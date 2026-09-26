@@ -10,7 +10,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Cloud Agents",
+  title: "Salts",
   description: "Personal, Always Accessible AI Agents",
 };
 

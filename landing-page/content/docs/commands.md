@@ -2,7 +2,7 @@
 title: Commands
 section: Everyday use
 order: 3
-summary: Five things you say to the session itself rather than to the agent, and why they still work when nothing else does.
+summary: Six things you say to the session itself rather than to the agent, and why they still work when nothing else does.
 ---
 
 Commands are handled by the conversation, not by the model. That matters: a session that
@@ -10,15 +10,17 @@ has got itself stuck cannot answer a question about itself, and a Telegram chat 
 buttons to press. Commands work in both cases, because they never reach the model at
 all.
 
-They cost nothing. No tokens are spent running one.
+They cost nothing, with one exception: `!compact` asks the model for a summary, and that
+call is billed like any other.
 
-## The five commands
+## The six commands
 
 | Command | What it does |
 |---|---|
 | `!new` | Hands this chat to a brand new session. Scheduled tasks move across |
 | `!clear` | The same, but the old conversation is deleted rather than kept |
 | `!stop` | Stops the reply being written right now |
+| `!compact` | Summarises the older part of the conversation so the agent reads less |
 | `!unstick` | Clears a stuck turn. The conversation and everything in it is kept |
 | `!delete` | Deletes this session and everything in it |
 
@@ -76,6 +78,28 @@ at: `Stopped.` if something was running, and `Nothing to stop` if nothing was.
 
 Use it when you asked the wrong question, or when an answer is clearly going the wrong
 way and you would rather not pay for the rest of it.
+
+## `!compact` — shrink what the agent re-reads
+
+Every turn re-sends the conversation to the model. A long session gets slower and more
+expensive per answer, and eventually longer than the model can read. `!compact` replaces
+the older messages, as the agent sees them, with a summary. The first few messages and
+the last exchange are still sent in full.
+
+The transcript is not changed. Every message stays readable in the browser; only what
+the model is sent gets shorter. Running `!compact` again folds the earlier summary into
+a new one.
+
+A session also compacts on its own before a turn when the previous turn's prompt went
+past the deployment's `compact_after_tokens` setting. Setting it to `0` turns the
+automatic compaction off. `!compact` works either way.
+
+It is refused while a reply is being written. Wait for the reply, or `!stop` it, then
+send `!compact`. It says `Nothing to compact yet` when the conversation is too short to
+summarise.
+
+Use it when you want to keep going in the same session but the conversation has grown
+long. Use `!new` instead when you are changing subject.
 
 ## `!unstick` — get a wedged session moving
 

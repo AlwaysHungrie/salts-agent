@@ -120,6 +120,12 @@ export type DeploymentSettings = {
   max_session_page: number;
   /** The largest SVG icon an MCP template may carry, in bytes. */
   max_icon_bytes: number;
+  /**
+   * Past this many prompt tokens in one model call, the session's older messages are
+   * summarised before its next turn. `0` never compacts on its own; `!compact` still
+   * works. See `maybeCompact` in agent.ts.
+   */
+  compact_after_tokens: number;
 
   /* ---- soft defaults ---- */
 
@@ -193,6 +199,7 @@ export const SETTINGS_FIELDS: readonly SettingsField[] = [
   INT("max_files_per_message", 1, 100, "attachments one message may carry"),
   INT("max_session_page", 1, 10_000, "largest session page a caller may ask for"),
   INT("max_icon_bytes", 1, 1_000_000, "largest SVG icon an MCP template may carry, in bytes"),
+  INT("compact_after_tokens", 0, 10_000_000, "prompt tokens past which older messages are summarised; 0 never auto-compacts"),
 
   { key: "models", kind: "json", doc: "models the settings page offers: [{id,label,vision}], at least one", group: "default" },
   { key: "default_model", kind: "string", doc: "model a new agent is seeded with", group: "default" },

@@ -33,6 +33,15 @@
 - Auth: header `x-api-secret: <API_SECRET>`. Read value from `agent/.dev.vars` (local) or `wrangler secret list`/prod store — never print it or write it into a committed file.
 - Deployed base URL: `https://salt-agent.dhairyashah98.workers.dev`.
 
+# Git: no direct commits to main
+
+- `main` is protected by a GitHub ruleset ("Protect main"): no direct pushes, no
+  force-push, no deletion, no bypass (admins included). Every change lands through a PR.
+- Never commit on `main` locally. Branch first (`git switch -c <branch>`), commit there,
+  push the branch, open a PR with `gh pr create --base main`, merge with `gh pr merge`.
+- Merging to `main` deploys production on Vercel. Pushing to `staging` deploys the
+  staging web app (`git push origin <branch>:staging`); `staging` is not protected.
+
 # Layout
 
 - `agent/` — agent code

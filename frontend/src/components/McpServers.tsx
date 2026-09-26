@@ -180,7 +180,7 @@ function ServerCard({
   const status = !server.enabled
     ? "Off"
     : server.last_error
-      ? "Not working"
+      ? "Last failed tool call"
       : !server.connected
         ? "Not connected"
         : live === server.tools.length
@@ -201,7 +201,7 @@ function ServerCard({
             {server.url}
           </span>
           <span
-            className={`mt-1 inline-block text-xs leading-[1.33] ${
+            className={`mt-3 inline-block text-xs leading-[1.33] ${
               server.last_error ? "text-ink font-semibold" : "text-faint"
             }`}
           >
@@ -215,7 +215,7 @@ function ServerCard({
       </div>
 
       {server.last_error && (
-        <p className="bg-canvas-soft mt-3 rounded-[14px] px-4 py-3 text-xs leading-[1.33]">
+        <p className="bg-canvas-soft mt-1 rounded-[14px] px-4 py-3 text-xs leading-[1.33]">
           {server.last_error}
         </p>
       )}
@@ -668,7 +668,9 @@ export function McpServers({
       error?: string;
     } | null;
     if (!res.ok || !payload?.server) {
-      setError(payload?.error ?? "Couldn't choose tools for that server. Try again.");
+      setError(
+        payload?.error ?? "Couldn't choose tools for that server. Try again.",
+      );
       return;
     }
     setServers((all) => all.map((s) => (s.id === id ? payload.server! : s)));

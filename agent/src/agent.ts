@@ -2,23 +2,33 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { Workspace } from "@cloudflare/shell";
 import { Think, type StepContext, type TurnConfig, type TurnContext } from "@cloudflare/think";
 import type { Schedule } from "agents";
-import { jsonSchema, tool, type ModelMessage, type ToolSet, type UIMessage } from "ai";
+import {
+  generateText,
+  jsonSchema,
+  tool,
+  type ModelMessage,
+  type ToolSet,
+  type UIMessage,
+} from "ai";
+import { COMPACTION_PREFIX, createCompactFunction } from "agents/experimental/memory/utils";
 import {
   capabilityLabels,
   channelLabels,
   mcpServerReady,
   mcpToolSpecs,
   enabled,
+  withMcpAuth,
   runTool,
   toolsFor,
   type ScheduledTask,
   type ToolContext,
 } from "./capabilities";
-import { parseCommand, type Command, type CommandResult } from "./commands";
+import { parseCommand, type Command, type CommandResult, type McpCommand } from "./commands";
 import type { McpServerRow } from "./mcp";
 import { applyMigrations, type Migration } from "./schema";
 import { deploymentSettings, type DeploymentSettings } from "./settings";
 import {
+  AGENT_SEPARATOR,
   DEFAULT_CONFIG,
   agentIdOf,
   type AgentDirectory,
@@ -197,6 +207,10 @@ const PDF_PARSE_ENGINE = "mistral-ocr";
 /** Where parses are kept: outside the workspace tree the model is shown. */
 const PARSE_CACHE_DIR = ".parse-cache";
 
+/** What the model is told a compaction summary is, ahead of the summary itself. */
+const SUMMARY_PREAMBLE =
+  "[Summary of the earlier part of this conversation, which was compacted to save context. The messages it covers are no longer shown.]";
+
 /**
  * The words out of a parse. The content array interleaves text with a rendered image
  * per page; the images are dropped, which is most of the bytes and none of the meaning
@@ -296,6 +310,25 @@ const SESSION_AGENT_MIGRATIONS: readonly Migration[] = [
       );
     },
   },
+  {
+    // Compaction. `context_tokens` is the largest prompt one model call in the turn
+    // sent, which is what a context window is measured against — `prompt_tokens` is
+    // summed across tool rounds. `compaction` holds the one summary the model reads in
+    // place of a run of older messages; the transcript itself is never touched.
+    name: "compaction",
+    up: (sql) => {
+      sql.exec(`ALTER TABLE usage ADD COLUMN context_tokens INTEGER NOT NULL DEFAULT 0`);
+      sql.exec(
+        `CREATE TABLE compaction (
+           id INTEGER PRIMARY KEY CHECK (id = 1),
+           from_id TEXT NOT NULL,
+           to_id TEXT NOT NULL,
+           summary TEXT NOT NULL,
+           ts INTEGER NOT NULL
+         )`
+      );
+    },
+  },
 ];
 
 export class SessionAgent extends Think<Env> {
@@ -317,8 +350,11 @@ export class SessionAgent extends Think<Env> {
   /** The external MCP servers, reloaded per turn so a connection made mid-session works. */
   private mcpServers: McpServerRow[] = [];
 
-  /** Usage accumulated by `onStepFinish` for the turn that is running now. */
-  private turnUsage = { prompt: 0, completion: 0, cached: 0, cost: 0, reported: 0, started: 0 };
+  /**
+   * Usage accumulated by `onStepFinish` for the turn that is running now. `peak` is the
+   * largest single prompt, which is what compaction measures against.
+   */
+  private turnUsage = { prompt: 0, completion: 0, cached: 0, cost: 0, reported: 0, peak: 0, started: 0 };
 
   /**
    * Whether the turn running now scheduled a task. Read by the WhatsApp channel,
@@ -650,7 +686,8 @@ export class SessionAgent extends Think<Env> {
       apiKey: key,
       baseURL: "https://openrouter.ai/api/v1",
       async fetch(input, init) {
-        const request = prepareOpenRouterRequest(init as RequestInit);
+        // Meta's terms bar WhatsApp content from reaching providers that train on it.
+        const request = prepareOpenRouterRequest(init as RequestInit, session.includes(`${AGENT_SEPARATOR}wa-`));
         const res = await fetch(input as RequestInfo, request as RequestInit);
         if (res.ok) {
           return stripUnsupportedAnnotations(
@@ -749,9 +786,10 @@ export class SessionAgent extends Think<Env> {
     this.ensureSchema();
     await this.loadConfig();
     const config = this.config();
-    this.turnUsage = { prompt: 0, completion: 0, cached: 0, cost: 0, reported: 0, started: Date.now() };
+    this.turnUsage = { prompt: 0, completion: 0, cached: 0, cost: 0, reported: 0, peak: 0, started: Date.now() };
     this.scheduledInTurn = false;
     this.turnsRunning++;
+    await this.maybeCompact(config);
 
     return {
       // Chat completions, not Responses: see `getModel`.
@@ -774,17 +812,18 @@ export class SessionAgent extends Think<Env> {
    *
    * A context window of N keeps only the last N messages, so a long session stops
    * growing its prompt — and its per-turn cost — without limit. 0 keeps everything.
+   * The window is counted after compaction, so a summary counts as one message.
    */
   private async modelMessages(config: Config): Promise<ModelMessage[]> {
-    const all = (await this.getMessages()).filter(
-      (m) => m.role === "user" || m.role === "assistant"
-    );
+    const all = await this.compactedMessages();
     const limit = config.context_messages;
     const kept = limit > 0 ? all.slice(-limit) : all;
 
     const messages: ModelMessage[] = [];
     for (const message of kept) {
-      const text = textOf(message);
+      const text = message.id.startsWith(COMPACTION_PREFIX)
+        ? `${SUMMARY_PREAMBLE}\n\n${textOf(message)}`
+        : textOf(message);
       if (message.role === "assistant") {
         if (text.trim()) messages.push({ role: "assistant", content: text });
         continue;
@@ -1079,6 +1118,7 @@ export class SessionAgent extends Think<Env> {
     this.turnUsage.prompt += prompt;
     this.turnUsage.completion += completion;
     this.turnUsage.cached += cached;
+    this.turnUsage.peak = Math.max(this.turnUsage.peak, prompt);
     this.turnUsage.cost += this.priceOf(prompt, completion, openrouterCost(step));
     // The one number that says whether the breakpoint is doing anything. A cache that
     // quietly stopped matching — a tool list that reordered, a memory written mid
@@ -1100,14 +1140,15 @@ export class SessionAgent extends Think<Env> {
     this.turnsRunning = Math.max(0, this.turnsRunning - 1);
     this.lastReplyId = result.message.id;
     this.exec(
-      `INSERT OR REPLACE INTO usage (message_id, prompt_tokens, completion_tokens, cost_usd, ms, ts)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT OR REPLACE INTO usage (message_id, prompt_tokens, completion_tokens, cost_usd, ms, ts, context_tokens)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       result.message.id,
       this.turnUsage.prompt,
       this.turnUsage.completion,
       this.turnCost(),
       this.turnUsage.started ? Date.now() - this.turnUsage.started : 0,
-      Date.now()
+      Date.now(),
+      this.turnUsage.peak
     );
 
     // What the turn cost goes to the agent's registry as well as to this session's
@@ -2366,6 +2407,7 @@ export class SessionAgent extends Think<Env> {
    * what `destroy` is for — the caller sends the reply and then calls `finishDelete`.
    */
   private async runCommand(command: Command): Promise<CommandResult> {
+    if (typeof command === "object") return await this.mcpCommand(command);
     // TEMP — remove with the `oom` command itself. Allocates a megabyte at a time
     // until the isolate is killed, to see what a session looks like on the way down
     // and what is left of it afterwards. The strings are held in an array so nothing
@@ -2402,6 +2444,7 @@ export class SessionAgent extends Think<Env> {
         destroy: false,
       };
     }
+    if (command === "compact") return await this.compactCommand();
     if (command === "stop") {
       // Counted before the cancel, because cancelling is what makes it zero.
       const running = this.turnsRunning;
@@ -2440,6 +2483,223 @@ export class SessionAgent extends Think<Env> {
       text: "Deleted this session and everything in it. The next message starts over.",
       destroy: true,
     };
+  }
+
+  /* -------------------------------------------------------------- compaction -- */
+
+  /**
+   * The conversation as the model is to read it: the transcript, with the run of older
+   * messages a compaction covered replaced by one message holding its summary.
+   *
+   * Only the model's view changes. Think's own history — what the chat draws, pages,
+   * forks and rewinds — is left exactly as it was, which is why this is an overlay kept
+   * here rather than Think's `session.compact()`, whose overlay rewrites that history.
+   * A summary whose ends are no longer both in the transcript (a rewind took one) is
+   * not applied, and the model gets the whole transcript again.
+   */
+  private async compactedMessages(): Promise<UIMessage[]> {
+    const all = (await this.getMessages()).filter(
+      (m) => m.role === "user" || m.role === "assistant"
+    );
+    const row = this.exec<{ from_id: string; to_id: string; summary: string }>(
+      `SELECT from_id, to_id, summary FROM compaction WHERE id = 1`
+    )[0];
+    if (!row) return all;
+    const from = all.findIndex((m) => m.id === row.from_id);
+    const to = all.findIndex((m) => m.id === row.to_id);
+    if (from === -1 || to < from) return all;
+    const summary: UIMessage = {
+      id: `${COMPACTION_PREFIX}1`,
+      role: "assistant",
+      parts: [{ type: "text", text: row.summary }],
+    };
+    return [...all.slice(0, from), summary, ...all.slice(to + 1)];
+  }
+
+  /**
+   * Summarise the older part of the conversation into the overlay, keeping the first
+   * few messages and roughly `tailTokens` of the most recent ones word for word.
+   *
+   * Think's reference algorithm does the choosing and the prompt: it protects the
+   * head, keeps tool calls with their results, and folds an existing summary into the
+   * new one rather than summarising a summary. The call is made with the agent's own
+   * model and key, through the same client a turn uses — so a WhatsApp session's
+   * no-training rule holds for it too.
+   *
+   * Returns how many transcript messages the summary now stands for and what the call
+   * cost, or null when there is nothing old enough to fold in yet.
+   */
+  private async compact(tailTokens: number): Promise<{ covered: number; cost: number } | null> {
+    this.ensureSchema();
+    const history = await this.compactedMessages();
+    const previous = this.exec<{ from_id: string }>(
+      `SELECT from_id FROM compaction WHERE id = 1`
+    )[0];
+    const overlaid = history.some((m) => m.id.startsWith(COMPACTION_PREFIX));
+    let cost = 0;
+    const summarise = createCompactFunction({
+      tailTokenBudget: tailTokens,
+      summarize: async (prompt) => {
+        const result = await generateText({
+          model: this.openrouter().chat(this.config().model),
+          prompt,
+        });
+        const reported = result.usage.raw?.cost;
+        cost = this.priceOf(
+          result.usage.inputTokens ?? 0,
+          result.usage.outputTokens ?? 0,
+          typeof reported === "number" ? reported : undefined
+        );
+        return result.text;
+      },
+    });
+    const result = await summarise(history as Parameters<typeof summarise>[0]);
+    if (!result) return null;
+
+    // A later summary covers everything the earlier one did, so it starts where that
+    // one started — the earlier summary's text is already folded into this one.
+    const from = overlaid && previous ? previous.from_id : result.fromMessageId;
+    this.exec(
+      `INSERT OR REPLACE INTO compaction (id, from_id, to_id, summary, ts) VALUES (1, ?, ?, ?, ?)`,
+      from,
+      result.toMessageId,
+      result.summary,
+      Date.now()
+    );
+    const all = (await this.getMessages()).filter(
+      (m) => m.role === "user" || m.role === "assistant"
+    );
+    const covered =
+      all.findIndex((m) => m.id === result.toMessageId) - all.findIndex((m) => m.id === from) + 1;
+    return { covered, cost };
+  }
+
+  /**
+   * Compact before a turn when the last one ran close to the window.
+   *
+   * Measured by what the provider reported for the largest prompt of the previous turn
+   * — system prompt, tools, parsed files and all — rather than by an estimate of the
+   * words, and only a turn since the last compaction counts, so one oversized turn does
+   * not summarise again before the smaller prompt has been measured.
+   *
+   * Never costs the turn its answer: a summary that fails is logged and the turn runs
+   * on the history as it stands, exactly as it would have without compaction.
+   */
+  private async maybeCompact(config: Config): Promise<void> {
+    const threshold = this.settings().compact_after_tokens;
+    if (threshold <= 0) return;
+    this.ensureSchema();
+    const last = this.exec<{ context_tokens: number; ts: number }>(
+      // Questions have usage rows too, holding nothing; only a reply measured a prompt.
+      `SELECT context_tokens, ts FROM usage WHERE context_tokens > 0 ORDER BY ts DESC LIMIT 1`
+    )[0];
+    if (!last || last.context_tokens <= threshold) return;
+    const since = this.exec<{ ts: number }>(`SELECT ts FROM compaction WHERE id = 1`)[0];
+    if (since && last.ts <= since.ts) return;
+    try {
+      // A fifth of the budget kept verbatim: recent enough to carry on from, small
+      // enough that the next turn lands well under the line.
+      const done = await this.compact(Math.floor(threshold / 5));
+      if (!done) return;
+      this.turnUsage.cost += done.cost;
+      this.turnUsage.reported += done.cost;
+      console.log(
+        `session ${this.name}: compacted ${done.covered} messages at ${last.context_tokens} prompt tokens (${config.model})`
+      );
+    } catch (err) {
+      console.error(
+        `compaction failed in session ${this.name}: ${err instanceof Error ? err.message : err}`
+      );
+    }
+  }
+
+  /**
+   * `!compact`: summarise now, whatever the size, keeping only the last exchange word
+   * for word. Refused while a reply is being written — the turn has already read the
+   * history it is answering from — and once the month's spend is used up, because the
+   * summary is a model call like any other.
+   */
+  private async compactCommand(): Promise<CommandResult> {
+    if (this.turnsRunning > 0) {
+      return {
+        text: "A reply is still being written. Wait for it to finish (or `!stop` it), then `!compact`.",
+        destroy: false,
+      };
+    }
+    const blocked = await this.spendBlocked();
+    if (blocked) return { text: blocked, destroy: false };
+    try {
+      await this.loadConfig();
+      const done = await this.compact(0);
+      if (!done) {
+        return { text: "Nothing to compact yet: the conversation is still short.", destroy: false };
+      }
+      if (done.cost > 0) await this.registry().addSpend(done.cost);
+      return {
+        text:
+          `Compacted: ${done.covered} earlier messages are now a summary the agent reads instead. ` +
+          "The transcript itself is unchanged.",
+        destroy: false,
+      };
+    } catch (err) {
+      return {
+        text: `Could not compact: ${err instanceof Error ? err.message : String(err)}`,
+        destroy: false,
+      };
+    }
+  }
+
+  /**
+   * `!enable-mcp` / `!disable-mcp`. Enabling switches every tool back on and re-reads
+   * the server's tool list, so a server that cannot be reached says so here rather
+   * than on the next turn. Disabling leaves the tool selection alone.
+   */
+  private async mcpCommand({ mcp, server }: McpCommand): Promise<CommandResult> {
+    const reg = this.registry();
+    const wanted = server.toLowerCase();
+    const row = (await reg.mcpServers()).find((s) => s.name.toLowerCase() === wanted);
+    if (mcp === "disable") {
+      const done = row && (await reg.updateMcpServer(row.id, { enabled: 0 }));
+      return {
+        text: done
+          ? "Disabled. You can also partially enable a few tools that are required from the web UI."
+          : "Error disabling MCP server, please visit the web UI.",
+        destroy: false,
+      };
+    }
+    if (!row) return { text: `No MCP server named "${server}".`, destroy: false };
+    const updated = await reg.updateMcpServer(row.id, { enabled: 1, disabled_tools: "[]" });
+    if (!updated || !mcpServerReady(updated)) {
+      return {
+        text: `${row.name} is not connected. Connect it from the web UI.`,
+        destroy: false,
+      };
+    }
+    try {
+      const tools = await withMcpAuth(updated, reg, (client) => client.listTools());
+      await reg.updateMcpServer(row.id, {
+        tools_json: JSON.stringify(tools),
+        tools_synced_at: Date.now(),
+        last_error: "",
+      });
+      await this.loadConfig();
+      if (!enabled(this.config(), "mcp")) {
+        return {
+          text: `${row.name} is enabled, but MCP is switched off for this agent. Turn it on from the web UI.`,
+          destroy: false,
+        };
+      }
+      return {
+        text:
+          `${row.name} enabled with all ${tools.length} tools. This can sharply raise token use — ` +
+          `disable it when not needed, or switch off unused tools from the web UI.`,
+        destroy: false,
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      await reg.noteMcpError(row.id, message);
+      return { text: `Error connecting to ${row.name}: ${message}`, destroy: false };
+    }
   }
 
   /**
@@ -2574,6 +2834,7 @@ export class SessionAgent extends Think<Env> {
     // Counted before the rows go: after the delete there is nothing left to total.
     this.releaseStorage();
     this.exec(`DELETE FROM usage`);
+    this.exec(`DELETE FROM compaction`);
     this.exec(`DELETE FROM message_files`);
     this.exec(`DELETE FROM message_text`);
     this.exec(`DELETE FROM attachments`);
@@ -2832,6 +3093,7 @@ type ContentPart = { type?: string; text?: string; cache_control?: { type: strin
 type ChatRequestBody = {
   model?: string;
   usage?: { include?: boolean };
+  provider?: { data_collection?: "allow" | "deny" };
   messages?: { role?: string; content?: string | ContentPart[] }[];
 };
 
@@ -2843,14 +3105,18 @@ const CACHE_CONTROL = { type: "ephemeral" } as const;
  * block carrying what the call actually cost, and — on Anthropic — the breakpoint
  * saying where the cacheable prefix ends.
  */
-export function prepareOpenRouterRequest(init: RequestInit | undefined): RequestInit | undefined {
+export function prepareOpenRouterRequest(
+  init: RequestInit | undefined,
+  noTrain = false
+): RequestInit | undefined {
   if (!init || typeof init.body !== "string") return init;
   try {
     const body = JSON.parse(init.body) as ChatRequestBody;
     const reported = body.usage?.include === true;
     const marked = markCacheablePrefix(body);
-    if (reported && !marked) return init;
+    if (reported && !marked && !noTrain) return init;
     body.usage = { ...body.usage, include: true };
+    if (noTrain) body.provider = { ...body.provider, data_collection: "deny" };
     return { ...init, body: JSON.stringify(body) };
   } catch {
     return init;

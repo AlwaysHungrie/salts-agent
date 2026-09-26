@@ -87,3 +87,44 @@ h1, h2, h3, h4 {
     animation: none;
   }
 }
+
+/*
+ * A tab panel arriving from the side its tab sits on: agents from the left, fleets
+ * from the right, so switching reads as moving along the control above it.
+ */
+@keyframes panel-from-left {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes panel-from-right {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.panel-from-left {
+  animation: panel-from-left 280ms cubic-bezier(0.3, 0.7, 0.2, 1) both;
+}
+
+.panel-from-right {
+  animation: panel-from-right 280ms cubic-bezier(0.3, 0.7, 0.2, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel-from-left,
+  .panel-from-right {
+    animation: none;
+  }
+}

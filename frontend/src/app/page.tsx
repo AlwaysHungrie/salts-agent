@@ -46,8 +46,8 @@ export default function Agents() {
   const [cursor, setCursor] = useState("");
   /**
    * The fleets this account administers: a name and a count each, never the agents.
-   * They are listed above everything else — see `Fleet` for why the two lists are
-   * kept apart rather than merged and sorted together.
+   * They get their own tab — see `Fleet` for why the two lists are kept apart
+   * rather than merged and sorted together.
    */
   const [fleets, setFleets] = useState<FleetRow[]>([]);
   /** Whether another page of the list below is being fetched. */
@@ -83,6 +83,9 @@ export default function Agents() {
   const [authing, setAuthing] = useState(false);
   /** Whether the "want more agents" dialog is up. */
   const [businessAsking, setBusinessAsking] = useState(false);
+  /** Which tab is showing. The fleets tab exists only while there is a fleet. */
+  const [tab, setTab] = useState<"agents" | "fleets">("agents");
+  const shownTab = fleets.length > 0 ? tab : "agents";
 
   /** The first page of the list, and the fleets above it. Replaces what is on screen. */
   const load = useCallback(async () => {
@@ -200,11 +203,9 @@ export default function Agents() {
   return (
     <div className="bg-canvas text-ink min-h-screen">
       <div className="mx-auto w-full max-w-2xl px-5 py-10 md:px-8 md:py-14">
-        <div className="flex items-center justify-between gap-4">
+        <div className="border-b border-canvas-soft pb-4 flex items-center justify-between gap-4">
           <div>
-            <h1 className="text-[32px] font-[650] leading-[1.2]">
-              Cloud Agents.
-            </h1>
+            <h1 className="text-[32px] font-[650] leading-[1.2]">Salts.</h1>
             <p className="text-muted mt-1 text-sm font-light leading-[1.43]">
               Personal, Always Accessible AI Agents
             </p>
@@ -220,11 +221,11 @@ export default function Agents() {
             prerendered page would flash the front door at someone already signed in,
             and localStorage cannot be read on the server at all. */}
         {!isLoaded && (
-          <p className="text-muted py-16 text-sm leading-[1.43]">Loading…</p>
+          <p className="text-muted py-4 text-sm leading-[1.43]">Loading…</p>
         )}
 
         {isLoaded && !isSignedIn && (
-          <div className="mt-8 space-y-2 w-full">
+          <div className="mt-4 space-y-2 w-full">
             <button
               onClick={() => setAuthing(true)}
               className="w-full min-h-17 bg-canvas-soft hover:bg-canvas-soft/60 group flex cursor-pointer items-center gap-3 rounded-2xl px-5 py-4 transition"
@@ -232,15 +233,8 @@ export default function Agents() {
               <Plus size={18} strokeWidth={2} />
               Connect your Account
             </button>
-            <p className="text-faint mt-6 text-xs leading-[1.33]">
-              You can find safety guidelines and best practices for running a
-              public facing agent in the{" "}
-              <a href="/docs" className="text-primary font-semibold underline">
-                docs
-              </a>
-              .
-              <br />
-              By signing up you agree to our{" "}
+            <p className="text-faint mt-2 ml-2 text-xs leading-[1.33]">
+              By signing up and using this platform you agree to our{" "}
               <a href="/tos" className="text-primary hover:underline">
                 terms of service
               </a>{" "}
@@ -263,15 +257,53 @@ export default function Agents() {
             )}
 
             {agents === null && (
-              <p className="text-muted py-16 text-sm leading-[1.43]">
+              <p className="text-muted py-4 text-sm leading-[1.43]">
                 Loading your agents…
               </p>
             )}
 
             {/* The create tile lives inside this block, not under a non-empty
                 list: an account with no agents is exactly the one that needs it. */}
-            {agents && (
-              <div className="mt-8 space-y-2">
+            {agents && fleets.length > 0 ? (
+              // A segmented control: one white thumb that slides under whichever
+              // label is chosen, on a soft track. With no fleets there is nothing to
+              // choose between: one segment names the list, drawn unselected.
+              <div
+                role="tablist"
+                className={`bg-canvas-soft relative mt-4 grid rounded-full p-1 w-60 grid-cols-2`}
+              >
+                <span
+                  aria-hidden
+                  className="bg-canvas absolute inset-y-1 left-1 rounded-full shadow-[0_1px_2px_rgba(0,0,0,0.06),0_2px_8px_rgba(0,0,0,0.06)] transition-transform duration-300 ease-[cubic-bezier(0.3,0.7,0.2,1)]"
+                  style={{
+                    width: "calc(50% - 4px)",
+                    transform:
+                      shownTab === "fleets"
+                        ? "translateX(100%)"
+                        : "translateX(0)",
+                  }}
+                />
+
+                {(["agents", "fleets"] as const).map((t) => (
+                  <button
+                    key={t}
+                    role="tab"
+                    aria-selected={shownTab === t}
+                    onClick={() => setTab(t)}
+                    className={`relative h-9 rounded-full text-sm font-semibold transition-colors duration-300 ${
+                      shownTab === t ? "text-ink" : "text-muted hover:text-ink"
+                    }`}
+                  >
+                    {t === "fleets" ? "Fleets" : "Agents"}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-4" />
+            )}
+
+            {agents && shownTab === "fleets" && (
+              <div key="fleets" className="panel-from-right mt-2 space-y-2">
                 {fleets.map((fleet) => (
                   <Fleet
                     // The count is part of the key on purpose: a fleet that grew or
@@ -288,7 +320,16 @@ export default function Agents() {
                     onAddAgents={setAddingTo}
                   />
                 ))}
+              </div>
+            )}
 
+            {agents && shownTab === "agents" && (
+              <div
+                key="agents"
+                // Fleets sit to the right of agents, so each list arrives from its
+                // own side — but only once there is a second side to come from.
+                className={`${fleets.length > 0 ? "panel-from-left" : ""} mt-2 space-y-2`}
+              >
                 {agents.map((agent) => (
                   <AgentListRow
                     key={agent.id}
@@ -493,7 +534,7 @@ function Fleet({
       {/* The row is the fleet, so its delete sits on the row — and it is the whole
           fleet it deletes, which is why it is asked for by name in a dialog rather
           than taken on this click. */}
-      <div className="bg-accent/8 group flex items-center gap-3 rounded-2xl pr-5 transition">
+      <div className="from-accent/12 to-transparent hover:to-accent/5 bg-linear-to-r group flex items-center gap-3 rounded-2xl pr-5 transition">
         <button
           onClick={toggle}
           aria-expanded={open}
@@ -648,7 +689,7 @@ function AgentListRow({
   );
 
   return (
-    <div className="hover:bg-canvas-soft group flex items-center gap-3 rounded-2xl px-5 py-4 transition">
+    <div className="bg-canvas-soft hover:bg-canvas-soft/60 group flex items-center gap-3 rounded-2xl px-5 py-4 transition">
       {isUser ? (
         <Link
           href={`/a/${encodeURIComponent(agent.id)}`}

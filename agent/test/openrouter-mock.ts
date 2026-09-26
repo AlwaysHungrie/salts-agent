@@ -31,6 +31,9 @@
  *   answered here too, with a one-pixel PNG.
  * - anything else — the model replies `You said: <message>`.
  *
+ * A compaction's summary call is recognised by Think's summary prompt and answered
+ * with `FIRST_SUMMARY`, or `UPDATED_SUMMARY` when it folds in an earlier one.
+ *
  * Every successful turn reports `COST_PER_TURN` in its usage, so spend accounting is
  * exercised rather than assumed.
  */
@@ -294,6 +297,12 @@ export const COMPLETION_TOKENS = 7;
 
 /** What the mock replies with, absent a trigger. */
 export const replyTo = (message: string) => `You said: ${message}`;
+
+/** What a first compaction summarises a conversation to. */
+export const FIRST_SUMMARY = "MOCK-SUMMARY-FIRST";
+
+/** What a compaction that folds in an earlier summary answers with. */
+export const UPDATED_SUMMARY = "MOCK-SUMMARY-UPDATED";
 
 /** What `!!schedule` asks the agent to run later. */
 export const SCHEDULED_PROMPT = "the standup digest";
@@ -675,6 +684,11 @@ export async function openrouterMock(request: Request): Promise<Response> {
   // Choosing which of a server's tools to keep. Not streamed either, so it has to be
   // answered before the title call below, which would hand it the words "Mock Title".
   if (isToolChoice(body)) return chosenTools(message);
+
+  // A compaction: Think's summary prompt, not streamed. Answered before the title
+  // call, which would hand the summary the words "Mock Title".
+  if (!body.stream && message.includes("NEW TURNS TO INCORPORATE")) return completion(UPDATED_SUMMARY);
+  if (!body.stream && message.includes("CONVERSATION TO SUMMARIZE")) return completion(FIRST_SUMMARY);
 
   // The title call: no streaming, and a system prompt asking for a name.
   if (!body.stream) return completion("Mock Title");

@@ -1,7 +1,7 @@
 import { SELF, env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
-import { COST_PER_TURN, replyTo } from "./openrouter-mock";
-import { agentIdOf } from "../src/registry";
+import { COST_PER_TURN, MCP_TOOLS, replyTo } from "./openrouter-mock";
+import { EMPTY_MCP_SERVER, agentIdOf } from "../src/registry";
 
 /**
  * A whole turn, end to end.
@@ -264,6 +264,62 @@ describe("bang commands over chat", () => {
     const { sessionId, email } = await chatFixture();
     const res = await say(sessionId, email, "what does !new do?");
     expect((await res.json() as { reply: string }).reply).toBe(replyTo("what does !new do?"));
+  });
+});
+
+describe("!enable-mcp and !disable-mcp", () => {
+  async function withServer(patch: Record<string, unknown> = {}) {
+    const fixture = await chatFixture();
+    await registryFor(fixture.agentId).addMcpServer({
+      ...EMPTY_MCP_SERVER,
+      id: crypto.randomUUID(),
+      name: "Docs",
+      url: "https://mcp.test/",
+      enabled: 0,
+      disabled_tools: '["read_page"]',
+      created_at: Date.now(),
+      ...patch,
+    });
+    return fixture;
+  }
+  const reply = async (res: Response) => ((await res.json()) as { reply: string }).reply;
+  const row = async (agentId: string) => (await registryFor(agentId).mcpServers())[0];
+
+  it("enables a server with every tool and says how many", async () => {
+    const { sessionId, email, agentId } = await withServer();
+    const text = await reply(await say(sessionId, email, "!enable-mcp docs"));
+    expect(text).toContain(`Docs enabled with all ${MCP_TOOLS.length} tools`);
+    const server = await row(agentId);
+    expect(server.enabled).toBe(1);
+    expect(JSON.parse(server.disabled_tools)).toEqual([]);
+  });
+
+  it("disables a server and keeps its tool selection", async () => {
+    const { sessionId, email, agentId } = await withServer({ enabled: 1 });
+    const text = await reply(await say(sessionId, email, "!disable-mcp Docs"));
+    expect(text).toMatch(/^Disabled\./);
+    const server = await row(agentId);
+    expect(server.enabled).toBe(0);
+    expect(server.disabled_tools).toBe('["read_page"]');
+  });
+
+  it("reports a server it cannot find", async () => {
+    const { sessionId, email } = await withServer();
+    expect(await reply(await say(sessionId, email, "!enable-mcp nope"))).toContain('No MCP server named "nope"');
+    expect(await reply(await say(sessionId, email, "!disable-mcp nope"))).toBe(
+      "Error disabling MCP server, please visit the web UI."
+    );
+  });
+
+  it("reports a server that is not connected", async () => {
+    const { sessionId, email } = await withServer({ auth: "oauth" });
+    expect(await reply(await say(sessionId, email, "!enable-mcp docs"))).toContain("not connected");
+  });
+
+  it("reports a server it cannot reach", async () => {
+    const { sessionId, email, agentId } = await withServer({ url: "https://unreachable.test/" });
+    expect(await reply(await say(sessionId, email, "!enable-mcp docs"))).toMatch(/^Error connecting to Docs/);
+    expect((await row(agentId)).last_error).not.toBe("");
   });
 });
 

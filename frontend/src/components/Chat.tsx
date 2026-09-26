@@ -92,6 +92,11 @@ function ToolLine({ tool }: { tool: ToolData }) {
 }
 
 function UsageLine({ usage }: { usage: UsageData }) {
+  // A command's answer or a spend-limit notice runs no turn and reports all zeros;
+  // a row of zeros there reads as "this was free", which it may not have been.
+  if (!usage.prompt_tokens && !usage.completion_tokens && !usage.cost_usd && !usage.llm_ms) {
+    return null;
+  }
   return (
     <div className="border-hairline-soft text-faint tnum mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t pt-3 text-xs leading-[1.33]">
       <span>

@@ -37,6 +37,7 @@ type Body = {
   model?: string;
   stream?: boolean;
   usage?: { include?: boolean };
+  provider?: { data_collection?: string };
   messages?: { role?: string; content?: string | ContentPart[] }[];
 };
 
@@ -129,6 +130,22 @@ describe("prepareOpenRouterRequest", () => {
     const body = prepared(anthropic({ messages: [{ role: "user", content: "hello" }] }));
     expect(body.usage?.include).toBe(true);
     expect(body.messages).toEqual([{ role: "user", content: "hello" }]);
+  });
+
+  it("forbids providers that train on the data only when asked to", () => {
+    // WhatsApp turns: Meta's terms bar their content from training-data providers.
+    const pinned = JSON.parse(
+      prepareOpenRouterRequest(request(anthropic({ model: "vendor/model" })), true)?.body as string
+    ) as Body;
+    expect(pinned.provider?.data_collection).toBe("deny");
+    expect(pinned.usage?.include).toBe(true);
+    expect(prepared(anthropic({ model: "vendor/model" })).provider).toBeUndefined();
+  });
+
+  it("pins even a body that needed nothing else", () => {
+    const ready: Body = { model: "vendor/model", messages: [], usage: { include: true } };
+    const init = prepareOpenRouterRequest(request(ready), true);
+    expect((JSON.parse(init?.body as string) as Body).provider?.data_collection).toBe("deny");
   });
 
   it("hands back anything it cannot read", () => {

@@ -16,6 +16,7 @@ describe("parseCommand", () => {
     expect(parseCommand("!new")).toBe("new");
     expect(parseCommand("!clear")).toBe("clear");
     expect(parseCommand("!stop")).toBe("stop");
+    expect(parseCommand("!compact")).toBe("compact");
     expect(parseCommand("!oom")).toBe("oom");
   });
 
@@ -57,5 +58,20 @@ describe("parseCommand", () => {
 
   it("still refuses a sentence that carries a mention", () => {
     expect(parseCommand("@mybot should I use !delete here?")).toBe(null);
+  });
+
+  it("parses !enable-mcp and !disable-mcp with a server name", () => {
+    expect(parseCommand("!enable-mcp Notion")).toEqual({ mcp: "enable", server: "Notion" });
+    expect(parseCommand("  !DISABLE-MCP  my server ")).toEqual({ mcp: "disable", server: "my server" });
+    expect(parseCommand("@mybot !enable-mcp notion")).toEqual({ mcp: "enable", server: "notion" });
+  });
+
+  it("does not match an mcp command without a server name", () => {
+    expect(parseCommand("!enable-mcp")).toBe(null);
+    expect(parseCommand("!disable-mcp   ")).toBe(null);
+  });
+
+  it("does not match an mcp command inside a sentence", () => {
+    expect(parseCommand("how do I use !enable-mcp notion?")).toBe(null);
   });
 });
