@@ -4,13 +4,20 @@ Chat agents that run as Cloudflare Durable Objects — one DO per session, one p
 — with a Next.js frontend that shows what every message costs, in tokens and in
 Cloudflare resources, as it streams.
 
-Agents share nothing: each has its own OpenRouter key, Telegram bot, MCP servers,
-memories and sessions. The home page lists them; each one has a page of its own.
+Agents share nothing: each has its own OpenRouter key, Telegram bot, WhatsApp number,
+MCP servers, memories and sessions. The home page lists them; each one has a page of its
+own. A fleet is a batch of agents one person creates, configures and pays for on behalf
+of other people.
 
 ```
-agent/      Cloudflare Worker + Durable Objects (the agent itself)
-frontend/   Next.js app (AI SDK useChat, streaming, cost display)
-admin-cli/  Owner dashboard: counts, limit requests, deployment settings + their defaults
+agent/         Cloudflare Worker + Durable Objects (the agent itself)
+frontend/      Next.js web app: chat, settings, capabilities, fleets, and the user guide at /guide
+landing-page/  Next.js marketing site
+admin-cli/     Owner dashboard: counts, users, limit requests, deployment settings + their defaults
+salts-web/     Optional: self-hosted SearXNG web search for an agent, tunnelled from a laptop
+infra/vercel/  Terraform for the two Vercel projects
+scripts/       Cloudflare cost queries (cost.sh, settle.sh)
+docs/          Architecture, infrastructure, costs, MCP catalogue, WhatsApp setup
 ```
 
 New here? [docs/architecture.md](docs/architecture.md) explains the Cloudflare primitives
@@ -30,8 +37,7 @@ The agent is npm, not pnpm — `package-lock.json` is its lockfile, and installi
 with pnpm resolves an `@modelcontextprotocol/sdk` the Agents SDK cannot build against.
 The frontend is pnpm.
 
-`agent/.dev.vars` is gitignored. It can hold `API_SECRET`, the impersonation back door —
-optional, and a deployment without one simply has one fewer way in. There is no
+`agent/.dev.vars` is gitignored. It holds `API_SECRET`, required for admin access to the project, and deployming without it is prohibited. There is no
 deployment-wide OpenRouter key: every agent is given its own under Settings, and an
 agent without one cannot answer. See `.dev.vars.example`.
 
@@ -58,6 +64,12 @@ Clerk session token this app forwards. The frontend never talks to the worker fr
 browser — every call goes through a Next route handler, so there is no CORS and no key
 exposure.
 
+The landing page is separate and talks to nothing:
+
+```bash
+cd landing-page && pnpm install && pnpm dev   # http://localhost:4000
+```
+
 Sign-in is Clerk, and a verified session token is the worker's gate: it answers nobody
 it cannot identify. Each agent then carries its own list of email addresses, and an
 address not on it is told the agent does not exist. `CLERK_ISSUER` in
@@ -69,8 +81,8 @@ The worker's `API_SECRET` is a back door, not a gate. Set both keys in a browser
 localStorage and that browser is that address, sign-up or no sign-up:
 
 ```js
-localStorage.API_SECRET = "<the worker's API_SECRET>"
-localStorage.API_EMAIL  = "whoever@example.com"
+localStorage.API_SECRET = "<the worker's API_SECRET>";
+localStorage.API_EMAIL = "whoever@example.com";
 ```
 
 Reload and you are them. Nothing in the app writes either key — devtools is the only way
@@ -82,8 +94,8 @@ in. The frontend never holds the secret; it lives in one browser and in the work
 Every limit and default the worker uses is a runtime setting: sessions per agent, file
 storage, upload sizes, page sizes, tool rounds, the model list, the model a new agent
 starts on, the system prompt, the starting value of each capability, and so on. They are
-stored in the deployment and edited from `admin-cli` (`npm start`, then `s`), with no
-redeploy.
+stored in the deployment and edited from `admin-cli` (`npm start`, then the **Defaults**
+and **Limits** tabs), with no redeploy.
 
 The worker has no built-in values for any of them. Their defaults ship with the admin
 CLI, in [admin-cli/defaults.json](admin-cli/defaults.json), and have to be written to
@@ -101,9 +113,9 @@ What that means in practice:
   `-- --staging` to target those.
 - **`npm run check`** in `admin-cli` exits 1 and lists the unset fields, or exits 0 when
   everything is set.
-- **The admin CLI dashboard** opens on the settings screen when anything is unset. Unset
-  rows are marked `!`; `i` fills them with the defaults, `r` sets one row to its
-  default, `R` sets every row to its default.
+- **The admin CLI dashboard** marks the Defaults and Limits tabs, and each unset row in
+  them, with `!`. `i` fills every unset row with its default; on a row, `enter` edits it
+  and `d` sets it to the shipped value.
 - **Settings cannot be unset or reset.** `PATCH /api/admin/settings` refuses `null`, and
   there is no `DELETE`. Change a value by setting a new one.
 
@@ -160,13 +172,26 @@ Two pages sit behind the buttons at the bottom of the sidebar:
 - **Settings** — how the agent talks: model, custom instructions, reasoning effort,
   temperature, reply cap, context window, auto-titling.
 - **Capabilities** — what the agent can do: web search, reading a URL, file ingest, image
-  input, image generation, audio input, scheduled tasks, memory. Each is off by default,
-  and the ones needing a key say so. See [agent/README.md](agent/README.md#capabilities).
+  input, image generation, audio input, voice notes, scheduled tasks, Telegram, WhatsApp,
+  MCP servers, memory. The ones needing a key say so. See
+  [agent/README.md](agent/README.md#capabilities).
 
-The default model is `deepseek/deepseek-v4-flash` on OpenRouter, set by the `MODEL` var in
-`agent/wrangler.jsonc` and overridable in Settings. What Settings offers is the `MODELS`
-var beside it, and meta settings can widen that per agent. Image input needs a multimodal
-model, which is what each entry's `vision` flag records.
+The **Guide** (`/guide`) is the end-user documentation, written in Markdown under
+`frontend/content/guide/`.
+
+The model a new agent starts on and the models Settings offers are the `default_model`
+and `models` deployment settings (shipped default: `deepseek/deepseek-v4-flash` on
+OpenRouter). Meta settings can widen that per agent. Image input needs a multimodal model,
+which is what each entry's `vision` flag records.
+
+## Hosting and branches
+
+[docs/infra.md](docs/infra.md) has the full picture. In short:
+
+- The Worker deploys to Cloudflare with `npm run deploy` (or `deploy:staging`) in `agent/`.
+- The web app and landing page deploy on Vercel from git. Merging to `main` ships
+  production; pushing to the `staging` branch ships the staging web app.
+- `main` is protected: every change lands through a pull request.
 
 ## Costs
 
