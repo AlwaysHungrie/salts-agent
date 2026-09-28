@@ -47,9 +47,9 @@ export const STORAGE_MB = 50;
  * travel smoothly; see app/page.tsx.
  */
 export const NAV = [
-  { id: "skills", label: "What it does", sections: ["stats", "skills", "mission"] },
+  { id: "skills", label: "What it does", sections: ["stats", "skills", "capabilities"] },
   { id: "how", label: "How it works", sections: ["how"] },
-  { id: "costs", label: "Pricing", sections: ["costs", "capabilities", "fleet"] },
+  { id: "costs", label: "Pricing", sections: ["costs", "mission", "fleet"] },
   { id: "faq", label: "FAQ", sections: ["faq", "start"] },
 ] as const;
 
@@ -84,24 +84,23 @@ export const LINKS = {
 /* ----------------------------------------------------------------- Copy -- */
 
 export const HERO = {
-  eyebrow: "In your browser, on Telegram and on WhatsApp",
-  title: "Your own AI agent. Always on.",
+  eyebrow: "In your browser, Telegram & WhatsApp",
+  title: "Your personal AI agent, always online.",
   body: [
-    "An AI agent that works for you around the clock, and is",
-    "free to run.",
-    "It remembers what you tell it, reminds you when things are due, and gets things done in the apps you already use.",
+    `${BRAND.name} is an AI agent that`,
+    "doesn't need a subscription or your computer to run.",
+    "So you can use it as much as you want, any way you want, and pay only for what you use.",
   ],
-  bodySecondary: "Bring your own OpenRouter API key, pick any model you like, and pay only for what your agent uses.",
   primaryCta: "Get my agent",
-  secondaryCta: "See how it works",
-  footnote: "Usage limits apply. Self-host on Cloudflare to remove them.",
+  secondaryCta: "See what can it do",
+  footnote: "Free to run with your own OpenRouter API key. Usage limits apply.",
 } as const;
 
 export const STATS = [
   {
     value: "$0",
     label:
-      "To run your agent. You only pay your model provider for what your agent actually uses.",
+      "To run your agent. You only pay your model provider for tokens your agent uses.",
   },
   {
     value: "24/7",
@@ -109,20 +108,20 @@ export const STATS = [
       "Your agent runs online, so it keeps working when your phone and laptop are switched off.",
   },
   {
-    value: "3 ways",
+    value: "3 interfaces",
     label:
-      "To talk to it: in your browser, on Telegram, or on WhatsApp. It is the same agent everywhere.",
+      "Chat via Browser, Whatsapp or use Telegram to make your agent publicly accessible.",
   },
 ] as const;
 
 export const FEATURES = {
   eyebrow: "What it can do for you",
-  title: "More than a chatbot",
-  body: `A chatbot answers questions while you have it open. Your ${BRAND.name} agent does things for you, and keeps going when you close the tab. Switch on only what you need, and reach out to us if there is something you would like it to do.`,
+  title: "Goes beyond answering questions.",
+  body: `Your ${BRAND.name} agent acts on what you ask, not just replies to it. Turn on only the skills you need.`,
   cards: [
     {
-      title: "It lives where you already chat",
-      body: "Message your agent on Telegram or WhatsApp just like you would message a friend. Type, forward a link, send a photo, or record a voice note. Every conversation also shows up in your browser.",
+      title: "It works in your apps",
+      body: "Connect Notion, Gmail, GitHub or any other app you use, and your agent can work it for you. Ask it to add a task, find a page or open an issue, and it takes care of the clicks.",
       wide: true,
     },
     {
@@ -138,8 +137,8 @@ export const FEATURES = {
       body: "Ask it to check in at 8am, every Monday, or before your flight, and it will message you first.",
     },
     {
-      title: "It works in your apps",
-      body: "Connect Notion, GitHub and other apps, and ask your agent to add a task, find a page or open an issue for you.",
+      title: "It lives where you already chat",
+      body: "Message it on Telegram or WhatsApp like you would a friend. Send text, links, photos or voice notes, and see every conversation in your browser too.",
     },
   ],
   /** The one dark card at the end of the grid. */
@@ -150,10 +149,10 @@ export const FEATURES = {
 } as const;
 
 export const MISSION = {
-  eyebrow: "Not stopping until",
+  eyebrow: "We're on track for",
   titleSuffix: "agents.",
   subtitle: "One for each person.",
-  body: "We believe every person on the planet should have open and equal access to their own AI agent.",
+  body: "We believe every person on the planet should have open and equal access to AI.",
   coverageSuffix: "covered so far.",
 } as const;
 
@@ -201,30 +200,30 @@ export const CAPABILITIES = {
     "Connect to GitHub",
     "Connect any MCP server",
   ],
-  more: "More added all the time.",
+  more: "More to be added over time.",
 } as const;
 
 /** A short section for Fleet Accounts. Kept modest on purpose: the page is about personal agents. */
 export const FLEET = {
   eyebrow: "Fleet Accounts",
   title: "Give an agent to everyone you work with.",
-  body: "Create agents for your team, your customers, or friends and family, one for each person. Your agents can share your OpenRouter API key, each with its own spending limit, so they work from day one.",
+  body: "Create agents for your team, your customers, or friends and family, one for each person. Your agents can share your OpenRouter API key, each with its own spending limit, so they work out of the box.",
   points: [
     {
       title: "Every agent stays private",
       body: "Each person gets their own agent, with their own chats, memories and bot. You cannot read their conversations.",
     },
     {
-      title: "They can make it their own",
-      body: "Your users can still customise their agent, within the settings you allow them to change.",
+      title: "Users can still make it their own",
+      body: "Your users can customise their agents, within the settings you allow them to change.",
     },
     {
       title: "Manage them in one place",
-      body: "Change settings for everyone at once or for one person, and add or remove people at any time.",
+      body: "Get additional options to give your users an agent experience you feel they would find useful.",
     },
   ],
   cta: "Learn about fleets",
-  note: "Fleet Accounts are free for a limited time. Request one from the app.",
+  note: "Upgrades to Fleet Accounts are free for a limited time. Request from the app.",
 } as const;
 
 /**
@@ -298,7 +297,7 @@ export const CTA = {
 } as const;
 
 export const FOOTER = {
-  tagline: `${BRAND.name} is a personal AI agent that is always on and free to run. Talk to it in your browser, on Telegram or on WhatsApp.`,
+  tagline: `${BRAND.name} is a personal AI agent that doesn't need a subscription or your computer to run. Use it as much as you want and pay only for what you use. Talk to it in your browser, on Telegram or on WhatsApp.`,
   note: "Free to run. Self-host for higher usage limits.",
   columns: [
     {
