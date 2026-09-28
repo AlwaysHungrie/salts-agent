@@ -1,0 +1,13 @@
+{
+  "name": "salts-web",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Private web search for a salt-agent: SearXNG in Docker behind a token gate, tunnelled out with ngrok, with the agent kept pointed at the tunnel.",
+  "bin": {
+    "salts-web": "./cli.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
