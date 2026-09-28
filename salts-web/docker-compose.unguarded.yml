@@ -13,4 +13,4 @@ services:
 
   searxng:
     ports:
-      - "${SEARXNG_PORT:-8080}:8080"
+      - "${SALTS_PORT:-8080}:8080"

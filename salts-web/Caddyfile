@@ -1,0 +1,12 @@
+# Bearer-token gate in front of SearXNG.
+#
+# The token is never written to disk: salts-web reads it from the macOS Keychain and
+# hands it to this container as SALTS_TOKEN, and `{$SALTS_TOKEN}` is substituted when
+# the Caddyfile loads. docker-compose.yml refuses to start without it, so the gate can
+# never come up matching an empty token.
+:8081 {
+	@unauthorized not header Authorization "Bearer {$SALTS_TOKEN}"
+	respond @unauthorized "unauthorized" 401
+
+	reverse_proxy searxng:8080
+}

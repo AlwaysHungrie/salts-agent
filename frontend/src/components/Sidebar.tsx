@@ -151,7 +151,7 @@ export function Sidebar({
                   aria-hidden={copy || undefined}
                   className="px-6 text-[11px] font-medium leading-[1.33]"
                 >
-                  This agent is part of and managed by {fleetName}
+                  This agent is part of {fleetName}
                 </span>
               ))}
             </div>

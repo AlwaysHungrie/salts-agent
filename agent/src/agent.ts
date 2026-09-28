@@ -2517,8 +2517,9 @@ export class SessionAgent extends Think<Env> {
   }
 
   /**
-   * Summarise the older part of the conversation into the overlay, keeping the first
-   * few messages and roughly `tailTokens` of the most recent ones word for word.
+   * Summarise the older part of the conversation into the overlay, keeping `head`
+   * messages at the start and roughly `tailTokens` (at least `minTail` messages) at the
+   * end word for word.
    *
    * Think's reference algorithm does the choosing and the prompt: it protects the
    * head, keeps tool calls with their results, and folds an existing summary into the
@@ -2529,7 +2530,11 @@ export class SessionAgent extends Think<Env> {
    * Returns how many transcript messages the summary now stands for and what the call
    * cost, or null when there is nothing old enough to fold in yet.
    */
-  private async compact(tailTokens: number): Promise<{ covered: number; cost: number } | null> {
+  private async compact(keep: {
+    head: number;
+    tailTokens: number;
+    minTail: number;
+  }): Promise<{ covered: number; cost: number } | null> {
     this.ensureSchema();
     const history = await this.compactedMessages();
     const previous = this.exec<{ from_id: string }>(
@@ -2538,7 +2543,9 @@ export class SessionAgent extends Think<Env> {
     const overlaid = history.some((m) => m.id.startsWith(COMPACTION_PREFIX));
     let cost = 0;
     const summarise = createCompactFunction({
-      tailTokenBudget: tailTokens,
+      protectHead: keep.head,
+      tailTokenBudget: keep.tailTokens,
+      minTailMessages: keep.minTail,
       summarize: async (prompt) => {
         const result = await generateText({
           model: this.openrouter().chat(this.config().model),
@@ -2599,7 +2606,7 @@ export class SessionAgent extends Think<Env> {
     try {
       // A fifth of the budget kept verbatim: recent enough to carry on from, small
       // enough that the next turn lands well under the line.
-      const done = await this.compact(Math.floor(threshold / 5));
+      const done = await this.compact({ head: 3, tailTokens: Math.floor(threshold / 5), minTail: 2 });
       if (!done) return;
       this.turnUsage.cost += done.cost;
       this.turnUsage.reported += done.cost;
@@ -2614,8 +2621,9 @@ export class SessionAgent extends Think<Env> {
   }
 
   /**
-   * `!compact`: summarise now, whatever the size, keeping only the last exchange word
-   * for word. Refused while a reply is being written — the turn has already read the
+   * `!compact`: summarise now, whatever the size — everything but the latest message,
+   * which is kept word for word so the conversation carries on from it. Unlike the
+   * automatic kind it keeps no head: asked for by hand, even a single exchange compacts. Refused while a reply is being written — the turn has already read the
    * history it is answering from — and once the month's spend is used up, because the
    * summary is a model call like any other.
    */
@@ -2630,9 +2638,9 @@ export class SessionAgent extends Think<Env> {
     if (blocked) return { text: blocked, destroy: false };
     try {
       await this.loadConfig();
-      const done = await this.compact(0);
+      const done = await this.compact({ head: 0, tailTokens: 0, minTail: 1 });
       if (!done) {
-        return { text: "Nothing to compact yet: the conversation is still short.", destroy: false };
+        return { text: "Nothing to compact yet: there is no earlier message to summarise.", destroy: false };
       }
       if (done.cost > 0) await this.registry().addSpend(done.cost);
       return {
