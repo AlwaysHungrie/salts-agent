@@ -201,7 +201,13 @@ export default function Agents() {
   };
 
   return (
-    <div className="bg-canvas text-ink min-h-screen">
+    <div className="bg-canvas text-ink relative min-h-screen">
+      <Link
+        href="/guide"
+        className="text-muted hover:text-ink absolute top-4 right-5 text-sm font-semibold transition-colors md:right-8"
+      >
+        User guide
+      </Link>
       <div className="mx-auto w-full max-w-2xl px-5 py-10 md:px-8 md:py-14">
         <div className="border-b border-canvas-soft pb-4 flex items-center justify-between gap-4">
           <div>
@@ -1653,7 +1659,7 @@ function BusinessRequestDialog({
         ) : (
           <div className="pt-6 sm:pt-10">
             <span className="bg-white text-muted inline-flex items-center rounded-[10px] px-3 py-1.5 text-xs font-semibold leading-[1.33]">
-              Business Account
+              Fleet Account
             </span>
             <h1 className="mt-5 text-[clamp(30px,4.5vw,44px)] leading-[1.08] tracking-[-0.025em]">
               Sponsor agents for everyone you work with.
@@ -1698,7 +1704,7 @@ function BusinessRequestDialog({
               </h2>
               <p className="text-muted mt-2 text-sm leading-relaxed">
                 For a limited time period we are allowing free upgrades to
-                business accounts. All requests are approved on a case to case
+                Fleet Accounts. All requests are approved on a case to case
                 basis.
               </p>
 
