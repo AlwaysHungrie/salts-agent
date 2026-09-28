@@ -180,7 +180,7 @@ export function SiteHeader() {
             </nav>
 
             <a
-              href="#start"
+              href={DESTINATIONS.signUp ?? "#start"}
               className="inline-flex h-10 items-center gap-2 rounded-[13px] bg-ink px-4 text-sm font-semibold text-white transition-colors hover:bg-ink-soft md:pr-3"
             >
               <span>{HERO.primaryCta}</span>
