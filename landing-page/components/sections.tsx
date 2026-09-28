@@ -6,8 +6,10 @@ import {
   COVERAGE_PERCENT,
   CTA as CTA_COPY,
   FEATURES as FEATURES_COPY,
+  FLEET,
   HERO,
   HOW,
+  LINKS,
   MISSION,
   OWNERSHIP,
   PRICING,
@@ -16,7 +18,6 @@ import {
   WORLD_POPULATION_B,
 } from "./content";
 import { Globe } from "./Globe";
-import { SignupCard } from "./SignupCard";
 import { CountUp, HeroSquircles, Reveal } from "./motion";
 import { Button, Eyebrow, Placeholder, Wrap } from "./ui";
 import type { ReactNode } from "react";
@@ -65,7 +66,7 @@ export function Hero() {
 
         <Reveal delay={0.15}>
           <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-            <Button href="#start">{HERO.primaryCta}</Button>
+            <Button href={LINKS.signUp ?? "#start"}>{HERO.primaryCta}</Button>
             <Button href="#how" variant="outline">
               {HERO.secondaryCta}
             </Button>
@@ -311,6 +312,51 @@ export function Capabilities() {
   );
 }
 
+/* --------------------------------------------------------------- Fleet -- */
+
+/** A short, quiet section: fleets matter, but the page is about personal agents. */
+export function Fleet() {
+  return (
+    <section id="fleet" className="mt-20 scroll-mt-28 sm:mt-28 lg:mt-32">
+      <Wrap>
+        <Reveal>
+          <div className="max-w-[640px]">
+            <Eyebrow>{FLEET.eyebrow}</Eyebrow>
+            <h2 className="mt-3 text-[clamp(26px,3.5vw,34px)] font-[650] leading-[1.1] tracking-[-0.025em]">
+              {FLEET.title}
+            </h2>
+            <p className="mt-4 leading-relaxed text-muted">{FLEET.body}</p>
+          </div>
+        </Reveal>
+
+        <div className="mt-8 grid gap-6 sm:mt-10 md:grid-cols-3">
+          {FLEET.points.map((p, i) => (
+            <Reveal key={p.title} delay={i * 0.05}>
+              <div className="border-t border-hairline pt-5">
+                <h3 className="text-base font-semibold tracking-[-0.01em]">
+                  {p.title}
+                </h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted">
+                  {p.body}
+                </p>
+              </div>
+            </Reveal>
+          ))}
+        </div>
+
+        <Reveal>
+          <div className="mt-8 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-5">
+            <Button href={LINKS.fleetGuide} variant="outline">
+              {FLEET.cta}
+            </Button>
+            <p className="text-sm text-faint">{FLEET.note}</p>
+          </div>
+        </Reveal>
+      </Wrap>
+    </section>
+  );
+}
+
 /* --------------------------------------------------------------- Steps -- */
 
 /** The three-step setup, rendered identically wherever it appears. */
@@ -351,6 +397,14 @@ export function Steps() {
         <div className="mt-8 sm:mt-12">
           <StepList />
         </div>
+
+        <Reveal>
+          <div className="mt-10 text-center">
+            <Button href={LINKS.guide} variant="outline">
+              {HOW.guideCta}
+            </Button>
+          </div>
+        </Reveal>
       </Wrap>
     </section>
   );
@@ -376,9 +430,11 @@ export function Cta() {
               </p>
             </div>
 
-            {/* The same three steps as "How it works", run for real. */}
-            <div className="mt-8 sm:mt-10">
-              <SignupCard />
+            <div className="mt-8 flex flex-col justify-center gap-3 sm:mt-10 sm:flex-row">
+              <Button href={LINKS.signUp ?? "#how"}>{CTA_COPY.primary}</Button>
+              <Button href={LINKS.guide} variant="outline">
+                {CTA_COPY.secondary}
+              </Button>
             </div>
           </div>
         </Reveal>
