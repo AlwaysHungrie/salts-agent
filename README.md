@@ -1,4 +1,4 @@
-# serverless-agent
+# salts-agent
 
 Chat agents that run as Cloudflare Durable Objects — one DO per session, one per agent
 — with a Next.js frontend that shows what every message costs, in tokens and in

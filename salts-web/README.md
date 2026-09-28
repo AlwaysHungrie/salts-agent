@@ -13,14 +13,24 @@ The CLI does the rest:
 - rebuilds the tunnel and updates the agent whenever the tunnel drops or moves
 - optionally starts at login
 
-It runs on macOS only, because the token is kept in the macOS Keychain.
+It runs on macOS, Linux and Windows.
 
 ## Requirements
 
-- Docker: Docker Desktop, OrbStack or Colima. It does not need to start at login.
-  salts-web starts it when it is not running.
-- ngrok: `brew install ngrok`. salts-web asks for your authtoken if ngrok has none.
+- Docker with the compose plugin. It does not need to start at login.
+  - macOS: Docker Desktop, OrbStack or Colima. salts-web starts it when it is not running.
+  - Windows: Docker Desktop. salts-web starts it when it is not running.
+  - Linux: Docker Engine, Docker Desktop or Colima. salts-web starts Docker Desktop and
+    Colima itself. Docker Engine runs as a system service, so start it with
+    `sudo systemctl enable --now docker`, and add your user to the `docker` group so
+    `docker info` works without `sudo`.
+- ngrok: `brew install ngrok` (macOS), `winget install ngrok.ngrok` (Windows), or
+  [ngrok.com/download](https://ngrok.com/download) (Linux). salts-web asks for your
+  authtoken if ngrok has none.
 - Node 20 or later.
+- Linux only, optional: `secret-tool` (package `libsecret-tools` on Debian/Ubuntu,
+  `libsecret` on Fedora/Arch) to keep the token in the desktop keyring. See
+  [Where things live](#where-things-live).
 
 ## Install
 
@@ -39,7 +49,7 @@ salts-web start
 
 1. Checks that Docker and ngrok are installed, that ngrok has an authtoken, and that
    Docker is running. Starts Docker if it is not.
-2. Generates an API token if the Keychain does not already hold one.
+2. Generates an API token if the OS secret store does not already hold one.
 3. Asks for the agent ID.
 4. Shows the token **once**. Paste it into the agent's settings under Capabilities →
    **Web search** → **SearXNG token**, then save. Leave the Brave key blank. When a
@@ -58,9 +68,9 @@ or generate a new one.
 | `salts-web start` | Checks the machine, runs the first-run steps if needed, then starts everything. |
 | `salts-web stop` | Stops the supervisor, the tunnel and the containers. |
 | `salts-web restart` | Opens a new tunnel and sends its address to the agent. |
-| `salts-web reset` | Deletes `state.json` and the token in the Keychain, so the next `start` is a first run. Stop salts-web first. |
+| `salts-web reset` | Deletes `state.json` and the saved token, so the next `start` is a first run. Stop salts-web first. |
 | `salts-web setup` | Runs the first-run questions again, for example to switch agents. |
-| `salts-web autostart on` / `off` | Adds or removes the login item (a LaunchAgent). |
+| `salts-web autostart on` / `off` | Adds or removes the login item. See [Where things live](#where-things-live). |
 
 ## Staging
 
@@ -78,9 +88,9 @@ salts-web autostart:staging on
 
 Staging runs as a separate instance, with its own token, state, containers, port,
 tunnel and login item, so it can run alongside production. `stop:staging` does not
-affect production. Staging uses the Keychain account `searxng-token-staging`, state and
-logs in `~/.salts-web/staging/`, the Docker project `searxng-staging`, and the login
-item `com.salts-web-staging`.
+affect production. Staging uses the token account `searxng-token-staging`, state and
+logs in `~/.salts-web/staging/`, the Docker project `searxng-staging`, and a login item
+with a `-staging` suffix.
 
 ## How it stays up
 
@@ -98,18 +108,31 @@ no Clerk session. The Worker accepts it only when the bearer token matches the a
 saved SearXNG token, and the only setting it changes is `searxng_url`. An agent with no
 token saved cannot be updated through this route.
 
-At login, the LaunchAgent runs `salts-web start` without a terminal. That start skips
+At login, the login item runs `salts-web start` without a terminal. That start skips
 the Docker wait and leaves it to the supervisor, so login is never held up.
 
 ## Where things live
 
-- **Token**: macOS Keychain, service `salts-web`, account `searxng-token`. It is never
-  written to a file or passed on a command line. The Caddy container receives it as
+- **Token**: never passed on a command line. The Caddy container receives it as
   `SALTS_TOKEN`. `docker-compose.yml` refuses to start the gate without it.
+
+  | Platform | Stored in |
+  | --- | --- |
+  | macOS | Keychain, service `salts-web`, account `searxng-token` |
+  | Linux with `secret-tool` and a running keyring | Secret Service keyring, attributes `service=salts-web`, `account=searxng-token` |
+  | Linux without a keyring (headless) | `~/.salts-web/token`, mode `0600` |
+  | Windows | `%USERPROFILE%\.salts-web\token.dpapi`, encrypted with DPAPI for the current user |
+
 - **State**: `~/.salts-web/state.json` holds the agent ID, Worker URL, port and tunnel
   address. It contains no secrets.
 - **Log**: `~/.salts-web/supervisor.log`.
-- **Login item**: `~/Library/LaunchAgents/com.salts-web.plist`.
+- **Login item**:
+
+  | Platform | Login item |
+  | --- | --- |
+  | macOS | LaunchAgent `~/Library/LaunchAgents/com.salts-web.plist` |
+  | Linux | systemd user unit `~/.config/systemd/user/salts-web.service` |
+  | Windows | `salts-web.cmd` in the Startup folder (`shell:startup`) |
 
 To target a different Worker, set `SALTS_WEB_WORKER=https://…` when you run
 `salts-web setup`. The default is the production Worker.
@@ -125,7 +148,9 @@ salts-web start
 ## Check it by hand
 
 ```bash
-T=$(security find-generic-password -s salts-web -a searxng-token -w)
+T=$(security find-generic-password -s salts-web -a searxng-token -w)   # macOS
+# T=$(secret-tool lookup service salts-web account searxng-token)      # Linux, keyring
+# T=$(cat ~/.salts-web/token)                                          # Linux, no keyring
 curl -s -H "Authorization: Bearer $T" \
   "$(node -p 'require(process.env.HOME+"/.salts-web/state.json").url')/search?q=solana&format=json" | head -c 400
 ```

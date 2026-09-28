@@ -221,7 +221,7 @@ export class McpClient {
     await this.send("initialize", {
       protocolVersion: MCP_PROTOCOL_VERSION,
       capabilities: {},
-      clientInfo: { name: "serverless-agent", version: "1.0" },
+      clientInfo: { name: "salts-agent", version: "1.0" },
     });
     // Best effort: some servers close the stream before the notification lands, and
     // the session works regardless.
