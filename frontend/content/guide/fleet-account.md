@@ -1,38 +1,23 @@
 ---
-title: Get a fleet account
+title: Get a Fleet Account
 section: Fleets
 order: 2
-summary: A free account can only create a few agents. Request a business account to create a fleet.
+summary: A Personal Account can only create a few agents. Request a Fleet Account to create a fleet.
 ---
 
-Every agent in a fleet counts as an agent you created. A free account can only create a limited number of agents, so before you can create a fleet, you need a business account with a higher limit.
+A Personal Account can only create a limited number of agents, and every agent in a fleet counts towards that limit. To create a fleet, you first need to request a Fleet Account with a higher limit. For a limited time, Fleet Accounts are free.
 
-> What to expect:
->
-> - Requests are reviewed by hand and approved one by one. It is not instant.
-> - For a limited time, business accounts are free.
-> - You ask for a number of extra agents. If you need more later, you can ask again.
+## 1. Request a Fleet Account
 
-## 1. Request a business account
-
-1. On the Salts home page, click **Need more agents?** at the bottom of your list of agents.
+1. On the Salts home page, click **Need more agents?** below your list of agents.
 2. Check that the email address shown is the one you want to manage the fleet from.
-3. Under **Request agents**, enter how many more agents you need. Count one agent for every person you want to give one to, plus a few for people who join later.
+3. Under **Request agents**, enter how many more agents you need. We recommend counting one agent for every person you want to give one to, plus a few extra for people who join later.
 4. Click **Send request**.
-
-You will see **Request sent**. We will get back to you.
 
 ## 2. Wait for approval
 
-Once your request is approved, your limit goes up. You do not have to do anything else.
+Requests are reviewed by hand, so approval is not instant. Once your request is approved, your limit goes up automatically and you do not need to do anything else.
 
-To check, open **Need more agents?** again. Under **Request agents**, it shows how many agents you have left and your current limit.
+To check your limit, open **Need more agents?** again. Under **Request agents**, you will see how many agents you have left. If you need more later, you can send another request.
 
-## You are ready
-
-Continue with [Create a fleet](/guide/create-fleet).
-
-## Footnotes
-
-1. Your limit counts every agent you created, including your own agent and every agent in every fleet. Deleting an agent frees up a place.
-2. If you try to create a fleet with more people than you have agents left, nothing is created and the dialog tells you why. Remove some addresses, or request more agents first.
+Once you are approved, continue with [Create a fleet](/guide/create-fleet).

@@ -5,51 +5,36 @@ order: 2
 summary: Long conversations get slower and more expensive with every reply. Compacting is how you keep them cheap.
 ---
 
-Your agent does not remember a conversation the way you do. Every time you send a message, the whole conversation so far is sent to the model again, from the first message to the last. The model reads all of it before it writes a single word.
+Every time you send your agent a message, it reads the whole conversation again from the start before it replies. You pay for everything it reads, so the longer a conversation gets, the more each reply costs. Long conversations also make replies slower, and old messages can confuse your agent.
 
-That has three consequences:
+Compacting solves this by replacing the older part of the conversation with a short summary. From then on, your agent reads the summary instead of every old message, and your replies become cheaper again.
 
-- **Every reply costs more than the one before.** You pay for everything the model reads. A conversation with a hundred messages in it costs far more per reply than one with ten, even if you only ask a short question.
-- **Replies get slower.** More to read means a longer wait.
-- **Answers can get worse.** Old, unrelated messages distract the model. At some point the conversation is longer than the model can read at all.
+## What compacting keeps
 
-Compacting fixes this. It replaces the older part of the conversation with a short summary. From then on your agent reads the summary instead of every old message, and your costs drop back down.
+The summary keeps what the conversation was about, what was decided and what is still open. It does not keep exact details, such as the precise wording of a message or a long list of numbers. If you need one of those details later, paste it into the chat again.
 
-## What compacting keeps and what it loses
+Compacting does not delete anything. Every message is still in your browser, exactly as it was sent.
 
-The summary keeps what the conversation was about, what was decided, and what is still open. It loses exact detail: the precise wording of a message, a long list of numbers, a file you sent twenty messages ago.
+## Your agent compacts on its own
 
-Nothing is deleted. Every message is still in your browser, word for word. Only what the model reads gets shorter.
-
-If you need an exact detail after compacting, paste it again.
-
-## It happens on its own
-
-Your agent compacts automatically. Before each reply it checks how much the model had to read for the last one. If that has grown past a set size, it summarises the older messages first, and keeps the first few messages and the most recent part of the conversation in full.
-
-You do not have to do anything for this. The summary is a model call, so it is billed to your OpenRouter key like any other reply.
+When a conversation grows past a certain size, your agent automatically summarises the older messages before it replies. You do not need to do anything. The summary is written by the model, so it is billed to your OpenRouter key like any other reply.
 
 ## When to compact yourself
 
-Send `!compact` when:
+You can also send `!compact` at any time. We recommend doing this when:
 
-- You want to carry on with the same subject, but the conversation has become long.
-- The cost shown under each reply keeps climbing.
-- Your agent starts forgetting what you told it earlier, or mixing up old and new instructions.
-
-A manual `!compact` summarises everything except your latest message. You can send it again later. The new summary includes the old one.
+- You want to keep talking about the same thing, but the conversation has become long.
+- The cost shown under each reply keeps going up.
+- Your agent starts forgetting what you told it earlier, or mixes up old and new instructions.
 
 ## Compact or start again
 
+If you are changing the subject, it is better to start a new conversation than to compact. Send `!new` on Telegram or WhatsApp, or start a new session in your browser. A new conversation is always the cheapest, and your agent does not lose anything it saved to its memory.
+
 | If you are | Do this |
 |---|---|
-| Carrying on with the same thing | `!compact` |
-| Changing subject | `!new`, or a new session in the browser |
-| Done with the conversation for good | `!clear` |
+| Carrying on with the same thing | Send `!compact` |
+| Changing the subject | Send `!new`, or start a new session in the browser |
+| Done with the conversation for good | Send `!clear` |
 
-When in doubt, start a new session. A fresh session is always the cheapest one, and nothing your agent saved to its memory is lost.
-
-## Footnotes
-
-1. **Context window** in your agent's settings is another way to keep replies cheap. It makes the agent read only the last few messages. Unlike compacting, it throws everything older away instead of summarising it.
-2. `!compact` replies `Nothing to compact yet` when there is only one message in the conversation.
+See [Commands](/guide/commands) for everything these commands do.

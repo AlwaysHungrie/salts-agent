@@ -51,6 +51,7 @@ const SECTION_ORDER = [
   "Managing costs",
   "Telegram",
   "WhatsApp",
+  "MCP servers",
   "Advanced use",
   "Fleets",
 ];
