@@ -109,33 +109,38 @@ async function fourTurns(sessionId: string, email: string, tag: string) {
 }
 
 describe("!compact", () => {
-  it("says there is nothing to compact in a short conversation", async () => {
+  it("says there is nothing to compact before anything was said", async () => {
     const { sessionId, email, agentId } = await chatFixture();
-    await say(sessionId, email, "hello");
     expect(await say(sessionId, email, "!compact")).toContain("Nothing to compact");
-    // No summary call was made, so nothing beyond the one turn was spent.
-    expect(await registryFor(agentId).spendThisMonth()).toBeCloseTo(COST_PER_TURN);
+    // No summary call was made, so nothing was spent.
+    expect(await registryFor(agentId).spendThisMonth()).toBeCloseTo(0);
   });
 
-  it("summarises the middle of the conversation for the model", async () => {
+  it("compacts even a single exchange", async () => {
+    const { sessionId, email } = await chatFixture();
+    await say(sessionId, email, "hello");
+    // The question goes into the summary; the reply is the one message kept.
+    expect(await say(sessionId, email, "!compact")).toContain("Compacted: 1 earlier message");
+  });
+
+  it("summarises everything but the latest message for the model", async () => {
     const tag = crypto.randomUUID().slice(0, 8);
     const { sessionId, email } = await chatFixture();
     await fourTurns(sessionId, email, tag);
 
-    // Head of three kept, last two kept: the second reply and the third exchange's
-    // question go into the summary.
+    // No head kept, last message kept: the other seven go into the summary.
     const reply = await say(sessionId, email, "!compact");
-    expect(reply).toContain("Compacted: 3 earlier messages");
+    expect(reply).toContain("Compacted: 7 earlier messages");
 
     await say(sessionId, email, `fifth-${tag}`);
     const [next] = await turnsCarrying(`fifth-${tag}`);
     const sent = JSON.stringify(next.messages);
     expect(sent).toContain(FIRST_SUMMARY);
     expect(sent).toContain("Summary of the earlier part of this conversation");
+    expect(sent).not.toContain(`first-${tag}`);
     expect(sent).not.toContain(`third-${tag}`);
-    // The head and the tail are sent as they were.
-    expect(sent).toContain(`first-${tag}`);
-    expect(sent).toContain(`fourth-${tag}`);
+    // The latest message, the fourth reply, is sent as it was.
+    expect(sent).toContain(replyTo(`fourth-${tag}`));
   });
 
   it("leaves the transcript whole", async () => {
@@ -154,7 +159,8 @@ describe("!compact", () => {
     await say(sessionId, email, "!compact");
     await say(sessionId, email, `fifth-${tag}`);
     await say(sessionId, email, `sixth-${tag}`);
-    expect(await say(sessionId, email, "!compact")).toContain("Compacted: 7 earlier messages");
+    // Eleven: all twelve transcript messages but the latest.
+    expect(await say(sessionId, email, "!compact")).toContain("Compacted: 11 earlier messages");
 
     await say(sessionId, email, `seventh-${tag}`);
     const [next] = await turnsCarrying(`seventh-${tag}`);
