@@ -6,6 +6,7 @@ import {
   Costs,
   Cta,
   Features,
+  Fleet,
   Hero,
   Mission,
   Stats,
@@ -33,6 +34,7 @@ export default function Page() {
           <Steps />
           <Costs />
           <Capabilities />
+          <Fleet />
           <FaqSection />
           <Cta />
         </main>

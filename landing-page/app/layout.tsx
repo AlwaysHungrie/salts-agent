@@ -23,9 +23,9 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Salt Agents — your own AI, right inside Telegram",
+  title: "Salts — your own AI agent, always on",
   description:
-    "Give your AI agent a name and a Telegram account, then text it like a friend. It remembers you, searches the web, reads your photos and voice notes — and shows what every reply costs. One agent for every person on Earth.",
+    "A personal AI agent that is always on and free to run. Talk to it in your browser, on Telegram or on WhatsApp. It remembers what you tell it, reminds you when things are due, and gets things done in the apps you already use.",
 };
 
 export default function RootLayout({
