@@ -1,36 +1,65 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# frontend
 
-## Getting Started
+The Salts web app: sign-in, the agent list, chat, settings, capabilities, fleets, and the
+user guide. Next.js 16 (App Router), Clerk, AI SDK. It is a thin shell over the agent
+Worker in [`../agent`](../agent/README.md), which holds every piece of data.
 
-First, run the development server:
+## Run it
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.example .env.local   # then add the Clerk keys
+pnpm install
+pnpm dev                     # http://localhost:3000, against AGENT_URL
+pnpm dev:local               # same, against LOCALHOST_AGENT_URL (a local `wrangler dev`)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+This package uses pnpm. The agent Worker uses npm.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+`.env.local` holds:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `AGENT_URL`: the Worker every route handler forwards to.
+- `LOCALHOST_AGENT_URL`: used instead when `USE_LOCAL_AGENT=true`, which `pnpm dev:local` sets.
+- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`: from the Clerk dashboard.
+- `CLERK_JWT_TEMPLATE`: only if your Clerk session token has no `email` claim.
 
-## Learn More
+It holds no shared secret. The Worker identifies a caller by the Clerk session token this
+app forwards. The Worker's `API_SECRET` back door is read from one browser's
+localStorage, never from this app. See the root [README](../README.md#run-it).
 
-To learn more about Next.js, take a look at the following resources:
+## How it talks to the Worker
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+The browser never calls the Worker. Every request goes to a route handler under
+`src/app/api/`, which forwards it with the caller's identity (`src/lib/upstream.ts`,
+`src/lib/proxy.ts`). There is no CORS and no key in the browser.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+`src/proxy.ts` is Next 16's middleware. It establishes the Clerk session and does not
+protect routes: the pages are shells, and the Worker refuses any request it cannot
+identify.
 
-## Deploy on Vercel
+## Pages
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+| Route | What it is |
+| --- | --- |
+| `/` | Every agent the caller may open, and the fleets they administer |
+| `/a/:agentId` | Chat, with the session sidebar |
+| `/a/:agentId/settings` | Model, instructions, reasoning, temperature, reply cap, context window |
+| `/a/:agentId/capabilities` | Tools, channels (Telegram, WhatsApp) and MCP servers |
+| `/guide`, `/guide/:slug` | The user guide |
+| `/sign-in`, `/sign-up`, `/sso-callback` | Clerk |
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## The user guide
+
+Pages are Markdown in `content/guide/`, one file per page. The front matter sets
+`title`, `section`, `order`, `summary` and `featured`. Adding a file adds the page; the
+search index at `/guide/search-index.json` is built from the same files.
+
+## Design
+
+`DESIGN.md` is the design system: monochrome ink on white, pill-shaped controls, one
+accent blue. The landing page mirrors its tokens.
+
+## Deploy
+
+Vercel project `salts-agent-app`. Merging to `main` deploys production, and pushing to
+the `staging` branch deploys staging. Environment variables are managed in Terraform, see
+[docs/infra.md](../docs/infra.md).
