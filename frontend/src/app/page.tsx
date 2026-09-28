@@ -201,7 +201,13 @@ export default function Agents() {
   };
 
   return (
-    <div className="bg-canvas text-ink min-h-screen">
+    <div className="bg-canvas text-ink relative min-h-screen">
+      <Link
+        href="/guide"
+        className="text-muted hover:text-ink absolute top-4 right-5 text-sm font-semibold transition-colors md:right-8"
+      >
+        User guide
+      </Link>
       <div className="mx-auto w-full max-w-2xl px-5 py-10 md:px-8 md:py-14">
         <div className="border-b border-canvas-soft pb-4 flex items-center justify-between gap-4">
           <div>
