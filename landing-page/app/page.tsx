@@ -30,10 +30,10 @@ export default function Page() {
           <Hero />
           <Stats />
           <Features />
-          <Mission />
+          <Capabilities />
           <Steps />
           <Costs />
-          <Capabilities />
+          <Mission />
           <Fleet />
           <FaqSection />
           <Cta />

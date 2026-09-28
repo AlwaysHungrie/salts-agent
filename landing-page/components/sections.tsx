@@ -59,15 +59,12 @@ export function Hero() {
             {HERO.body[0]} <span className="font-medium">{HERO.body[1]}</span>{" "}
             {HERO.body[2]}
           </p>
-          <p className="mx-auto mt-4 max-w-[620px] text-[16px] font-light leading-[1.5] text-muted text-balance sm:mt-6 sm:text-xl sm:leading-[1.4]">
-            {HERO.bodySecondary}
-          </p>
         </Reveal>
 
         <Reveal delay={0.15}>
           <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
             <Button href={LINKS.signUp ?? "#start"}>{HERO.primaryCta}</Button>
-            <Button href="#how" variant="outline">
+            <Button href="#skills" variant="outline">
               {HERO.secondaryCta}
             </Button>
           </div>
