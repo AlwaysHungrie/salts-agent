@@ -1662,12 +1662,13 @@ function BusinessRequestDialog({
               Fleet Account
             </span>
             <h1 className="mt-5 text-[clamp(30px,4.5vw,44px)] leading-[1.08] tracking-[-0.025em]">
-              Sponsor agents for everyone you work with.
+              Create agents for everyone you work with.
             </h1>
             <p className="text-muted mt-4 max-w-lg text-base font-light leading-[1.4] sm:text-xl">
-              Deploy and co-manage agents for your friends and customers, one
-              for each user. Agents you manage can share your OpenRouter API key
-              and have individual usage limits.
+              Create agents for your team, your customers, or friends and
+              family, one for each person. These agents can share your
+              OpenRouter API key, each with its own spending limit, so they work
+              out of the box.
             </p>
 
             {/* Three plain statements, not a feature grid. What is being asked for is
@@ -1680,11 +1681,11 @@ function BusinessRequestDialog({
                 ],
                 [
                   "You are in control",
-                  "You and the user that has access to the agent can still customize the agent and make it their own.",
+                  "Your users can customise their agents, within the settings you allow them to change.",
                 ],
                 [
                   "Manage your fleet",
-                  "Gain additional settings to get control over how much your agents can be customized.",
+                  "Get additional options to give your users an agent experience you feel they would find useful.",
                 ],
               ].map(([title, body]) => (
                 <div key={title} className="rounded-[24px] py-6">
@@ -1703,9 +1704,8 @@ function BusinessRequestDialog({
                 Request Access.
               </h2>
               <p className="text-muted mt-2 text-sm leading-relaxed">
-                For a limited time period we are allowing free upgrades to
-                Fleet Accounts. All requests are approved on a case to case
-                basis.
+                For a limited time period we are allowing free upgrades to Fleet
+                Accounts. All requests are approved on a case to case basis.
               </p>
 
               <div className="mt-6 space-y-5">

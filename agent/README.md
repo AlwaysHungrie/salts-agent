@@ -33,8 +33,8 @@ its own number and a Worker that refuses at the deployment's are two limits that
 and the browser's is the one the user meets first.
 
 It lives in `AgentDirectory`, is defined in `src/settings.ts`, and is reached over
-`/api/admin/settings` — or, in practice, from the `admin-cli` dashboard's settings
-screen (`s` on the list, `enter` to edit a row, `r` to set it to the shipped value).
+`/api/admin/settings` — or, in practice, from the `admin-cli` dashboard's **Defaults**
+and **Limits** tabs (`enter` to edit a row, `d` to set it to the shipped value).
 
 Every field is required. The Worker has no values of its own to fall back on: until the
 stored document is complete it answers every request except `/api/admin/settings` and
@@ -58,7 +58,7 @@ for that one and the preflight lets it through.
 ## Run locally
 
 ```bash
-cp .dev.vars.example .dev.vars   # then put your OpenRouter key in it
+cp .dev.vars.example .dev.vars   # optional: holds API_SECRET, the back door
 npm install
 npm run dev                       # wrangler dev on http://localhost:8787
 ```
@@ -109,6 +109,8 @@ curl -X POST http://localhost:8787/agents/session-agent/my-session/chat \
 | `GET  /agents/session-agent/:id/messages` | One page of transcript, newest last, with per-message tokens and cost. `?limit` (default 30, max 200) and `?before=<message id>` walk backwards |
 | `GET  /agents/session-agent/:id/summary` | Message count and total LLM spend |
 | `POST /agents/session-agent/:id/reset` | Wipe the session |
+| `POST /agents/session-agent/:id/unstick` | Free a session whose turns stopped completing, keeping its transcript |
+| `GET  /agents/session-agent/:id/live` | Whether a reply is still in flight, for a browser that reloaded mid-stream |
 | `GET\|POST /agents/session-agent/:id/files` | List pending attachments / upload one |
 | `GET\|DELETE /agents/session-agent/:id/files/:fileId` | Image bytes / drop a pending attachment |
 | `GET /agents/session-agent/:id/tasks` | Tasks this session scheduled |
@@ -116,18 +118,34 @@ curl -X POST http://localhost:8787/agents/session-agent/my-session/chat \
 | `GET\|POST /api/agents` | List / create agents — `{ name, openrouter_api_key?, allowed_emails? }`, and a key that OpenRouter rejects is a 400 that creates nothing. `GET` lists only what the caller may open |
 | `GET\|PATCH\|DELETE /api/agents/:agentId` | Read / rename / delete an agent and everything it owns. `PATCH` takes `{ name?, allowed_emails? }` |
 | `GET\|PATCH /api/agents/:agentId/config` | That agent's settings, capabilities and their metadata |
+| `GET\|PATCH\|POST /api/agents/:agentId/meta` | The admin's meta settings: defaults and which of them users may change. `POST` re-applies them. Admin only |
 | `GET\|POST /api/agents/:agentId/mcp` | That agent's MCP servers |
+| `GET /api/agents/:agentId/telegram/status` | Ask Telegram why the bot is or is not answering |
+| `GET /api/agents/catalog` | The model and MCP catalogues the create dialog picks from |
 | `GET\|POST /api/agents/:agentId/sessions` | List / create that agent's sessions. GET takes `?limit` (default 30, max 200) and `?cursor`, and answers `{ sessions, has_more, cursor }` |
 | `PATCH\|DELETE /api/sessions/:sessionId` | Rename / delete a session |
+| `POST /api/sessions/:sessionId/fork` | New session seeded with the first `count` messages of this one |
+| `POST /api/sessions/:sessionId/unstick` | Same as the session route above, behind the agent's access list |
+| `GET\|PATCH /api/fleets/:fleetId` | A fleet's settings, with the catalogues its dialog picks from. Fleet admin only |
+| `POST /api/fleets/:fleetId/agents` | Add agents to a fleet, one per address |
+| `DELETE /api/agents?fleet=:fleetId` | Delete a fleet's agents, a page at a time. Fleet admin only |
+| `POST /api/business-requests` | A signed-in account asks for a higher agent limit |
 | `POST /telegram/webhook/:agentId` | One route per agent, because one bot per agent |
+| `GET\|POST /whatsapp/webhook/:agentId` | WhatsApp's subscription handshake (`GET`) and deliveries (`POST`) |
+| `POST /searxng/:agentId/url` | salts-web reports its tunnel address. Bearer token must match the agent's SearXNG token |
+| `GET /api/mcp/oauth/callback` | Where an MCP provider's OAuth sends the browser back |
 | `GET /api/admin/settings` | The stored settings and what they still lack: `{ settings, missing, fields }`. Owner only, via `API_SECRET` |
 | `PATCH /api/admin/settings` | Merge a patch: `{ <field>: value }`. No field can be unset. Owner only |
+| `GET /api/admin/stats` | Deployment counts. Owner only |
+| `GET /api/admin/users[/:email]` | Every address, paged and searchable, or one address with its limit and agents. Owner only |
+| `POST /api/admin/business-account` | Set an account's agent limit: `{ email, agent_limit }`. Owner only |
+| `GET /api/admin/business-requests`, `POST …/:id/approve`, `DELETE …/:id` | The queue of limit requests. Owner only |
 
 ## Agents
 
 An agent is a bot, its settings, its tools and its conversations. Agents share nothing:
-each has its own OpenRouter key, its own Telegram bot, its own MCP servers, its own
-memories and its own sessions. Traffic to one never queues behind another.
+each has its own OpenRouter key, its own Telegram bot and WhatsApp number, its own MCP
+servers, its own memories and its own sessions. Traffic to one never queues behind another.
 
 That falls out of the object layout. Durable Object namespaces cannot be enumerated —
 you can address an instance by name but not ask which instances exist — so there are
@@ -145,6 +163,11 @@ session finds its agent — a Durable Object knows nothing about itself but its 
 
 Every `/agents/session-agent/:sessionId/...` route therefore takes that whole prefixed
 id, and needs no agent of its own in the path.
+
+A **fleet** is a set of agents one address (the fleet admin) creates for other people,
+one per address. The fleet holds a meta-settings document of its own, and each of its
+agents gets a copy at creation and at every apply after that. The admin decides the
+defaults and which of them users may change, but cannot open a user's agent.
 
 ## Who can open an agent
 
@@ -245,31 +268,43 @@ Two routes are deliberately outside all of this:
 - `GET /api/mcp/oauth/callback` — arrives from the provider's browser, carrying a state
   token instead of a header.
 
+## Commands
+
+A message that is nothing but a bang command is handled before a turn starts, the same
+in the browser, Telegram and WhatsApp: `!new`, `!clear`, `!delete`, `!stop`, `!unstick`,
+`!compact`, and `!enable-mcp <name>` / `!disable-mcp <name>`. See
+[`src/commands.ts`](src/commands.ts).
+
 ## Capabilities
 
-Capabilities are what the agent can *do* beyond writing text. Each one is off by default
-and switched on under **Capabilities** in the frontend; the metadata in
-[`src/capabilities.ts`](src/capabilities.ts) is what that page renders, so a new
-capability needs no frontend change.
+Capabilities are what the agent can *do* beyond writing text. Each one is switched on
+under **Capabilities** in the frontend, and starts at the value in the `config_defaults`
+deployment setting. The metadata in [`src/capabilities.ts`](src/capabilities.ts) is what
+that page renders, so a new capability needs no frontend change.
 
-| Capability | Kind | Needs | Tools |
-|---|---|---|---|
-| Web search | tool | Brave Search API key | `web_search` |
-| Read a URL | tool | — | `fetch_url` |
-| File ingest | input | — | — |
-| Image input | input | a multimodal model | — |
-| Image generation | tool | an OpenRouter image model | `generate_image` |
-| Audio input | input | an OpenRouter model that accepts audio | — |
-| Scheduled tasks | tool | — | `schedule_task`, `list_scheduled_tasks`, `cancel_scheduled_task` |
-| Memory | tool | — | `remember`, `recall` |
+| Capability | Needs | Tools |
+|---|---|---|
+| Web search | Brave Search API key, or a SearXNG URL and token (see [salts-web](../salts-web/README.md)) | `web_search` |
+| Read a URL | — | `fetch_url` |
+| File ingest | — | — |
+| Image input | a multimodal model | — |
+| Image generation | an OpenRouter image model | `generate_image` |
+| Audio input | a transcription model | `transcribe_audio` |
+| Voice notes | a voice model; Telegram or WhatsApp | `send_voice_note` |
+| Schedule tasks | — | `schedule_task`, `list_scheduled_tasks`, `cancel_scheduled_task` |
+| Telegram | bot token and username, whitelists | — |
+| WhatsApp | a Meta app and number ([docs/whatsapp-setup.md](../docs/whatsapp-setup.md)) | — |
+| MCP servers | the server's URL, or a catalogue template | the server's own |
+| Private Memory | — | `remember`, `recall` |
 
-**Tool capabilities** hand the model functions it may call. A turn runs up to six tool
-rounds — call, run, feed the results back — before it must answer, on both the streaming
+**Tool capabilities** hand the model functions it may call. A turn runs up to `max_tool_rounds`
+tool rounds (a deployment setting) — call, run, feed the results back — before it must answer, on both the streaming
 and non-streaming paths. **Input capabilities** change what a turn may carry in: text
 files are inlined into the message, images become `image_url` parts, and audio is
-transcribed once on upload so the model only ever sees text.
+transcribed by the `transcribe_audio` tool when the words matter, with the transcript
+cached so the model only ever sees text.
 
-Memory is app-wide rather than per session: a fact worth keeping ("I use pnpm") is worth
+Memory is agent-wide rather than per session, and never shared between agents: a fact worth keeping ("I use pnpm") is worth
 keeping in the next session too. Recent memories are injected into the system prompt, so
 the model can use what it knows without spending a round trip to discover that it knows
 it.
