@@ -2,7 +2,7 @@
 # Brave and friends and answers over a plain JSON API. Replaces the Brave API key.
 #
 # Driven by the salts-web CLI (see README), which supplies SALTS_TOKEN from the
-# Keychain and SALTS_PORT from a free-port scan.
+# OS secret store and SALTS_PORT from a free-port scan.
 
 # `searxng` is kept from before the folder was renamed, so a stack already running is
 # recreated in place rather than colliding with its own container names. salts-web
@@ -73,7 +73,7 @@ services:
     ports:
       - "127.0.0.1:${SALTS_PORT:-8080}:8081"
     environment:
-      - SALTS_TOKEN=${SALTS_TOKEN:?run salts-web start; it supplies the token from the Keychain}
+      - SALTS_TOKEN=${SALTS_TOKEN:?run salts-web start; it supplies the token from the OS secret store}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
