@@ -1,12 +1,20 @@
 # Self-hosted SearXNG: a metasearch engine that fronts Google, Bing, DuckDuckGo,
 # Brave and friends and answers over a plain JSON API. Replaces the Brave API key.
+#
+# Driven by the salts-web CLI (see README), which supplies SALTS_TOKEN from the
+# Keychain and SALTS_PORT from a free-port scan.
+
+# `searxng` is kept from before the folder was renamed, so a stack already running is
+# recreated in place rather than colliding with its own container names. salts-web
+# sets `searxng-staging` for the staging instance, so the two can run side by side.
+name: ${SALTS_PROJECT:-searxng}
+
 services:
-  # First-run setup. Generates the instance secret into settings.yml and the API
-  # token into token.txt / token.conf. Runs to completion before SearXNG starts,
-  # and regenerates nothing on every later run.
+  # First-run setup. Generates the instance secret into settings.yml. Runs to
+  # completion before SearXNG starts, and regenerates nothing on every later run.
   init:
     image: docker.io/library/alpine:3
-    container_name: searxng-init
+    container_name: ${SALTS_PROJECT:-searxng}-init
     volumes:
       - ./:/config
     command:
@@ -25,30 +33,15 @@ services:
           echo "secret_key already set"
         fi
 
-        # The API token the gate requires. Never printed; written to two files.
-        if [ ! -s /config/token.conf ]; then
-          token=$$(rand)
-          # The token never goes to the logs. It lands in two files: token.txt to
-          # read, and token.conf, the Caddy snippet that enforces it.
-          printf '%s\n' "$$token" > /config/token.txt
-          printf '%s\n' \
-            "@unauthorized not header Authorization \"Bearer $$token\"" \
-            "respond @unauthorized \"unauthorized\" 401" \
-            > /config/token.conf
-          echo "generated a new API token -> token.txt"
-        else
-          echo "API token already generated (see token.txt)"
-        fi
-
   searxng:
     image: docker.io/searxng/searxng:latest
-    container_name: searxng
+    container_name: ${SALTS_PROJECT:-searxng}
     restart: unless-stopped
     depends_on:
       init:
         condition: service_completed_successfully
-    # No host port: the token gate owns 8080 and is the only way in. The
-    # unguarded override file swaps that around (see README).
+    # No host port: the token gate is the only way in. The unguarded override
+    # file swaps that around (see README).
     expose:
       - "8080"
     volumes:
@@ -70,17 +63,19 @@ services:
         max-size: "1m"
         max-file: "1"
 
-  # The token gate on port 8080, and the only way in. The agent sends
+  # The token gate, and the only way in. The agent sends
   # `Authorization: Bearer <token>`; only requests carrying it reach SearXNG.
+  # Bound to loopback: ngrok is what takes it off the machine.
   caddy:
     image: docker.io/library/caddy:2-alpine
-    container_name: searxng-caddy
+    container_name: ${SALTS_PROJECT:-searxng}-caddy
     restart: unless-stopped
     ports:
-      - "${SEARXNG_PORT:-8080}:8081"
+      - "127.0.0.1:${SALTS_PORT:-8080}:8081"
+    environment:
+      - SALTS_TOKEN=${SALTS_TOKEN:?run salts-web start; it supplies the token from the Keychain}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./token.conf:/etc/caddy/token.conf:ro
       - caddy-data:/data
     depends_on:
       init:

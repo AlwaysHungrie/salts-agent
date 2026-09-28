@@ -1,10 +1,12 @@
-# Bearer-token gate in front of SearXNG. Only used with the `guarded` profile.
+# Bearer-token gate in front of SearXNG.
 #
-# The token itself lives in token.conf, which the `init` service generates on the
-# first run. Importing it (rather than reading an env var) keeps the token out of
-# this file and works on the very first `up`, when .env has not been read yet.
+# The token is never written to disk: salts-web reads it from the macOS Keychain and
+# hands it to this container as SALTS_TOKEN, and `{$SALTS_TOKEN}` is substituted when
+# the Caddyfile loads. docker-compose.yml refuses to start without it, so the gate can
+# never come up matching an empty token.
 :8081 {
-	import /etc/caddy/token.conf
+	@unauthorized not header Authorization "Bearer {$SALTS_TOKEN}"
+	respond @unauthorized "unauthorized" 401
 
 	reverse_proxy searxng:8080
 }

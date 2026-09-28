@@ -543,3 +543,69 @@ describe("the model catalog", () => {
     expect(body.models.length).toBeGreaterThan(0);
   });
 });
+
+describe("salts-web repointing the SearXNG URL", () => {
+  const TOKEN = "a".repeat(64);
+
+  /** An agent whose SearXNG token is `TOKEN`, and the member who owns it. */
+  async function agentWithToken(token = TOKEN) {
+    const member = someone("member");
+    const { body } = await createAgent(member);
+    await SELF.fetch(
+      `${BASE}/api/agents/${body.id}/config`,
+      as(member, { method: "PATCH", body: JSON.stringify({ searxng_token: token }) })
+    );
+    return { member, id: body.id as string };
+  }
+
+  function repoint(id: string, url: unknown, token?: string) {
+    return SELF.fetch(`${BASE}/searxng/${id}/url`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        ...(token === undefined ? {} : { authorization: `Bearer ${token}` }),
+      },
+      body: JSON.stringify({ url }),
+    });
+  }
+
+  async function storedUrl(member: string, id: string) {
+    const res = await SELF.fetch(`${BASE}/api/agents/${id}/config`, as(member));
+    return ((await res.json()) as { config: { searxng_url: string } }).config.searxng_url;
+  }
+
+  it("sets the URL when the token matches", async () => {
+    const { member, id } = await agentWithToken();
+    const res = await repoint(id, "https://abc.ngrok-free.app/", TOKEN);
+    expect(res.status).toBe(200);
+    expect(await storedUrl(member, id)).toBe("https://abc.ngrok-free.app");
+  });
+
+  it("refuses a wrong token and leaves the URL alone", async () => {
+    const { member, id } = await agentWithToken();
+    const res = await repoint(id, "https://evil.example", "b".repeat(64));
+    expect(res.status).toBe(401);
+    expect(await storedUrl(member, id)).toBe("");
+  });
+
+  it("refuses a request with no token", async () => {
+    const { id } = await agentWithToken();
+    expect((await repoint(id, "https://evil.example")).status).toBe(401);
+  });
+
+  it("refuses every token when the agent has none set", async () => {
+    const { id } = await agentWithToken("");
+    expect((await repoint(id, "https://evil.example", "")).status).toBe(401);
+    expect((await repoint(id, "https://evil.example", "anything")).status).toBe(401);
+  });
+
+  it("refuses an agent that does not exist", async () => {
+    expect((await repoint("nosuchagent", "https://x.example", TOKEN)).status).toBe(401);
+  });
+
+  it("refuses a URL that is not http(s)", async () => {
+    const { id } = await agentWithToken();
+    expect((await repoint(id, "javascript:alert(1)", TOKEN)).status).toBe(400);
+    expect((await repoint(id, "not a url", TOKEN)).status).toBe(400);
+  });
+});
