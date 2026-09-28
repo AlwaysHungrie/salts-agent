@@ -1,79 +1,41 @@
 ---
-title: How Salts is different from a chatbot
+title: Salts is different.
 section: Get started
-order: 2
-summary: A chatbot answers questions. Your agent does things for you, runs without you, and works the way you decide.
+order: 3
+summary: An AI chatbot can only answer questions. Salts can do much more...
 featured: true
 ---
 
-Most AI apps are chatbots. You open them, type a question, read the answer and close them. When the tab is closed, nothing happens.
+Most AI apps you might know are chatbots. You open them, ask a question, read the answer and close them. Your Salts agent can do a lot more than that. It can take actions for you in other apps, it keeps running when you are not around, and you decide exactly how it behaves and how much it spends.
 
-Your Salts agent is different in three ways. It can do things, not only answer. It does not need you, or any device of yours, to keep running. And it is yours to control, down to the last cent it spends.
-
-| A chatbot | Your agent |
-|---|---|
-| Answers questions | Answers questions, and does things for you in other apps |
-| Only works while you have it open | Is always on, and can act while you sleep |
-| Lives in one app or one website | Is in your browser, on Telegram and on WhatsApp. The same agent everywhere |
-| Monthly subscription, same price whether you use it or not | No subscription. You pay only for what it uses |
-| Behaves the way the company decided | Behaves the way you decide |
+| AI chatbot                          | Salts agent                                               |
+| ----------------------------------- | --------------------------------------------------------- |
+| Answers questions                   | Answers questions, and does things for you in other apps  |
+| Only works while you have it open   | Is always on, and can do things while you sleep           |
+| Lives in one app or website         | Is available in your browser, on Telegram and on WhatsApp |
+| Charges a monthly subscription      | Has no subscription. You only pay for what it uses        |
+| Behaves the way the company decided | Behaves the way you decide                                |
 
 ## It does things for you
 
-A chatbot can tell you how to do something. Your agent can do it.
+A chatbot can tell you how to do something. Your agent can do it for you. From the **Capabilities** page you can let your agent:
 
-Switch on what you need on the **Capabilities** page, and your agent can:
+- Search the web, so its answers are up to date.
+- Read the links, files, photos and voice notes you send it.
+- Remember what you tell it, across all your conversations.
+- Remind you of something, or run a task at a time you choose.
+- Create images and reply with voice notes.
 
-- Search the web and open the pages it finds, so its answers are current.
-- Read the files, photos and voice notes you send it.
-- Remember what you tell it, across every conversation.
-- Set a reminder, or run a task at a time you choose, and message you with the result.
-- Create images, and reply with voice notes.
-
-### MCP: connecting your agent to your apps
-
-MCP is a standard way for an AI agent to use another app. When you connect an app to your agent through MCP, your agent can read from it and act in it, using your account.
-
-Connect Notion, and you can say "add this to my reading list" from Telegram, and it is done. Connect GitHub, and you can ask what changed in a project this week, or open an issue from a voice note.
-
-Many apps already offer an MCP server. Ready-made ones are listed on the **Capabilities** page, and you can add any other by its address. You choose which of each server's tools your agent is allowed to use.
+Your agent can also be connected to apps you already use, such as Gmail, Notion and GitHub. Once connected, you can ask it to add something to your Notion reading list from Telegram, or to open a GitHub issue from a voice note. These connections are called MCP servers, and you can add them from the **Capabilities** page.
 
 ## It does not need your device
 
-Your agent does not run on your phone or your laptop. It lives online, and it is always on.
+Your agent runs online, not on your phone or laptop. You do not need to install anything or keep anything open. A reminder you set for next Tuesday will still arrive on Tuesday, even if your laptop has been closed all week.
 
-You do not install anything, and you do not keep anything open. Close your laptop, switch off your phone, go on holiday. A reminder you set for next Tuesday still arrives on Tuesday, and a daily summary still arrives every morning.
-
-When you want to talk to it, use whatever is in front of you: your browser at your desk, Telegram or WhatsApp on the move. Every conversation shows up in your browser, wherever it started.
+You can talk to your agent from wherever is most convenient: your browser at your desk, or Telegram and WhatsApp on your phone. Every conversation also shows up in your browser, wherever it started.
 
 ## You are in control
 
-This is the biggest difference. A chatbot is someone else's product, with their price, their model, their rules. Your agent is yours.
+Your agent uses your own OpenRouter API key, so you pay the model's price directly and only for what your agent actually uses. A quiet week costs almost nothing, and an agent you do not use costs nothing at all. Every reply shows what it cost, and you can set a spending limit on your key so there are never any surprises.
 
-### No subscription
-
-There is no monthly fee for the model. Your agent uses your own OpenRouter key, and you pay the model's price directly, for what your agent actually uses. A quiet week costs almost nothing. An agent you do not use costs nothing at all.
-
-### You decide what it spends
-
-- Every reply shows what it cost, so there are no surprises at the end of the month.
-- You set a spending limit on your OpenRouter key. Your agent cannot go past it.
-- You choose a cheaper or a stronger model at any time, and switch back whenever you like.
-
-See [Choose the right model](/guide/choosing-a-model) and [Why and when to compact](/guide/compacting).
-
-### You decide how it behaves
-
-- **Model**: pick from models made by different companies. You are not tied to one.
-- **Custom instructions**: tell it how to answer, what to focus on, and what to avoid. It follows them in every conversation.
-- **Capabilities**: switch on only what you want it to be able to do. Everything else stays off.
-- **Who it talks to**: only you, unless you add someone. On Telegram you decide exactly which people and groups it answers.
-
-### Your agent is yours alone
-
-Every agent is separate. Its conversations, its memory and its connected apps belong to that agent and nobody else's. You can delete any conversation, or the whole agent, whenever you want.
-
-## Footnotes
-
-1. Capabilities that use a model of their own, such as creating images or listening to voice notes, are billed to the same OpenRouter key.
-2. Every capability you switch on makes each reply a little more expensive. Switch on what you use, not everything.
+You also decide how your agent behaves. You can pick the model it uses, give it custom instructions on how to answer, switch on only the capabilities you want, and choose who it is allowed to talk to. To learn more, read [Choose the right model](/guide/choosing-a-model).
