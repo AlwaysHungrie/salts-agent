@@ -7,7 +7,7 @@ variable "vercel_team" {
 variable "github_repo" {
   description = "owner/name of the repo both projects deploy from."
   type        = string
-  default     = "AlwaysHungrie/serverless-agent"
+  default     = "AlwaysHungrie/salts-agent"
 }
 
 variable "frontend_project_name" {

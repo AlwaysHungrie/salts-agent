@@ -2,27 +2,32 @@
 title: Set up web search
 section: Advanced use
 order: 1
-summary: Give your agent the live web, for free, with a private search engine that runs on your Mac.
+summary: Give your agent the live web, for free, with a private search engine that runs on your own computer.
 ---
 
 Without web search, your agent only knows what its model learned when it was trained, so it cannot tell you today's news, a current price or whether a shop is open. With web search switched on, your agent can look things up and tell you where the answer came from.
 
-This guide will help you run your own free search engine, called SearXNG, on your Mac and connect it to your agent. You will need to use the Terminal app, but every command you need is on this page. If you would rather not run anything on your Mac, skip to [Using Brave instead](#using-brave-instead).
+This guide will help you run your own free search engine, called SearXNG, on your computer and connect it to your agent. It works on Mac, Windows and Linux. You will need to use a terminal (the Terminal app on a Mac, PowerShell on Windows), but every command you need is on this page. If you would rather not run anything on your computer, skip to [Using Brave instead](#using-brave-instead).
 
 > What to expect:
 >
-> - This only works on a Mac.
-> - Your agent can only search while your Mac is on, awake and connected to the internet.
+> - Your agent can only search while your computer is on, awake and connected to the internet.
 > - You will install three free tools: Docker, Node.js and ngrok. You will also need a free ngrok account.
 
 ## 1. Install the tools
 
-1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/). If you already use OrbStack or Colima, those work too.
+1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/). If you already use OrbStack or Colima, those work too. On Linux you can use Docker Engine instead; we recommend starting it with `sudo systemctl enable --now docker` and adding yourself to the `docker` group, so salts-web can use it without asking for your password.
 2. Install [Node.js](https://nodejs.org), version 20 or later.
-3. Install ngrok. If you use Homebrew, run this in Terminal:
+3. Install ngrok. On a Mac with Homebrew, run this in Terminal:
 
    ```
    brew install ngrok
+   ```
+
+   On Windows, run this in PowerShell:
+
+   ```
+   winget install ngrok.ngrok
    ```
 
    Otherwise, download it from [ngrok.com/download](https://ngrok.com/download).
@@ -31,11 +36,11 @@ This guide will help you run your own free search engine, called SearXNG, on you
 
 ## 2. Download salts-web
 
-salts-web is a small program that starts the search engine and connects it to your agent. In Terminal, run these three commands one at a time:
+salts-web is a small program that starts the search engine and connects it to your agent. In your terminal, run these three commands one at a time:
 
 ```
-git clone https://github.com/AlwaysHungrie/serverless-agent.git
-cd serverless-agent/salts-web
+git clone https://github.com/AlwaysHungrie/salts-agent.git
+cd salts-agent/salts-web
 npm link
 ```
 
@@ -57,7 +62,7 @@ salts-web will ask you a few questions:
 
 1. **ngrok authtoken**: paste the authtoken from step 1. You only need to do this once.
 2. **Agent ID**: paste your agent ID.
-3. salts-web will then show you a **token**. Copy it, and leave Terminal open while you do the next step.
+3. salts-web will then show you a **token**. Copy it, and leave your terminal open while you do the next step.
 
 ## 4. Add the token to your agent
 
@@ -67,9 +72,9 @@ Open your agent, go to **Capabilities**, and find **Web search**.
 2. Paste the token into **SearXNG token** and save.
 3. Leave **Brave Search API key** and **SearXNG URL** empty. salts-web fills in the URL for you.
 
-Go back to Terminal and press **Enter**. When salts-web is done, you will see three green ticks, ending with `agent <your-agent-id> now searches through it`.
+Go back to your terminal and press **Enter**. When salts-web is done, you will see three green ticks, ending with `agent <your-agent-id> now searches through it`.
 
-Finally, salts-web asks whether it should start automatically when you log in. We recommend saying yes, otherwise your agent loses web search every time you restart your Mac.
+Finally, salts-web asks whether it should start automatically when you log in. We recommend saying yes, otherwise your agent loses web search every time you restart your computer.
 
 ## You are done
 
@@ -90,10 +95,10 @@ If you also want your agent to open search results and read the full page, switc
 
 ## Using Brave instead
 
-If you would rather not run anything on your Mac, you can use Brave's search API instead. Brave has a free plan that is enough for one person. Create an account at [brave.com/search/api](https://brave.com/search/api/), subscribe to the free plan, and paste your key into **Brave Search API key** under **Web search** in your agent's **Capabilities**. Brave asks for a card, and any searches beyond the free plan are billed by Brave.
+If you would rather not run anything on your computer, you can use Brave's search API instead. Brave has a free plan that is enough for one person. Create an account at [brave.com/search/api](https://brave.com/search/api/), subscribe to the free plan, and paste your key into **Brave Search API key** under **Web search** in your agent's **Capabilities**. Brave asks for a card, and any searches beyond the free plan are billed by Brave.
 
 ## Footnotes
 
-1. If your agent stops searching, check that your Mac is awake and online, then run `salts-web restart`.
+1. If your agent stops searching, check that your computer is awake and online, then run `salts-web restart`.
 2. If salts-web says your agent refused the token, paste the token into **SearXNG token** again, save, and choose **retry**.
 3. If your agent is not searching when it should, add this to **Custom instructions** in **Settings**: "Search the web for anything about current events, prices or dates." A stronger model also helps.
