@@ -597,7 +597,7 @@ export const TOOLS: ToolSpec[] = [
         throw new Error("only http and https URLs can be fetched");
       }
       const res = await fetch(target, {
-        headers: { accept: "text/html,text/plain", "user-agent": "serverless-agent/1.0" },
+        headers: { accept: "text/html,text/plain", "user-agent": "salts-agent/1.0" },
         redirect: "follow",
       });
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);

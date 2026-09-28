@@ -10,15 +10,18 @@
 //   salts-web setup       the first-run questions again (agent id, token check)
 //   salts-web stop        stop the supervisor, the tunnel and the containers
 //   salts-web restart     bring the tunnel up again and push its new address
-//   salts-web reset       forget the agent (state.json) and delete the token from the Keychain
+//   salts-web reset       forget the agent (state.json) and delete the saved token
 //   salts-web autostart on|off
-//                         start at login (a LaunchAgent), or stop doing so
+//                         start at login, or stop doing so (a LaunchAgent on macOS, a
+//                         systemd user unit on Linux, a Startup-folder script on Windows)
 //
 // Every command takes a `:staging` suffix (`start:staging`, `stop:staging`, …) to run
 // against the staging Worker instead of production. The two are separate instances —
 // own token, state, containers, port, tunnel and login item — and can run side by side.
 //
-// The token lives in the macOS Keychain and nowhere else: not in a file, not in argv.
+// The token is never in argv. It lives in the OS secret store: the macOS Keychain, the
+// Secret Service keyring on Linux (`secret-tool`), or a DPAPI-encrypted file on Windows.
+// A Linux machine with no keyring falls back to a file only this user can read.
 // It reaches the gate as an environment variable on the Caddy container.
 
 import { spawn, spawnSync } from "node:child_process";
@@ -61,12 +64,31 @@ const HOME = path.join(os.homedir(), ".salts-web", ...(SUFFIX ? [TARGET] : []));
 const STATE_FILE = path.join(HOME, "state.json");
 const PID_FILE = path.join(HOME, "supervisor.pid");
 const LOG_FILE = path.join(HOME, "supervisor.log");
+/** `salts-web restart` drops this file; the supervisor picks it up (no SIGUSR1 on Windows). */
+const RESTART_FILE = path.join(HOME, "restart.request");
+/** Linux without a keyring: the token, mode 0600. Windows: the DPAPI-encrypted token. */
+const TOKEN_FILE = path.join(HOME, "token");
+const DPAPI_FILE = path.join(HOME, "token.dpapi");
+
+const IS_MAC = process.platform === "darwin";
+const IS_WIN = process.platform === "win32";
 
 const KEYCHAIN_SERVICE = "salts-web";
 const KEYCHAIN_ACCOUNT = `searxng-token${SUFFIX}`;
 
 const LAUNCH_LABEL = `com.salts-web${SUFFIX}`;
-const LAUNCH_PLIST = path.join(os.homedir(), "Library", "LaunchAgents", `${LAUNCH_LABEL}.plist`);
+/** The file that makes it start at login, whichever platform this is. */
+const AUTOSTART_FILE = IS_MAC
+  ? path.join(os.homedir(), "Library", "LaunchAgents", `${LAUNCH_LABEL}.plist`)
+  : IS_WIN
+    ? path.join(
+        process.env.APPDATA ?? path.join(os.homedir(), "AppData", "Roaming"),
+        "Microsoft", "Windows", "Start Menu", "Programs", "Startup", `salts-web${SUFFIX}.cmd`
+      )
+    : path.join(
+        process.env.XDG_CONFIG_HOME ?? path.join(os.homedir(), ".config"),
+        "systemd", "user", `salts-web${SUFFIX}.service`
+      );
 
 /** The Docker Compose project, which also prefixes its container names. */
 const PROJECT = `searxng${SUFFIX}`;
@@ -107,26 +129,103 @@ function writeState(patch) {
   return next;
 }
 
-// ─── the token, in the Keychain ─────────────────────────────────────────────────
+// ─── the token, in the OS secret store ──────────────────────────────────────────
 
-function readToken() {
-  const res = spawnSync(
-    "security",
-    ["find-generic-password", "-s", KEYCHAIN_SERVICE, "-a", KEYCHAIN_ACCOUNT, "-w"],
-    { encoding: "utf8" }
-  );
-  return res.status === 0 ? res.stdout.trim() : "";
+/** PowerShell reading/writing a DPAPI file; the token only ever travels on stdin/stdout. */
+function powershell(script, input) {
+  return spawnSync("powershell", ["-NoProfile", "-NonInteractive", "-Command", script], {
+    input,
+    encoding: "utf8",
+    windowsHide: true,
+    env: { ...process.env, SALTS_DPAPI_FILE: DPAPI_FILE },
+  });
 }
 
-/** Written through `security -i` on stdin, so the token never appears in a process list. */
-function writeToken(token) {
-  const res = spawnSync("security", ["-i"], {
-    input: `add-generic-password -U -s ${KEYCHAIN_SERVICE} -a ${KEYCHAIN_ACCOUNT} -w ${token}\n`,
-    encoding: "utf8",
-  });
-  if (res.status !== 0 || readToken() !== token) {
-    throw new Error(`could not store the token in the Keychain: ${res.stderr.trim()}`);
+const SECRET_TOOL_ATTRS = ["service", KEYCHAIN_SERVICE, "account", KEYCHAIN_ACCOUNT];
+
+function readToken() {
+  if (IS_MAC) {
+    const res = spawnSync(
+      "security",
+      ["find-generic-password", "-s", KEYCHAIN_SERVICE, "-a", KEYCHAIN_ACCOUNT, "-w"],
+      { encoding: "utf8" }
+    );
+    return res.status === 0 ? res.stdout.trim() : "";
   }
+  if (IS_WIN) {
+    if (!existsSync(DPAPI_FILE)) return "";
+    const res = powershell(
+      "$s = Get-Content -Raw $env:SALTS_DPAPI_FILE | ConvertTo-SecureString; " +
+        "[Runtime.InteropServices.Marshal]::PtrToStringBSTR([Runtime.InteropServices.Marshal]::SecureStringToBSTR($s))"
+    );
+    return res.status === 0 ? res.stdout.trim() : "";
+  }
+  if (have("secret-tool")) {
+    const res = spawnSync("secret-tool", ["lookup", ...SECRET_TOOL_ATTRS], { encoding: "utf8" });
+    if (res.status === 0 && res.stdout.trim()) return res.stdout.trim();
+  }
+  try {
+    return readFileSync(TOKEN_FILE, "utf8").trim();
+  } catch {
+    return "";
+  }
+}
+
+/** Written on stdin, so the token never appears in a process list. */
+function writeToken(token) {
+  mkdirSync(HOME, { recursive: true });
+  let res;
+  if (IS_MAC) {
+    res = spawnSync("security", ["-i"], {
+      input: `add-generic-password -U -s ${KEYCHAIN_SERVICE} -a ${KEYCHAIN_ACCOUNT} -w ${token}\n`,
+      encoding: "utf8",
+    });
+  } else if (IS_WIN) {
+    res = powershell(
+      "[Console]::In.ReadLine() | ConvertTo-SecureString -AsPlainText -Force | " +
+        "ConvertFrom-SecureString | Set-Content -NoNewline $env:SALTS_DPAPI_FILE",
+      `${token}\n`
+    );
+  } else {
+    if (have("secret-tool")) {
+      res = spawnSync("secret-tool", ["store", `--label=salts-web ${KEYCHAIN_ACCOUNT}`, ...SECRET_TOOL_ATTRS], {
+        input: token,
+        encoding: "utf8",
+      });
+    }
+    // No keyring (a headless box, or no Secret Service running): a file only this user reads.
+    if (!res || res.status !== 0) {
+      writeFileSync(TOKEN_FILE, `${token}\n`, { mode: 0o600 });
+      res = { status: 0, stderr: "" };
+    } else {
+      rmSync(TOKEN_FILE, { force: true });
+    }
+  }
+  if (res.status !== 0 || readToken() !== token) {
+    throw new Error(`could not store the token: ${(res.stderr ?? "").trim()}`);
+  }
+}
+
+/** Returns whether there was a token to delete. */
+function deleteToken() {
+  if (IS_MAC) {
+    return run("security", ["delete-generic-password", "-s", KEYCHAIN_SERVICE, "-a", KEYCHAIN_ACCOUNT]).status === 0;
+  }
+  const file = IS_WIN ? DPAPI_FILE : TOKEN_FILE;
+  let had = existsSync(file);
+  rmSync(file, { force: true });
+  if (!IS_WIN && have("secret-tool") && run("secret-tool", ["lookup", ...SECRET_TOOL_ATTRS]).status === 0) {
+    run("secret-tool", ["clear", ...SECRET_TOOL_ATTRS]);
+    had = true;
+  }
+  return had;
+}
+
+/** Where the token is kept, for messages. */
+function tokenStoreName() {
+  if (IS_MAC) return "the Keychain";
+  if (IS_WIN) return "a DPAPI-encrypted file";
+  return existsSync(TOKEN_FILE) ? TOKEN_FILE : "the keyring";
 }
 
 function newToken() {
@@ -142,7 +241,9 @@ function run(cmd, args, opts = {}) {
 }
 
 function have(cmd) {
-  return run("/bin/sh", ["-c", `command -v ${cmd}`]).status === 0;
+  return IS_WIN
+    ? run("where", [cmd], { windowsHide: true }).status === 0
+    : run("/bin/sh", ["-c", `command -v ${cmd}`]).status === 0;
 }
 
 function dockerUp() {
@@ -155,9 +256,16 @@ function dockerUp() {
  */
 async function ensureDocker(say = () => {}) {
   if (dockerUp()) return;
-  if (existsSync("/Applications/Docker.app")) {
+  const winDesktop = path.join(process.env.ProgramFiles ?? "C:\\Program Files", "Docker", "Docker", "Docker Desktop.exe");
+  if (IS_MAC && existsSync("/Applications/Docker.app")) {
     say("Docker is not running; starting Docker Desktop");
     run("open", ["-g", "-a", "Docker"]);
+  } else if (IS_WIN && existsSync(winDesktop)) {
+    say("Docker is not running; starting Docker Desktop");
+    spawn(winDesktop, [], { detached: true, stdio: "ignore" }).unref();
+  } else if (!IS_MAC && !IS_WIN && run("systemctl", ["--user", "cat", "docker-desktop"]).status === 0) {
+    say("Docker is not running; starting Docker Desktop");
+    run("systemctl", ["--user", "start", "docker-desktop"]);
   } else if (have("orbctl")) {
     say("Docker is not running; starting OrbStack");
     run("orbctl", ["start"], { timeout: DOCKER_WAIT_MS });
@@ -165,7 +273,11 @@ async function ensureDocker(say = () => {}) {
     say("Docker is not running; starting Colima");
     run("colima", ["start"], { timeout: DOCKER_WAIT_MS });
   } else {
-    throw new Error("Docker is not running, and no Docker Desktop, OrbStack or Colima was found to start");
+    throw new Error(
+      IS_MAC || IS_WIN
+        ? "Docker is not running, and no Docker Desktop, OrbStack or Colima was found to start"
+        : "Docker is not running — start it (`sudo systemctl start docker`) and check your user can run `docker info`"
+    );
   }
   const until = Date.now() + DOCKER_WAIT_MS;
   while (Date.now() < until) {
@@ -195,10 +307,24 @@ function ngrokHasAuthtoken() {
 /** The problems that stop salts-web running at all, none of which it can fix itself. */
 function missingTools() {
   const out = [];
-  if (process.platform !== "darwin") out.push("salts-web keeps its token in the macOS Keychain, so it runs on macOS only");
-  if (!have("docker")) out.push("docker is not installed — install Docker Desktop (or OrbStack / Colima)");
-  else if (run("docker", ["compose", "version"]).status !== 0) out.push("`docker compose` is not available — update Docker");
-  if (!have("ngrok")) out.push("ngrok is not installed — `brew install ngrok`");
+  if (!have("docker")) {
+    out.push(
+      IS_MAC
+        ? "docker is not installed — install Docker Desktop (or OrbStack / Colima)"
+        : IS_WIN
+          ? "docker is not installed — install Docker Desktop"
+          : "docker is not installed — install Docker Engine with the compose plugin (https://docs.docker.com/engine/install/)"
+    );
+  } else if (run("docker", ["compose", "version"]).status !== 0) out.push("`docker compose` is not available — update Docker");
+  if (!have("ngrok")) {
+    out.push(
+      IS_MAC
+        ? "ngrok is not installed — `brew install ngrok`"
+        : IS_WIN
+          ? "ngrok is not installed — `winget install ngrok.ngrok`"
+          : "ngrok is not installed — see https://ngrok.com/download/linux"
+    );
+  }
   return out;
 }
 
@@ -299,7 +425,11 @@ function supervisorPid() {
 
 /** A pid that is still ngrok, as opposed to a number some other process now holds. */
 function isNgrok(pid) {
-  return alive(pid) && /ngrok/.test(run("ps", ["-p", String(pid), "-o", "comm="]).stdout);
+  if (!alive(pid)) return false;
+  const res = IS_WIN
+    ? run("tasklist", ["/FI", `PID eq ${pid}`, "/FO", "CSV", "/NH"], { windowsHide: true })
+    : run("ps", ["-p", String(pid), "-o", "comm="]);
+  return /ngrok/i.test(res.stdout);
 }
 
 /**
@@ -347,7 +477,7 @@ async function supervise() {
     const child = spawn(
       "ngrok",
       ["http", `127.0.0.1:${port}`, "--log", "stdout", "--log-format", "json"],
-      { stdio: ["ignore", "pipe", "pipe"] }
+      { stdio: ["ignore", "pipe", "pipe"], windowsHide: true }
     );
     ngrok = child;
     writeState({ ngrokPid: child.pid, url: "" });
@@ -491,11 +621,14 @@ async function supervise() {
   process.on("SIGTERM", shutdown);
   process.on("SIGINT", shutdown);
   // `salts-web restart`.
-  process.on("SIGUSR1", () => {
+  rmSync(RESTART_FILE, { force: true });
+  setInterval(() => {
+    if (!existsSync(RESTART_FILE)) return;
+    rmSync(RESTART_FILE, { force: true });
     stopNgrok();
     writeState({ pushedUrl: "" });
     tick().then(() => log("manual restart done"));
-  });
+  }, 1000);
 
   await tick();
   setInterval(tick, HEARTBEAT_MS);
@@ -508,6 +641,7 @@ function spawnSupervisor() {
   const child = spawn(process.execPath, [CLI, withTarget("_supervise")], {
     detached: true,
     stdio: "ignore",
+    windowsHide: true,
   });
   child.unref();
   return child.pid;
@@ -547,11 +681,46 @@ async function waitForPush(pid, since, timeoutMs = 240_000) {
 }
 
 function autostartOn() {
-  mkdirSync(path.dirname(LAUNCH_PLIST), { recursive: true });
+  mkdirSync(path.dirname(AUTOSTART_FILE), { recursive: true });
+  if (IS_WIN) {
+    // A script in the Startup folder; `start /min` so no console window stays open.
+    writeFileSync(
+      AUTOSTART_FILE,
+      `@echo off\r\nstart "salts-web" /min "${process.execPath}" "${CLI}" ${withTarget("start")}\r\n`
+    );
+    return;
+  }
+  if (!IS_MAC) {
+    // A systemd user unit. `start` exits once the supervisor is spawned; RemainAfterExit
+    // keeps the unit (and so the supervisor in its cgroup) alive.
+    if (!have("systemctl")) throw new Error("autostart on Linux needs systemd (`systemctl --user`)");
+    const q = (s) => `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+    writeFileSync(
+      AUTOSTART_FILE,
+      `[Unit]
+Description=salts-web (${TARGET})
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+Environment=${q(`PATH=${process.env.PATH ?? "/usr/bin:/bin"}`)}
+ExecStart=${q(process.execPath)} ${q(CLI)} ${withTarget("start")}
+StandardOutput=append:${LOG_FILE}
+StandardError=append:${LOG_FILE}
+
+[Install]
+WantedBy=default.target
+`
+    );
+    run("systemctl", ["--user", "daemon-reload"]);
+    const res = run("systemctl", ["--user", "enable", path.basename(AUTOSTART_FILE)]);
+    if (res.status !== 0) throw new Error(res.stderr.trim());
+    return;
+  }
   const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   // launchd starts with a bare PATH; docker and ngrok live wherever this shell found them.
   writeFileSync(
-    LAUNCH_PLIST,
+    AUTOSTART_FILE,
     `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -575,20 +744,22 @@ function autostartOn() {
   );
   const domain = `gui/${process.getuid()}`;
   run("launchctl", ["bootout", `${domain}/${LAUNCH_LABEL}`]);
-  const res = run("launchctl", ["bootstrap", domain, LAUNCH_PLIST]);
+  const res = run("launchctl", ["bootstrap", domain, AUTOSTART_FILE]);
   // Bootstrapping runs it once now (RunAtLoad); harmless, `start` is idempotent.
-  if (res.status !== 0 && !existsSync(LAUNCH_PLIST)) throw new Error(res.stderr.trim());
+  if (res.status !== 0 && !existsSync(AUTOSTART_FILE)) throw new Error(res.stderr.trim());
 }
 
 function autostartOff() {
-  run("launchctl", ["bootout", `gui/${process.getuid()}/${LAUNCH_LABEL}`]);
-  rmSync(LAUNCH_PLIST, { force: true });
+  if (IS_MAC) run("launchctl", ["bootout", `gui/${process.getuid()}/${LAUNCH_LABEL}`]);
+  else if (!IS_WIN && existsSync(AUTOSTART_FILE)) run("systemctl", ["--user", "disable", path.basename(AUTOSTART_FILE)]);
+  rmSync(AUTOSTART_FILE, { force: true });
+  if (!IS_MAC && !IS_WIN) run("systemctl", ["--user", "daemon-reload"]);
 }
 
 function showToken(token) {
   const line = "─".repeat(token.length + 4);
   console.log(`
-${BOLD}Your SearXNG token${OFF} ${YELLOW}(shown this once — it is kept in the Keychain, not on disk)${OFF}
+${BOLD}Your SearXNG token${OFF} ${YELLOW}(shown this once — it is kept in ${tokenStoreName()})${OFF}
 
   ┌${line}┐
   │  ${BOLD}${token}${OFF}  │
@@ -610,9 +781,9 @@ async function setup(rl, { force }) {
   if (!token) {
     token = newToken();
     fresh = true;
-    console.log(`${GREEN}✓${OFF} generated a new token and stored it in the Keychain`);
+    console.log(`${GREEN}✓${OFF} generated a new token and stored it in ${tokenStoreName()}`);
   } else {
-    console.log(`${GREEN}✓${OFF} token already in the Keychain`);
+    console.log(`${GREEN}✓${OFF} token already in ${tokenStoreName()}`);
   }
 
   let agentId = state.agentId;
@@ -714,7 +885,7 @@ async function start({ interactive, forceSetup }) {
       process.exit(1);
     }
 
-    if ((fresh || forceSetup) && !existsSync(LAUNCH_PLIST)) {
+    if ((fresh || forceSetup) && !existsSync(AUTOSTART_FILE)) {
       const yes = (await rl.question("Start salts-web automatically when you log in? [Y/n] ")).trim().toLowerCase();
       if (yes === "" || yes === "y" || yes === "yes") {
         autostartOn();
@@ -734,7 +905,7 @@ async function stop() {
     console.log(res.status === 0 ? `${GREEN}✓${OFF} containers stopped` : `${RED}✗${OFF} ${res.stderr.trim()}`);
   }
   writeState({ url: "", pushedUrl: "" });
-  if (existsSync(LAUNCH_PLIST)) console.log(`${DIM}autostart is still on; it starts again at next login${OFF}`);
+  if (existsSync(AUTOSTART_FILE)) console.log(`${DIM}autostart is still on; it starts again at next login${OFF}`);
 }
 
 /** Back to a first run: the next `start` asks for the agent and makes a new token. */
@@ -744,12 +915,8 @@ function reset() {
   }
   rmSync(STATE_FILE, { force: true });
   console.log(`${GREEN}✓${OFF} deleted ${STATE_FILE}`);
-  const res = run("security", ["delete-generic-password", "-s", KEYCHAIN_SERVICE, "-a", KEYCHAIN_ACCOUNT]);
-  console.log(
-    res.status === 0
-      ? `${GREEN}✓${OFF} deleted the token from the Keychain`
-      : `${DIM}no token in the Keychain${OFF}`
-  );
+  const where = tokenStoreName();
+  console.log(deleteToken() ? `${GREEN}✓${OFF} deleted the token from ${where}` : `${DIM}no saved token${OFF}`);
 }
 
 async function restart() {
@@ -760,7 +927,7 @@ async function restart() {
   }
   const since = new Date().toISOString();
   writeState({ pushStatus: 0, lastError: "" });
-  process.kill(pid, "SIGUSR1");
+  writeFileSync(RESTART_FILE, since);
   console.log(`${DIM}  … restarting the tunnel${OFF}`);
   const result = await waitForPush(pid, since, 120_000);
   if (result.ok) console.log(`${GREEN}✓${OFF} tunnel at ${result.state.url}, pushed to the agent`);
