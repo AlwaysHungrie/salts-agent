@@ -38,6 +38,13 @@ export type Config = {
   agent_name: string;
   /** Appended to the built-in system prompt. Empty means "no custom instructions". */
   system_prompt: string;
+  /**
+   * The owner's notes. `private_notes` is a brief only the model reads; `public_notes`
+   * is what guests are shown before they start, and the model is told it too. Longer
+   * than `system_prompt` on purpose: a brief with its evidence runs to pages.
+   */
+  private_notes: string;
+  public_notes: string;
   temperature: number;
   /** Cap on a single reply. 0 means "no cap: let the model stop on its own". */
   max_tokens: number;
@@ -125,6 +132,8 @@ export type Config = {
 export const DEFAULT_CONFIG: Omit<Config, "model" | SettableConfigKey> = {
   agent_name: "",
   system_prompt: "",
+  private_notes: "",
+  public_notes: "",
   openrouter_api_key: "",
   brave_api_key: "",
   searxng_url: "",
@@ -420,6 +429,8 @@ export type Memory = {
 export type SessionRow = {
   id: string;
   title: string;
+  /** Who started it on the web, lowercased. "" for channel sessions and older rows. */
+  owner_email: string;
   created_at: number;
   updated_at: number;
   /**
@@ -569,6 +580,14 @@ export type AccessRow = {
   allowed_emails: string;
   admin_email: string;
   seeded: number;
+  /**
+   * Guests: people who may message the agent and nothing else — start sessions of
+   * their own, read and continue those, and delete them. Never its settings, keys or
+   * anyone else's sessions. `guests` is the switch; with it on, an empty
+   * `guest_emails` means any signed-in address.
+   */
+  guests: number;
+  guest_emails: string;
 };
 
 /**
@@ -745,6 +764,17 @@ const SESSION_REGISTRY_MIGRATIONS: readonly Migration[] = [
       );
     },
   },
+  {
+    name: "guests, session owners and notes",
+    up: (sql) => {
+      addColumnIfMissing(sql, "access", `guests INTEGER NOT NULL DEFAULT 0`);
+      addColumnIfMissing(sql, "access", `guest_emails TEXT NOT NULL DEFAULT ''`);
+      addColumnIfMissing(sql, "sessions", `owner_email TEXT NOT NULL DEFAULT ''`);
+      sql.exec(`CREATE INDEX IF NOT EXISTS idx_sessions_owner ON sessions(owner_email)`);
+      addColumnIfMissing(sql, "config", `private_notes TEXT NOT NULL DEFAULT ''`);
+      addColumnIfMissing(sql, "config", `public_notes TEXT NOT NULL DEFAULT ''`);
+    },
+  },
 ];
 
 /**
@@ -916,9 +946,11 @@ export class SessionRegistry extends DurableObject {
   access(): AccessRow {
     this.ensureSchema();
     const row = this.ctx.storage.sql
-      .exec(`SELECT allowed_emails, admin_email, seeded FROM access WHERE id = 1`)
+      .exec(
+        `SELECT allowed_emails, admin_email, seeded, guests, guest_emails FROM access WHERE id = 1`
+      )
       .toArray()[0] as AccessRow | undefined;
-    return row ?? { allowed_emails: "", admin_email: "", seeded: 0 };
+    return row ?? { allowed_emails: "", admin_email: "", seeded: 0, guests: 0, guest_emails: "" };
   }
 
   /**
@@ -945,7 +977,27 @@ export class SessionRegistry extends DurableObject {
       allowed,
       admin
     );
-    return { allowed_emails: allowed, admin_email: admin, seeded: 1 };
+    return { ...current, allowed_emails: allowed, admin_email: admin, seeded: 1 };
+  }
+
+  /**
+   * Switch guests on or off and replace their list. Separate from `setAccess` because
+   * it is a different decision, made by the admin rather than by any user.
+   */
+  setGuests(patch: { guests?: number; guest_emails?: string }): AccessRow {
+    const current = this.access();
+    const guests = patch.guests === undefined ? current.guests : patch.guests ? 1 : 0;
+    const emails = patch.guest_emails ?? current.guest_emails;
+    this.ctx.storage.sql.exec(
+      `INSERT INTO access (id, allowed_emails, admin_email, seeded, guests, guest_emails)
+       VALUES (1, ?, ?, 1, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET guests = excluded.guests, guest_emails = excluded.guest_emails`,
+      current.allowed_emails,
+      current.admin_email,
+      guests,
+      emails
+    );
+    return { ...current, guests, guest_emails: emails };
   }
 
   /**
@@ -974,7 +1026,7 @@ export class SessionRegistry extends DurableObject {
       allowedEmails,
       admin
     );
-    return { allowed_emails: allowedEmails, admin_email: admin, seeded: 1 };
+    return { ...current, allowed_emails: allowedEmails, admin_email: admin, seeded: 1 };
   }
 
   /* ------------------------------------------------------------- storage -- */
@@ -1167,32 +1219,27 @@ export class SessionRegistry extends DurableObject {
     return row?.n ?? 0;
   }
 
-  list(limit: number, cursor = ""): SessionPage {
+  /** `owner`, when given, narrows the page to the sessions that address started. */
+  list(limit: number, cursor = "", owner = ""): SessionPage {
     this.ensureSchema();
     const size = Math.max(1, Math.trunc(limit));
     const after = parseCursor(cursor);
     // One row past the page: its existence is the only thing `has_more` needs, and
     // it is cheaper than a second COUNT over the table.
-    const rows = (
-      after
-        ? this.ctx.storage.sql.exec(
-            `SELECT id, title, created_at, updated_at, object_id, source, chat_id, chat_type,
-                    chat_username, chat_thread_id
-             FROM sessions
-             WHERE updated_at < ? OR (updated_at = ? AND id > ?)
-             ORDER BY updated_at DESC, id ASC LIMIT ?`,
-            after.updated_at,
-            after.updated_at,
-            after.id,
-            size + 1
-          )
-        : this.ctx.storage.sql.exec(
-            `SELECT id, title, created_at, updated_at, object_id, source, chat_id, chat_type,
-                    chat_username, chat_thread_id
-             FROM sessions ORDER BY updated_at DESC, id ASC LIMIT ?`,
-            size + 1
-          )
-    ).toArray() as unknown as SessionRow[];
+    const rows = this.ctx.storage.sql
+      .exec(
+        `SELECT id, title, owner_email, created_at, updated_at, object_id, source, chat_id,
+                chat_type, chat_username, chat_thread_id
+         FROM sessions
+         WHERE (?1 = '' OR owner_email = ?1)
+           AND (?2 = 0 OR updated_at < ?2 OR (updated_at = ?2 AND id > ?3))
+         ORDER BY updated_at DESC, id ASC LIMIT ?4`,
+        owner,
+        after?.updated_at ?? 0,
+        after?.id ?? "",
+        size + 1
+      )
+      .toArray() as unknown as SessionRow[];
 
     const page = rows.slice(0, size);
     const last = page[page.length - 1];
@@ -1227,7 +1274,9 @@ export class SessionRegistry extends DurableObject {
       chat_thread_id: "",
     },
     /** The deployment's `max_sessions`, passed in by the caller. See `storageState`. */
-    maxSessions: number
+    maxSessions: number,
+    /** Who started it on the web. Written once; an update keeps the first owner. */
+    owner = ""
   ): SessionRow {
     this.ensureSchema();
     // The ceiling, enforced here because here is where every path meets: the web
@@ -1243,13 +1292,14 @@ export class SessionRegistry extends DurableObject {
     }
     const now = Date.now();
     this.ctx.storage.sql.exec(
-      `INSERT INTO sessions (id, title, created_at, updated_at, object_id, source, chat_id,
-                             chat_type, chat_username, chat_thread_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO sessions (id, title, owner_email, created_at, updated_at, object_id, source,
+                             chat_id, chat_type, chat_username, chat_thread_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET title = excluded.title, updated_at = excluded.updated_at,
                                      object_id = excluded.object_id`,
       id,
       title,
+      owner.trim().toLowerCase(),
       now,
       now,
       objectId,
@@ -1259,7 +1309,7 @@ export class SessionRegistry extends DurableObject {
       origin.chat_username,
       origin.chat_thread_id
     );
-    return { id, title, created_at: now, updated_at: now, object_id: objectId, ...origin };
+    return this.get(id)!;
   }
 
   /**
@@ -1271,8 +1321,8 @@ export class SessionRegistry extends DurableObject {
     this.ensureSchema();
     return this.ctx.storage.sql
       .exec(
-        `SELECT id, title, created_at, updated_at, object_id, source, chat_id, chat_type,
-                chat_username, chat_thread_id
+        `SELECT id, title, owner_email, created_at, updated_at, object_id, source, chat_id,
+                chat_type, chat_username, chat_thread_id
          FROM sessions WHERE chat_id = ? AND chat_thread_id = ? LIMIT 1`,
         chatId,
         threadId
@@ -1342,8 +1392,8 @@ export class SessionRegistry extends DurableObject {
     this.ensureSchema();
     return this.ctx.storage.sql
       .exec(
-        `SELECT id, title, created_at, updated_at, object_id, source, chat_id, chat_type,
-                chat_username, chat_thread_id
+        `SELECT id, title, owner_email, created_at, updated_at, object_id, source, chat_id,
+                chat_type, chat_username, chat_thread_id
          FROM sessions WHERE id = ? LIMIT 1`,
         id
       )
@@ -1712,7 +1762,58 @@ const AGENT_DIRECTORY_MIGRATIONS: readonly Migration[] = [
       );
     },
   },
+  {
+    // Metadata: free-form tags an app attaches to the agents it makes, so each app
+    // lists only its own (`with`) and the others can leave them out (`without`).
+    //
+    // Guests: an index copy of each agent's guest switch and list, so "the agents
+    // this address may message" is a query. The registry stays the authority.
+    name: "agent metadata and guests",
+    up: (sql) => {
+      addColumnIfMissing(sql, "agents", `metadata TEXT NOT NULL DEFAULT '{}'`);
+      addColumnIfMissing(sql, "agents", `guests INTEGER NOT NULL DEFAULT 0`);
+      sql.exec(
+        `CREATE TABLE IF NOT EXISTS agent_guests (
+           agent_id TEXT NOT NULL,
+           email TEXT NOT NULL,
+           PRIMARY KEY (agent_id, email)
+         )`
+      );
+      sql.exec(`CREATE INDEX IF NOT EXISTS idx_agent_guests_email ON agent_guests(email)`);
+      sql.exec(`CREATE INDEX IF NOT EXISTS idx_agents_guests ON agents(guests)`);
+    },
+  },
 ];
+
+/**
+ * Which agents a listing keeps, by metadata. `with` keeps only agents whose `key`
+ * holds `value`; `without` drops every agent that has `key` at all.
+ */
+/** The row as `AgentRow` has always looked: the metadata column is for filtering. */
+function withoutMetadata(row: AgentRow & { metadata?: string }): AgentRow {
+  const { metadata: _metadata, ...rest } = row;
+  return rest;
+}
+
+export type MetadataFilter = { with?: [string, string]; without?: string };
+
+/** Metadata keys are plain identifiers: they end up inside a JSON path. */
+export const METADATA_KEY = /^[a-z0-9_-]{1,40}$/;
+
+/** The SQL condition for `filter` on table alias `a`, and its bound values. */
+function metadataClause(filter: MetadataFilter | undefined): { sql: string; args: string[] } {
+  const parts: string[] = [];
+  const args: string[] = [];
+  if (filter?.with && METADATA_KEY.test(filter.with[0])) {
+    parts.push(`json_extract(a.metadata, '$."' || ? || '"') = ?`);
+    args.push(filter.with[0], filter.with[1]);
+  }
+  if (filter?.without && METADATA_KEY.test(filter.without)) {
+    parts.push(`json_extract(a.metadata, '$."' || ? || '"') IS NULL`);
+    args.push(filter.without);
+  }
+  return { sql: parts.length ? parts.join(" AND ") : "1", args };
+}
 
 export class AgentDirectory extends DurableObject {
   private ready = false;
@@ -1876,40 +1977,101 @@ export class AgentDirectory extends DurableObject {
    * you administer yourself and put your own address in: it shows up here as yours,
    * and again inside the fleet as one of its agents, because it is both.
    */
-  listPage(email: string, limit = 0, cursor = ""): AgentPage {
+  listPage(email: string, limit = 0, cursor = "", filter?: MetadataFilter): AgentPage {
     this.ensureSchema();
     const wanted = email.trim().toLowerCase();
     if (!wanted) return { agents: [], has_more: false, cursor: "" };
     const size = this.pageSize(limit);
     const after = decodeCursor(cursor);
+    const meta = metadataClause(filter);
     // One row more than asked for: whether there is another page is then a fact
     // about this query rather than a second count over the whole list.
     const rows = this.ctx.storage.sql
       .exec(
         `SELECT * FROM (
            SELECT a.id, a.name, a.created_at, a.updated_at, a.allowed_emails,
-                  a.admin_email, a.fleet_id, a.fleet_name
+                  a.admin_email, a.fleet_id, a.fleet_name, a.metadata
              FROM agents a
-            WHERE a.admin_email = ?1 AND a.fleet_id = ''
+            WHERE a.admin_email = ? AND a.fleet_id = ''
             UNION
            SELECT a.id, a.name, a.created_at, a.updated_at, a.allowed_emails,
-                  a.admin_email, a.fleet_id, a.fleet_name
+                  a.admin_email, a.fleet_id, a.fleet_name, a.metadata
              FROM agents a
              JOIN agent_members m ON m.agent_id = a.id
-            WHERE m.email = ?1
-         )
-         WHERE (?2 = 0 AND ?3 = '')
-            OR created_at > ?2
-            OR (created_at = ?2 AND id > ?3)
-         ORDER BY created_at, id
-         LIMIT ?4`,
+            WHERE m.email = ?
+         ) a
+         WHERE ${meta.sql}
+           AND ((? = 0 AND ? = '') OR a.created_at > ? OR (a.created_at = ? AND a.id > ?))
+         ORDER BY a.created_at, a.id
+         LIMIT ?`,
         wanted,
+        wanted,
+        ...meta.args,
+        after?.created_at ?? 0,
+        after?.id ?? "",
+        after?.created_at ?? 0,
         after?.created_at ?? 0,
         after?.id ?? "",
         size + 1
       )
-      .toArray() as unknown as AgentRow[];
-    return this.page(rows, size);
+      .toArray() as unknown as (AgentRow & { metadata: string })[];
+    return this.page(rows.map(withoutMetadata), size);
+  }
+
+  /**
+   * One page of the agents `email` may message as a guest: guests switched on, and
+   * either no guest list (anyone signed in) or `email` on it.
+   */
+  listGuestPage(email: string, limit = 0, cursor = "", filter?: MetadataFilter): AgentPage {
+    this.ensureSchema();
+    const wanted = email.trim().toLowerCase();
+    if (!wanted) return { agents: [], has_more: false, cursor: "" };
+    const size = this.pageSize(limit);
+    const after = decodeCursor(cursor);
+    const meta = metadataClause(filter);
+    const rows = this.ctx.storage.sql
+      .exec(
+        `SELECT a.id, a.name, a.created_at, a.updated_at, a.admin_email
+           FROM agents a
+          WHERE a.guests = 1
+            AND (NOT EXISTS (SELECT 1 FROM agent_guests g WHERE g.agent_id = a.id)
+                 OR EXISTS (SELECT 1 FROM agent_guests g WHERE g.agent_id = a.id AND g.email = ?))
+            AND ${meta.sql}
+            AND ((? = 0 AND ? = '') OR a.created_at > ? OR (a.created_at = ? AND a.id > ?))
+          ORDER BY a.created_at, a.id
+          LIMIT ?`,
+        wanted,
+        ...meta.args,
+        after?.created_at ?? 0,
+        after?.id ?? "",
+        after?.created_at ?? 0,
+        after?.created_at ?? 0,
+        after?.id ?? "",
+        size + 1
+      )
+      .toArray() as unknown as { id: string; name: string; created_at: number; updated_at: number; admin_email: string }[];
+    // A guest learns the agent's name and nothing about who else is on it.
+    return this.page(
+      rows.map((r) => ({ ...r, allowed_emails: "", admin_email: "", fleet_id: "", fleet_name: "" })),
+      size
+    );
+  }
+
+  /** Mirror an agent's guest switch and list, as the registry holds them. */
+  setGuests(id: string, guests: number, guestEmails: string) {
+    this.ensureSchema();
+    const emails = splitEmails(guestEmails);
+    this.ctx.storage.transactionSync(() => {
+      this.ctx.storage.sql.exec(`DELETE FROM agent_guests WHERE agent_id = ?`, id);
+      for (const email of emails) {
+        this.ctx.storage.sql.exec(
+          `INSERT OR IGNORE INTO agent_guests (agent_id, email) VALUES (?, ?)`,
+          id,
+          email
+        );
+      }
+      this.ctx.storage.sql.exec(`UPDATE agents SET guests = ? WHERE id = ?`, guests ? 1 : 0, id);
+    });
   }
 
   /**
@@ -2029,7 +2191,8 @@ export class AgentDirectory extends DurableObject {
     name: string,
     allowedEmails: string,
     adminEmail: string,
-    fleet?: { id: string; name: string }
+    fleet?: { id: string; name: string },
+    metadata: Record<string, string> = {}
   ): AgentRow {
     this.ensureSchema();
     const now = Date.now();
@@ -2038,8 +2201,8 @@ export class AgentDirectory extends DurableObject {
     const fleetName = fleet?.name ?? "";
     this.ctx.storage.sql.exec(
       `INSERT INTO agents (id, name, created_at, updated_at, allowed_emails, admin_email,
-                           fleet_id, fleet_name)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                           fleet_id, fleet_name, metadata)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       id,
       name,
       now,
@@ -2047,7 +2210,8 @@ export class AgentDirectory extends DurableObject {
       allowedEmails,
       admin,
       fleetId,
-      fleetName
+      fleetName,
+      JSON.stringify(metadata)
     );
     // The row is in; this puts the same addresses in `agent_members` beside it.
     this.writeMembers(id, allowedEmails);
@@ -2390,6 +2554,7 @@ export class AgentDirectory extends DurableObject {
     // id were ever reused.
     this.ctx.storage.transactionSync(() => {
       this.ctx.storage.sql.exec(`DELETE FROM agent_members WHERE agent_id = ?`, id);
+      this.ctx.storage.sql.exec(`DELETE FROM agent_guests WHERE agent_id = ?`, id);
       this.ctx.storage.sql.exec(`DELETE FROM agents WHERE id = ?`, id);
     });
   }

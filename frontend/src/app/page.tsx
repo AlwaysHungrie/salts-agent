@@ -89,7 +89,9 @@ export default function Agents() {
 
   /** The first page of the list, and the fleets above it. Replaces what is on screen. */
   const load = useCallback(async () => {
-    const res = await apiFetch(`/api/agents`, {
+    // Agents another app made for itself (socratic-salt's challenges, say) carry an
+    // `app` tag and are that app's to show, not this list's.
+    const res = await apiFetch(`/api/agents?without=app`, {
       cache: "no-store",
     });
     const payload = (await res.json().catch(() => null)) as
@@ -124,7 +126,7 @@ export default function Agents() {
     if (!cursor || loadingMore) return;
     setLoadingMore(true);
     const res = await apiFetch(
-      `/api/agents?cursor=${encodeURIComponent(cursor)}`,
+      `/api/agents?without=app&cursor=${encodeURIComponent(cursor)}`,
       { cache: "no-store" },
     );
     const payload = (await res.json().catch(() => null)) as AgentPage | null;
