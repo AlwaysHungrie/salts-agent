@@ -1,5 +1,6 @@
 import "server-only";
 import { excerpt } from "./prompt";
+import { PROTOCOL } from "./protocol";
 import { orNull, workerJson } from "./worker";
 
 /**
@@ -112,6 +113,9 @@ export async function createChallenge(name: string, email: string): Promise<stri
   await workerJson(`${agentPath(agent.id)}/config`, {
     method: "PATCH",
     body: JSON.stringify({
+      system_prompt: PROTOCOL,
+      // Room for the reply, the running tally and any reasoning the model spends first.
+      max_tokens: 2000,
       cap_web_search: 0,
       cap_url_fetch: 1,
       cap_mcp: 1,
@@ -187,6 +191,7 @@ export async function saveSettings(id: string, input: SettingsInput): Promise<vo
       ...meta,
       monthly_spend_limit: input.monthly_spend_limit,
       config: {
+        system_prompt: PROTOCOL,
         private_notes: input.private_notes,
         public_notes: input.public_notes,
         model: input.model,
