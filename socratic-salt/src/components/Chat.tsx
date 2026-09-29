@@ -2,12 +2,14 @@
 
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
-import { AlertCircle, RotateCcw, Send, Square } from "lucide-react";
+import { AlertCircle, MessagesSquare, RotateCcw, Send, Square } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Bubble, Thinking, toUIMessages } from "./Messages";
 import { identityHeaders } from "@/lib/identity";
 import { MAX_MESSAGE, type ChatUIMessage } from "@/lib/chat";
 import type { StoredMessage } from "@/lib/challenges";
+import { latestStance } from "@/lib/stance";
+import { useSetStance } from "./Stance";
 
 export function Chat({
   challengeId,
@@ -50,6 +52,16 @@ export function Chat({
     });
 
   const busy = status === "streaming" || status === "submitted";
+  const setStance = useSetStance();
+
+  // Once a reply has landed, the brief pane shows where the debate now stands.
+  useEffect(() => {
+    if (busy) return;
+    const replies = messages
+      .filter((m) => m.role === "assistant")
+      .map((m) => m.parts.map((p) => (p.type === "text" ? p.text : "")).join(""));
+    setStance(latestStance(replies));
+  }, [messages, busy, setStance]);
 
   useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -73,30 +85,53 @@ export function Chat({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {messages.length > 0 && (
-        <div className="flex shrink-0 justify-end px-4 pt-3 md:px-8">
+      <div className="border-hairline-soft flex h-12 shrink-0 items-center gap-2 border-b px-4 md:px-8">
+        <MessagesSquare className="text-muted size-4" strokeWidth={1.75} />
+        <p className="min-w-0 truncate text-sm font-semibold">Discussion with {name}</p>
+        {messages.length > 0 && (
           <button
             type="button"
             onClick={startOver}
-            className="border-hairline text-muted hover:text-ink hover:bg-canvas-soft inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition"
+            className="border-hairline text-muted hover:text-ink hover:bg-canvas-soft ml-auto inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition"
           >
             <RotateCcw className="size-3.5" /> Start over
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 md:px-8">
         {messages.length === 0 ? (
           <div className="mx-auto flex min-h-full max-w-xl flex-col justify-center py-6">
-            <h2 className="text-[32px] leading-[1.13] font-[650] tracking-[-0.02em]">
-              Make your case.
+            <h2 className="text-[28px] leading-[1.15] font-[650] tracking-[-0.02em]">
+              Work out the decision together.
             </h2>
-            <p className="text-muted mt-2 text-base leading-[1.43] font-light">
-              {name} argues one side. Take it on one argument at a time — it takes what you tell
-              it as true.
+            <p className="text-muted mt-3 text-base leading-[1.5] font-light">
+              {name} was set up to argue one side of the decision in the brief. Test it. It
+              concedes what is true, shows where things stand after every reply, and changes its
+              recommendation when your case outweighs its own.
+            </p>
+            <ol className="mt-6 space-y-3 text-[15px] leading-[1.45]">
+              {[
+                "Make one argument per message.",
+                "Bring what it cannot know: customer conversations, plans, decisions. It takes them as true.",
+                "Ask for a conclusion whenever you are ready.",
+              ].map((step, i) => (
+                <li key={step} className="flex gap-3">
+                  <span className="bg-canvas-soft grid size-6 shrink-0 place-items-center rounded-full text-xs font-semibold">
+                    {i + 1}
+                  </span>
+                  <span className="pt-0.5">{step}</span>
+                </li>
+              ))}
+            </ol>
+            <p className="text-faint mt-5 text-[13px]">
+              The person who set up this challenge can read this conversation.
             </p>
             {openers.length > 0 && (
-              <div className="mt-6 space-y-2">
+              <div className="mt-8 space-y-2">
+                <p className="text-muted text-xs font-semibold tracking-[0.08em] uppercase">
+                  Ways to start
+                </p>
                 {openers.map((o) => (
                   <button
                     key={o}
