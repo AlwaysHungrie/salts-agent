@@ -86,7 +86,10 @@ describe("owner notes", () => {
       `${BASE}/api/agents/${id}/config`,
       as(owner, {
         method: "PATCH",
-        body: JSON.stringify({ private_notes: brief, public_notes: "The decision: Salt or Spark." }),
+        body: JSON.stringify({
+          private_notes: brief,
+          public_notes: "The decision: Salt or Spark.",
+        }),
       })
     );
     const { config } = await json<{ config: { private_notes: string } }>(
@@ -158,18 +161,33 @@ describe("guests", () => {
 
     // Only conversing: no reset, no files, no fork.
     expect(
-      (await SELF.fetch(`${BASE}/agents/session-agent/${session.id}/reset`, as(guest, { method: "POST" })))
-        .status
+      (
+        await SELF.fetch(
+          `${BASE}/agents/session-agent/${session.id}/reset`,
+          as(guest, { method: "POST" })
+        )
+      ).status
     ).toBe(404);
-    expect((await SELF.fetch(`${BASE}/agents/session-agent/${session.id}/files`, as(guest))).status).toBe(404);
     expect(
-      (await SELF.fetch(`${BASE}/api/sessions/${session.id}/fork`, as(guest, { method: "POST", body: "{}" })))
-        .status
+      (await SELF.fetch(`${BASE}/agents/session-agent/${session.id}/files`, as(guest))).status
+    ).toBe(404);
+    expect(
+      (
+        await SELF.fetch(
+          `${BASE}/api/sessions/${session.id}/fork`,
+          as(guest, { method: "POST", body: "{}" })
+        )
+      ).status
     ).toBe(404);
 
     // The owner reads it; the guest may delete it.
-    expect((await SELF.fetch(`${BASE}/agents/session-agent/${session.id}/messages`, as(owner))).status).toBe(200);
-    expect((await SELF.fetch(`${BASE}/api/sessions/${session.id}`, as(guest, { method: "DELETE" }))).status).toBe(200);
+    expect(
+      (await SELF.fetch(`${BASE}/agents/session-agent/${session.id}/messages`, as(owner))).status
+    ).toBe(200);
+    expect(
+      (await SELF.fetch(`${BASE}/api/sessions/${session.id}`, as(guest, { method: "DELETE" })))
+        .status
+    ).toBe(200);
   });
 
   it("keeps each guest to their own sessions", async () => {
@@ -187,10 +205,16 @@ describe("guests", () => {
     expect(listed.sessions.map((s) => s.id)).toEqual([aliceSession.id]);
 
     for (const other of [ownerSession.id]) {
-      expect((await SELF.fetch(`${BASE}/agents/session-agent/${other}/messages`, as(alice))).status).toBe(404);
-      expect((await SELF.fetch(`${BASE}/api/sessions/${other}`, as(alice, { method: "DELETE" }))).status).toBe(404);
+      expect(
+        (await SELF.fetch(`${BASE}/agents/session-agent/${other}/messages`, as(alice))).status
+      ).toBe(404);
+      expect(
+        (await SELF.fetch(`${BASE}/api/sessions/${other}`, as(alice, { method: "DELETE" }))).status
+      ).toBe(404);
     }
-    expect((await SELF.fetch(`${BASE}/agents/session-agent/${aliceSession.id}/messages`, as(bob))).status).toBe(404);
+    expect(
+      (await SELF.fetch(`${BASE}/agents/session-agent/${aliceSession.id}/messages`, as(bob))).status
+    ).toBe(404);
 
     // The owner sees every guest's session, and `mine=1` narrows to their own.
     const all = await json<{ sessions: { owner_email: string }[] }>(
@@ -210,7 +234,11 @@ describe("guests", () => {
     expect((await startSession(id, invited)).status).toBe(200);
     expect((await startSession(id, someone("uninvited"))).status).toBe(404);
 
-    const { config } = { config: await json<{ guests: unknown }>(SELF.fetch(`${BASE}/api/agents/${id}/config`, as(owner))) };
+    const { config } = {
+      config: await json<{ guests: unknown }>(
+        SELF.fetch(`${BASE}/api/agents/${id}/config`, as(owner))
+      ),
+    };
     expect(config.guests).toEqual({ enabled: true, emails: [invited] });
   });
 
@@ -220,7 +248,9 @@ describe("guests", () => {
     const guest = someone("guest");
     const session = await json<{ id: string }>(startSession(id, guest));
     await setGuests(id, owner, { guests: false });
-    expect((await SELF.fetch(`${BASE}/agents/session-agent/${session.id}/messages`, as(guest))).status).toBe(404);
+    expect(
+      (await SELF.fetch(`${BASE}/agents/session-agent/${session.id}/messages`, as(guest))).status
+    ).toBe(404);
   });
 
   it("lets only the admin decide who the guests are", async () => {
@@ -237,9 +267,11 @@ describe("guests", () => {
     const { owner, id } = await challenge();
     const invited = someone("invited");
     const listFor = async (email: string) =>
-      (await json<{ agents: { id: string; admin_email: string }[] }>(
-        SELF.fetch(`${BASE}/api/agents?as=guest&limit=100`, as(email))
-      )).agents;
+      (
+        await json<{ agents: { id: string; admin_email: string }[] }>(
+          SELF.fetch(`${BASE}/api/agents?as=guest&limit=100`, as(email))
+        )
+      ).agents;
 
     expect((await listFor(invited)).some((a) => a.id === id)).toBe(false);
     await setGuests(id, owner, { guests: true, guest_emails: [invited] });
@@ -256,8 +288,11 @@ describe("agent metadata", () => {
     const tagged = await createAgent(owner, { metadata: { app: "socratic-salt" } });
     const plain = await createAgent(owner);
     const ids = async (query: string) =>
-      (await json<{ agents: { id: string }[] }>(SELF.fetch(`${BASE}/api/agents?${query}`, as(owner))))
-        .agents.map((a) => a.id);
+      (
+        await json<{ agents: { id: string }[] }>(
+          SELF.fetch(`${BASE}/api/agents?${query}`, as(owner))
+        )
+      ).agents.map((a) => a.id);
 
     expect(await ids("with=app:socratic-salt")).toEqual([tagged.id]);
     expect(await ids("without=app")).toEqual([plain.id]);
@@ -270,7 +305,10 @@ describe("agent metadata", () => {
     for (const metadata of [{ "bad key!": "x" }, { app: 1 }, ["app"], { app: "x".repeat(101) }]) {
       const res = await SELF.fetch(
         `${BASE}/api/agents`,
-        as(owner, { method: "POST", body: JSON.stringify({ name: "X", allowed_emails: owner, metadata }) })
+        as(owner, {
+          method: "POST",
+          body: JSON.stringify({ name: "X", allowed_emails: owner, metadata }),
+        })
       );
       expect(res.status).toBe(400);
     }

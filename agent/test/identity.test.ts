@@ -91,11 +91,15 @@ describe("access lists", () => {
 
 describe("normalizeEmails", () => {
   it("accepts commas, semicolons and newlines as separators", () => {
-    expect(normalizeEmails("a@x.com, b@x.com; c@x.com", MAX_MEMBERS)).toBe("a@x.com\nb@x.com\nc@x.com");
+    expect(normalizeEmails("a@x.com, b@x.com; c@x.com", MAX_MEMBERS)).toBe(
+      "a@x.com\nb@x.com\nc@x.com"
+    );
   });
 
   it("lowercases and de-duplicates", () => {
-    expect(normalizeEmails(["A@x.com", "a@X.COM", "b@x.com"], MAX_MEMBERS)).toBe("a@x.com\nb@x.com");
+    expect(normalizeEmails(["A@x.com", "a@X.COM", "b@x.com"], MAX_MEMBERS)).toBe(
+      "a@x.com\nb@x.com"
+    );
   });
 
   it("drops entries that are not addresses", () => {

@@ -15,7 +15,7 @@ function tone(seconds: number): Int16Array {
 function pages(file: Uint8Array): { headerType: number; granule: bigint; sequence: number }[] {
   const view = new DataView(file.buffer, file.byteOffset, file.byteLength);
   const found: { headerType: number; granule: bigint; sequence: number }[] = [];
-  for (let at = 0; at + 27 <= file.length; ) {
+  for (let at = 0; at + 27 <= file.length;) {
     expect(String.fromCharCode(...file.subarray(at, at + 4))).toBe("OggS");
     const segments = file[at + 26];
     let payload = 0;

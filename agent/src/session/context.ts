@@ -1,0 +1,186 @@
+import { COMPACTION_PREFIX } from "agents/experimental/memory/utils";
+import { jsonSchema, type ModelMessage, tool, type ToolSet } from "ai";
+import {
+  capabilityLabels,
+  channelLabels,
+  enabled,
+  mcpServerReady,
+  mcpToolSpecs,
+  runTool,
+  type ToolContext,
+  toolsFor,
+} from "../capabilities";
+import type { Config } from "../registry";
+import { base64ToBytes } from "../util/bytes";
+import { attachmentsOf, insertAttachment } from "./attachments";
+import { sendVoiceNote } from "./channels";
+import { compactedMessages } from "./compaction";
+import { ensureParsed, fileParts, mcpUploadNotes, parsedDocuments } from "./documents";
+import { uploadPath } from "./files";
+import { inWords, textOf } from "./format";
+import { transcribeAttachment } from "./transcribe";
+import type { SessionHost } from "./types";
+
+/** What the model is told a compaction summary is, ahead of the summary itself. */
+export const SUMMARY_PREAMBLE =
+  "[Summary of the earlier part of this conversation, which was compacted to save context. The messages it covers are no longer shown.]";
+
+export function systemPrompt(host: SessionHost): string {
+  // The deployment's line first. Blank is the owner choosing to say nothing.
+  const deployment = host.settings().system_prompt.trim();
+  const parts = deployment ? [deployment] : [];
+  // The name comes from renaming the agent, so it is kept outside the editable instructions.
+  const name = host.config().agent_name.trim();
+  const custom = host.config().system_prompt.trim();
+  const instructions = [...(name ? [`Your name is ${name}.`] : []), ...(custom ? [custom] : [])];
+  if (instructions.length > 0) parts.push(instructions.join("\n"));
+  // The owner's notes: the brief only the model sees, then what the person talking
+  // to it was shown before starting, so it knows exactly what they have read.
+  const privateNotes = (host.config().private_notes ?? "").trim();
+  if (privateNotes) parts.push(privateNotes);
+  const publicNotes = (host.config().public_notes ?? "").trim();
+  if (publicNotes) {
+    parts.push(`What the person you are talking with was shown before starting:\n\n${publicNotes}`);
+  }
+  if (host.memories().length > 0) {
+    // Memories are injected rather than recalled by tool call, so the model can use
+    // what it knows without spending a round trip to find out that it knows it.
+    parts.push(
+      `What you remember about this user:\n${host
+        .memories()
+        .map((m) => `- ${m.text}`)
+        .join("\n")}`
+    );
+  }
+  const ready = capabilityLabels(host.config());
+  if (ready.length > 0) parts.push(`Capabilities available to you: ${ready.join(", ")}.`);
+  // Channels are named apart from capabilities, with the limit spelled out: listed as a
+  // capability, the model offered to message numbers it has no way to reach.
+  const channels = channelLabels(host.config());
+  if (channels.length > 0) {
+    parts.push(
+      `You are reachable on ${inWords(channels)}. Your reply goes back to the chat the message came from — you cannot start a conversation, and you cannot message any other number or account.`
+    );
+  }
+  // A connected MCP server's tools are named after it, so naming the servers tells
+  // the model which prefix belongs to which provider.
+  const connected = enabled(host.config(), "mcp") ? host.mcpServers().filter(mcpServerReady) : [];
+  if (connected.length > 0) {
+    parts.push(
+      `Connected MCP servers, whose tools are prefixed with their name: ${connected
+        .map((s) => s.name)
+        .join(", ")}.`
+    );
+  }
+  parts.push(
+    "Files the user attaches are written to the workspace under uploads/, and every message names the ones it carries. Open one with the read tool when the question is about it."
+  );
+  return parts.join("\n\n");
+}
+
+/**
+ * The conversation as the model receives it, with files re-attached from the workspace at
+ * turn time. `context_messages` keeps the last N (0 = all), counted after compaction.
+ */
+export async function modelMessages(host: SessionHost, config: Config): Promise<ModelMessage[]> {
+  const all = await compactedMessages(host);
+  const limit = config.context_messages;
+  const kept = limit > 0 ? all.slice(-limit) : all;
+
+  const messages: ModelMessage[] = [];
+  for (const message of kept) {
+    const text = message.id.startsWith(COMPACTION_PREFIX)
+      ? `${SUMMARY_PREAMBLE}\n\n${textOf(message)}`
+      : textOf(message);
+    if (message.role === "assistant") {
+      if (text.trim()) messages.push({ role: "assistant", content: text });
+      continue;
+    }
+    const attachments = attachmentsOf(host, message.id);
+    // Parsed on the first turn that needs it, the way a clip is transcribed on the
+    // first turn that needs its words.
+    for (const a of attachments) await ensureParsed(host, a);
+    const parsed = await parsedDocuments(host, attachments);
+    const uploads = await mcpUploadNotes(host, config, attachments);
+    // A parsed PDF travels as its text; the file is sent only when there is no parse.
+    const parts = await fileParts(host, attachments, new Set(parsed.map((p) => p.id)));
+    const content = [
+      { type: "text" as const, text },
+      ...uploads.map((note) => ({ type: "text" as const, text: note })),
+      ...parsed.map((p) => ({
+        type: "text" as const,
+        text: `--- contents of ${p.name} ---\n${p.text}`,
+      })),
+      ...parts,
+    ];
+    messages.push(
+      content.length === 1 ? { role: "user", content: text } : { role: "user", content }
+    );
+  }
+  return messages;
+}
+
+/**
+ * The capability and MCP tools, wrapped for the AI SDK with their JSON Schema as-is.
+ * They sit beside Think's own workspace tools.
+ */
+export function capabilityTools(host: SessionHost, config: Config): ToolSet {
+  const context = toolContext(host, config);
+  const tools: ToolSet = {};
+  // The built-in capability tools, plus whatever the connected MCP servers offer.
+  const specs = [
+    ...toolsFor(config),
+    ...(enabled(config, "mcp") ? mcpToolSpecs(host.mcpServers()) : []),
+  ];
+  for (const spec of specs) {
+    tools[spec.name] = tool({
+      description: spec.description,
+      inputSchema: jsonSchema(spec.parameters as never),
+      // A failure is returned rather than thrown, so the model reads what went
+      // wrong and can correct itself on the next round.
+      execute: async (args) =>
+        (await runTool(spec.name, args as Record<string, unknown>, context, spec)).content,
+    });
+  }
+  return tools;
+}
+
+export function toolContext(host: SessionHost, config: Config): ToolContext {
+  return {
+    config,
+    settings: host.settings(),
+    sessionId: host.name(),
+    openrouterKey: host.openrouterKey(),
+    registry: host.registry(),
+    saveImage: async (dataUrl, prompt) => {
+      const id = crypto.randomUUID().slice(0, 12);
+      const mime = dataUrl.match(/^data:([^;]+)/)?.[1] ?? "image/png";
+      const bytes = base64ToBytes(dataUrl.split(",", 2)[1] ?? "");
+      const name = `${prompt.slice(0, 40) || "image"}.png`;
+      const path = uploadPath(id, name);
+      await host.workspace.writeFileBytes(path, bytes, mime);
+      insertAttachment(host, {
+        id,
+        kind: "image",
+        name,
+        mime,
+        text: prompt,
+        path,
+        thumb_path: "",
+        bytes: bytes.byteLength,
+      });
+      // Marked used straight away: it belongs to the reply, not to the next turn.
+      host.exec(`UPDATE attachments SET used = 1 WHERE id = ?`, id);
+      return `/agents/session-agent/${encodeURIComponent(host.name())}/files/${id}`;
+    },
+    transcribeAttachment: (id) => transcribeAttachment(host, id),
+    sendVoiceNote: (bytes) => sendVoiceNote(host, bytes),
+    schedule: async (when, prompt) => {
+      const task = await host.scheduleTask(when, prompt);
+      host.turn.scheduled = true;
+      return task;
+    },
+    listTasks: () => host.listTasks(),
+    cancelTask: (id) => host.cancelTask(id),
+  };
+}

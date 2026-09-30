@@ -71,7 +71,8 @@ async function telegramMock(request: Request, url: URL): Promise<Response> {
 
   // The webhook is registered whenever an agent's settings are saved. Nothing leaves
   // the process, so the seal the suite keeps on api.telegram.org is untouched.
-  if (method === "setWebhook" || method === "deleteWebhook") return json({ ok: true, result: true });
+  if (method === "setWebhook" || method === "deleteWebhook")
+    return json({ ok: true, result: true });
   if (method === "getMe") return json({ ok: true, result: { id: 1, username: "mock_bot" } });
   if (method === "getWebhookInfo") {
     return json({ ok: true, result: { url: "https://worker.test/hook", pending_update_count: 0 } });
@@ -84,7 +85,8 @@ async function telegramMock(request: Request, url: URL): Promise<Response> {
     const body = (await request.json().catch(() => ({}))) as { file_id?: string };
     // A file id a test uses to make the step before the turn fail the way the platform
     // fails it — see RESET_FILE_ID.
-    if (body.file_id === RESET_FILE_ID) return json({ ok: false, description: PLATFORM_RESET }, 500);
+    if (body.file_id === RESET_FILE_ID)
+      return json({ ok: false, description: PLATFORM_RESET }, 500);
     return json({ ok: true, result: { file_path: `files/${body.file_id ?? "unknown"}` } });
   }
   if (url.pathname.includes("/file/bot")) {
@@ -215,7 +217,11 @@ async function graphMock(request: Request, url: URL): Promise<Response> {
   }
   if (/^\/v\d+\.\d+\/media-[\w-]+$/.test(url.pathname)) {
     const id = url.pathname.split("/").at(-1) ?? "";
-    return json({ id, url: `https://graph.facebook.com/__inbound/${id}`, file_size: WHATSAPP_FILE_BODY.length });
+    return json({
+      id,
+      url: `https://graph.facebook.com/__inbound/${id}`,
+      file_size: WHATSAPP_FILE_BODY.length,
+    });
   }
 
   // The media store. A voice note is uploaded here first and named by id on the send,
@@ -382,8 +388,7 @@ function lastUserMessage(body: ChatBody): string {
 }
 
 /** Whether this request is the second leg of a tool call — the SDK sending the result back. */
-const carriesToolResult = (body: ChatBody) =>
-  (body.messages ?? []).some((m) => m.role === "tool");
+const carriesToolResult = (body: ChatBody) => (body.messages ?? []).some((m) => m.role === "tool");
 
 const usage = () => ({
   prompt_tokens: PROMPT_TOKENS,
@@ -459,7 +464,11 @@ function spoken(body: ChatBody) {
     created: 1,
     model: "mock/voice",
     choices: [
-      { index: 0, delta: { role: "assistant", audio: { data: spokenPcm(i * per, per) } }, finish_reason: null },
+      {
+        index: 0,
+        delta: { role: "assistant", audio: { data: spokenPcm(i * per, per) } },
+        finish_reason: null,
+      },
     ],
   }));
   return stream([
@@ -598,8 +607,7 @@ async function mcpMock(request: Request, url: URL): Promise<Response> {
     return json({ upload_id });
   }
   const body = (await request.json().catch(() => ({}))) as { id?: number; method?: string };
-  const reply = (result: unknown) =>
-    json({ jsonrpc: "2.0", id: body.id ?? 1, result }, 200);
+  const reply = (result: unknown) => json({ jsonrpc: "2.0", id: body.id ?? 1, result }, 200);
 
   if (body.method === "initialize") {
     return new Response(
@@ -683,9 +691,7 @@ export async function openrouterMock(request: Request): Promise<Response> {
   if (url.pathname === "/__requests") {
     const contains = url.searchParams.get("contains");
     return json(
-      contains
-        ? chatRequests.filter((b) => JSON.stringify(b).includes(contains))
-        : chatRequests
+      contains ? chatRequests.filter((b) => JSON.stringify(b).includes(contains)) : chatRequests
     );
   }
 
@@ -715,8 +721,10 @@ export async function openrouterMock(request: Request): Promise<Response> {
 
   // A compaction: Think's summary prompt, not streamed. Answered before the title
   // call, which would hand the summary the words "Mock Title".
-  if (!body.stream && message.includes("NEW TURNS TO INCORPORATE")) return completion(UPDATED_SUMMARY);
-  if (!body.stream && message.includes("CONVERSATION TO SUMMARIZE")) return completion(FIRST_SUMMARY);
+  if (!body.stream && message.includes("NEW TURNS TO INCORPORATE"))
+    return completion(UPDATED_SUMMARY);
+  if (!body.stream && message.includes("CONVERSATION TO SUMMARIZE"))
+    return completion(FIRST_SUMMARY);
 
   // The title call: no streaming, and a system prompt asking for a name.
   if (!body.stream) return completion("Mock Title");
