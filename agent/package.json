@@ -5,6 +5,9 @@
   "scripts": {
     "dev": "wrangler dev",
     "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\"",
     "test": "vitest run",
     "test:watch": "vitest",
     "deploy": "npm run typecheck && npm test && node scripts/preflight.mjs && wrangler deploy && node ../admin-cli/index.mjs init",
@@ -28,7 +31,11 @@
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.22.0",
     "@cloudflare/workers-types": "^5.20260908.1",
+    "eslint": "^9.39.5",
+    "globals": "^17.12.0",
+    "prettier": "^3.9.9",
     "typescript": "^5.9.2",
+    "typescript-eslint": "^8.71.0",
     "vitest": "^4.1.11",
     "wrangler": "^4.42.0"
   }
