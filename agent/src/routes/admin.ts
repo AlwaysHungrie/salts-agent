@@ -1,4 +1,4 @@
-import type { Env } from "../agent";
+import type { Env } from "../env";
 import { forgetCachedSettings, missingSettings, SETTINGS_FIELDS } from "../settings";
 import { callerEmail, trustedCaller } from "../worker/auth";
 import { json, jsonError, readJson } from "../worker/http";

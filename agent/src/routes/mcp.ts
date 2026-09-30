@@ -1,4 +1,4 @@
-import type { Env } from "../agent";
+import type { Env } from "../env";
 import { SECRET_MASK } from "../capabilities";
 import {
   type McpServerRow,

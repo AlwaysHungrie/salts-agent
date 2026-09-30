@@ -1,4 +1,5 @@
-import { type Env, modelCatalog } from "../agent";
+import type { Env } from "../env";
+import { modelCatalog } from "../models";
 import {
   type AgentRow,
   DEFAULT_META,

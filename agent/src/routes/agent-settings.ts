@@ -1,4 +1,4 @@
-import { modelCatalog } from "../agent";
+import { modelCatalog } from "../models";
 import { TELEGRAM_WHITELIST_DEFAULTS } from "../capabilities";
 import { type Config, DEFAULT_META, type MetaSettings, type ModelChoice } from "../registry";
 import { deploymentSettings } from "../settings";

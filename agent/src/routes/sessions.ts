@@ -1,4 +1,4 @@
-import type { Env } from "../agent";
+import type { Env } from "../env";
 import { agentIdOf, sessionLimitMessage, sessionName } from "../registry";
 import { deploymentSettings } from "../settings";
 import { callerEmail } from "../worker/auth";

@@ -1,4 +1,4 @@
-import type { ModelOption } from "../agent";
+import type { ModelOption } from "../models";
 import { CAPABILITIES, type Capability } from "../capabilities";
 import type { MetaSettings, ModelChoice } from "../registry";
 import type { DeploymentSettings } from "../settings";

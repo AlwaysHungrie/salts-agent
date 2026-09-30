@@ -1,4 +1,4 @@
-import type { Env } from "../agent";
+import type { Env } from "../env";
 import { enabled } from "../capabilities";
 import { sessionLimitMessage } from "../registry";
 import { deploymentSettings } from "../settings";

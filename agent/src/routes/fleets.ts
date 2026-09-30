@@ -1,4 +1,5 @@
-import { type Env, modelCatalog } from "../agent";
+import type { Env } from "../env";
+import { modelCatalog } from "../models";
 import { type AgentRow, DEFAULT_META, type FleetRow, type MetaSettings } from "../registry";
 import { deploymentSettings } from "../settings";
 import { redactMeta, validateMeta } from "../validation/meta";

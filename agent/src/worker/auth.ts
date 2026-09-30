@@ -1,4 +1,4 @@
-import type { Env } from "../agent";
+import type { Env } from "../env";
 import { clerkEmail } from "../clerk";
 import { type AccessRow, type AgentRow, emailAllowed, splitEmails } from "../registry";
 import { API_SECRET_HEADER, USER_EMAIL_HEADER } from "./http";

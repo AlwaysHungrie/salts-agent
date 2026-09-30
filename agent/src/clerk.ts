@@ -1,5 +1,5 @@
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose";
-import type { Env } from "./agent";
+import type { Env } from "./env";
 
 /**
  * Turning a Clerk session token into an email address the Worker can act on.

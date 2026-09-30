@@ -1,4 +1,4 @@
-import type { Env } from "../agent";
+import type { Env } from "../env";
 import { readJson } from "../worker/http";
 import { directory, readConfig, registry, writeConfig } from "../worker/stores";
 

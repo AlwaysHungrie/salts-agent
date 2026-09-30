@@ -1,6 +1,6 @@
 import { SELF, env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
-import { cachedPromptTokens, prepareOpenRouterRequest } from "../src/agent";
+import { cachedPromptTokens, prepareOpenRouterRequest } from "../src/openrouter";
 
 /**
  * The cache breakpoint, and the number that proves it landed.

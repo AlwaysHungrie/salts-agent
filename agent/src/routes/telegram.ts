@@ -1,4 +1,4 @@
-import type { Env } from "../agent";
+import type { Env } from "../env";
 import { sessionLimitMessage } from "../registry";
 import { deploymentSettings } from "../settings";
 import { allowedBy, chatTitle, Telegram, type TelegramUpdate, topicId } from "../telegram";
