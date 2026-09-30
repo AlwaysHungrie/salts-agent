@@ -297,22 +297,25 @@ function ServerCard({
             </div>
           )}
 
+          {/*
+            Always editable: a server without OAuth counts as connected as soon as it
+            is saved. Moving an OAuth server drops its tokens, so it reconnects.
+          */}
+          {manage && (
+            <input
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              onBlur={() => url.trim() && url !== server.url && onPatch({ url })}
+              aria-label="Server URL"
+              className={input}
+            />
+          )}
+
           {manage && !server.connected && (
-            <>
-              <input
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                onBlur={() =>
-                  url.trim() && url !== server.url && onPatch({ url })
-                }
-                aria-label="Server URL"
-                className={input}
-              />
-              <AuthPicker
-                value={server.auth}
-                onChange={(auth) => onPatch({ auth })}
-              />
-            </>
+            <AuthPicker
+              value={server.auth}
+              onChange={(auth) => onPatch({ auth })}
+            />
           )}
 
           {/*

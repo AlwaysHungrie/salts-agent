@@ -23,7 +23,7 @@ function as(email: string, init: RequestInit = {}) {
   };
 }
 
-type Server = { id: string; headers: Record<string, string> };
+type Server = { id: string; url: string; headers: Record<string, string> };
 
 async function withHeadersServer() {
   const email = someone();
@@ -83,6 +83,18 @@ describe("MCP header values", () => {
     expect(res.status).toBe(200);
     const { server: updated } = (await res.json()) as { server: Server };
     expect(updated.headers).toEqual({ Authorization: "Bearer second", "X-Team": "t1" });
+  });
+
+  it("survive the server's URL being changed after it is saved", async () => {
+    const { email, agentId, server } = await withHeadersServer();
+    const res = await SELF.fetch(
+      `${BASE}/api/agents/${agentId}/mcp/${server.id}`,
+      as(email, { method: "PATCH", body: JSON.stringify({ url: "https://mcp.test/moved" }) })
+    );
+    expect(res.status).toBe(200);
+    const { server: moved } = (await res.json()) as { server: Server };
+    expect(moved.url).toBe("https://mcp.test/moved");
+    expect(moved.headers).toEqual({ Authorization: "Bearer first" });
   });
 
   it("are masked when the list is managed for the caller, and shown to the owning dialog", async () => {
