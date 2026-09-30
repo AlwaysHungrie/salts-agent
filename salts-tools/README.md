@@ -98,13 +98,13 @@ database URL. Its log is `~/.salts-tools/matchmaker.log`.
 
 | Command | What it does |
 | --- | --- |
-| `salts-tools start` | Checks the machine, runs the first-run steps if needed, then starts every service that is on (`web` if none is). |
-| `salts-tools start <service>…` | Turns those services on and starts them, on the running tunnel if there is one. |
+| `salts-tools start` | Checks the machine, runs the first-run steps if needed, then starts the services that were on last time (`web` if none were). The login item runs this. |
+| `salts-tools start <service>…` | Starts those services only, on the running tunnel if there is one. Services already running keep running; others are not started. |
 | `salts-tools stop <service>` | Turns one service off and stops it. The others and the tunnel keep running. Stopping the last one stops everything. |
 | `salts-tools stop` | Stops the supervisor, the tunnel and the containers. The next `start` brings back the same services. |
 | `salts-tools restart` | Opens a new tunnel and sends its addresses to the agent. |
 | `salts-tools reset` | Deletes `state.json` and the saved token, so the next `start` is a first run. Stop salts-tools first. |
-| `salts-tools setup` | Runs the first-run questions again, for example to switch agents. |
+| `salts-tools setup` | Runs the first-run questions again, for example to switch agents. Starts nothing. |
 | `salts-tools autostart on` / `off` | Adds or removes the login item. See [Where things live](#where-things-live). |
 
 Services: `web`, `matchmaker`.
