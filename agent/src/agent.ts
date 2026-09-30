@@ -133,8 +133,7 @@ export type Snapshot = {
  * rather than stored, so the transcript stays the framework's to own.
  */
 export type TurnStep =
-  | { kind: "text"; text: string }
-  | { kind: "tools"; tools: { name: string; ok: boolean }[] };
+  { kind: "text"; text: string } | { kind: "tools"; tools: { name: string; ok: boolean }[] };
 
 /** The shape the frontend reads a transcript in. */
 export type StoredMessage = {
@@ -221,15 +220,18 @@ function annotationText(annotation: FileAnnotation): string {
   const content = annotation.file?.content;
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";
-  return content
-    .filter((part): part is { type: "text"; text: string } =>
-      typeof (part as { text?: unknown })?.text === "string" &&
-      (part as { type?: string }).type === "text"
-    )
-    .map((part) => part.text)
-    // A parse arrives one page per entry; the blank line keeps them from running on.
-    .join("\n\n")
-    .trim();
+  return (
+    content
+      .filter(
+        (part): part is { type: "text"; text: string } =>
+          typeof (part as { text?: unknown })?.text === "string" &&
+          (part as { type?: string }).type === "text"
+      )
+      .map((part) => part.text)
+      // A parse arrives one page per entry; the blank line keeps them from running on.
+      .join("\n\n")
+      .trim()
+  );
 }
 
 /** One parsed document as OpenRouter hands it back on the assistant delta. */
@@ -242,10 +244,12 @@ function uploadPath(id: string, name: string): string {
 
 /** A file name the workspace can hold: no separators, no traversal, never empty. */
 function safeName(name: string): string {
-  const cleaned = name.replace(/[/\\]+/g, "_").replace(/^\.+/, "").trim();
+  const cleaned = name
+    .replace(/[/\\]+/g, "_")
+    .replace(/^\.+/, "")
+    .trim();
   return cleaned.slice(0, 100) || "file";
 }
-
 
 /**
  * A session's own tables, in the order they were introduced.
@@ -373,7 +377,15 @@ export class SessionAgent extends Think<Env> {
    * Usage accumulated by `onStepFinish` for the turn that is running now. `peak` is the
    * largest single prompt, which is what compaction measures against.
    */
-  private turnUsage = { prompt: 0, completion: 0, cached: 0, cost: 0, reported: 0, peak: 0, started: 0 };
+  private turnUsage = {
+    prompt: 0,
+    completion: 0,
+    cached: 0,
+    cost: 0,
+    reported: 0,
+    peak: 0,
+    started: 0,
+  };
 
   /**
    * Whether the turn running now scheduled a task. Read by the WhatsApp channel,
@@ -691,22 +703,22 @@ export class SessionAgent extends Think<Env> {
    */
   private openrouter() {
     const session = this.name;
-    const self = this;
     const key = this.openrouterKey();
     // Said here rather than left to OpenRouter, which answers a blank key with a bare
     // 401 that reaches the chat as "Provider returned error" and names nothing the
     // person reading it could act on.
     if (!key) {
-      throw new Error(
-        "OpenRouter API key is missing. Add it in Settings."
-      );
+      throw new Error("OpenRouter API key is missing. Add it in Settings.");
     }
     return createOpenAI({
       apiKey: key,
       baseURL: "https://openrouter.ai/api/v1",
-      async fetch(input, init) {
+      fetch: async (input, init) => {
         // Meta's terms bar WhatsApp content from reaching providers that train on it.
-        const request = prepareOpenRouterRequest(init as RequestInit, session.includes(`${AGENT_SEPARATOR}wa-`));
+        const request = prepareOpenRouterRequest(
+          init as RequestInit,
+          session.includes(`${AGENT_SEPARATOR}wa-`)
+        );
         const res = await fetch(input as RequestInfo, request as RequestInit);
         if (res.ok) {
           return stripUnsupportedAnnotations(
@@ -714,10 +726,10 @@ export class SessionAgent extends Think<Env> {
             (files) => {
               // Writing the parse output outlives the stream, so it is handed to the
               // object's own lifetime rather than awaited inside the reader.
-              self.ctx.waitUntil(self.cacheFileAnnotations(files));
+              this.ctx.waitUntil(this.cacheFileAnnotations(files));
             },
             (cost) => {
-              self.turnUsage.reported += cost;
+              this.turnUsage.reported += cost;
             }
           );
         }
@@ -815,7 +827,15 @@ export class SessionAgent extends Think<Env> {
     this.ensureSchema();
     await this.loadConfig();
     const config = this.config();
-    this.turnUsage = { prompt: 0, completion: 0, cached: 0, cost: 0, reported: 0, peak: 0, started: Date.now() };
+    this.turnUsage = {
+      prompt: 0,
+      completion: 0,
+      cached: 0,
+      cost: 0,
+      reported: 0,
+      peak: 0,
+      started: Date.now(),
+    };
     this.scheduledInTurn = false;
     this.turnsRunning++;
     await this.maybeCompact(config);
@@ -981,7 +1001,9 @@ export class SessionAgent extends Think<Env> {
    */
   private async ensureParsed(attachment: Attachment): Promise<void> {
     if (attachment.kind !== "pdf") return;
-    if (this.exec(`SELECT attachment_id FROM file_cache WHERE attachment_id = ?`, attachment.id)[0]) {
+    if (
+      this.exec(`SELECT attachment_id FROM file_cache WHERE attachment_id = ?`, attachment.id)[0]
+    ) {
       return;
     }
     const base64 = await this.readBase64(attachment.path);
@@ -1019,7 +1041,9 @@ export class SessionAgent extends Think<Env> {
         }),
       });
       if (!res.ok) {
-        console.error(`pdf parse ${res.status} for ${attachment.id}: ${(await res.text()).slice(0, 500)}`);
+        console.error(
+          `pdf parse ${res.status} for ${attachment.id}: ${(await res.text()).slice(0, 500)}`
+        );
         return;
       }
       const json = (await res.json()) as {
@@ -1029,7 +1053,9 @@ export class SessionAgent extends Think<Env> {
       // The parse is billed on this call, so it belongs to the turn that triggered it.
       if (typeof json.usage?.cost === "number") this.turnUsage.reported += json.usage.cost;
 
-      const files = (json.choices?.[0]?.message?.annotations ?? []).filter((a) => a?.type === "file");
+      const files = (json.choices?.[0]?.message?.annotations ?? []).filter(
+        (a) => a?.type === "file"
+      );
       if (files.length === 0) {
         console.error(`pdf parse returned no annotations for ${attachment.id}`);
         return;
@@ -1041,7 +1067,9 @@ export class SessionAgent extends Think<Env> {
     } catch (err) {
       // A failed parse is not a failed turn: the PDF is still sent as a file, and the
       // only cost is that OpenRouter parses it again on the way through.
-      console.error(`pdf parse failed for ${attachment.id}: ${err instanceof Error ? err.message : err}`);
+      console.error(
+        `pdf parse failed for ${attachment.id}: ${err instanceof Error ? err.message : err}`
+      );
     }
   }
 
@@ -1065,7 +1093,8 @@ export class SessionAgent extends Think<Env> {
         name
       )[0];
       if (!row) continue;
-      if (this.exec(`SELECT attachment_id FROM file_cache WHERE attachment_id = ?`, row.id)[0]) continue;
+      if (this.exec(`SELECT attachment_id FROM file_cache WHERE attachment_id = ?`, row.id)[0])
+        continue;
       const text = annotationText(annotation);
       if (!text.trim()) {
         console.error(`pdf parse for ${row.id} carried no text`);
@@ -1085,7 +1114,9 @@ export class SessionAgent extends Think<Env> {
         );
       } catch (err) {
         // Caching is an optimisation; failing to cache costs a re-parse, nothing more.
-        console.error(`file cache write failed for ${row.id}: ${err instanceof Error ? err.message : err}`);
+        console.error(
+          `file cache write failed for ${row.id}: ${err instanceof Error ? err.message : err}`
+        );
       }
     }
   }
@@ -1099,7 +1130,10 @@ export class SessionAgent extends Think<Env> {
     attachments: Attachment[],
     skip: Set<string> = new Set()
   ): Promise<
-    ({ type: "image"; image: string } | { type: "file"; data: string; mediaType: string; filename: string })[]
+    (
+      | { type: "image"; image: string }
+      | { type: "file"; data: string; mediaType: string; filename: string }
+    )[]
   > {
     const parts: (
       | { type: "image"; image: string }
@@ -1114,11 +1148,11 @@ export class SessionAgent extends Think<Env> {
         a.kind === "image"
           ? { type: "image", image: `data:${a.mime};base64,${base64}` }
           : {
-            type: "file",
-            data: `data:application/pdf;base64,${base64}`,
-            mediaType: "application/pdf",
-            filename: a.name,
-          }
+              type: "file",
+              data: `data:application/pdf;base64,${base64}`,
+              mediaType: "application/pdf",
+              filename: a.name,
+            }
       );
     }
     return parts;
@@ -1318,7 +1352,8 @@ export class SessionAgent extends Think<Env> {
    */
   private async sendVoiceNote(bytes: Uint8Array): Promise<string> {
     const row = await this.registry().get(this.sessionId());
-    if (!row?.chat_id) throw new Error("this session is not tied to a chat, so a voice note has nowhere to go");
+    if (!row?.chat_id)
+      throw new Error("this session is not tied to a chat, so a voice note has nowhere to go");
     const opened = openChannel(row.source, this.config(), this.env);
     if (!opened.channel) throw new Error(opened.reason);
     const channel = opened.channel;
@@ -1663,7 +1698,10 @@ export class SessionAgent extends Think<Env> {
 
     if (isPdf(mime, file.name)) {
       if (!enabled(config, "file_ingest")) {
-        return { body: { error: "File ingest is off. Turn it on under Capabilities." }, status: 400 };
+        return {
+          body: { error: "File ingest is off. Turn it on under Capabilities." },
+          status: 400,
+        };
       }
       // Nothing is extracted here: the file lands in the workspace whole, and the
       // read tool hands its pages to the model when a question needs them. The card's
@@ -1684,7 +1722,10 @@ export class SessionAgent extends Think<Env> {
 
     if (mime.startsWith("image/")) {
       if (!enabled(config, "vision")) {
-        return { body: { error: "Image input is off. Turn it on under Capabilities." }, status: 400 };
+        return {
+          body: { error: "Image input is off. Turn it on under Capabilities." },
+          status: 400,
+        };
       }
       // Refuse here rather than at turn time: by the time the model refuses, the
       // message and the attachment have already been stored.
@@ -1738,7 +1779,9 @@ export class SessionAgent extends Think<Env> {
     }
     if (!mime.startsWith("text/") && !isTextLike(mime, file.name)) {
       return {
-        body: { error: `${file.name} is not a text format. Text, Markdown, CSV, JSON and source files work.` },
+        body: {
+          error: `${file.name} is not a text format. Text, Markdown, CSV, JSON and source files work.`,
+        },
         status: 415,
       };
     }
@@ -1985,7 +2028,7 @@ export class SessionAgent extends Think<Env> {
           mode: "stream",
           input: [userMessage],
           callback: {
-            onStart: () => { },
+            onStart: () => {},
             onEvent: (json: string) => {
               const chunk = JSON.parse(json) as {
                 type: string;
@@ -1999,12 +2042,20 @@ export class SessionAgent extends Think<Env> {
                 toolNames.set(chunk.toolCallId, chunk.toolName ?? "tool");
                 this.emit({ type: "tool", name: chunk.toolName ?? "tool" });
               } else if (chunk.type === "tool-output-available" && chunk.toolCallId) {
-                this.emit({ type: "tool_done", name: toolNames.get(chunk.toolCallId) ?? "tool", ok: true });
+                this.emit({
+                  type: "tool_done",
+                  name: toolNames.get(chunk.toolCallId) ?? "tool",
+                  ok: true,
+                });
               } else if (chunk.type === "tool-output-error" && chunk.toolCallId) {
-                this.emit({ type: "tool_done", name: toolNames.get(chunk.toolCallId) ?? "tool", ok: false });
+                this.emit({
+                  type: "tool_done",
+                  name: toolNames.get(chunk.toolCallId) ?? "tool",
+                  ok: false,
+                });
               }
             },
-            onDone: () => { },
+            onDone: () => {},
             onError: (error: string) => {
               this.emit({ type: "error", error: reportable(error, this.name) });
             },
@@ -2161,7 +2212,10 @@ export class SessionAgent extends Think<Env> {
       // and isolate resets, which is not an answer to someone who asked a question.
       // `reportable` logs the whole thing and returns the sentence worth sending.
       await channel
-        .sendText({ ...target, replyTo: undefined }, `Something went wrong: ${reportable(err, this.name)}`)
+        .sendText(
+          { ...target, replyTo: undefined },
+          `Something went wrong: ${reportable(err, this.name)}`
+        )
         .catch(() => {
           // The chat is unreachable; the error is already the answer to the request.
         });
@@ -2369,8 +2423,7 @@ export class SessionAgent extends Think<Env> {
     // The message just past the cut is the question a fork hands back for editing;
     // its files travel too, so the new session's composer opens with the same chips.
     const dropped = visible[Math.max(0, count)];
-    const pending =
-      dropped?.role === "user" ? this.attachmentsOf(dropped.id).map((a) => a.id) : [];
+    const pending = dropped?.role === "user" ? this.attachmentsOf(dropped.id).map((a) => a.id) : [];
 
     return {
       messages: (await this.getMessages()).filter((m) => keep.has(m.id)),
@@ -2510,12 +2563,16 @@ export class SessionAgent extends Think<Env> {
           held.push(chunk);
           mb += 4;
           if (mb % 16 === 0) {
-            console.log(`[oom] holding ${mb} MB across ${held.length} buffers in session ${this.name}`);
+            console.log(
+              `[oom] holding ${mb} MB across ${held.length} buffers in session ${this.name}`
+            );
           }
         }
       } catch (err) {
         // An allocation failure is a real answer: the runtime refused before it was killed.
-        console.log(`[oom] allocation threw at ${mb} MB: ${err instanceof Error ? err.message : err}`);
+        console.log(
+          `[oom] allocation threw at ${mb} MB: ${err instanceof Error ? err.message : err}`
+        );
         return {
           text: `Allocation failed at ${mb} MB: ${err instanceof Error ? err.message : String(err)}`,
           destroy: false,
@@ -2688,7 +2745,11 @@ export class SessionAgent extends Think<Env> {
     try {
       // A fifth of the budget kept verbatim: recent enough to carry on from, small
       // enough that the next turn lands well under the line.
-      const done = await this.compact({ head: 3, tailTokens: Math.floor(threshold / 5), minTail: 2 });
+      const done = await this.compact({
+        head: 3,
+        tailTokens: Math.floor(threshold / 5),
+        minTail: 2,
+      });
       if (!done) return;
       this.turnUsage.cost += done.cost;
       this.turnUsage.reported += done.cost;
@@ -2722,7 +2783,10 @@ export class SessionAgent extends Think<Env> {
       await this.loadConfig();
       const done = await this.compact({ head: 0, tailTokens: 0, minTail: 1 });
       if (!done) {
-        return { text: "Nothing to compact yet: there is no earlier message to summarise.", destroy: false };
+        return {
+          text: "Nothing to compact yet: there is no earlier message to summarise.",
+          destroy: false,
+        };
       }
       if (done.cost > 0) await this.registry().addSpend(done.cost);
       return {
@@ -3156,7 +3220,8 @@ function reportable(error: unknown, session: string): string {
   }
   if (/rate.?limit|429/i.test(raw)) return "The provider is rate limiting this key.";
   if (/credit|quota|402/i.test(raw)) return "The provider rejected the call for credits or quota.";
-  if (/context length|too large|413/i.test(raw)) return "That turn was too large for the model's context.";
+  if (/context length|too large|413/i.test(raw))
+    return "That turn was too large for the model's context.";
 
   // Anything unrecognised: the first line only, short enough to read.
   const first = raw.split("\n")[0].trim();
@@ -3445,10 +3510,7 @@ function isTextLike(mime: string, name: string): boolean {
 }
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
-  return bytes.buffer.slice(
-    bytes.byteOffset,
-    bytes.byteOffset + bytes.byteLength
-  ) as ArrayBuffer;
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
 }
 
 function base64ToBytes(encoded: string): ArrayBuffer {

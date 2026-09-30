@@ -161,7 +161,8 @@ export type ChannelEnv = {
  * — and "capability not ready" and "credentials missing" are different problems with
  * different fixes.
  */
-export type OpenedChannel = { channel: Channel; reason?: never } | { channel?: never; reason: string };
+export type OpenedChannel =
+  { channel: Channel; reason?: never } | { channel?: never; reason: string };
 
 export function openChannel(source: string, config: Config, env: ChannelEnv): OpenedChannel {
   if (source === "telegram") {

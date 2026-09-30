@@ -233,7 +233,7 @@ describe("a whole round trip", () => {
       const after = (await post(hook, update(chat, "again"))).headers.get("x-session");
       expect(after).not.toBe(before);
 
-      const ids = (await sessionIds(agentId, email));
+      const ids = await sessionIds(agentId, email);
       expect(ids).toContain(after);
       expect(ids.includes(before as string)).toBe(command === "!new");
     }
@@ -304,7 +304,9 @@ describe("what the channel seam buys", () => {
     await post(hook, withDocument(chat, "read this", RESET_FILE_ID));
 
     const [sent] = await waitForReply(chat);
-    expect(sent.text).toBe("Something went wrong: Session restarted before your message was processed.");
+    expect(sent.text).toBe(
+      "Something went wrong: Session restarted before your message was processed."
+    );
     expect(sent.text).not.toContain("SQL");
     expect(sent.text).not.toContain(PLATFORM_RESET);
   });

@@ -397,7 +397,8 @@ export function inboundOf(payload: WhatsappPayload | null): WhatsappInbound | un
       if (message.type !== "text" && !media) continue;
       // A picture or a clip says what it is for in its caption; there is no other text.
       const text = (message.text?.body ?? media?.caption ?? "").trim();
-      const contact = value?.contacts?.find((c) => c.wa_id === message.from) ?? value?.contacts?.[0];
+      const contact =
+        value?.contacts?.find((c) => c.wa_id === message.from) ?? value?.contacts?.[0];
       return {
         message,
         from: message.from,
@@ -440,7 +441,12 @@ function extensionOf(mime: string): string {
   return EXTENSIONS[subtype] ?? subtype ?? "bin";
 }
 
-const EXTENSIONS: Record<string, string> = { jpeg: "jpg", mpeg: "mp3", plain: "txt", quicktime: "mov" };
+const EXTENSIONS: Record<string, string> = {
+  jpeg: "jpg",
+  mpeg: "mp3",
+  plain: "txt",
+  quicktime: "mov",
+};
 
 /**
  * Whether this sender is the person the agent belongs to.

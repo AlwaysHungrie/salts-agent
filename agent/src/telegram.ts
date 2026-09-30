@@ -162,7 +162,10 @@ export class Telegram {
     if (threadId) form.set("message_thread_id", String(threadId));
     if (caption) form.set("caption", caption.slice(0, 1000));
     form.set("photo", new Blob([bytes]), name);
-    const res = await fetch(`${this.api}/bot${this.token}/sendPhoto`, { method: "POST", body: form });
+    const res = await fetch(`${this.api}/bot${this.token}/sendPhoto`, {
+      method: "POST",
+      body: form,
+    });
     if (!res.ok) throw new Error(`telegram sendPhoto: ${res.status} ${await res.text()}`);
   }
 
@@ -178,7 +181,10 @@ export class Telegram {
     form.set("chat_id", chatId);
     if (threadId) form.set("message_thread_id", String(threadId));
     form.set("voice", new Blob([bytes], { type: "audio/ogg" }), "voice-note.ogg");
-    const res = await fetch(`${this.api}/bot${this.token}/sendVoice`, { method: "POST", body: form });
+    const res = await fetch(`${this.api}/bot${this.token}/sendVoice`, {
+      method: "POST",
+      body: form,
+    });
     if (!res.ok) throw new Error(`telegram sendVoice: ${res.status} ${await res.text()}`);
   }
 
@@ -295,7 +301,8 @@ export function messageFiles(message: TelegramMessage): TelegramFile[] {
   if (clip) {
     files.push({
       file_id: clip.file_id,
-      name: "file_name" in clip && clip.file_name ? clip.file_name : `voice-${message.message_id}.ogg`,
+      name:
+        "file_name" in clip && clip.file_name ? clip.file_name : `voice-${message.message_id}.ogg`,
       mime: clip.mime_type ?? "audio/ogg",
       size: clip.file_size ?? 0,
     });
