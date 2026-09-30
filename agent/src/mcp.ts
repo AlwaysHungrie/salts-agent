@@ -71,7 +71,7 @@ export type McpServerRow = {
   created_at: number;
 };
 
-/** What the browser may see: tokens and header values never leave the Worker. */
+/** What the browser may see: tokens never leave the Worker. */
 export type McpServerView = Omit<
   McpServerRow,
   | "oauth_client_secret"
@@ -83,8 +83,11 @@ export type McpServerView = Omit<
   | "tools_json"
   | "disabled_tools"
 > & {
-  /** Header names only, so a saved key shows as set without being handed back. */
-  header_names: string[];
+  /**
+   * Saved headers. Values are real for a caller that may edit the server's list, and
+   * the mask for anyone else.
+   */
+  headers: Record<string, string>;
   tools: McpTool[];
   /** Names from `tools` the agent may not call. */
   disabled_tools: string[];

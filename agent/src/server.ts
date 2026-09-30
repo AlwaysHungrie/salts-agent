@@ -29,6 +29,8 @@ import {
   sessionLimitMessage,
   sessionName,
   type AccessRow,
+  METADATA_KEY,
+  type MetadataFilter,
   MAX_PAGE,
   type AgentRow,
   DEFAULT_META,
@@ -252,6 +254,43 @@ async function agentAccess(
  * the list administers an agent they cannot open, which is the ordinary case now that
  * the two are separate.
  */
+/**
+ * Whether `email` is one of `agentId`'s guests: guests switched on, and either no
+ * guest list — anyone signed in — or the address on it.
+ */
+function isGuest(access: AccessRow, email: string): boolean {
+  if (!email || !access.guests) return false;
+  const list = splitEmails(access.guest_emails);
+  return list.length === 0 || list.includes(email);
+}
+
+/** The session routes a guest may reach, and only on a session they started. */
+const GUEST_SESSION_ROUTES = new Set(["stream", "chat", "messages", "live", "summary"]);
+
+/**
+ * Whether the caller may reach this session route as a guest: a guest of its agent,
+ * the session's owner, and a route that only converses — never files, tasks, reset,
+ * export or fork. On `/api/sessions/:id` the one thing a guest may do is delete it.
+ */
+async function mayUseSessionAsGuest(
+  request: Request,
+  env: Env,
+  agentId: string,
+  sessionId: string,
+  segments: string[]
+): Promise<boolean> {
+  const route =
+    segments[0] === "agents"
+      ? GUEST_SESSION_ROUTES.has(segments[3] ?? "")
+      : request.method === "DELETE" && !segments[3];
+  if (!route) return false;
+  const email = await callerEmail(request, env);
+  const access = await agentAccess(env, agentId);
+  if (!access || !isGuest(access, email)) return false;
+  const session = await registry(env, agentId).get(sessionId);
+  return !!session && session.owner_email === email;
+}
+
 async function mayUseAgent(request: Request, env: Env, agentId: string): Promise<boolean> {
   const email = await callerEmail(request, env);
   if (!email) return false;
@@ -310,6 +349,13 @@ const CAPABILITY_FIELDS: CapabilityField[] = CAPABILITIES.flatMap((c) => c.field
  */
 const CORE_SECRETS = ["openrouter_api_key"] as const satisfies readonly (keyof Config)[];
 
+
+/**
+ * The longest note an agent keeps, each of `private_notes` and `public_notes`. Long
+ * enough for a brief with its evidence; both are resent every turn, so the model's
+ * context is the real ceiling.
+ */
+const MAX_NOTES = 64_000;
 /**
  * Keep the settings row trustworthy: the agent reads it straight into an OpenRouter
  * request, so every value is checked and clamped here rather than at the call site.
@@ -330,6 +376,11 @@ function validateConfig(body: Partial<Config>): Partial<Config> {
   if (body.system_prompt !== undefined) {
     if (typeof body.system_prompt !== "string") throw new Error("system_prompt must be a string");
     patch.system_prompt = body.system_prompt.slice(0, 4000);
+  }
+  for (const key of ["private_notes", "public_notes"] as const) {
+    if (body[key] === undefined) continue;
+    if (typeof body[key] !== "string") throw new Error(`${key} must be a string`);
+    patch[key] = body[key].slice(0, MAX_NOTES);
   }
   if (body.temperature !== undefined) {
     if (!Number.isFinite(body.temperature)) throw new Error("temperature must be a number");
@@ -481,8 +532,12 @@ async function syncWhatsappSubscription(
 /** Where the authorization server sends the browser back to. Always this Worker. */
 const redirectUri = (origin: string) => `${origin}/api/mcp/oauth/callback`;
 
-/** A server as the browser may see it: header values and tokens stay in the Worker. */
-function mcpView(row: McpServerRow): McpServerView {
+/**
+ * A server as the browser may see it: tokens stay in the Worker. Header values go back
+ * to a caller that may edit them, so a saved key can be read and corrected; anyone
+ * else gets the names with each value masked.
+ */
+function mcpView(row: McpServerRow, reveal: boolean): McpServerView {
   const {
     oauth_client_secret: _secret,
     oauth_access_token: token,
@@ -496,7 +551,12 @@ function mcpView(row: McpServerRow): McpServerView {
   } = row;
   return {
     ...rest,
-    header_names: Object.keys(parseHeaders(headers)),
+    headers: Object.fromEntries(
+      Object.entries(parseHeaders(headers)).map(([key, value]) => [
+        key,
+        reveal ? value : SECRET_MASK,
+      ])
+    ),
     tools: parseTools(tools_json),
     disabled_tools: parseNames(disabled_tools),
     connected: row.auth !== "oauth" || token !== "",
@@ -891,11 +951,12 @@ async function handleMcp(
 
   if (request.method === "GET" && !id) {
     const servers = await reg.mcpServers();
+    const reveal = await manages();
     const { mcp } = await reg.meta();
     const settings = await deploymentSettings(env);
     return withCors(
       Response.json({
-        servers: servers.map(mcpView),
+        servers: servers.map((row) => mcpView(row, reveal)),
         /** Shown on the page, because a provider may ask for it when registering by hand. */
         redirect_uri: redirectUri(url.origin),
         // The two admin settings the list itself has to draw: which providers the
@@ -945,7 +1006,7 @@ async function handleMcp(
     await reg.addMcpServer(row);
     // OAuth has nothing to list yet — the tools are read once the user has approved.
     const synced = row.auth === "oauth" ? row : await syncMcpTools(reg, row);
-    return withCors(Response.json({ server: mcpView(synced) }));
+    return withCors(Response.json({ server: mcpView(synced, true) }));
   }
 
   if (id && action === "connect" && request.method === "POST") {
@@ -975,13 +1036,14 @@ async function handleMcp(
       last_error: "",
     });
     if (!row) return withCors(Response.json({ error: "no such server" }, { status: 404 }));
-    return withCors(Response.json({ server: mcpView(row) }));
+    return withCors(Response.json({ server: mcpView(row, await manages()) }));
   }
 
   if (id && action === "refresh" && request.method === "POST") {
     const row = await reg.mcpServer(id);
     if (!row) return withCors(Response.json({ error: "no such server" }, { status: 404 }));
-    return withCors(Response.json({ server: mcpView(await syncMcpTools(reg, row)) }));
+    const synced = await syncMcpTools(reg, row);
+    return withCors(Response.json({ server: mcpView(synced, await manages()) }));
   }
 
   /**
@@ -1033,7 +1095,7 @@ async function handleMcp(
       ),
     });
     if (!updated) return withCors(Response.json({ error: "no such server" }, { status: 404 }));
-    return withCors(Response.json({ server: mcpView(updated) }));
+    return withCors(Response.json({ server: mcpView(updated, await manages()) }));
   }
 
   if (id && request.method === "PATCH") {
@@ -1074,7 +1136,9 @@ async function handleMcp(
     const rereads = ["url", "auth", "headers", "enabled"] as const;
     const changed = rereads.some((key) => patch[key] !== undefined);
     return withCors(
-      Response.json({ server: mcpView(changed ? await syncMcpTools(reg, updated) : updated) })
+      Response.json({
+        server: mcpView(changed ? await syncMcpTools(reg, updated) : updated, await manages()),
+      })
     );
   }
 
@@ -1770,13 +1834,21 @@ async function provisionAgent(
     meta?: MetaSettings;
     /** The OpenRouter key, when it came in at the top level rather than in `meta`. */
     key?: string;
+    metadata?: Record<string, string>;
   }
 ): Promise<AgentRow> {
   await registry(env, agent.id).setAccess({
     allowed_emails: agent.allowed,
     admin_email: agent.admin,
   });
-  const row = await dir.create(agent.id, agent.name, agent.allowed, agent.admin, agent.fleet);
+  const row = await dir.create(
+    agent.id,
+    agent.name,
+    agent.allowed,
+    agent.admin,
+    agent.fleet,
+    agent.metadata
+  );
 
   // Seed the settings row so the agent has a model — and its key — the moment it
   // exists, which is what lets it answer without a trip through Settings. Telegram is
@@ -1795,6 +1867,96 @@ async function provisionAgent(
   // the caller that still sends it at the top level.
   if (agent.key) await writeConfig(env, reg, { openrouter_api_key: agent.key });
   return row;
+}
+
+/** A listing's metadata filter, from `?with=key:value` and `?without=key`. */
+function metadataFilter(url: URL): MetadataFilter | undefined {
+  const withParam = url.searchParams.get("with") ?? "";
+  const without = url.searchParams.get("without") ?? "";
+  const cut = withParam.indexOf(":");
+  const filter: MetadataFilter = {
+    ...(cut > 0 ? { with: [withParam.slice(0, cut), withParam.slice(cut + 1)] as [string, string] } : {}),
+    ...(without ? { without } : {}),
+  };
+  return filter.with || filter.without ? filter : undefined;
+}
+
+/** Tags an app attaches at creation: at most 10, plain keys, short string values. */
+function validateMetadata(raw: unknown): Record<string, string> {
+  if (raw === undefined || raw === null) return {};
+  if (typeof raw !== "object" || Array.isArray(raw)) throw new Error("metadata must be an object");
+  const entries = Object.entries(raw as Record<string, unknown>);
+  if (entries.length > 10) throw new Error("metadata may have at most 10 keys");
+  const out: Record<string, string> = {};
+  for (const [key, value] of entries) {
+    if (!METADATA_KEY.test(key)) throw new Error(`metadata key "${key}" must match ${METADATA_KEY}`);
+    if (typeof value !== "string" || value.length > 100) {
+      throw new Error(`metadata "${key}" must be a string of at most 100 characters`);
+    }
+    out[key] = value;
+  }
+  return out;
+}
+
+/** The guest switch and list, as the settings page edits them. */
+function guestsView(access: AccessRow) {
+  return { enabled: access.guests === 1, emails: splitEmails(access.guest_emails) };
+}
+
+/** What a guest may know about an agent: its name and its public notes. */
+async function publicView(env: Env, agent: AgentRow) {
+  const config = await readConfig(env, registry(env, agent.id));
+  return { id: agent.id, name: agent.name, public_notes: config.public_notes };
+}
+
+/**
+ * The whole of an agent a guest can reach: its public view, and their own sessions —
+ * listing them and starting one. Everything else is the same 404 a stranger gets.
+ */
+async function handleGuest(
+  request: Request,
+  env: Env,
+  url: URL,
+  agent: AgentRow,
+  section: string | undefined,
+  email: string
+): Promise<Response> {
+  const reg = registry(env, agent.id);
+  if (section === "public" && request.method === "GET") {
+    return withCors(Response.json(await publicView(env, agent)));
+  }
+  if (section === "sessions" && request.method === "GET") {
+    const settings = await deploymentSettings(env);
+    const asked = Number(url.searchParams.get("limit") ?? settings.session_page);
+    const size = Math.min(
+      Math.max(1, Number.isFinite(asked) ? asked : settings.session_page),
+      settings.max_session_page
+    );
+    return withCors(
+      Response.json(await reg.list(size, url.searchParams.get("cursor") ?? "", email))
+    );
+  }
+  if (section === "sessions" && request.method === "POST") {
+    const { title } = (await request.json().catch(() => ({}))) as { title?: string };
+    const sessionId = sessionName(agent.id, crypto.randomUUID().slice(0, 8));
+    const objectId = env.SessionAgent.idFromName(sessionId).toString();
+    let created;
+    try {
+      created = await reg.create(
+        sessionId,
+        (title ?? "").trim().slice(0, 60) || "New session",
+        objectId,
+        undefined,
+        (await deploymentSettings(env)).max_sessions,
+        email
+      );
+    } catch (err) {
+      return withCors(Response.json({ error: (err as Error).message }, { status: 409 }));
+    }
+    await syncSessionCount(env, agent.id);
+    return withCors(Response.json(created));
+  }
+  return notFound();
 }
 
 /** Everything under `/api/agents`. Undefined when the path is not one of these. */
@@ -1839,6 +2001,13 @@ async function handleAgents(
         );
       }
 
+      // `with=key:value` / `without=key`: each app lists its own agents and leaves
+      // the others' out. `as=guest` is the agents this caller may only message.
+      const filter = metadataFilter(url);
+      if (url.searchParams.get("as") === "guest") {
+        return withCors(Response.json(await dir.listGuestPage(email, limit, cursor, filter)));
+      }
+
       // How many more this caller may administer, so the frontend can hide the
       // create button before the account hits the wall rather than after.
       const agentLimit = email ? await dir.getAgentLimit(email) : 0;
@@ -1846,7 +2015,7 @@ async function handleAgents(
       // The fleets this caller administers come whole — a name and a count each —
       // and the page beside them is everything that is not inside one of them.
       const page = email
-        ? await dir.listPage(email, limit, cursor)
+        ? await dir.listPage(email, limit, cursor, filter)
         : { agents: [], has_more: false, cursor: "" };
       return withCors(
         Response.json({
@@ -1907,7 +2076,15 @@ async function handleAgents(
         fleet_name?: string;
         /** The agent's defaults, chosen in the second step of the create dialog. */
         meta?: Partial<MetaSettings>;
+        /** Tags the creating app attaches, to find its own agents again. */
+        metadata?: unknown;
       };
+      let metadata: Record<string, string>;
+      try {
+        metadata = validateMetadata(body.metadata);
+      } catch (err) {
+        return withCors(Response.json({ error: (err as Error).message }, { status: 400 }));
+      }
       // Checked before the agent exists, like the key: a rejected document should
       // leave nothing behind. Creation is the one time the model default and the
       // default MCP servers may be set, so this is the call that reads them.
@@ -2031,6 +2208,7 @@ async function handleAgents(
             fleet,
             meta,
             key,
+            metadata,
           })
         );
       }
@@ -2103,9 +2281,18 @@ async function handleAgents(
   const email = await callerEmail(request, env);
   const isUser = emailAllowed(access.allowed_emails, email);
   const isAdmin = !!email && access.admin_email === email;
-  if (!isUser && !isAdmin) return notFound();
-
   const section = segments[3];
+
+  // A guest reaches the guest routes and nothing else of the agent.
+  if (!isUser && !isAdmin) {
+    if (!isGuest(access, email)) return notFound();
+    return await handleGuest(request, env, url, agent, section, email);
+  }
+
+  // What a guest is shown, for anyone who may see the agent at all.
+  if (section === "public" && request.method === "GET") {
+    return withCors(Response.json(await publicView(env, agent)));
+  }
 
   if (!section) {
     // The row itself — name, access list, who administers it — is readable by both:
@@ -2113,13 +2300,40 @@ async function handleAgents(
     // does not already know about the agent they made.
     if (request.method === "GET") return withCors(Response.json(agentFor(agent, email)));
     if (request.method === "PATCH") {
-      // Renaming the agent and editing its access list are settings-page edits, so
-      // they belong to its users. An admin who is not one does not get them.
-      if (!isUser) return notFound();
       const body = (await request.json().catch(() => ({}))) as {
         name?: string;
         allowed_emails?: string | string[];
+        guests?: boolean;
+        guest_emails?: string | string[];
       };
+      // Who may message the agent as a guest is the admin's call, like its meta.
+      if (body.guests !== undefined || body.guest_emails !== undefined) {
+        if (!isAdmin) return notFound();
+        let guestEmails: string | undefined;
+        if (body.guest_emails !== undefined) {
+          try {
+            guestEmails = normalizeEmails(
+              Array.isArray(body.guest_emails)
+                ? body.guest_emails
+                : body.guest_emails.split(/[\n,;]/),
+              (await deploymentSettings(env)).max_members
+            );
+          } catch (err) {
+            return withCors(Response.json({ error: (err as Error).message }, { status: 400 }));
+          }
+        }
+        const saved = await reg.setGuests({
+          ...(body.guests !== undefined ? { guests: body.guests ? 1 : 0 } : {}),
+          ...(guestEmails !== undefined ? { guest_emails: guestEmails } : {}),
+        });
+        await dir.setGuests(agentId, saved.guests, saved.guest_emails);
+        if (body.name === undefined && body.allowed_emails === undefined) {
+          return withCors(Response.json({ ...agentFor(agent, email), guests: guestsView(saved) }));
+        }
+      }
+      // Renaming the agent and editing its access list are settings-page edits, so
+      // they belong to its users. An admin who is not one does not get them.
+      if (!isUser) return notFound();
       let next = agent;
 
       if (body.name !== undefined) {
@@ -2236,6 +2450,7 @@ async function handleAgents(
           // the meta dialog, so a page that drew them would be offering an edit that
           // the PATCH below drops on the floor.
           locked: meta.locked,
+          guests: guestsView(access),
           // The ceilings the composer has to know before it sends anything: how many
           // files one message may carry, and how large each kind may be.
           //
@@ -2420,8 +2635,11 @@ async function handleAgents(
         Math.max(1, Number.isFinite(asked) ? asked : settings.session_page),
         settings.max_session_page
       );
+      // `?mine=1` narrows to the sessions the caller started, which is how an owner
+      // finds their own conversation among their guests'.
+      const owner = url.searchParams.get("mine") === "1" ? email : "";
       return withCors(
-        Response.json(await reg.list(size, url.searchParams.get("cursor") ?? ""))
+        Response.json(await reg.list(size, url.searchParams.get("cursor") ?? "", owner))
       );
     }
     if (request.method === "POST") {
@@ -2442,7 +2660,8 @@ async function handleAgents(
           title ?? "New session",
           objectId,
           undefined,
-          (await deploymentSettings(env)).max_sessions
+          (await deploymentSettings(env)).max_sessions,
+          email
         );
       } catch (err) {
         return withCors(Response.json({ error: (err as Error).message }, { status: 409 }));
@@ -2536,7 +2755,8 @@ async function handleSession(
         title ?? `${source?.title ?? "Session"} (fork)`,
         objectId,
         undefined,
-        max_sessions
+        max_sessions,
+        await callerEmail(request, env)
       );
     } catch (err) {
       return withCors(Response.json({ error: (err as Error).message }, { status: 409 }));
@@ -3150,7 +3370,15 @@ export default {
     ) {
       const sessionId = decodeURIComponent(segments[2]);
       const owner = agentIdOf(sessionId);
-      if (!owner || !(await mayUseAgent(request, env, owner))) return notFound();
+      if (
+        !owner ||
+        !(
+          (await mayUseAgent(request, env, owner)) ||
+          (await mayUseSessionAsGuest(request, env, owner, sessionId, segments))
+        )
+      ) {
+        return notFound();
+      }
     }
 
     // An agent and everything that belongs to it: settings, MCP servers, sessions.
