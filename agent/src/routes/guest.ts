@@ -1,4 +1,4 @@
-import type { Env } from "../agent";
+import type { Env } from "../env";
 import { type AccessRow, type AgentRow, sessionName, splitEmails } from "../registry";
 import { deploymentSettings } from "../settings";
 import { errorMessage, json, jsonError, notFound, readJson } from "../worker/http";

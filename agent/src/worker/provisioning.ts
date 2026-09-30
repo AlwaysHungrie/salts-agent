@@ -1,4 +1,4 @@
-import type { Env } from "../agent";
+import type { Env } from "../env";
 import { CAPABILITY_BY_ID, type CapabilityId, TELEGRAM_WHITELIST_DEFAULTS } from "../capabilities";
 import type { McpServerRow } from "../mcp";
 import {

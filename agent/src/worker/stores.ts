@@ -1,5 +1,5 @@
 import { routeAgentRequest } from "agents";
-import type { Env } from "../agent";
+import type { Env } from "../env";
 import type { SessionRegistry } from "../registry";
 import { deploymentSettings, type DeploymentSettings } from "../settings";
 

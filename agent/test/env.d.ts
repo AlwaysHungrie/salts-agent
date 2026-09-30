@@ -1,6 +1,6 @@
 /// <reference types="@cloudflare/vitest-pool-workers/types" />
 
-import type { Env as WorkerEnv } from "../src/agent";
+import type { Env as WorkerEnv } from "../src/env";
 
 /**
  * Teach `cloudflare:test` what this Worker's bindings are, so `env` in a test is the

@@ -1,5 +1,5 @@
 import { routeAgentRequest } from "agents";
-import type { Env } from "./agent";
+import type { Env } from "./env";
 import { agentIdOf } from "./registry";
 import { fileBusinessRequest, handleAdmin } from "./routes/admin";
 import { handleAgents } from "./routes/agents";

@@ -1,5 +1,6 @@
 import type { Config, McpCatalogEntry } from "./registry";
-import type { Env, ModelOption } from "./agent";
+import type { Env } from "./env";
+import type { ModelOption } from "./models";
 
 /**
  * The deployment's own knobs: every ceiling this Worker enforces, and every value an

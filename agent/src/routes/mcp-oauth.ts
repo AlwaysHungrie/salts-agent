@@ -1,4 +1,4 @@
-import type { Env } from "../agent";
+import type { Env } from "../env";
 import {
   discoverAuthServer,
   exchangeCode,
