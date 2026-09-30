@@ -5,19 +5,8 @@ import { useCallback, useState } from "react";
 import { AgentListRow } from "./AgentListRow";
 
 /**
- * One fleet: a name, a count, and its agents only once it is opened.
- *
- * Fleets sit above the rest of the list rather than among it, and they are closed
- * until asked for. Both of those are because of what a fleet is: one create call
- * that can have made a thousand agents, all with the same name, told apart only by
- * the address on each. Merged into the list in creation order they would bury the
- * handful of agents somebody actually opens day to day; drawn open they would be a
- * thousand rows nobody reads. So the fleet is the row, and its size is the thing
- * worth reading about it.
- *
- * Opening one fetches a page, and each page is asked for as the one before it runs
- * out — the list below this one is paged the same way, and the two never share a
- * cursor, because they are two separate reads of two separate things.
+ * One fleet: name and count, with its agents fetched a page at a time only once opened.
+ * Fleets are listed apart so a thousand identical rows do not bury everyday agents.
  */
 export function Fleet({
   fleet,
@@ -31,11 +20,7 @@ export function Fleet({
 }: {
   fleet: FleetRow;
   email: string;
-  /**
-   * Agents deleted since this fleet was fetched. The pages already fetched are
-   * this component's own, and a deletion happens on the page outside it — so
-   * rather than re-reading the fleet to lose one row, the row is simply dropped.
-   */
+  /** Agents deleted since this fleet was fetched, dropped from its pages without a re-read. */
   removed: string[];
   onMeta: (agent: AgentRow) => void;
   onDelete: (agent: AgentRow) => void;
@@ -68,9 +53,7 @@ export function Fleet({
     [fleet.fleet_id],
   );
 
-  // The first page is fetched when the fleet is opened, not when the page loads:
-  // an account with twenty fleets would otherwise make twenty reads nobody asked
-  // for. Once fetched it is kept, so closing and reopening costs nothing.
+  // The first page loads on open, not on page load, and is kept across reopening.
   const toggle = () => {
     setOpen((was) => {
       if (!was && agents === null) void page("");
@@ -82,9 +65,7 @@ export function Fleet({
 
   return (
     <div>
-      {/* The row is the fleet, so its delete sits on the row — and it is the whole
-          fleet it deletes, which is why it is asked for by name in a dialog rather
-          than taken on this click. */}
+      {/* Deletes the whole fleet, so it asks by name in a dialog. */}
       <div className="from-accent/12 to-transparent hover:to-accent/5 bg-linear-to-r group flex items-center gap-3 rounded-2xl pr-5 transition">
         <button
           onClick={toggle}
@@ -107,9 +88,7 @@ export function Fleet({
             </span>
           </span>
         </button>
-        {/* The fleet's own settings, and the way to grow it. Both belong on the
-            fleet rather than on any agent in it: one is the document every agent is
-            written from, and the other makes more agents from that document. */}
+        {/* The fleet's settings and adding agents belong to the fleet, not to any one agent. */}
         <button
           onClick={() => onFleetSettings(fleet)}
           className="text-muted hover:text-ink shrink-0 text-sm transition"

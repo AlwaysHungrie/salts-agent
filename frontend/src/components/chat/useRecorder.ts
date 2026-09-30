@@ -3,9 +3,8 @@ import { recordingSeconds, type ClientLimits } from "@/lib/agent";
 import { startRecording, type Recorder } from "@/lib/recorder";
 
 /**
- * A voice note being recorded. `recordedFor` is seconds into the take, or null when
- * the mic is idle. The take is capped by the deployment's audio ceiling: at the cap
- * it is stopped and kept rather than run into a clip the Worker would reject.
+ * A voice note being recorded (`recordedFor` seconds, or null when idle). At the
+ * deployment's audio cap the take is stopped and kept.
  */
 export function useRecorder({
   limits,

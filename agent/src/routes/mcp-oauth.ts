@@ -15,12 +15,8 @@ import { registry, type Registry } from "../worker/stores";
 export const redirectUri = (origin: string) => `${origin}/api/mcp/oauth/callback`;
 
 /**
- * Begin an OAuth connection: discover the provider's endpoints, register this app as
- * a client if it has not been already, and hand back the URL to send the user to.
- *
- * The PKCE verifier and the CSRF state are parked on the row; the callback is the
- * only thing that reads them, and it clears them once the tokens are in. The state
- * is prefixed with the agent id, because the callback has nothing else to go on.
+ * Start an OAuth connection: discover endpoints, register a client if needed, park the
+ * PKCE verifier and state on the row, and return the authorize URL.
  */
 export async function startMcpOauth(
   reg: Registry,
@@ -48,9 +44,7 @@ export async function startMcpOauth(
   }
 
   const verifier = randomToken();
-  // The redirect URI is registered with the provider and cannot vary per agent, so
-  // the callback is one route for all of them — and the state is the only thing that
-  // comes back. It carries the agent so the callback knows whose registry to open.
+  // One redirect URI for every agent, so the state carries the agent id.
   const state = `${agentId}.${randomToken(16)}`;
   await reg.updateMcpServer(row.id, {
     auth: "oauth",
@@ -82,9 +76,8 @@ export async function startMcpOauth(
 }
 
 /**
- * The provider sends the browser back here with a code. It is traded for tokens, the
- * server's tools are read straight away, and the user lands back on the page they
- * started from — connected, or with the reason it failed on the card.
+ * OAuth callback: exchange the code, read the server's tools, and redirect back with
+ * the outcome.
  */
 export async function handleOauthCallback(url: URL, env: Env): Promise<Response> {
   const state = url.searchParams.get("state") ?? "";

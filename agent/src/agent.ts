@@ -52,9 +52,8 @@ import type { TelegramMessage } from "./telegram";
 import type { WhatsappInbound } from "./whatsapp";
 
 /**
- * What a scheduled task's user message is prefixed with. It is the only durable trace
- * of why a turn ran: an alarm submits the turn and returns, so the reply is written by
- * a later invocation that has nothing in memory to tell it who asked.
+ * Prefix on a scheduled task's user message: the only durable trace of why the turn ran,
+ * since the reply is written by a later invocation with no memory of who asked.
  */
 export const SCHEDULED_PREFIX = "[scheduled task] ";
 
@@ -130,12 +129,8 @@ export class SessionAgent extends Think<Env> {
   }
 
   /**
-   * Think owns the transcript, so these tables hold only what it has no opinion
-   * about: what an attachment is, which message carried it, and what a turn cost.
-   *
-   * The ladder is in `SESSION_AGENT_MIGRATIONS`; see schema.ts for why it is a ladder
-   * and not a list of tolerated failures. Every session object runs it lazily, so a
-   * new step reaches a session the first time that session is touched after deploy.
+   * Session tables for what Think's transcript does not hold: attachments, which message
+   * carried them, and turn cost. Migrations run lazily on first touch after a deploy.
    */
   private ensureSchema() {
     if (this.schemaReady) return;
@@ -143,25 +138,14 @@ export class SessionAgent extends Think<Env> {
     this.schemaReady = true;
   }
 
-  /**
-   * The agent this session belongs to, read out of the session's own name. A Durable
-   * Object knows nothing about itself but that name, and the owner is encoded in it
-   * precisely so this lookup needs nothing else — see `sessionName` in registry.ts.
-   */
+  /** The owning agent, read from this session's own name (see `sessionName`). */
   private agentId(): string {
     return agentIdOf(this.name);
   }
 
   /**
-   * This session's id as the registry stores it.
-   *
-   * `this.name` is the URL path segment the request was routed on, so a session whose
-   * id holds a character `encodeURIComponent` rewrites arrives here encoded — a colon
-   * becomes `%3A` — while the row was written under the raw id. Every lookup an object
-   * makes about itself has to undo that, or it silently finds nothing: that is how a
-   * WhatsApp session named `tg-wa:<number>` by `!new` came to drop every scheduled
-   * message it produced. Ids generated now are URL-safe (see `safeChatId` in
-   * registry.ts); this is what keeps the ones already stored working.
+   * This session's id as the registry stores it. `this.name` arrives URL-encoded (a colon
+   * becomes `%3A`), so lookups must decode it or silently miss the stored row.
    */
   private sessionId(): string {
     try {
@@ -196,17 +180,8 @@ export class SessionAgent extends Think<Env> {
   }
 
   /**
-   * Whether the chosen model can be sent an image at all.
-   *
-   * The agent's own list answers first: a model named in meta settings was typed in
-   * beside a checkbox saying whether it sees images, and that answer is about this
-   * agent. Failing that, the deployment's catalogue. An id in neither is taken at its
-   * word — refusing images to every model nobody wrote down would make image input
-   * unusable for exactly the deployments that went and picked their own, and a model
-   * that cannot see them fails at the call with OpenRouter's own message.
-   *
-   * Read here rather than in `loadConfig` because it is only ever needed when an
-   * image actually turns up, and a turn of plain text should not pay for the lookup.
+   * Whether the chosen model accepts images: the agent's own list, then the deployment's
+   * catalogue; an unknown id is assumed to (OpenRouter reports a real refusal itself).
    */
   private async modelSeesImages(model: string): Promise<boolean> {
     const chosen = (await this.registry().meta()).models.find((m) => m.id === model);
@@ -227,10 +202,8 @@ export class SessionAgent extends Think<Env> {
   }
 
   /**
-   * The deployment's ceilings and defaults, as last read by `loadConfig` or
-   * `settingsNow()`. There is nothing to stand in before that: every path that reads a
-   * ceiling runs inside a turn or a request that loads them first, and one that does
-   * not is a bug this throw makes loud.
+   * The deployment settings last loaded. Every caller runs after a load; reading them
+   * before one is a bug, so this throws.
    */
   private settings(): DeploymentSettings {
     if (!this.currentSettings) throw new Error("deployment settings read before they were loaded");
@@ -238,10 +211,8 @@ export class SessionAgent extends Think<Env> {
   }
 
   /**
-   * The settings, fetched if this object has not read them this turn.
-   *
-   * For the request paths that are not turns — an upload, a transcript page, a fork —
-   * which enforce a ceiling without having loaded a config first.
+   * The settings, fetched now: for request paths (upload, transcript page, fork) that
+   * enforce a ceiling without loading a config first.
    */
   private async settingsNow(): Promise<DeploymentSettings> {
     this.currentSettings = await deploymentSettings(this.env);
@@ -249,15 +220,8 @@ export class SessionAgent extends Think<Env> {
   }
 
   /**
-   * The key every model call is billed to: the agent's own, and only ever its own.
-   *
-   * There is no deployment-wide fallback. One used to exist, and it meant an agent
-   * created by anyone at all could spend the deployment's own credit — which is the
-   * whole bill, not a share of it — without its maker ever pasting a key. An agent
-   * with no key of its own now simply cannot answer, and says so.
-   *
-   * Read per call rather than cached, because settings are reloaded each turn and a
-   * key pasted mid-conversation should take effect at once.
+   * The agent's own OpenRouter key. There is deliberately no deployment-wide fallback, so
+   * no agent can spend the deployment's credit. Read per call so a new key applies at once.
    */
   private openrouterKey(): string {
     return this.config().openrouter_api_key;
@@ -268,19 +232,13 @@ export class SessionAgent extends Think<Env> {
   }
 
   /**
-   * OpenRouter through the AI SDK's OpenAI-compatible client.
-   *
-   * Failed calls are logged with their body before the SDK sees them. OpenRouter
-   * answers an upstream failure with "Provider returned error" and puts what actually
-   * happened in `error.metadata.raw` — which is the only part worth reading, and the
-   * part that never survives to the chat.
+   * OpenRouter through the AI SDK's OpenAI-compatible client. Failed calls are logged with
+   * their body first, because the useful detail (`error.metadata.raw`) never reaches the chat.
    */
   private openrouter() {
     const session = this.name;
     const key = this.openrouterKey();
-    // Said here rather than left to OpenRouter, which answers a blank key with a bare
-    // 401 that reaches the chat as "Provider returned error" and names nothing the
-    // person reading it could act on.
+    // Said here: OpenRouter answers a blank key with a bare 401 that names nothing actionable.
     if (!key) {
       throw new Error("OpenRouter API key is missing. Add it in Settings.");
     }
@@ -321,11 +279,8 @@ export class SessionAgent extends Think<Env> {
   }
 
   /**
-   * Calling the provider directly would build a Responses API model — the AI SDK's
-   * default for OpenAI itself. OpenRouter's own surface is chat completions, and its
-   * Responses endpoint covers only some of the models behind it, which is why a model
-   * that works everywhere else can come back as "Provider returned error". `.chat()`
-   * is the endpoint OpenRouter actually implements for every model it offers.
+   * Chat completions, not the Responses API: it is the endpoint OpenRouter implements for
+   * every model, whereas its Responses endpoint covers only some.
    */
   getModel() {
     return this.openrouter().chat(this.model());
@@ -336,9 +291,8 @@ export class SessionAgent extends Think<Env> {
   }
 
   /**
-   * Every knob the settings page owns, applied per turn: model, prompt, sampling,
-   * reply cap, reasoning effort, context window, and the capability tools that are
-   * ready to run.
+   * Applies the settings page per turn: model, prompt, sampling, reply cap, reasoning
+   * effort, context window, and the capability tools that are ready.
    */
   override async beforeTurn(_ctx: TurnContext): Promise<TurnConfig> {
     this.ensureSchema();
@@ -373,9 +327,8 @@ export class SessionAgent extends Think<Env> {
     this.turnUsage.cached += cached;
     this.turnUsage.peak = Math.max(this.turnUsage.peak, prompt);
     this.turnUsage.cost += priceOf(this.model(), prompt, completion, openrouterCost(step));
-    // The one number that says whether the breakpoint is doing anything. A cache that
-    // quietly stopped matching — a tool list that reordered, a memory written mid
-    // conversation — costs full price and looks exactly like a cache that is working.
+    // Logged because a cache that silently stopped matching costs full price and otherwise
+    // looks exactly like one that works.
     if (prompt > 0) {
       console.log(`session ${this.name}: prompt ${prompt} tokens, ${cached} from cache`);
     }
@@ -404,10 +357,7 @@ export class SessionAgent extends Think<Env> {
       this.turnUsage.peak
     );
 
-    // What the turn cost goes to the agent's registry as well as to this session's
-    // own usage table. The registry is where the monthly ceiling is measured, and
-    // it cannot be measured from here: the next turn may well be in a different
-    // session object, which knows nothing about this one's spending.
+    // Also banked in the registry, where the monthly ceiling is measured across sessions.
     const spent = turnCost(this.turnUsage);
     if (spent > 0) this.ctx.waitUntil(this.registry().addSpend(spent));
 
@@ -440,9 +390,8 @@ export class SessionAgent extends Think<Env> {
       return await streamChat(this.host, message, retry === true);
     }
 
-    // A browser that reloaded mid-reply asks here whether one is still in flight,
-    // naming the last reply its transcript holds so a turn that ended in between is
-    // sent rather than lost.
+    // A reloaded browser asks whether a reply is still in flight, naming the last reply it
+    // holds so a turn that ended in between is replayed.
     if (request.method === "GET" && path === "live") {
       return this.live.attach(url.searchParams.get("has") ?? "");
     }
@@ -513,12 +462,8 @@ export class SessionAgent extends Think<Env> {
         const inbound = (await request.json()) as WhatsappInbound;
         body = await channelTurn(this.host, whatsappInbound(inbound, this.config(), this.env));
       } else if (request.method === "POST" && path === "destroy") {
-        // The bucket is swept before the reply, because `destroy()` aborts the
-        // isolate: work left running behind it may never finish. Dropping the
-        // object's own storage is what waits, and the runtime completes that.
-        //
-        // The agent's byte total is given back first, for the same reason: after
-        // `destroy()` there is nobody left to report it.
+        // Storage totals and the bucket sweep happen before replying, because `destroy()` aborts
+        // the isolate and nothing after it is guaranteed to run.
         await this.registry().addStorageBytes(-storedBytes(this.host));
         await sweepBucket(this.host);
         this.ctx.waitUntil(this.destroy());
@@ -538,11 +483,7 @@ export class SessionAgent extends Think<Env> {
     );
   }
 
-  /**
-   * The half of `!delete` — and of `!clear`, once the chat has moved on — that cannot
-   * be reported: the object drops its own storage, which ends the isolate running this
-   * code.
-   */
+  /** The unreportable half of `!delete` (and `!clear`): the object drops its storage and ends. */
   private async finishDelete(): Promise<void> {
     releaseStorage(this.host);
     await sweepBucket(this.host);
@@ -550,14 +491,8 @@ export class SessionAgent extends Think<Env> {
   }
 
   /**
-   * Free a session whose turns have stopped completing. A turn that dies without
-   * settling — an isolate evicted mid-flight, a stream that never terminated — leaves
-   * concurrency state behind that turns every later question into a failure, and no
-   * amount of asking again clears it.
-   *
-   * This is deliberately narrower than a reset: in-flight turns are cancelled and the
-   * execution state is dropped, but messages, files and memory all stay. The
-   * conversation survives; only the stuck machinery around it goes.
+   * Free a session whose turns stopped settling (evicted isolate, unterminated stream).
+   * Cancels turns and drops execution state; messages, files and memory stay.
    */
   private unstick(): { cancelled: boolean } {
     this.cancelAllChats();
@@ -623,12 +558,7 @@ export class SessionAgent extends Think<Env> {
     return await this.cancelSchedule(id);
   }
 
-  /**
-   * The pending tasks as instructions another session can re-create them from. The
-   * raw schedules are read rather than `listTasks`, because what that returns is
-   * written to be read by a person — a cron expression there carries a "cron " label
-   * that `scheduleTask` would not accept back.
-   */
+  /** Pending tasks in a form `scheduleTask` accepts back (`listTasks` labels cron entries). */
   private taskHandover(): TaskHandover[] {
     return [...this.getSchedules<{ prompt: string }>()]
       .filter((s) => s.callback === "runScheduledTask")
@@ -639,10 +569,8 @@ export class SessionAgent extends Think<Env> {
   }
 
   /**
-   * Take on the tasks of the session this chat used to point at. Called across
-   * objects, so it is public: the old session hands its work over on `!new` and then
-   * drops it, and a task the successor cannot re-create is reported rather than lost
-   * silently.
+   * Adopt the tasks of this chat's previous session on `!new`. Public for cross-object
+   * RPC; a task that cannot be re-created is counted as failed, not lost silently.
    */
   async adoptTasks(tasks: TaskHandover[]): Promise<{ moved: number; failed: number }> {
     this.ensureSchema();
@@ -661,26 +589,14 @@ export class SessionAgent extends Think<Env> {
   }
 
   /**
-   * A scheduled task runs a turn with nobody watching: the prompt is stored as the
-   * user message and the reply lands in the transcript, so the session reads as a
-   * conversation when the user comes back to it.
-   *
-   * The turn is awaited here rather than submitted, and the reply is posted from here
-   * rather than from `onChatResponse`. A submitted turn finishes on an invocation that
-   * has nothing left to wait for it: on staging the alarm was recorded `canceled`
-   * about sixty milliseconds after `onChatResponse` read the session's chat row, which
-   * is the Graph call being cut off mid-flight. The transcript had the answer and the
-   * phone never got it, silently — the throw that would have been logged never
-   * happened, because the whole invocation went away. Awaiting keeps the send inside
-   * the alarm that caused it, which is the arrangement the webhook turn already has
-   * and the one that demonstrably delivers.
+   * Run a scheduled prompt as a turn and deliver the reply from here. Awaited inside the
+   * alarm: a submitted turn let the alarm end mid-send and the reply never arrived.
    */
   async runScheduledTask(payload: { prompt: string }) {
     this.ensureSchema();
     await this.loadConfig();
-    // A task that comes due over the ceiling is dropped, not queued: it was meant to
-    // run at a time that has passed, and running it next month is not what was asked
-    // for. Logged, because nobody is watching a scheduled task fail.
+    // Over the spend ceiling the task is dropped, not queued for next month; logged, since
+    // nobody watches a scheduled task.
     console.log(`scheduled task running in session ${this.name}`);
     const blocked = await spendBlocked(this.host);
     if (blocked) {
@@ -709,12 +625,8 @@ export class SessionAgent extends Think<Env> {
   }
 
   /**
-   * What this session knows about itself: the transcript and the LLM spend, which
-   * OpenRouter reports exactly per call.
-   *
-   * Cloudflare's own costs are deliberately absent. See
-   * docs/cloudflare-durable-object-costs.md for how to read them from the GraphQL
-   * Analytics API, and why measuring them from inside the object does not work.
+   * Transcript size and LLM spend. Cloudflare's own costs are measured from outside; see
+   * docs/cloudflare-durable-object-costs.md.
    */
   private async summary() {
     const row = this.exec<{ prompt: number; completion: number; cost: number }>(

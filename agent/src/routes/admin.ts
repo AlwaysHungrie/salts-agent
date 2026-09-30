@@ -13,9 +13,8 @@ function limitParam(url: URL): number {
 }
 
 /**
- * Everything under `/api/admin`: the deployment owner's routes, gated on `API_SECRET`
- * alone because the owner has no Clerk session. Matched before the identity gate.
- * Undefined when the path is not one of these.
+ * Everything under `/api/admin`: the owner's routes, gated on `API_SECRET` alone (no
+ * Clerk session) and matched before the identity gate.
  */
 export async function handleAdmin(
   request: Request,
@@ -55,9 +54,8 @@ async function setAgentLimit(request: Request, env: Env): Promise<Response> {
 }
 
 /**
- * The deployment's settings. GET returns the stored document, the fields still missing
- * and the field descriptors, so the admin CLI holds no copy of any. PATCH merges; there
- * is no unset, because every field is required.
+ * The deployment's settings. GET returns the document, missing fields and field
+ * descriptors (the admin CLI keeps no copy). PATCH merges; every field is required.
  */
 async function handleSettings(request: Request, env: Env): Promise<Response> {
   const dir = directory(env);

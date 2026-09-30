@@ -76,13 +76,7 @@ export function McpDefaults({
   );
 }
 
-/**
- * Default headers, as pairs.
- *
- * The document holds them as an object, but they are edited as a list: an object
- * with a blank key is not a thing anyone can type towards. The rows are local state
- * for that reason — a half-typed pair has to survive until it has a name.
- */
+/** Default headers edited as rows (local state), so a half-typed pair survives until named. */
 export function HeaderRows({
   headers,
   onChange,

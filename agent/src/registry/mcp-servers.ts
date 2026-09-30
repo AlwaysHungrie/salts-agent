@@ -121,9 +121,7 @@ export async function performRefresh(
       last_error: "",
     });
   } catch (err) {
-    // A refusal of the grant itself is the end of this connection: drop the tokens
-    // so the server reads as disconnected and offers a Connect button, rather than
-    // sitting there advertising tools that every call will fail.
+    // A refused grant ends the connection: clear the tokens so the card offers Connect.
     if (err instanceof McpTokenError && err.permanent) {
       return updateMcpServer(storage, server.id, {
         oauth_access_token: "",

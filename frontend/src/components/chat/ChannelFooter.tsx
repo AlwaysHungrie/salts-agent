@@ -1,10 +1,6 @@
 
 
-/**
- * How a session that lives on another platform is marked: the wash behind the
- * footer, the link's underline and the logo, in that platform's own colour.
- * Tailwind reads classes as written, so each one is spelled out rather than built.
- */
+/** Each platform's colours, spelled out because Tailwind only sees literal class names. */
 export const CHANNEL_MARK = {
   telegram: {
     fade: "from-[#229ED9]/18",

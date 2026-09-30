@@ -20,13 +20,8 @@ export const OPENROUTER_KEY: CapabilityField = {
 /* --------------------------------------------------------------- pieces -- */
 
 /**
- * One block of the form, titled, with the lock that decides who may change what is
- * inside it.
- *
- * The lock is the point of this dialog rather than a decoration on it: a locked
- * setting disappears from the agent's own pages, so this becomes the only place it
- * exists. Sections that are not a setting — the model catalogue, the MCP templates —
- * take no lock, because there is nothing under the agent for them to hide.
+ * A titled form block with an optional lock; a locked setting disappears from the
+ * agent's own pages.
  */
 export function Section({
   title,
@@ -95,15 +90,8 @@ export function LockButton({
 }
 
 /**
- * A list of model ids, typed in.
- *
- * `ChipList` is what an access list uses, and this is the same shape of thing: a set
- * of entries, added one at a time, removed by their chip. It keeps a newline-joined
- * string, which is how the config columns hold their own lists — so the conversion
- * lives here rather than spreading through the form.
- *
- * The suggestions are the ids this deployment already knows about: nobody should have
- * to retype a shipped model to keep it in the list.
+ * A typed list of model ids over `ChipList` (newline-joined), with the deployment's ids
+ * as one-click suggestions.
  */
 export function IdList({
   label,

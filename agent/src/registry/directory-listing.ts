@@ -2,11 +2,8 @@ import { directorySettings } from "./directory-settings";
 import type { AgentPage, AgentRow, FleetRow, MetadataFilter } from "./types";
 
 /**
- * Where a page stopped: the sort key of its last row, `<created_at>:<id>`.
- *
- * A keyset rather than an offset. The lists this pages are appended to while they
- * are being read — an offset would skip or repeat a row every time an agent is
- * created mid-scroll, and a fleet of thousands is read over minutes, not seconds.
+ * Keyset cursor `<created_at>:<id>`: these lists grow while being read, and an offset
+ * would skip or repeat rows.
  */
 export function encodeCursor(row: AgentRow): string {
   return `${row.created_at}:${row.id}`;
@@ -60,14 +57,8 @@ export function listAgents(storage: DurableObjectStorage, email?: string): Agent
   }
   const wanted = email.trim().toLowerCase();
   if (!wanted) return [];
-  // A `UNION` of the two ways on, rather than one `WHERE x OR EXISTS (…)`.
-  //
-  // They return the same rows, but SQLite cannot use an index for an `OR` across
-  // two tables — it falls back to scanning every agent and running the subquery per
-  // row, which is the walk this table exists to remove. Split in two, each half is
-  // an index lookup: `idx_agents_admin_email` for the left, `idx_agent_members_email`
-  // for the right. `UNION` is the deduplicating one, which is what keeps an admin
-  // who is also on the access list from appearing twice.
+  // A `UNION` rather than `OR EXISTS`: SQLite cannot index an OR across two tables, and
+  // each half here is an index lookup. `UNION` also dedupes an admin who is a member.
   return storage.sql
     .exec(
       `SELECT a.id, a.name, a.created_at, a.updated_at, a.allowed_emails, a.admin_email,

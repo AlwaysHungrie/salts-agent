@@ -9,10 +9,8 @@ import {
 import { apiFetch } from "@/lib/identity";
 
 /**
- * What the composer may offer: the agent's ready input capabilities, and the
- * deployment's ceilings (files per message, image size, recording length) from
- * `/config`. `limits` is null until it answers, and uploads and recording wait for it.
- * The session id names the agent, so nothing extra is threaded down.
+ * The agent's ready input capabilities and the deployment's composer limits, from
+ * `/config`. `limits` is null until loaded; uploads and recording wait for it.
  */
 export function useComposerLimits(sessionId: string) {
   const [ready, setReady] = useState<Set<string>>(new Set());

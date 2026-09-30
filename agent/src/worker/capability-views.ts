@@ -4,12 +4,8 @@ import type { MetaSettings, ModelChoice } from "../registry";
 import type { DeploymentSettings } from "../settings";
 
 /**
- * What the settings page may offer as models.
- *
- * The agent's own list wins where it has one, and the deployment's catalogue is what
- * an empty list means. A chosen model keeps its catalogue label when it has one, and
- * is shown as the id it is otherwise — but the vision flag is always the one chosen
- * beside it, because that is the answer somebody actually gave for this agent.
+ * Models the settings page may offer: the agent's list (with its vision flags), else the
+ * deployment catalogue.
  */
 export function modelOptions(chosen: ModelChoice[], catalog: ModelOption[]): ModelOption[] {
   if (!chosen.length) return catalog;
@@ -20,14 +16,7 @@ export function modelOptions(chosen: ModelChoice[], catalog: ModelOption[]): Mod
   }));
 }
 
-/**
- * The capability list with the deployment's own upload ceilings written into the note
- * the page shows.
- *
- * The note quotes two numbers, and a deployment that has raised either of them would
- * otherwise tell every user the shipped figure — which is the one kind of wrong
- * documentation nobody can correct, because it is generated.
- */
+/** Capabilities with the deployment's actual upload limits written into the file note. */
 export function notedCapabilities(list: Capability[], settings: DeploymentSettings): Capability[] {
   const mb = (n: number) => `${Number((n / 1_000_000).toFixed(1))} MB`;
   return list.map((capability) =>
@@ -43,12 +32,8 @@ export function notedCapabilities(list: Capability[], settings: DeploymentSettin
 }
 
 /**
- * The capability list with the fixed-choice model menus filled in.
- *
- * The menu is the deployment's `field_options` — the code ships none. This agent's own
- * meta document may answer a column with its own list of ids, which wins outright: an
- * agent's administrator is closer to the agent than the deployment's owner is. An id
- * the deployment names keeps its name there; one it does not is shown as the id.
+ * Capabilities with the fixed-choice menus filled in from the deployment's `field_options`,
+ * or the agent's own list, which wins.
  */
 export function capabilitiesFor(meta: MetaSettings, settings: DeploymentSettings): Capability[] {
   const menus = settings.field_options as Record<string, { id: string; label: string }[]>;

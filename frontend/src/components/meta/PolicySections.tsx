@@ -67,11 +67,7 @@ export function LimitsSection({
   );
 }
 
-/**
- * Which models may be offered, and what each fixed-choice field (the image and
- * transcription models) may be widened to. The choice fields are lists of OpenRouter
- * ids like the model list, so they are edited beside it rather than in their capability.
- */
+/** Which models may be offered, and the widened menus for fixed-choice fields. */
 export function ModelOptionSections({
   editor,
   catalog,

@@ -29,9 +29,7 @@ export function systemPrompt(host: SessionHost): string {
   // The deployment's line first. Blank is the owner choosing to say nothing.
   const deployment = host.settings().system_prompt.trim();
   const parts = deployment ? [deployment] : [];
-  // The name leads the custom instructions rather than living inside them: it is
-  // set by renaming the agent, so it stays right when the name changes and cannot
-  // be deleted by editing the instructions box.
+  // The name comes from renaming the agent, so it is kept outside the editable instructions.
   const name = host.config().agent_name.trim();
   const custom = host.config().system_prompt.trim();
   const instructions = [...(name ? [`Your name is ${name}.`] : []), ...(custom ? [custom] : [])];
@@ -56,11 +54,8 @@ export function systemPrompt(host: SessionHost): string {
   }
   const ready = capabilityLabels(host.config());
   if (ready.length > 0) parts.push(`Capabilities available to you: ${ready.join(", ")}.`);
-  // Named apart from the capabilities, and with the limit spelled out. A channel is
-  // how this conversation arrived, not a tool: the reply goes back the way the
-  // message came, and nothing here can open a conversation with anyone else. Listed
-  // among the capabilities it read as an ability, and the agent offered to send a
-  // WhatsApp message to a number it was given — then reached for bash to do it.
+  // Channels are named apart from capabilities, with the limit spelled out: listed as a
+  // capability, the model offered to message numbers it has no way to reach.
   const channels = channelLabels(host.config());
   if (channels.length > 0) {
     parts.push(
@@ -84,13 +79,8 @@ export function systemPrompt(host: SessionHost): string {
 }
 
 /**
- * The conversation as the model receives it. Think stores the words; the pictures
- * are put back here, read from the workspace at turn time rather than carried in
- * the transcript, so a session holding an 8MB PDF does not carry it in every row.
- *
- * A context window of N keeps only the last N messages, so a long session stops
- * growing its prompt — and its per-turn cost — without limit. 0 keeps everything.
- * The window is counted after compaction, so a summary counts as one message.
+ * The conversation as the model receives it, with files re-attached from the workspace at
+ * turn time. `context_messages` keeps the last N (0 = all), counted after compaction.
  */
 export async function modelMessages(host: SessionHost, config: Config): Promise<ModelMessage[]> {
   const all = await compactedMessages(host);
@@ -112,10 +102,7 @@ export async function modelMessages(host: SessionHost, config: Config): Promise<
     for (const a of attachments) await ensureParsed(host, a);
     const parsed = await parsedDocuments(host, attachments);
     const uploads = await mcpUploadNotes(host, config, attachments);
-    // A PDF that has been parsed travels as its own words. The file itself is only
-    // sent when there is no parse to send instead — a failed parse, or one that came
-    // back empty — because carrying eight megabytes of base64 to a provider that
-    // will only turn it back into this same text is work nobody needs done twice.
+    // A parsed PDF travels as its text; the file is sent only when there is no parse.
     const parts = await fileParts(host, attachments, new Set(parsed.map((p) => p.id)));
     const content = [
       { type: "text" as const, text },
@@ -134,9 +121,8 @@ export async function modelMessages(host: SessionHost, config: Config): Promise<
 }
 
 /**
- * The capability tools, wrapped for the AI SDK. Their JSON Schema is reused as is,
- * so a tool added in `capabilities.ts` reaches the model with no work here. They
- * merge with Think's own workspace tools — read, write, edit, grep, bash.
+ * The capability and MCP tools, wrapped for the AI SDK with their JSON Schema as-is.
+ * They sit beside Think's own workspace tools.
  */
 export function capabilityTools(host: SessionHost, config: Config): ToolSet {
   const context = toolContext(host, config);

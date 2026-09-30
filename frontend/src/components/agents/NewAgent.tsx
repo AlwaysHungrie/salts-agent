@@ -4,17 +4,8 @@ import { apiFetch, useIdentity } from "@/lib/identity";
 import { useEffect, useRef, useState } from "react";
 
 /**
- * Who the agent is, then what it is: name first, its settings second.
- *
- * An agent made on its own belongs to whoever is making it and to nobody else —
- * there is no access list to fill in, because the answer is always the address
- * already signed in. Ticking the fleet box is what turns this into a list: a fleet
- * name, a column of addresses, and one agent made for each of them.
- *
- * The second step is meta settings, which is the whole of a fleet's configuration —
- * every agent in the fleet is created holding it. A lone agent has nobody to hold
- * settings *for*, so it is asked only for the OpenRouter key that makes it able to
- * answer at all.
+ * Create an agent: name first, settings second. Ticking "fleet" makes one agent per
+ * address, configured by the full meta form; a lone agent only asks for its key.
  */
 export function NewAgent({
   busy,
@@ -70,21 +61,14 @@ export function NewAgent({
   }, []);
 
   /**
-   * The addresses the fleet box holds, in the order they were typed — and what was
-   * typed that is not one.
-   *
-   * Split apart here because the Worker drops anything that is not an address
-   * without a word, so a fleet made from a box with a typo in it would quietly come
-   * back one agent short. The count below is the number of agents that will exist,
-   * and the rejected words are named so the typo can be found.
+   * The fleet box split into valid addresses and rejected words, so a typo is named
+   * rather than silently dropped by the Worker.
    */
   const typed = fleetEmails
     .split(/[\s,;]+/)
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean);
-  // The same shape check the Worker's `normalizeEmails` applies, so the two agree on
-  // what counts. Repeats are kept: the same address twice is two agents for that
-  // person, which the Worker makes as asked.
+  // The Worker's `normalizeEmails` shape check. Repeats are kept (two agents for one person).
   const isEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
   const members = typed.filter(isEmail);
   const rejected = typed.filter((e) => !isEmail(e));

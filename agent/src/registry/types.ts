@@ -2,20 +2,9 @@ import type { McpAuth } from "../mcp";
 import type { SettableConfigKey } from "../settings";
 
 /**
- * One agent's settings, split in two:
- *
- * - Tuning (model, prompt, temperature…): how the agent talks.
- * - Capabilities (`cap_*` plus the credentials they need): what the agent can *do* —
- *   search, read files, see images, draw, hear, schedule work, remember.
- *
- * Every agent has its own `SessionRegistry`, so this row — bot token, MCP servers,
- * OpenRouter key and all — belongs to that agent alone. Nothing here is shared.
- *
- * One typed column per setting, in a single-row table: settings keep growing, and
- * columns keep them queryable and migratable instead of turning into one opaque blob.
- * Integers stand in for booleans because SQLite has no boolean type.
- *
- * API keys are stored here in plain text. That is deliberate for now — see README.
+ * One agent's settings: tuning (how it talks) and capabilities (`cap_*` plus their
+ * credentials). One typed column each in a single-row table; integers stand in for
+ * booleans. Keys are stored in plain text, deliberately for now (see README).
  */
 export type Config = {
   model: string;
@@ -27,9 +16,8 @@ export type Config = {
   /** Appended to the built-in system prompt. Empty means "no custom instructions". */
   system_prompt: string;
   /**
-   * The owner's notes. `private_notes` is a brief only the model reads; `public_notes`
-   * is what guests are shown before they start, and the model is told it too. Longer
-   * than `system_prompt` on purpose: a brief with its evidence runs to pages.
+   * The owner's notes: `private_notes` only the model reads; `public_notes` guests see
+   * before starting (and the model is told). Longer than `system_prompt` on purpose.
    */
   private_notes: string;
   public_notes: string;
@@ -55,10 +43,8 @@ export type Config = {
   cap_mcp: number;
 
   /**
-   * The agent's own OpenRouter key. Every model call this agent makes is billed to
-   * it, so one agent's spend and rate limits are its own. There is no fallback: blank
-   * means the agent cannot answer, which is the only way a deployment's own credit
-   * stays out of reach of every agent anyone creates on it.
+   * The agent's own OpenRouter key, billed for every call. No fallback: blank means the
+   * agent cannot answer, which keeps the deployment's credit out of reach.
    */
   openrouter_api_key: string;
   /** Brave Search API key. The default web search provider when set. */
@@ -90,9 +76,8 @@ export type Config = {
   /** The test or business number's id from Meta's API Setup panel, not the number. */
   whatsapp_phone_number_id: string;
   /**
-   * The WhatsApp Business Account the number belongs to. Not used to send: it is the
-   * account whose webhooks this agent's Meta app has to be subscribed to, which the
-   * Worker does itself whenever the settings are saved.
+   * The WhatsApp Business Account: not used to send, but the account the Meta app is
+   * subscribed to on every save.
    */
   whatsapp_waba_id: string;
   /** System-user token with `whatsapp_business_messaging`. Sends every reply. */
@@ -102,20 +87,15 @@ export type Config = {
   /** Chosen by the owner, pasted into Meta's callback settings. Must match exactly. */
   whatsapp_verify_token: string;
   /**
-   * The one number this agent answers, in international form.
-   *
-   * Not a whitelist. An agent on WhatsApp serves one person, and a required single
-   * value says that in a way a list cannot: there is no empty state that quietly means
-   * "everyone", and no second entry to add by accident.
+   * The one number this agent answers, in international form. A single required value,
+   * not a whitelist, so there is no empty state meaning "everyone".
    */
   whatsapp_number: string;
 };
 
 /**
- * The per-agent columns every agent starts blank on: its name, its own instructions,
- * its keys and its channel wiring. Everything else a new agent holds — the model and
- * every column in `SETTABLE_CONFIG_KEYS` — is the deployment's `default_model` and
- * `config_defaults`, not a value this code picks.
+ * Per-agent columns every agent starts blank on. The model and `SETTABLE_CONFIG_KEYS`
+ * come from the deployment's `default_model` and `config_defaults`.
  */
 export const DEFAULT_CONFIG: Omit<Config, "model" | SettableConfigKey> = {
   agent_name: "",
@@ -139,100 +119,52 @@ export const DEFAULT_CONFIG: Omit<Config, "model" | SettableConfigKey> = {
 };
 
 /**
- * Meta settings: an agent's settings *about* its settings.
- *
- * Where `Config` is what the agent is set to right now, this is what it should be
- * set to by default — which model choices it is offered at all, which capabilities
- * arrive switched on, what their fields start out holding, and which MCP templates
- * and servers belong to it. Applying it writes those defaults into `Config`; nothing
- * here is read on a turn, so a turn's behaviour still comes from `Config` alone.
- *
- * One JSON blob rather than columns: it is nested (per capability, per server) and
- * nothing queries it, so columns would buy nothing and cost a migration per field.
+ * Meta settings: what the agent should be set to by default, what it may be offered and
+ * what is locked. Applying writes them into `Config`; turns read only `Config`.
  */
 export type MetaSettings = {
   /**
-   * The models the settings page may offer, typed in rather than picked: OpenRouter's
-   * catalogue is far larger than the handful a deployment names in its `models` setting, and an
-   * agent that wants one of the others should not need a release. Empty means the
-   * deployment's own list.
-   *
-   * Each carries its own `vision`, because an id typed in is one nothing else knows
-   * anything about — whether it can be sent an image is a thing only the person
-   * adding it can say.
+   * Models the settings page may offer, typed in (empty = the deployment's list). Each
+   * carries its own `vision`, since only whoever adds an id can say.
    */
   models: ModelChoice[];
   /** Default tuning values. A key that is absent keeps the factory default. */
   defaults: Partial<Pick<Config, MetaTunableKey>>;
-  /**
-   * Settings the agent's own pages may not touch: capability ids and config columns.
-   * A locked setting is not shown under the agent at all — it is decided here and
-   * nowhere else, which is what makes this more than a set of starting values.
-   */
+  /** Capability ids and config columns the agent's own pages may not show or change. */
   locked: string[];
   /** Per capability: whether it starts on, and what its fields start out holding. */
   capabilities: Record<string, MetaCapability>;
   /**
-   * Open lists of what a fixed-choice field may be set to, by config column — the
-   * image model and the transcription model. Same reasoning as `models`: the built-in
-   * choices are a starting point, not the limit. An absent or empty list leaves the
-   * field offering what the Worker ships.
+   * Replacement menus for fixed-choice fields (image and transcription models), by column.
+   * Empty leaves the deployment's menu.
    */
   field_options: Record<string, string[]>;
   mcp: {
     /** Template ids offered on the capabilities page, out of the catalogue. Empty means every one. */
     templates: string[];
-    /**
-     * Templates supplied by whoever provisioned this agent, shown on the capabilities
-     * page in place of the deployment's `mcp_catalog`.
-     *
-     * A definition carries what a tile actually needs (a name, a url, how it
-     * authenticates), which is what lets a catalogue live outside this repo. Empty
-     * leaves the deployment's catalogue in force.
-     */
+    /** Templates from whoever provisioned the agent, replacing the deployment's `mcp_catalog`. */
     catalog: McpCatalogEntry[];
     /** Servers added to the agent when the defaults are applied, matched by name. */
     servers: MetaMcpServer[];
     /**
-     * Whether the agent's own pages may add servers of their own — and rename, repoint
-     * or remove the ones it has.
-     *
-     * On is the open arrangement: the servers above are a starting point and the agent
-     * builds out the rest. Off makes the list this dialog's alone, which is what an
-     * agent handed to somebody else wants — they can switch a server off, pick which
-     * of its tools it may call and approve its OAuth, because that is using what they
-     * were given, but the list itself is not theirs to change.
+     * Whether the agent's own pages may add, rename, repoint or remove servers. Off suits an
+     * agent handed to someone else: they can still use, tune and connect what they were given.
      */
     user_servers: boolean;
   };
   /**
-   * What this agent may spend on model calls in a calendar month, in US dollars.
-   * `0` is no ceiling at all, which is what every agent had before this existed.
-   *
-   * Counted against what the agent's own turns cost — the numbers OpenRouter hands
-   * back per turn, summed into `spend` by month. A month that has already gone over
-   * refuses new turns rather than truncating one mid-answer: a half-written reply
-   * costs the same as a whole one and is worth less.
+   * Monthly model spend ceiling in USD (0 = none). Over the ceiling, new turns are refused
+   * rather than cut off mid-answer.
    */
   monthly_spend_limit: number;
   /**
-   * How many addresses this agent's own access list may grow to. `0` is no ceiling
-   * beyond the deployment's `max_members`.
-   *
-   * A fleet agent is created with one member and its user may add more — that is
-   * deliberate, they own the agent. This is the administrator's say in how far that
-   * goes, for an agent they are paying for.
+   * Ceiling on the agent's access list (0 = only the deployment's `max_members`): the
+   * administrator's say over how far a fleet agent's user may share it.
    */
   member_limit: number;
 };
 
-/**
- * One provider on the capabilities page's strip — from the deployment's `mcp_catalog`,
- * or from whoever provisioned the agent.
- *
- * The logo is an optional SVG `icon`; without one, a mark is drawn from `letter` and
- * `color`, which needs no asset at all.
- */
+/** One MCP provider tile: an optional SVG `icon`, else a mark from `letter` and `color`. */
 export type McpCatalogEntry = {
   id: string;
   name: string;
@@ -248,11 +180,7 @@ export type McpCatalogEntry = {
   color?: string;
 };
 
-/**
- * One model an agent may be switched to: an OpenRouter id, and whether it sees images.
- * No label — a model that is in the deployment's catalogue is shown under the name
- * that gives it, and one that is not is shown as the id it is.
- */
+/** A model an agent may use, and whether it accepts images. Labelled from the catalogue. */
 export type ModelChoice = { id: string; vision: boolean };
 
 /** The tuning settings a default may be given for. */
@@ -272,11 +200,7 @@ export type MetaCapability = {
   fields?: Record<string, string>;
 };
 
-/**
- * One MCP server the agent should have. OAuth still has to be approved per server —
- * this only gets the row in place, with the headers it needs, so connecting is a
- * click rather than a re-entry of the URL.
- */
+/** An MCP server the agent is created with. OAuth is still approved per server. */
 export type MetaMcpServer = {
   name: string;
   url: string;
@@ -324,11 +248,7 @@ export type SessionRow = {
   chat_type: string;
   /** A public chat's @handle, without the @. Empty for a private one. */
   chat_username: string;
-  /**
-   * The forum topic inside that chat, as a string, or empty when the session is the
-   * whole chat. A forum gets one session per topic, so this is part of what makes a
-   * conversation distinct.
-   */
+  /** The forum topic within the chat, or empty for the whole chat (one session per topic). */
   chat_thread_id: string;
 };
 
@@ -341,21 +261,16 @@ export type SessionPage = {
 };
 
 /**
- * One agent's access row, as the registry holds it.
- *
- * `seeded` is 0 only for an agent created before access lived here at all. It is not
- * part of the wire format: the Worker uses it to decide whether to fall back to the
- * directory, and strips it before anything is returned.
+ * One agent's access row. `seeded` = 0 means not yet copied from the directory; it is
+ * stripped before anything is returned.
  */
 export type AccessRow = {
   allowed_emails: string;
   admin_email: string;
   seeded: number;
   /**
-   * Guests: people who may message the agent and nothing else — start sessions of
-   * their own, read and continue those, and delete them. Never its settings, keys or
-   * anyone else's sessions. `guests` is the switch; with it on, an empty
-   * `guest_emails` means any signed-in address.
+   * Guests may start, read, continue and delete their own sessions, nothing else. With
+   * `guests` on, an empty `guest_emails` means any signed-in address.
    */
   guests: number;
   guest_emails: string;
@@ -368,36 +283,16 @@ export type AgentRow = {
   created_at: number;
   updated_at: number;
   /**
-   * Who may open this agent: newline-separated email addresses, lowercased.
-   *
-   * Access is by email rather than by account id because an agent is usually shared
-   * before the people it is shared with have signed in — the address is what the
-   * owner knows, and Clerk hands the same address back once they do. Empty means
-   * nobody but nothing else: an agent with no addresses is unreachable, which is why
-   * creation always seeds it with the creator's own.
+   * Who may open this agent: newline-separated lowercase emails. By email because agents
+   * are shared before people sign in.
    */
   allowed_emails: string;
   /**
-   * The one address that administers this agent: whoever created it, lowercased.
-   *
-   * Separate from `allowed_emails` on purpose. The access list says who may *use* the
-   * agent — open its pages, chat with it, change its settings. This says who may
-   * change the decisions *behind* those settings: the meta document, and whether the
-   * agent goes on existing at all. It is set once, at creation, and never moves.
-   *
-   * Being the admin is not membership. An admin who is not on the access list cannot
-   * open the agent any more than a stranger can; they see it on their list of agents
-   * and they can administer it, and that is all. Putting themselves on the list is a
-   * deliberate act, the same as adding anybody else.
+   * The address that administers the agent (its creator): owns the meta document and
+   * deletion, set once. Not membership: an admin off the list cannot open the agent.
    */
   admin_email: string;
-  /**
-   * The fleet this agent belongs to, or '' when it stands alone.
-   *
-   * A fleet is one create call that made several agents at once — one per address —
-   * all of them holding the same settings. The id is what groups them on the home
-   * page; it is shared by every agent that call made and by nothing else.
-   */
+  /** The fleet this agent was created in, or '' when it stands alone. */
   fleet_id: string;
   /** What that fleet is called. '' for an agent that is not in one. */
   fleet_name: string;

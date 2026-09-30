@@ -13,9 +13,8 @@ export const TITLE_PROMPT =
   "Name this conversation in at most four words. Reply with the title only: no quotes, no punctuation at the end, no preamble.";
 
 /**
- * The user's turn: their words, plus a note naming every file they attached and
- * where it sits in the workspace. The bytes are not inlined — the model opens what
- * it needs with the read tool, so a PDF is not re-sent with every later message.
+ * The user's words plus a note per attached file. Bytes are not inlined; the model opens
+ * files with the read tool.
  */
 export function userText(host: SessionHost, message: string, attachments: Attachment[]): string {
   if (attachments.length === 0) return message;
@@ -35,14 +34,8 @@ export function userText(host: SessionHost, message: string, attachments: Attach
 }
 
 /**
- * The message a turn sends, and the files it claims: the pending ones, or — on a
- * retry — the ones the question being asked again came with.
- *
- * `only` names them outright, and is how a chat channel says "these files, the ones
- * that arrived on this message". A browser turn passes nothing and takes the pending
- * pool, because that is exactly what it means there: files dropped on the composer
- * before the message was sent. A channel has no composer, and its pool is shared with
- * every other message being answered at that moment.
+ * Open a turn and claim its files: those named in `only` (a channel's own message), else
+ * the pending pool (the browser composer), or on retry the retried question's files.
  */
 export async function openTurn(
   host: SessionHost,
@@ -50,10 +43,7 @@ export async function openTurn(
   retry: boolean,
   only?: string[]
 ): Promise<UIMessage> {
-  // A new question is the end of the last stop. Cleared here and not in
-  // `beforeTurn`, which runs again on a retried attempt: an abort is one of the
-  // things Think retries, so clearing it there would clear it on the way down from
-  // the very stop that set it.
+  // Cleared here, not in `beforeTurn`, which Think re-runs on a retried abort.
   host.turn.stoppedOnPurpose = false;
   const attachments = retry ? await rewind(host) : claimed(host, only);
   const id = crypto.randomUUID();
@@ -76,9 +66,8 @@ export async function openTurn(
 }
 
 /**
- * Undo the last exchange so it can be asked again: the trailing assistant messages
- * and the question that prompted them are deleted from the session, and that
- * question's attachments are handed back so the retry carries the same files.
+ * Undo the last exchange for a retry: delete the trailing replies and their question,
+ * and return that question's files so the retry carries them.
  */
 export async function rewind(host: SessionHost): Promise<Attachment[]> {
   const messages = await host.getMessages();
@@ -104,13 +93,8 @@ export async function rewind(host: SessionHost): Promise<Attachment[]> {
 }
 
 /**
- * The sentence to answer with instead of running a turn, when the agent has spent
- * its month. Empty when it may go ahead.
- *
- * Checked before the turn rather than during it: a reply cut off halfway through
- * costs what a whole one costs and is worth less than nothing. Going over by the
- * price of one turn is the deliberate trade — the cost is only known once the turn
- * has happened, so the ceiling is the point where it stops starting new ones.
+ * The refusal to send instead of a turn once the month's spend is used (empty = go
+ * ahead). Checked before the turn, so a reply is never cut off midway.
  */
 export async function spendBlocked(host: SessionHost): Promise<string> {
   const { usd, limit } = await host.registry().spendState();
@@ -147,12 +131,8 @@ export async function runChat(host: SessionHost, message: string, retry = false)
 }
 
 /**
- * Stream a reply as SSE, in the event shape the browser already speaks. Think owns
- * the loop and the persistence; this translates its UI message chunks into the
- * `delta` / `tool` / `tool_done` / `usage` protocol the chat client reads.
- *
- * The object stays resident — and billable — for the whole stream. A stopped reply
- * keeps its partial text and its token cost, because the tokens were generated.
+ * Stream a reply as SSE in the chat client's `delta`/`tool`/`tool_done`/`usage` protocol.
+ * A stopped reply keeps its partial text and cost.
  */
 export async function streamChat(
   host: SessionHost,
@@ -169,9 +149,8 @@ export async function streamChat(
   // Tool events name the call by id; the name arrives once, when it starts.
   const toolNames = new Map<string, string>();
 
-  // The turn runs against the object, not against this request, and every event it
-  // produces is banked as it goes. The response is one listener on that; a browser
-  // that reloads mid-reply opens another and is caught up from the first token.
+  // The turn runs on the object and banks every event; this response is one listener, and
+  // a reloaded browser can attach another.
   host.live.start();
   const turn = (async () => {
     try {
@@ -244,11 +223,7 @@ export async function streamCommand(host: SessionHost, command: Command): Promis
   return streamSentence(text);
 }
 
-/**
- * Ask the model for a short name for the session and write it to the registry, so
- * the sidebar stops showing "New session". Best effort: a failed title must never
- * fail the turn it was generated from.
- */
+/** Ask the model for a short session title. Best effort: never fails the turn. */
 export async function nameSession(host: SessionHost, userMessage: string, reply: string) {
   try {
     const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {

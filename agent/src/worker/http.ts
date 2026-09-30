@@ -5,20 +5,8 @@ export const CORS = {
 };
 
 /**
- * The headers a call can carry, and the two ways to be somebody here.
- *
- * `authorization` is the ordinary one: a Clerk session token, whose signature the
- * Worker verifies against Clerk's published keys. The address comes out of the
- * verified claims, so it is one Clerk vouched for rather than one the caller typed.
- * This is the only identity a normal user of the app ever has.
- *
- * `x-api-secret` + `x-user-email` is the other one, and it is a back door on purpose.
- * Present the deployment's `API_SECRET` and the Worker takes the address beside it at
- * face value — any address, with no sign-in and no proof — and treats the caller as
- * that person for the whole request. It exists so a holder of the secret can act as
- * anyone, which is a feature here rather than an accident. It is also why `API_SECRET`
- * is not an origin check but a master key: whoever has it has every identity in the
- * deployment. Leave it unset and the door is not there at all.
+ * Two ways to be someone: a Clerk token in `authorization` (verified), or `x-api-secret`
+ * plus `x-user-email`, a deliberate back door that makes `API_SECRET` a master key.
  */
 export const API_SECRET_HEADER = "x-api-secret";
 export const USER_EMAIL_HEADER = "x-user-email";

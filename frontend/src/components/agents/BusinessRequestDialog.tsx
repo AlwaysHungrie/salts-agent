@@ -2,17 +2,8 @@ import { apiFetch } from "@/lib/identity";
 import { useEffect, useState } from "react";
 
 /**
- * The ask for a higher agent limit, as a screen rather than a dialog.
- *
- * A raised limit is one row the owner writes by hand once they have heard the ask,
- * and this screen is the only way to make it. So it gets the whole viewport: the
- * page underneath is a list the account has already filled, and nothing on it is
- * worth glancing back at mid-decision.
- *
- * It grants nothing itself. It files a request for a number, which the owner reviews
- * from the admin CLI — so what reaches the account is always a number they chose.
- * The copy says that plainly; a form that looks like a checkout and behaves like a
- * queue is the one thing this screen must not be.
+ * The request for a higher agent limit, as a full screen. It grants nothing: the owner
+ * reviews it from the admin CLI, and the copy says so.
  */
 export function BusinessRequestDialog({
   email,
@@ -28,10 +19,7 @@ export function BusinessRequestDialog({
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState<number | null>(null);
 
-  // Escape closes, and the list underneath is frozen while this is up. Without the
-  // lock the page behind keeps its own scroll position — and a fixed overlay that
-  // scrolls its parent is exactly what makes this read as part of the page instead
-  // of on top of it.
+  // Escape closes, and the page behind stops scrolling while this is open.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();

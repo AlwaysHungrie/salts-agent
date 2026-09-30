@@ -17,9 +17,7 @@ export function readMeta(storage: DurableObjectStorage): MetaSettings {
     return {
       ...DEFAULT_META,
       ...stored,
-      // The list was bare ids before each model carried its own vision flag. An
-      // agent stored back then said nothing about images either way, which is the
-      // same thing an unknown id says: assume it sees them.
+      // Older rows stored bare ids; like an unknown id, assume they accept images.
       models: (stored.models ?? []).map((m) =>
         typeof m === "string" ? { id: m, vision: true } : m
       ),

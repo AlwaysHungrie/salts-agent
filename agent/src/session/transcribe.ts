@@ -5,9 +5,8 @@ import { audioFormat, isAudioAttachment } from "./files";
 import type { SessionHost } from "./types";
 
 /**
- * Turn audio into text. OpenRouter has no /audio/transcriptions route, but many of
- * its models take audio as a chat input part, so this spends the agent's existing
- * OpenRouter key rather than asking the user for a second provider.
+ * Transcribe audio through an OpenRouter chat model (there is no transcription route),
+ * billed to the agent's existing key.
  */
 export async function transcribe(
   host: SessionHost,

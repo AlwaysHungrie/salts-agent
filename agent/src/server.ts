@@ -19,9 +19,8 @@ export { SessionAgent } from "./agent";
 export { AgentDirectory, SessionRegistry } from "./registry";
 
 /**
- * Checks that run before any route: the deployment is configured, CORS preflight, and
- * the settings document is complete. Returns a response to end the request with, or
- * undefined to carry on.
+ * Checks before any route: the deployment is configured, CORS preflight, and the
+ * settings are complete. Returns a response to end with, or undefined to carry on.
  */
 async function preflight(request: Request, env: Env, segments: string[]) {
   // 503, not 500: the deployment is incomplete rather than broken.
@@ -88,8 +87,7 @@ function touchOnMessage(env: Env, ctx: ExecutionContext, segments: string[]) {
 
 /**
  * Routes matched before the identity gate, because their callers have no Clerk session:
- * the MCP OAuth redirect (proved by its state token) and the owner's admin routes
- * (proved by `API_SECRET`).
+ * the MCP OAuth redirect (state token) and the owner's admin routes (`API_SECRET`).
  */
 async function unauthenticatedRoute(
   request: Request,

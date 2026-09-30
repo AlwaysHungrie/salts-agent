@@ -12,11 +12,7 @@ import {
 } from "../whatsapp";
 import { callSession, readConfig, registry, syncSessionCount } from "../worker/stores";
 
-/**
- * Meta's subscription handshake. Saving the callback URL in the dashboard makes this
- * exact call, and the field is only subscribed if the challenge comes back verbatim
- * as plain text.
- */
+/** Meta's subscription handshake: echo the challenge as plain text. */
 
 export function whatsappVerify(url: URL, verifyToken: string): Response {
   const mode = url.searchParams.get("hub.mode");
@@ -32,18 +28,8 @@ export function whatsappVerify(url: URL, verifyToken: string): Response {
 }
 
 /**
- * One delivery from WhatsApp, for one agent. The sender's number is resolved to that
- * agent's session — created on first contact — and the message is handed to the
- * session's own object, which answers in the chat itself.
- *
- * Every agent is a different Meta app with its own number and its own secret, so each
- * has its own route, exactly as Telegram does. What differs is that Meta has no API
- * for setting a callback URL: there is no `syncWebhook` here, and the owner pastes
- * this route into the dashboard by hand. That is what the setup guide is for.
- *
- * Meta retries anything that is not a fast 200, so the turn runs after the response
- * rather than under it — and every delivery is claimed first, or a retry issued while
- * the first turn is still thinking would be answered twice.
+ * One WhatsApp delivery for one agent: resolve (or create) the sender's session and hand
+ * it over after a fast 200. Each delivery is claimed first so a retry is not answered twice.
  */
 export async function handleWhatsappWebhook(
   request: Request,
@@ -54,9 +40,7 @@ export async function handleWhatsappWebhook(
 ): Promise<Response> {
   const reg = registry(env, agentId);
   const config = await readConfig(env, reg);
-  // Every field is required, so `enabled` is also the answer to "is this agent's
-  // WhatsApp set up". A half-filled one answers the handshake and then fails to
-  // verify a signature, which looks like Meta's fault.
+  // `enabled` requires every field, so a half-configured agent is treated as off.
   if (!enabled(config, "whatsapp")) return new Response("whatsapp is off", { status: 404 });
 
   if (request.method === "GET") return whatsappVerify(url, config.whatsapp_verify_token);
@@ -121,9 +105,7 @@ export async function handleWhatsappWebhook(
         source: "whatsapp",
         chat_id: chatId,
         chat_type: "private",
-        // WhatsApp has no handles, so this column carries the business number the
-        // message was sent to. It is what "continue on WhatsApp" links at, the same
-        // way a Telegram group's @handle is.
+        // The business number, which "continue on WhatsApp" links to.
         chat_username: inbound.businessNumber,
         // Cloud API group messaging needs an Official Business Account, so every
         // conversation here is one person.

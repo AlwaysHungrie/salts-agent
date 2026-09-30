@@ -26,9 +26,8 @@ export const META_TUNABLES = [
 ] as const satisfies readonly MetaTunableKey[];
 
 /**
- * What a lock may name: a tuning column, or a capability. Locking a capability locks
- * its switch and every field it declares, because half a locked capability — a switch
- * nobody may flip over credentials anybody may rewrite — is not a useful thing.
+ * Lockable keys: tuning columns and capabilities (a capability lock covers its switch
+ * and all its fields).
  */
 export const LOCKABLE = new Set<string>([...META_TUNABLES, ...CAPABILITIES.map((c) => c.id)]);
 
@@ -212,11 +211,8 @@ function mcp(value: unknown, settings: DeploymentSettings): MetaSettings["mcp"] 
 }
 
 /**
- * Meta settings as they may be stored: a whole document, each part checked the way a
- * config PATCH is. A part left out of `body` comes back empty.
- *
- * `defaults`, `capabilities` and `mcp.servers` seed the agent at creation only; after
- * that the previous values are kept as the record of how it started.
+ * A whole meta document, each part validated like a config PATCH (omitted parts come back
+ * empty). `defaults`, `capabilities` and `mcp.servers` only change at creation.
  */
 export function validateMeta(
   body: Partial<MetaSettings>,
@@ -261,12 +257,8 @@ export function validateMeta(
 }
 
 /**
- * One provisioned template, checked before it is stored.
- *
- * Every field is rendered on a page the agent's own owner opens, so a bad entry is a
- * broken tile rather than a bad request — hence the refusal here rather than a filter.
- * `url` is parsed because the tile turns it into a server; `auth` is checked against
- * the three this Worker can actually connect with.
+ * Validate one provisioned MCP template: a bad entry would be a broken tile, so it is
+ * refused. `url` must parse; `auth` must be one the Worker supports.
  */
 export function validateCatalogEntry(entry: unknown): McpCatalogEntry {
   if (typeof entry !== "object" || entry === null)

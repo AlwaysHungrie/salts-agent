@@ -8,18 +8,14 @@ import { PARSE_CACHE_DIR } from "./files";
 import type { Attachment, SessionHost } from "./types";
 
 /**
- * Which parser OpenRouter runs over a PDF. `mistral-ocr` is the one that reads scans
- * and keeps a table's shape, and it is billed per page — which is affordable only
- * because a document is parsed once per session and replayed after that.
+ * OpenRouter's PDF parser: `mistral-ocr` reads scans and tables. Billed per page, so a
+ * document is parsed once per session and replayed.
  */
 export const PDF_PARSE_ENGINE = "mistral-ocr";
 
 /**
- * Send each PDF a message carried to every connected MCP server that takes uploads,
- * and name the id it came back under. The model sees the PDF's words but cannot copy
- * its bytes into a tool call, so without this a server that stores the original gets
- * the text alone. Uploaded once per server, on the first turn that needs it; a failed
- * upload is not a failed turn, and is tried again on the next.
+ * Upload each PDF to every connected server that takes uploads, and name its id for the
+ * model (which cannot copy bytes into a tool call). Once per server; retried on failure.
  */
 export async function mcpUploadNotes(
   host: SessionHost,
@@ -73,11 +69,7 @@ export async function ensureMcpUpload(
   }
 }
 
-/**
- * The words of every attachment that has been parsed, in message order. A row whose
- * file has gone missing is forgotten rather than repaired: the PDF is still on hand,
- * so the worst case is one more parse.
- */
+/** The text of every parsed attachment. A row whose file is missing is forgotten. */
 export async function parsedDocuments(
   host: SessionHost,
   attachments: Attachment[]
@@ -90,9 +82,7 @@ export async function parsedDocuments(
       a.id
     )[0];
     if (!row?.path) continue;
-    // Parses were once cached whole, as JSON. Those rows are dropped rather than
-    // read: their contents are a payload, not a document, and putting one in front
-    // of the model would be worse than parsing the PDF again.
+    // Legacy whole-JSON parse caches are dropped, not fed to the model.
     if (!row.path.endsWith(".txt")) {
       host.exec(`DELETE FROM file_cache WHERE attachment_id = ?`, a.id);
       await host.workspace.rm(row.path, { force: true });
@@ -110,13 +100,8 @@ export async function parsedDocuments(
 }
 
 /**
- * Parse a PDF once, the way a clip is transcribed once: on the first turn that needs
- * it, not at upload, so nothing stands between the user and sending their message.
- *
- * It takes its own request because OpenRouter does not return annotations on a
- * streamed completion — the parse only comes back on an ordinary one. The reply is
- * thrown away; what is wanted is the parse riding along with it, whose text stands
- * in for the document on this turn and every turn after it.
+ * Parse a PDF on the first turn that needs it, with a separate non-streamed request
+ * (OpenRouter only returns annotations there). The reply is discarded; the parse is kept.
  */
 export async function ensureParsed(host: SessionHost, attachment: Attachment): Promise<void> {
   if (attachment.kind !== "pdf") return;
@@ -189,15 +174,8 @@ export async function ensureParsed(host: SessionHost, attachment: Attachment): P
 }
 
 /**
- * Keep what the parse actually said, against the attachment it came from.
- *
- * Only the text is kept. A parse also carries a rendered image per page, and those
- * are the bulk of it — worth nothing to a model that reads text, and worth their
- * weight in tokens to one that does not. The words are what a question about a
- * document is answered from.
- *
- * The annotation names the file and nothing else, so the newest PDF with that name
- * wins the match, and an annotation matching nothing is dropped.
+ * Cache the text of each parse against its attachment (page images are dropped). The
+ * annotation only names the file, so the newest PDF with that name wins.
  */
 export async function cacheFileAnnotations(
   host: SessionHost,
@@ -218,9 +196,7 @@ export async function cacheFileAnnotations(
       console.error(`pdf parse for ${row.id} carried no text`);
       continue;
     }
-    // Kept out of `uploads/`, and out of any directory the read and list tools walk:
-    // the parse is plumbing, and a model that finds it sitting beside the PDF will
-    // open it, reason about it, and spend a turn's tool budget on a cache file.
+    // Outside any directory the model's tools walk, or it would read the cache file.
     const path = `${PARSE_CACHE_DIR}/${row.id}.txt`;
     try {
       await host.workspace.writeFile(path, text, "text/plain");
@@ -240,9 +216,8 @@ export async function cacheFileAnnotations(
 }
 
 /**
- * Images and PDFs as model content parts. They are sent with the message rather
- * than read through a tool: a tool result has to be text, so handing a page back
- * that way is not something an OpenAI-shaped API will accept.
+ * Images and PDFs as content parts: a tool result must be text, so they cannot come back
+ * through a tool.
  */
 export async function fileParts(
   host: SessionHost,

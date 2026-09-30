@@ -1,21 +1,6 @@
 /**
- * External MCP servers: the agent's tools, hosted by someone else.
- *
- * A server here is always remote and always speaks Streamable HTTP — Notion's,
- * MetaMCP's, and every other hosted server do. There is no stdio transport: a Worker
- * has no subprocesses to give one.
- *
- * Two ways in, because that is what providers actually ask for:
- *
- * - Headers. A key pasted into a header, which is how MetaMCP and most API-key
- *   servers authenticate.
- * - OAuth. The full MCP authorization flow — protected-resource discovery, dynamic
- *   client registration, PKCE — which is how Notion authenticates. Nothing is typed
- *   in: the user clicks Connect and approves it at the provider.
- *
- * The JSON-RPC client is hand-rolled rather than pulled from the MCP SDK: three
- * methods (initialize, tools/list, tools/call) over `fetch` is less code than the
- * bundle it would cost inside a Worker.
+ * External MCP servers over Streamable HTTP (no stdio in a Worker), authenticated by
+ * headers or the full MCP OAuth flow. The JSON-RPC client is hand-rolled to stay small.
  */
 
 export type McpAuth = "none" | "headers" | "oauth";
@@ -60,9 +45,8 @@ export type McpServerRow = {
   /** Cached `tools/list`, as JSON. Refreshed on save, on connect, and on demand. */
   tools_json: string;
   /**
-   * The tools of this server the agent may not call, as a JSON array of names. Kept
-   * as the exclusions rather than the inclusions so a tool the provider adds later
-   * arrives switched on, which is what someone who never opened this list expects.
+   * Tools the agent may not call, as a JSON array. Stored as exclusions so a tool the
+   * provider adds later arrives switched on.
    */
   disabled_tools: string;
   tools_synced_at: number;
@@ -106,9 +90,8 @@ type JsonRpcResponse = {
 };
 
 /**
- * Raised when the authorization server refuses a token request. `permanent` marks the
- * refusals that will not come good on their own — a spent or revoked refresh token —
- * as opposed to the provider being briefly unreachable.
+ * A refused token request. `permanent` marks refusals that will not recover on their
+ * own (spent or revoked refresh token), as opposed to a brief outage.
  */
 export class McpTokenError extends Error {
   constructor(
@@ -166,11 +149,7 @@ async function readEnvelope(res: Response): Promise<JsonRpcResponse | undefined>
   return last;
 }
 
-/**
- * One MCP session against one server. `initialize` is sent on the first call and the
- * session id it hands back is echoed on the rest, which is what lets a server keep
- * per-connection state between `tools/list` and `tools/call`.
- */
+/** One MCP session with a server: `initialize` on first call, then its session id is echoed. */
 export class McpClient {
   private sessionId = "";
   private initialized = false;
@@ -272,9 +251,8 @@ export class McpClient {
   }
 
   /**
-   * Hands the server a file's bytes out of band, for a server that takes files that
-   * way. A model can read an attachment but cannot copy its bytes into a tool call, so
-   * the agent posts them here and the model passes the id that comes back.
+   * Upload a file's bytes out of band. The model cannot copy bytes into a tool call, so it
+   * passes the returned id instead.
    */
   async upload(bytes: ArrayBuffer, mime: string): Promise<string> {
     const headers: Record<string, string> = { ...this.extraHeaders, "content-type": mime };
@@ -331,11 +309,7 @@ async function getJson<T>(url: string): Promise<T | undefined> {
   }
 }
 
-/**
- * Where a server's `.well-known` documents live. The spec puts the path of the
- * resource *after* the well-known segment, and older servers put it at the root, so
- * both are tried in that order.
- */
+/** `.well-known` URLs to try: the spec's (resource path after the segment), then the root. */
 function wellKnown(base: URL, document: string): string[] {
   const path = base.pathname.replace(/\/$/, "");
   const urls = [`${base.origin}/.well-known/${document}`];
@@ -344,12 +318,8 @@ function wellKnown(base: URL, document: string): string[] {
 }
 
 /**
- * Find the authorization server for an MCP endpoint, and read its metadata.
- *
- * The path is the one the spec lays out: the protected resource points at its
- * authorization servers, and each of those describes its own endpoints. When a server
- * publishes neither — plenty in the wild do not — the conventional endpoints under
- * its own origin are assumed, which is what the spec's fallback says to do.
+ * Find an MCP endpoint's authorization server and its metadata, falling back to the
+ * conventional endpoints on its own origin as the spec allows.
  */
 export async function discoverAuthServer(
   serverUrl: string
@@ -385,11 +355,7 @@ export async function discoverAuthServer(
   };
 }
 
-/**
- * Register this app with the authorization server on the fly. MCP providers hand out
- * no client ids in advance, so the client is created per server, per install, the
- * first time someone connects it.
- */
+/** Dynamic client registration: MCP providers issue no client ids in advance. */
 export async function registerClient(
   registrationUrl: string,
   redirectUri: string
@@ -427,9 +393,7 @@ async function tokenRequest(tokenUrl: string, form: Record<string, string>): Pro
   });
   if (!res.ok) {
     const body = (await res.text()).slice(0, 300);
-    // 400 and 401 are the authorization server saying the grant itself is no good —
-    // `invalid_grant` for a spent or revoked refresh token. Retrying cannot fix it;
-    // only the user approving the app again can.
+    // 400/401 means the grant itself is bad (`invalid_grant`); only reconnecting fixes it.
     throw new McpTokenError(
       `token request failed: ${res.status} ${body}`,
       res.status,
@@ -483,9 +447,8 @@ export function refreshToken(
 /* ------------------------------------------------------------ tool names -- */
 
 /**
- * What a server's tools are called once they reach the model. Two servers may both
- * offer `search`, so the server's own name goes in front — and the result is kept to
- * the characters OpenRouter accepts in a function name.
+ * A server's tool name as the model sees it: prefixed with the server name (two servers
+ * may both offer `search`) and limited to characters OpenRouter accepts.
  */
 export function slug(name: string): string {
   return (

@@ -60,11 +60,7 @@ export function formatMb(bytes: number): string {
     : `${Math.round(bytes / 1000)} kB`;
 }
 
-/**
- * The format name OpenRouter wants beside the audio bytes. It is picky about the
- * container, so anything unrecognised is reported here rather than as a 400 from
- * upstream.
- */
+/** The audio format OpenRouter expects; unknown containers are reported here. */
 export function audioFormat(mime: string, name: string): string {
   const subtype = mime.split("/")[1]?.split(";")[0]?.toLowerCase() ?? "";
   const extension = name.split(".").pop()?.toLowerCase() ?? "";
@@ -77,12 +73,7 @@ export function audioFormat(mime: string, name: string): string {
   return candidate;
 }
 
-/**
- * Ogg is here because every voice note is one — both chat apps record Opus in Ogg and
- * neither offers anything else — so refusing it would mean refusing the clips people
- * actually send. Whether it goes through is the transcription model's call: the default
- * one reads Ogg, and a model that does not answers with a 400 that the tool reports.
- */
+/** Ogg is accepted because every voice note is Ogg Opus; the transcription model decides. */
 export const AUDIO_FORMATS: Record<string, string> = {
   wav: "wav",
   wave: "wav",

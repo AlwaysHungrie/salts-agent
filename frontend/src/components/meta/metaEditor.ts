@@ -8,13 +8,8 @@ import type {
 } from "@/lib/agent";
 
 /**
- * The form's one seam, and the reads and writes that go through it.
- *
- * Before the agent exists every value is a *default* in the meta document; once it
- * exists the values are the agent's own `Config`, edited live. Every editor reads
- * through `valueOf` and writes through `setValue` (and the capability equivalents), so
- * the form is written once for both. `valueOf` is undefined only before the agent
- * exists and before the control was touched; each editor shows its factory value then.
+ * The form's seam: before the agent exists values are meta defaults; after, the agent's
+ * own `Config`. `valueOf`/`setValue` hide which, so the form is written once.
  */
 export function metaEditor({
   meta,

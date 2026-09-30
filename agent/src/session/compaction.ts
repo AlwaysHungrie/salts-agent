@@ -5,14 +5,8 @@ import type { Config } from "../registry";
 import type { SessionHost } from "./types";
 
 /**
- * The conversation as the model is to read it: the transcript, with the run of older
- * messages a compaction covered replaced by one message holding its summary.
- *
- * Only the model's view changes. Think's own history — what the chat draws, pages,
- * forks and rewinds — is left exactly as it was, which is why this is an overlay kept
- * here rather than Think's `session.compact()`, whose overlay rewrites that history.
- * A summary whose ends are no longer both in the transcript (a rewind took one) is
- * not applied, and the model gets the whole transcript again.
+ * The transcript as the model reads it, with the compacted run replaced by one summary.
+ * An overlay: Think's history is untouched. Skipped if a rewind removed either end.
  */
 export async function compactedMessages(host: SessionHost): Promise<UIMessage[]> {
   const all = (await host.getMessages()).filter((m) => m.role === "user" || m.role === "assistant");
@@ -32,18 +26,9 @@ export async function compactedMessages(host: SessionHost): Promise<UIMessage[]>
 }
 
 /**
- * Summarise the older part of the conversation into the overlay, keeping `head`
- * messages at the start and roughly `tailTokens` (at least `minTail` messages) at the
- * end word for word.
- *
- * Think's reference algorithm does the choosing and the prompt: it protects the
- * head, keeps tool calls with their results, and folds an existing summary into the
- * new one rather than summarising a summary. The call is made with the agent's own
- * model and key, through the same client a turn uses — so a WhatsApp session's
- * no-training rule holds for it too.
- *
- * Returns how many transcript messages the summary now stands for and what the call
- * cost, or null when there is nothing old enough to fold in yet.
+ * Summarise older messages into the overlay, keeping `head` messages and about
+ * `tailTokens` (at least `minTail`) verbatim, via Think's reference algorithm and the
+ * agent's own model and client. Returns messages covered and cost, or null.
  */
 export async function compact(
   host: SessionHost,
@@ -97,15 +82,8 @@ export async function compact(
 }
 
 /**
- * Compact before a turn when the last one ran close to the window.
- *
- * Measured by what the provider reported for the largest prompt of the previous turn
- * — system prompt, tools, parsed files and all — rather than by an estimate of the
- * words, and only a turn since the last compaction counts, so one oversized turn does
- * not summarise again before the smaller prompt has been measured.
- *
- * Never costs the turn its answer: a summary that fails is logged and the turn runs
- * on the history as it stands, exactly as it would have without compaction.
+ * Compact before a turn when the previous turn's largest reported prompt exceeded the
+ * threshold (once per compaction). A failed summary is logged and never costs the turn.
  */
 export async function maybeCompact(host: SessionHost, config: Config): Promise<void> {
   const threshold = host.settings().compact_after_tokens;

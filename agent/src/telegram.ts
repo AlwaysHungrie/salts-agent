@@ -22,9 +22,8 @@ export type TelegramMessage = {
   from?: { id: number; is_bot: boolean; first_name?: string; username?: string };
   entities?: { type: string; offset: number; length: number }[];
   /**
-   * The forum topic this message sits in. A topic behaves like a chat inside a chat,
-   * so this is the second half of what identifies a conversation. Absent in a plain
-   * group, and absent in a forum's "General" topic.
+   * The forum topic, the second half of a conversation's identity. Absent outside forums
+   * and in "General".
    */
   message_thread_id?: number;
   is_topic_message?: boolean;
@@ -37,11 +36,7 @@ export type TelegramMessage = {
     text?: string;
     caption?: string;
     from?: { id: number; is_bot: boolean; first_name?: string; username?: string };
-    /**
-     * Set when the "reply" is really the service message that opened a topic —
-     * Telegram hangs the first message of a topic off it. It names the topic, and it
-     * is not something anyone said, so it is a title rather than a quote.
-     */
+    /** Set when the reply target is the topic's opening service message: a title, not a quote. */
     forum_topic_created?: { name: string };
   };
   photo?: { file_id: string; file_size?: number; width: number; height: number }[];
@@ -98,11 +93,7 @@ export class Telegram {
     await this.call("deleteWebhook", { drop_pending_updates: true });
   }
 
-  /**
-   * What Telegram thinks the webhook is: where it points, how many updates are
-   * queued behind it, and why the last delivery failed. The fastest answer to "the
-   * bot is not replying".
-   */
+  /** Telegram's view of the webhook: target, queue and last error. */
   async webhookInfo(): Promise<{
     url: string;
     pending_update_count: number;
@@ -169,13 +160,7 @@ export class Telegram {
     if (!res.ok) throw new Error(`telegram sendPhoto: ${res.status} ${await res.text()}`);
   }
 
-  /**
-   * Send a voice note: one bubble with a waveform, not a file with a download button.
-   *
-   * `sendVoice` and not `sendAudio` — `sendAudio` is for music and shows a track, and
-   * Telegram only draws the waveform for Ogg Opus, which is the same container
-   * WhatsApp requires. See `VOICE_MIME` in channel.ts.
-   */
+  /** Send a voice note (`sendVoice`, not `sendAudio`): Ogg Opus shows as a waveform. */
   async sendVoice(chatId: string, bytes: ArrayBuffer, threadId?: number) {
     const form = new FormData();
     form.set("chat_id", chatId);
@@ -197,13 +182,7 @@ export class Telegram {
   }
 }
 
-/**
- * Split on paragraph, then line, then hard, so a reply breaks where it reads.
- *
- * Exported because WhatsApp has the same 4096-character ceiling and wants the same
- * breaks. It belongs in a module neither channel owns; it stays here until there is
- * a second thing to move with it.
- */
+/** Split on paragraph, then line, then hard. Shared with WhatsApp's same 4096 limit. */
 export function split(text: string): string[] {
   if (text.length <= MESSAGE_LIMIT) return [text || "…"];
   const chunks: string[] = [];
@@ -245,11 +224,7 @@ export function chatKey(message: TelegramMessage): string {
   return topic ? `${message.chat.id}:${topic}` : String(message.chat.id);
 }
 
-/**
- * The message being replied to, as a Markdown blockquote — who said it and what they
- * said, capped so a reply to a wall of text stays a quote. Empty when the message is
- * not a reply, or when what it replies to carried no words.
- */
+/** The replied-to message as a capped Markdown blockquote, or empty. */
 export function quotedText(message: TelegramMessage): string {
   const parent = message.reply_to_message;
   // In a forum, the first message of a topic "replies" to the service message that
@@ -263,11 +238,7 @@ export function quotedText(message: TelegramMessage): string {
   return lines.map((line) => `> ${line}`).join("\n");
 }
 
-/**
- * A message as the rest of the agent should read it: the quote it answers, then what
- * was actually said. The model gets the context it was missing, and the transcript
- * carries it too, so the browser can show the same thing.
- */
+/** A message as the agent reads it: the quoted context, then what was said. */
 export function messageTextWithQuote(message: TelegramMessage): string {
   const quote = quotedText(message);
   const text = messageText(message);
@@ -321,9 +292,8 @@ export function addressesBot(message: TelegramMessage, botUsername: string): boo
 }
 
 /**
- * One whitelist, as the config stores it: entries on their own lines, blank lines
- * ignored. `/pattern/` is a regular expression, tested against the whole candidate;
- * anything else is a plain, case-insensitive match with a leading @ ignored.
+ * Whitelist entries, one per line: `/pattern/` is a regex over the whole value; anything
+ * else is a case-insensitive match, leading @ ignored.
  */
 export function whitelistEntries(list: string): string[] {
   return list
@@ -357,11 +327,7 @@ export function allowedBy(list: string, candidates: (string | undefined)[]): boo
   });
 }
 
-/**
- * A conversation's name, for the sidebar. A topic is named after the topic, under the
- * group it lives in — Telegram only ever gives the topic's name on the service message
- * that opened it, so a session started mid-topic falls back to the topic's number.
- */
+/** A sidebar name. Topics are named after the topic when known, else its number. */
 export function chatTitle(message: TelegramMessage): string {
   const chat = message.chat;
   const topic = topicId(message);

@@ -3,13 +3,7 @@ import type { Env } from "../env";
 import type { SessionRegistry } from "../registry";
 import { deploymentSettings, type DeploymentSettings } from "../settings";
 
-/**
- * One agent's own store: its settings, its MCP servers, its memories, its sessions.
- *
- * Agents share nothing. Two agents are two Durable Objects, so one agent's bot token
- * and OpenRouter key are unreachable from the other, and a burst of traffic to one
- * queues on its object alone.
- */
+/** One agent's own store. Agents share nothing: separate objects, credentials and queues. */
 export function registry(env: Env, agentId: string) {
   return env.SessionRegistry.get(env.SessionRegistry.idFromName(agentId));
 }
@@ -20,12 +14,8 @@ export function directory(env: Env) {
 }
 
 /**
- * An agent's config, seeded from the deployment's defaults if this is its first read.
- *
- * Every route that wants a config goes through here rather than calling
- * `readConfig(env, reg)`, because the model a new agent starts on and the values its
- * columns start at are both deployment settings, and a route that skipped them would
- * seed the agent with nothing.
+ * An agent's config, seeded from the deployment's defaults on first read. Always go
+ * through here so a new agent is never seeded with nothing.
  */
 export async function readConfig(env: Env, reg: ReturnType<typeof registry>) {
   const settings = await deploymentSettings(env);
@@ -42,11 +32,7 @@ export async function writeConfig(
   return await reg.setConfig(patch, settings.default_model, settings.config_defaults);
 }
 
-/**
- * Push an agent's session count back into the directory, so the admin dashboard can
- * read every total out of one object. Called after a session is created or deleted —
- * both rare next to a turn — and never on the hot path.
- */
+/** Copy an agent's session count into the directory for admin stats. Off the hot path. */
 export async function syncSessionCount(env: Env, agentId: string) {
   const count = await registry(env, agentId).sessionCount();
   await directory(env).setSessionCount(agentId, count);

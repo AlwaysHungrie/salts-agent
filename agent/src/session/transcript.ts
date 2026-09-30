@@ -7,13 +7,8 @@ import { stepsOf, textOf } from "./format";
 import type { Attachment, PackedAttachment, SessionHost, Snapshot, TranscriptPage } from "./types";
 
 /**
- * A page of the transcript as the API serves it: Think's messages, plus what only
- * this agent knows — the files each question carried, and what each reply cost.
- *
- * Paged from the end, because that is the end a chat opens at. Each message costs
- * three extra SQL reads here (its usage row, its typed text, its attachments), so
- * a long session that returned whole would pay for its entire history on every
- * open. `before` walks backwards from the oldest message the client holds.
+ * A transcript page as the API serves it: Think's messages plus files and cost. Paged
+ * from the end; `before` walks back from the oldest message the client holds.
  */
 export async function transcriptPage(
   host: SessionHost,
@@ -25,9 +20,7 @@ export async function transcriptPage(
     (m) => m.role === "user" || m.role === "assistant"
   );
 
-  // `before` names the oldest message the caller already holds, so the window ends
-  // just before it. An id that is no longer in the transcript — a session reset
-  // under a stale scroll — falls back to the newest page rather than erroring.
+  // An unknown `before` id (e.g. after a reset) falls back to the newest page.
   const end = before ? visible.findIndex((m) => m.id === before) : -1;
   const upTo = end === -1 ? visible.length : end;
   const size = Math.max(1, Math.min(limit, max_message_page));
@@ -68,11 +61,7 @@ export async function transcriptPage(
   };
 }
 
-/**
- * What the message said, as a person wrote it: the file annotations the turn added
- * for the model are dropped, so the bubble and a forked draft read the way they did
- * when they were typed.
- */
+/** What the user typed, without the file notes added for the model. */
 export function spokenText(host: SessionHost, message: UIMessage): string {
   const typed = host.exec<{ text: string }>(
     `SELECT text FROM message_text WHERE message_id = ?`,
@@ -126,18 +115,15 @@ export async function exportTurns(host: SessionHost, count: number): Promise<Sna
 }
 
 /**
- * Replay a snapshot into this (empty) session. Attachment ids are kept, so the
- * copied messages still name their files, but the bytes are written into this
- * session's own workspace so deleting either side leaves the other intact.
+ * Replay a snapshot into this empty session. Attachment ids are kept but the bytes are
+ * copied, so either session can be deleted independently.
  */
 export async function importTurns(host: SessionHost, snapshot: Snapshot): Promise<void> {
   const carried = (snapshot.attachments ?? []).map((a) => [a, 1] as const);
   // Copied unsent (used = 0), so they show as chips and ride the next turn.
   const pending = (snapshot.pending ?? []).map((a) => [a, 0] as const);
 
-  // A fork copies the bytes rather than sharing them — either session can be
-  // deleted without taking the other's files — so it is charged for them like any
-  // other upload, and refused the same way when there is no room.
+  // Copied bytes are charged like an upload, and refused the same way when there is no room.
   const incoming = [...carried, ...pending].reduce((sum, [a]) => sum + (a.bytes ?? 0), 0);
   const { max_agent_bytes } = await host.settingsNow();
   if (incoming > 0 && incoming > (await host.registry().storageRoom(max_agent_bytes))) {

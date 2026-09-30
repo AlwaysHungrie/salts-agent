@@ -48,11 +48,7 @@ export function validateMcpBody(body: Record<string, unknown>): Partial<McpServe
   return patch;
 }
 
-/**
- * Names have to be distinct: a server's name is the prefix its tools reach the model
- * under, so two servers called the same thing would offer the model two different
- * tools under one name.
- */
+/** Server names must be distinct: they prefix the tool names the model sees. */
 export async function assertNameFree(
   reg: Registry,
   name: string,

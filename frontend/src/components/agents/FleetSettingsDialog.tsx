@@ -4,19 +4,9 @@ import { apiFetch } from "@/lib/identity";
 import { useEffect, useState } from "react";
 
 /**
- * A fleet's own settings: the document every agent in it is written from.
- *
- * Saving does not only change what the next agent is created holding. It is written
- * over every agent already in the fleet — their meta documents replaced, the
- * defaults applied over their own settings, including settings their users chose for
- * themselves. That is the point of a fleet setting and it is also the damage it can
- * do, so it is asked for twice: once as a save, once as a sentence saying how many
- * agents it lands on.
- *
- * The write is batched, a few agents per call, for the same reason deleting a fleet
- * is. The settings themselves are stored on the first call, so a run that stops
- * halfway has already changed what the fleet means — the agents behind the cursor
- * are the ones still holding the old document, and saving again finishes the job.
+ * A fleet's own settings. Saving overwrites every agent in the fleet (their meta and
+ * settings), so it asks for confirmation. Applied in batches; a partial run is
+ * finished by saving again.
  */
 export function FleetSettingsDialog({
   fleet,

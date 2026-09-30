@@ -3,13 +3,8 @@ import { Settings } from "lucide-react";
 import Link from "next/link";
 
 /**
- * One agent on the list, wherever it is drawn: on the page itself, or inside an
- * open fleet.
- *
- * Two different things put a row here, and they decide what the row offers. A user
- * opens the agent; an admin administers it. An admin who is not also on the access
- * list gets no door: the name is text, not a link, because the page behind it
- * answers them the same way it answers a stranger.
+ * One agent row, on the page or inside an open fleet. A user gets a link; an admin who is
+ * not on the access list gets plain text, since the agent page would refuse them.
  */
 export function AgentListRow({
   agent,
@@ -34,17 +29,8 @@ export function AgentListRow({
     .map((e) => e.trim())
     .filter(Boolean);
   /**
-   * The line under the name, and it answers a different question depending on who
-   * is reading it.
-   *
-   * To a member, their own address is not information — they know it — so the line
-   * says what the agent *is* instead: the fleet it belongs to, or that it is their
-   * own. Anyone else on it is still named, because that is the part they do not
-   * already know.
-   *
-   * To an administrator looking down a fleet, the addresses are the whole point:
-   * every agent in a fleet has the same name, and the member is the only thing that
-   * tells one from the next.
+   * The line under the name: to a member, the fleet or "your own" plus any other members;
+   * to an administrator, the members, which are what tell a fleet's agents apart.
    */
   const others = members.filter((e) => e.toLowerCase() !== email);
   const subtitle = isUser
@@ -78,9 +64,7 @@ export function AgentListRow({
       ) : (
         <div className="min-w-0 flex-1">{title}</div>
       )}
-      {/* Admin settings are the defaults behind the agent's own settings, so they
-          are reachable only from here — never from the agent's pages, where they
-          would read as one more setting. */}
+      {/* Admin settings are reachable only from here, never from the agent's own pages. */}
       {showMeta && isAdmin && (
         <button
           onClick={() => onMeta(agent)}

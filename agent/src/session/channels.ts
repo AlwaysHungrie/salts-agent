@@ -17,17 +17,8 @@ import { openTurn, spendBlocked } from "./turns";
 import type { Attachment, SessionHost } from "./types";
 
 /**
- * Post a reply to the chat this session belongs to, over whichever channel it came
- * in on. Best effort throughout: the turn is already in the transcript, so a chat
- * that cannot be reached must not turn a completed task into a failed one.
- *
- * The channel is decided by the session's `source` rather than by which credentials
- * happen to be filled in: an agent may have both channels on, and a WhatsApp chat id
- * posted to Telegram would land in whichever chat that number happens to name.
- *
- * Every way this can come to nothing is logged, and that is deliberate: nobody is
- * watching a scheduled task, the answer is already in the transcript, and a silent
- * no-send is the one failure this path cannot afford.
+ * Post a reply to this session's chat, over the channel named by its `source` (not by
+ * which credentials exist). Best effort, but every no-send is logged: nobody watches.
  */
 export async function deliverToChat(
   host: SessionHost,
@@ -76,18 +67,8 @@ export async function deliverToChat(
 }
 
 /**
- * Speak a note into this session's chat.
- *
- * Called by the `send_voice_note` tool, mid-turn, which is why every refusal here is
- * a thrown reason rather than a logged one: the model reads it as the tool's result
- * and can say something true to the user instead of promising audio that never
- * arrived.
- *
- * It asks the channel whether it does voice notes rather than asking which channel
- * it is, so the tool works on every channel that can carry one and on no channel
- * that cannot. The chat comes from the session's row and not from the message being
- * answered, so a note asked for by a scheduled task goes where an ordinary reply
- * would.
+ * Send a voice note to this session's chat, for the `send_voice_note` tool. Refusals are
+ * thrown so the model can tell the user; it asks the channel, not which channel it is.
  */
 export async function sendVoiceNote(host: SessionHost, bytes: Uint8Array): Promise<string> {
   const row = await host.registry().get(host.sessionId());
@@ -111,22 +92,9 @@ export async function sendVoiceNote(host: SessionHost, bytes: Uint8Array): Promi
 }
 
 /**
- * One message from a chat channel, answered.
- *
- * The same eight steps for every channel, because they were the same eight steps
- * when they were written twice: look busy, answer a command without a turn, check
- * the spend, take in what came attached, run, reply, send what was drawn, apologise
- * if it broke. What differs between Telegram and WhatsApp is held by the channel
- * object — see channel.ts — so nothing here branches on which one it is.
- *
- * The chat is a session like any other, so the turn is the turn the browser runs:
- * the same settings, tools, memory and transcript. What is different is the ends —
- * files arrive from the channel rather than from an upload, and the reply is posted
- * back rather than streamed.
- *
- * Who may talk is settled before this: the webhook checks the whitelist or the
- * configured number before a session exists, and these routes are only reachable
- * from it.
+ * Answer one chat-channel message: the same steps for every channel (typing, commands,
+ * spend check, files, turn, reply, drawn images, apology on failure). The webhook has
+ * already checked who may talk.
  */
 export async function channelTurn(
   host: SessionHost,
@@ -160,14 +128,8 @@ export async function channelTurn(
       input: [await openTurn(host, inbound.text, false, attached)],
     });
     if (host.turn.stoppedOnPurpose) {
-      // `!stop` has already said so in this chat, so this turn owes it nothing —
-      // not the half-answer to a question that was withdrawn, and least of all
-      // "that turn was cut short", which reads as a fault when it was an
-      // instruction. What it wrote is in the transcript either way.
-      //
-      // Read without looking at the status, because a turn cancelled before its
-      // first chunk reports `completed` with nothing in it. The flag is the only
-      // thing that tells a stop that was asked for from one that was not.
+      // `!stop` already answered in this chat, so this turn sends nothing. Checked regardless
+      // of status: a turn cancelled before its first chunk reports `completed`.
       return { ok: true };
     }
     if (result.status !== "completed") {
@@ -185,25 +147,19 @@ export async function channelTurn(
     await channel.sendText(target, reply || "(no reply)");
     // An image the agent drew during the turn is a file in a chat, not a link.
     await sendDrawn(host, channel, target, drawnBefore);
-    // Said as its own message rather than folded into the answer, so the model
-    // cannot paraphrase away the one thing the user has to do for the task to
-    // arrive. The window is open by definition here — they just wrote.
+    // Its own message, so the model cannot paraphrase away what the user must do.
     if (host.turn.scheduled && channel.scheduledNotice) {
       await channel.sendText(target, channel.scheduledNotice);
     }
     return { ok: true };
   } catch (err) {
-    // A chat that is out of reach for good takes no apology: on WhatsApp the send
-    // that would carry it is the send being refused. The answer is already in the
-    // transcript, and the browser can still read it.
+    // An unreachable chat gets no apology: that send would be refused too.
     const unreachable = channel.unreachable(err);
     if (unreachable) {
       console.warn(`${channel.id} unreachable for session ${host.name()}: ${unreachable}`);
       return { ok: false, skipped: unreachable };
     }
-    // The same one line the browser gets: a raw platform error names SQL statements
-    // and isolate resets, which is not an answer to someone who asked a question.
-    // `reportable` logs the whole thing and returns the sentence worth sending.
+    // One readable line, as the browser gets; `reportable` logs the full error.
     await channel
       .sendText(
         { ...target, replyTo: undefined },
@@ -217,19 +173,8 @@ export async function channelTurn(
 }
 
 /**
- * Pull what a message carried into the workspace, as though it had been uploaded:
- * the same rows, the same paths, the same capability checks, so the turn that
- * follows cannot tell the difference.
- *
- * The files are `ChannelFile`s and not any one channel's shape, so a channel that
- * learns to hand over inbound media gets all of this — the capability gates, the
- * storage ceiling, the PDF and audio handling — without a line here.
- *
- * Returns the ids it took in, and the turn that follows claims those rather than
- * whatever is pending. The pool is the session's, and two messages sent a second
- * apart are two turns running side by side inside one Durable Object: downloading
- * the second clip while the first turn is still opening is enough for one turn to
- * claim both files and answer both questions, which is what it did.
+ * Pull a message's files into the workspace as though uploaded (same rows, checks and
+ * ceiling). Returns their ids so this turn claims exactly these, not a concurrent turn's.
  */
 export async function ingestFiles(host: SessionHost, files: ChannelFile[]): Promise<string[]> {
   const taken: string[] = [];
@@ -245,9 +190,7 @@ export async function ingestFiles(host: SessionHost, files: ChannelFile[]): Prom
     if (!allowed) continue;
 
     const bytes = await file.read();
-    // The agent's ceiling applies to what arrives over a chat channel too. The file
-    // is dropped and the turn goes on with the text: the alternative is an agent
-    // that stops answering because somebody sent it a video.
+    // Over the storage ceiling the file is dropped and the turn goes on with the text.
     const maxAgentBytes = host.settings().max_agent_bytes;
     if (bytes.byteLength > (await host.registry().storageRoom(maxAgentBytes))) {
       console.warn(
@@ -277,11 +220,7 @@ export async function ingestFiles(host: SessionHost, files: ChannelFile[]): Prom
   return taken;
 }
 
-/**
- * Images created during this turn, sent to the chat as pictures rather than as the
- * links they are in the browser. A channel that cannot carry one sends nothing and
- * says nothing: the reply already describes what was drawn.
- */
+/** Send images drawn this turn as pictures; a channel that cannot carry one sends nothing. */
 export async function sendDrawn(
   host: SessionHost,
   channel: Channel,

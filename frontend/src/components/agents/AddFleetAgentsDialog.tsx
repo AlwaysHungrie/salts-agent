@@ -2,11 +2,7 @@ import type { AgentRow, FleetRow } from "@/lib/agent";
 import { apiFetch } from "@/lib/identity";
 import { useState } from "react";
 
-/**
- * Grow a fleet: addresses in, one agent each, created holding the fleet's own
- * settings rather than anything typed here. That is the whole point of it being a
- * fleet — an agent added in a year's time is the same agent as the first one.
- */
+/** Add agents to a fleet: one per address, created from the fleet's own settings. */
 export function AddFleetAgentsDialog({
   fleet,
   onClose,

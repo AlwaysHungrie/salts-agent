@@ -11,9 +11,8 @@ import { publicAttachment } from "./files";
 import { LiveTurns } from "./live";
 
 /**
- * A file the user attached, or an image the agent drew. The bytes live in the Think
- * workspace — a virtual filesystem the model reads with its own tools — and this row
- * is the metadata the UI needs to draw the file and the turn needs to name it.
+ * A file the user attached or an image the agent drew. Bytes live in the workspace; this
+ * row is what the UI and the turn need.
  */
 export type Attachment = {
   id: string;
@@ -47,9 +46,8 @@ export type Snapshot = {
 };
 
 /**
- * One segment of an assistant turn, in the order it happened — what it said, and the
- * tools it ran between saying things. Derived from Think's message parts on read
- * rather than stored, so the transcript stays the framework's to own.
+ * One segment of an assistant turn: text, or the tools run between texts. Derived from
+ * Think's message parts, not stored.
  */
 export type TurnStep =
   { kind: "text"; text: string } | { kind: "tools"; tools: { name: string; ok: boolean }[] };
@@ -108,17 +106,9 @@ export function emptyUsage(): TurnUsage {
 }
 
 /**
- * What running turns have done that later code needs to know.
- *
- * `running` counts turns in flight (two messages a second apart are two turns in one
- * object) so `!stop` can say whether it stopped anything. It is approximate: a turn
- * that dies before `onChatResponse` leaves its count, and `!stop`/`!unstick` zero it.
- *
- * `stoppedOnPurpose` is set by `!stop` and cleared when the next question opens a turn,
- * so an aborted turn can tell a requested stop (already answered) from a failure.
- *
- * `scheduled` says the running turn scheduled a task; WhatsApp owes the user a note
- * about its 24-hour window whenever one is made.
+ * What running turns have done that later code needs. `running` counts turns in flight
+ * (approximate; `!stop`/`!unstick` zero it). `stoppedOnPurpose` marks a requested stop
+ * until the next question. `scheduled`: WhatsApp owes a 24-hour-window note.
  */
 export type TurnState = { running: number; stoppedOnPurpose: boolean; scheduled: boolean };
 

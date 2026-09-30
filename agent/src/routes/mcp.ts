@@ -59,9 +59,8 @@ type McpCall = {
   agentId: string;
   reg: ReturnType<typeof registry>;
   /**
-   * Whether this call may change *which* servers the agent has (add, repoint, remove).
-   * That is a meta setting; `?meta=1` is the admin dialog that owns it. Using a server
-   * the agent already has is never refused.
+   * Whether this call may change which servers exist: the `user_servers` meta setting,
+   * or `?meta=1` from the admin dialog. Using existing servers is never refused.
    */
   manages: () => Promise<boolean>;
 };
@@ -120,9 +119,8 @@ async function listServers({ env, url, reg, manages }: McpCall): Promise<Respons
     servers: servers.map((row) => mcpView(row, reveal)),
     // Shown on the page: a provider may ask for it when registering by hand.
     redirect_uri: redirectUri(url.origin),
-    // The admin settings the list has to draw, sent here because `/meta` is admin-only.
-    // `templates` narrows the catalogue (empty is all); an agent's own catalogue
-    // replaces the deployment's.
+    // Sent here because `/meta` is admin-only. Empty `templates` offers all; the agent's
+    // own catalogue replaces the deployment's.
     templates: mcp.templates,
     catalog: mcp.catalog.length ? mcp.catalog : settings.mcp_catalog,
     user_servers: mcp.user_servers,

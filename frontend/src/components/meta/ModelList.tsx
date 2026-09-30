@@ -2,17 +2,8 @@ import type { ModelChoice, ModelOption } from "@/lib/agent";
 import { useState } from "react";
 
 /**
- * The models an agent may be switched between: an OpenRouter id each, and whether
- * that model can be sent an image.
- *
- * Not `IdList`, because an id is not the whole answer. Nothing here can look up
- * whether an arbitrary OpenRouter model is multimodal, so whoever adds it has to say,
- * and the checkbox beside the box is where they say it. Unticked by default: most
- * models take images, and the ones that do not are the exception worth marking.
- *
- * The suggestions are the models this deployment already names, and they bring their
- * own answer with them — nobody should have to remember which of the shipped models
- * is text-only.
+ * Models an agent may use, each with a "no images" flag that whoever adds it sets.
+ * Suggestions are the deployment's models, which bring their own flag.
  */
 export function ModelList({
   value,

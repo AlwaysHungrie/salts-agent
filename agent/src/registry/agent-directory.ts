@@ -58,24 +58,16 @@ import type {
 } from "./types";
 
 /**
- * The list of agents, in one well-known Durable Object.
- *
- * Same reason the session index exists: a Durable Object namespace can be addressed
- * by name but not enumerated, so "which agents exist" has to be written down
- * somewhere. This holds names only — everything an agent *is* lives in its own
- * `SessionRegistry`, which is why deleting an agent is two steps, not one.
+ * The index of agents, in one well-known Durable Object (namespaces cannot be
+ * enumerated). Everything an agent holds lives in its own `SessionRegistry`.
  */
 
 export class AgentDirectory extends DurableObject {
   private ready = false;
 
   /**
-   * The deployment-wide directory tables. Ladder in `AGENT_DIRECTORY_MIGRATIONS`.
-   *
-   * `migrate()` still runs after it, and still keeps its own `schema_version` row: it
-   * guards a data backfill that predates this ladder, and renumbering it against the
-   * ladder's version would mean deciding what an already-written `1` meant. Leaving
-   * the two counters separate costs one extra table and no ambiguity.
+   * The directory's tables. `migrateMembership` keeps its own `schema_version` for a
+   * backfill that predates the ladder.
    */
   private ensureSchema() {
     if (this.ready) return;
@@ -84,38 +76,15 @@ export class AgentDirectory extends DurableObject {
     this.ready = true;
   }
 
-  /**
-   * Every agent, or — given an email — only the ones that address may open.
-   *
-   * Two ways onto the list, and both are an index lookup: the address administers the
-   * agent, or it is one of the agent's members. An admin sees the agent they made
-   * whether or not they are also on its access list — administering one you cannot
-   * open is the ordinary case now that the two are separate.
-   *
-   * The match is exact on both sides. Addresses are stored already lowercased and
-   * trimmed, by `normalizeEmails` on the way in, so there is nothing to normalize
-   * here beyond the address being asked about.
-   */
+  /** Every agent, or those `email` administers or is a member of (two indexed lookups). */
   list(email?: string): AgentRow[] {
     this.ensureSchema();
     return listAgents(this.ctx.storage, email);
   }
 
   /**
-   * One page of the agents `email` sees on the home page, excluding the agents
-   * inside fleets it administers.
-   *
-   * Those are left out because a fleet is read as a fleet: it is listed once, by
-   * name and size, and its agents are only fetched when it is opened. Pouring a
-   * thousand of them into this page would push everything else off the end of a
-   * list that is meant to be a handful of doors.
-   *
-   * What is never left out is an agent you are a *member* of, fleet or not. To its
-   * member it is simply their agent — the fleet is how it is administered, which is
-   * a different matter — and an agent somebody has to go looking for inside a
-   * collapsed fleet is one they will assume was never made. That includes a fleet
-   * you administer yourself and put your own address in: it shows up here as yours,
-   * and again inside the fleet as one of its agents, because it is both.
+   * One home-page page of agents `email` sees: those it administers outside its fleets,
+   * plus every agent it is a member of, fleet or not (fleets are listed separately).
    */
   listPage(email: string, limit = 0, cursor = "", filter?: MetadataFilter): AgentPage {
     this.ensureSchema();
@@ -137,13 +106,7 @@ export class AgentDirectory extends DurableObject {
     return setAgentGuests(this.ctx.storage, id, guests, guestEmails);
   }
 
-  /**
-   * The fleets `email` administers, each with the number of agents in it.
-   *
-   * Not paged. A fleet is one create call, so this is a list of decisions somebody
-   * made by hand — tens of rows where the agents under them are thousands — and it
-   * is the counts, not the agents, that this page is built from.
-   */
+  /** Fleets `email` administers, with agent counts. Not paged: tens of rows at most. */
   listFleets(email: string): FleetRow[] {
     this.ensureSchema();
     return listFleets(this.ctx.storage, email);
@@ -182,12 +145,8 @@ export class AgentDirectory extends DurableObject {
   }
 
   /**
-   * `adminEmail` is the address that made the agent. It is the only time it is ever
-   * written: there is no route that changes it, because an agent whose administrator
-   * can be handed over is one that can be taken.
-   *
-   * It falls back to the first address on the access list, which is what an unguarded
-   * deployment — where there is no signed-in caller to name — has to go on.
+   * Create an agent. `adminEmail` is written only here and never changes, falling back to
+   * the first listed address when no caller is known.
    */
   create(
     id: string,
@@ -201,12 +160,7 @@ export class AgentDirectory extends DurableObject {
     return createAgent(this.ctx.storage, id, name, allowedEmails, adminEmail, fleet, metadata);
   }
 
-  /**
-   * Replace the access list. The caller keeps their own address on it: a user who
-   * could edit themselves out would lock everyone, themselves included, out of an
-   * agent that only they could have unlocked. The admin is untouched either way —
-   * it is not part of this list and is never rewritten.
-   */
+  /** Replace the access list; the admin is separate and untouched. */
   setAllowedEmails(id: string, allowedEmails: string) {
     this.ensureSchema();
     return setAllowedEmails(this.ctx.storage, id, allowedEmails);
@@ -218,18 +172,8 @@ export class AgentDirectory extends DurableObject {
   }
 
   /**
-   * Note that an agent was used, at most once every `TOUCH_INTERVAL`.
-   *
-   * This runs on every message, and it is the only *write* the hot path makes to the
-   * directory — one object, one thread, for the whole deployment. A row write is also
-   * about a thousand times the cost of a row read, so skipping the ones that would
-   * change nothing anybody can see is the cheapest win available here.
-   *
-   * Nothing is lost by coarsening it. `list()` orders agents by `created_at`, so this
-   * column decides no ordering at all; it is the "last used" date the home page
-   * shows, and a few minutes of lag in a date is invisible. Session ordering is a
-   * different column in a different object — `SessionRegistry.touch` — and is left
-   * exact, because the sidebar really does reorder on it after every turn.
+   * Record that an agent was used, at most every `TOUCH_INTERVAL`: this is the only hot-path
+   * write to the single directory object, and it only feeds a "last used" date.
    */
   touch(id: string) {
     this.ensureSchema();
@@ -237,12 +181,8 @@ export class AgentDirectory extends DurableObject {
   }
 
   /**
-   * The deployment's own knobs, complete — or `SettingsIncompleteError` naming what
-   * is not set yet. There are no shipped values to fill a gap with; see `settings.ts`.
-   *
-   * Every other object reads this through `deploymentSettings` in `settings.ts`,
-   * which caches it per isolate — this method is one RPC hop and gets called on paths
-   * that run per turn.
+   * The deployment settings, complete, or `SettingsIncompleteError`. Other objects read
+   * them through the cached `deploymentSettings`.
    */
   settings(): DeploymentSettings {
     this.ensureSchema();
@@ -256,17 +196,8 @@ export class AgentDirectory extends DurableObject {
   }
 
   /**
-   * Merge a patch into the stored document and return it, with what is still unset.
-   *
-   * Validation happens here rather than in the route so the stored document cannot be
-   * made invalid by any caller, and so the merge and the cross-field checks
-   * (`message_page` against `max_message_page`) see the same state.
-   *
-   * A rejection comes back as `{ error }` rather than as a throw. A thrown
-   * `SettingsError` crossing a Durable Object RPC boundary arrives at the Worker as a
-   * plain `Error`, so the route could not tell a value it should answer 400 for from a
-   * failure it should answer 500 for — and answering 500 to "that number is too big"
-   * is the difference between a dialog that can be corrected and one that looks broken.
+   * Validate and merge a settings patch. A rejection is returned as `{ error }`, not
+   * thrown: a thrown error crosses RPC as a plain `Error` and the route could not answer 400.
    */
   setSettings(patch: unknown): { settings: StoredSettings; missing: string[] } | { error: string } {
     this.ensureSchema();
@@ -283,21 +214,15 @@ export class AgentDirectory extends DurableObject {
   }
 
   /**
-   * How many agents `email` may administer — itself included.
-   *
-   * The deployment's `default_agent_limit` unless the owner has raised this one
-   * account, which is what `account_limits` holds: absence is the ordinary case.
+   * How many agents `email` may administer: its `account_limits` row, else the
+   * deployment's `default_agent_limit`.
    */
   getAgentLimit(email: string): number {
     this.ensureSchema();
     return getAgentLimit(this.ctx.storage, email);
   }
 
-  /**
-   * Set how many agents `email` may administer. This is what "business account" is:
-   * there is no separate flag, only a raised ceiling — a row here at all is the mark
-   * of one. Only ever called from the owner's own admin route.
-   */
+  /** Set `email`'s agent ceiling. A business account is just a row here; owner route only. */
   setAgentLimit(email: string, limit: number) {
     this.ensureSchema();
     return setAgentLimit(this.ctx.storage, email, limit);
@@ -309,11 +234,7 @@ export class AgentDirectory extends DurableObject {
     return countByAdmin(this.ctx.storage, email);
   }
 
-  /**
-   * The whole admin dashboard in one query: how many accounts, agents and sessions
-   * the deployment holds. Sessions come from the cached per-agent counter rather
-   * than from the session registries, which is what keeps this to a single read.
-   */
+  /** Deployment-wide counts in one query; sessions come from the cached per-agent counter. */
   counts(): {
     users: number;
     agents: number;
@@ -326,11 +247,8 @@ export class AgentDirectory extends DurableObject {
   }
 
   /**
-   * One page of every address the deployment knows — each admin and each member — in
-   * email order, narrowed to those containing `query` when there is one. Admin CLI only.
-   *
-   * `cursor` is the last email of the previous page: the list is keyed on the address
-   * itself, so a user added mid-scroll cannot make a page skip or repeat a row.
+   * A page of every known address (admins and members) in email order, optionally filtered.
+   * The cursor is the last email, so additions mid-scroll cannot skip or repeat rows.
    */
   listUsers(limit = 20, cursor = "", query = ""): UserPage {
     this.ensureSchema();
@@ -388,12 +306,8 @@ export class AgentDirectory extends DurableObject {
   }
 
   /**
-   * One page of open requests, oldest first, each carrying what the owner needs to
-   * decide: the limit it would raise and how many agents that account already runs.
-   *
-   * Paged rather than returned whole because the queue has no ceiling — anyone signed
-   * in can file one. `cursor` is keyset on `created_at`, with `id` breaking ties, so a
-   * request filed mid-scroll cannot make the page skip or repeat a row.
+   * A page of open requests, oldest first, with each account's current limit and agent
+   * count. Keyset cursor on `created_at:id`.
    */
   listBusinessRequests(limit = 20, cursor = ""): BusinessRequestPage {
     this.ensureSchema();
@@ -407,9 +321,8 @@ export class AgentDirectory extends DurableObject {
   }
 
   /**
-   * Grant a request: fold its increase into the account's limit, then remove it from
-   * the queue. Undefined when the request is already gone — resolved, or raced by a
-   * second click — so the route can tell the caller nothing happened.
+   * Grant a request: add its increase to the account's limit and dequeue it. Undefined
+   * when it is already gone (resolved, or a double click).
    */
   approveBusinessRequest(id: string): { email: string; agent_limit: number } | undefined {
     this.ensureSchema();

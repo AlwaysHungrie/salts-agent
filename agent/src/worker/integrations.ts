@@ -19,12 +19,8 @@ export async function webhookSecret(token: string): Promise<string> {
 }
 
 /**
- * Ask OpenRouter whether a key works.
- *
- * Worth a round trip because the failure mode moved: a key used to be the operator's
- * Worker secret, and is now something a user pastes into a form. Without this the
- * first sign of a typo is a chat that answers nothing, with the 401 buried inside a
- * stream error. Best effort, like the webhook check — the save already happened.
+ * Check an OpenRouter key when it is pasted, so a typo shows now rather than as a silent
+ * chat. Best effort: the save has already happened.
  */
 export async function checkOpenrouterKey(
   key: string
@@ -45,9 +41,8 @@ export async function checkOpenrouterKey(
 }
 
 /**
- * Point the bot at this Worker, or unhook it when the capability is switched off.
- * Best effort: a bad token is reported back to the settings page, not thrown, because
- * the rest of the save has already happened.
+ * Point the bot at this Worker, or unhook it when Telegram is off. Errors are reported,
+ * not thrown; the save has already happened.
  */
 export async function syncWebhook(
   config: Config,
@@ -75,16 +70,8 @@ export async function syncWebhook(
 }
 
 /**
- * Subscribe this agent's Meta app to its WhatsApp Business Account, so deliveries
- * reach the callback URL at all.
- *
- * Meta has no API for setting the callback URL — that is pasted in by hand — but the
- * account-level subscription behind it does have one, and it is the step that costs
- * people an evening: everything looks configured and no webhook ever arrives. So it
- * happens on every save, like Telegram's `setWebhook`, rather than in a curl the
- * setup guide has to teach.
- *
- * Best effort, and reported rather than thrown: the settings are already saved.
+ * Subscribe the agent's Meta app to its Business Account on every save (the callback URL
+ * is pasted by hand; this half is the step people miss). Reported, not thrown.
  */
 export async function syncWhatsappSubscription(
   config: Config,
@@ -100,13 +87,7 @@ export async function syncWhatsappSubscription(
   }
 }
 
-/**
- * Ask a server what it can do, and cache the answer on its row.
- *
- * This is what turns a URL into usable tools, so it runs on save, after an OAuth
- * connection, and whenever the user asks for a refresh. A failure is recorded rather
- * than thrown: the card shows why, and the server stays editable.
- */
+/** List a server's tools and cache them on its row. Failures are recorded on the card. */
 export async function syncMcpTools(reg: Registry, row: McpServerRow): Promise<McpServerRow> {
   if (!mcpServerReady(row)) {
     return (await reg.updateMcpServer(row.id, { tools_json: "", last_error: "" })) ?? row;

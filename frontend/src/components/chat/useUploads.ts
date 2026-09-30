@@ -12,13 +12,8 @@ const filesUrl = (sessionId: string) =>
   `/api/sessions/${encodeURIComponent(sessionId)}/files`;
 
 /**
- * The composer's attachments: the ones the session holds for the next turn, the ones
- * still uploading, and what went wrong.
- *
- * Uploads go one at a time (several large files at once overwhelm the Worker), but
- * every pick gets its card up front. A pick can be cancelled at any point; a cancel
- * that races a landed upload may leave the Worker holding a file the strip does not,
- * which `reconcileIfNeeded` clears before the next send.
+ * The composer's attachments: held, uploading, and errors. Uploads run one at a time but
+ * every pick shows at once; cancels that race a landed upload are cleaned up before send.
  */
 export function useUploads(sessionId: string, limits: ClientLimits | null) {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -63,9 +58,8 @@ export function useUploads(sessionId: string, limits: ClientLimits | null) {
   };
 
   /**
-   * Drop anything the Worker holds for the next turn that the strip does not. An
-   * aborted request can still finish storing its file after the browser stopped
-   * listening, and that row would otherwise ride along with the next message.
+   * Delete files the Worker holds that the strip does not (an aborted upload can still
+   * land), so they do not ride along with the next message.
    */
   const reconcilePending = async (accepted: string[] = []) => {
     try {

@@ -10,10 +10,8 @@ export function inWords(items: string[]): string {
 }
 
 /**
- * What a failure may say in a chat bubble. The raw error can be a provider payload of
- * many thousands of characters — a schema dump with a whole parsed document inside it —
- * and pasting that at someone tells them nothing while burying the reply. The full text
- * goes to the log, where it can be read; the chat gets one line.
+ * One chat-safe line for a failure (the raw error can be a huge provider payload); the
+ * full text goes to the log.
  */
 export function reportable(error: unknown, session: string): string {
   const raw = error instanceof Error ? error.message : String(error);
@@ -44,11 +42,8 @@ export function reportable(error: unknown, session: string): string {
 }
 
 /**
- * What to say in the chat when a turn does not complete. The status says what kind of
- * failure it was, and Think's own error says why — worth passing on, because the two
- * cases want opposite things from the user: an aborted or errored turn is worth
- * retrying, while a turn that never ran is a session to reset, and "try again" sends
- * someone in a loop.
+ * What the chat says when a turn does not complete. The status and Think's error
+ * distinguish "try again" from "reset this session" and from provider refusals.
  */
 export function turnFailure(status: string, error?: string): string {
   const why = error ? ` (${reportable(error, "turn")})` : "";
@@ -74,9 +69,8 @@ export function textOf(message: UIMessage | undefined): string {
 }
 
 /**
- * How a turn unfolded, read back off the message Think stored: text it wrote, and the
- * tools it ran between writing. A tool part carries its own outcome, so a failed tool
- * still draws as a failed line when the session is reopened.
+ * The turn's text and tool steps, read back off Think's stored message (a failed tool
+ * keeps its outcome).
  */
 export function stepsOf(message: UIMessage): TurnStep[] {
   const steps: TurnStep[] = [];
