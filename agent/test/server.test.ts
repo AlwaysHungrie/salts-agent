@@ -568,7 +568,7 @@ describe("the model catalog", () => {
   });
 });
 
-describe("salts-web repointing the SearXNG URL", () => {
+describe("salts-tools repointing the SearXNG URL", () => {
   const TOKEN = "a".repeat(64);
 
   /** An agent whose SearXNG token is `TOKEN`, and the member who owns it. */
@@ -631,5 +631,112 @@ describe("salts-web repointing the SearXNG URL", () => {
     const { id } = await agentWithToken();
     expect((await repoint(id, "javascript:alert(1)", TOKEN)).status).toBe(400);
     expect((await repoint(id, "not a url", TOKEN)).status).toBe(400);
+  });
+});
+
+describe("salts-tools pointing an MCP server at the tunnel", () => {
+  const TOKEN = "c".repeat(64);
+
+  async function agentWithToken() {
+    const member = someone("member");
+    const { body } = await createAgent(member);
+    await SELF.fetch(
+      `${BASE}/api/agents/${body.id}/config`,
+      as(member, { method: "PATCH", body: JSON.stringify({ searxng_token: TOKEN }) })
+    );
+    return { member, id: body.id as string };
+  }
+
+  function point(id: string, body: unknown, token = TOKEN) {
+    return SELF.fetch(`${BASE}/searxng/${id}/mcp`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: JSON.stringify(body),
+    });
+  }
+
+  type View = {
+    name: string;
+    url: string;
+    auth: string;
+    headers: Record<string, string>;
+    tools: unknown[];
+  };
+  async function servers(member: string, id: string): Promise<View[]> {
+    const res = await SELF.fetch(`${BASE}/api/agents/${id}/mcp`, as(member));
+    return ((await res.json()) as { servers: View[] }).servers;
+  }
+
+  it("creates the server with the token as its bearer, and lists its tools", async () => {
+    const { member, id } = await agentWithToken();
+    const res = await point(id, { name: "matchmaker", url: "https://mcp.test/matchmaker/mcp" });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { created: boolean }).created).toBe(true);
+    const [server] = await servers(member, id);
+    expect(server.name).toBe("matchmaker");
+    expect(server.url).toBe("https://mcp.test/matchmaker/mcp");
+    expect(server.auth).toBe("headers");
+    expect(server.headers.Authorization).toBe(`Bearer ${TOKEN}`);
+    expect(server.tools.length).toBeGreaterThan(0);
+  });
+
+  it("repoints the server it created, keeping headers added since", async () => {
+    const { member, id } = await agentWithToken();
+    await point(id, { name: "matchmaker", url: "https://mcp.test/old/mcp" });
+    const list = (await (await SELF.fetch(`${BASE}/api/agents/${id}/mcp`, as(member))).json()) as {
+      servers: { id: string }[];
+    };
+    await SELF.fetch(
+      `${BASE}/api/agents/${id}/mcp/${list.servers[0].id}`,
+      as(member, {
+        method: "PATCH",
+        body: JSON.stringify({
+          headers: { Authorization: `Bearer ${TOKEN}`, "X-OpenRouter-Api-Key": "sk-or-test" },
+        }),
+      })
+    );
+    const res = await point(id, { name: "matchmaker", url: "https://mcp.test/new/mcp" });
+    expect(res.status).toBe(200);
+    const [server] = await servers(member, id);
+    expect(server.url).toBe("https://mcp.test/new/mcp");
+    expect(server.headers["X-OpenRouter-Api-Key"]).toBe("sk-or-test");
+  });
+
+  it("leaves a same-named server alone when it does not use this token", async () => {
+    const { member, id } = await agentWithToken();
+    await SELF.fetch(
+      `${BASE}/api/agents/${id}/mcp`,
+      as(member, {
+        method: "POST",
+        body: JSON.stringify({
+          name: "matchmaker",
+          url: "https://mcp.test/theirs/mcp",
+          auth: "headers",
+          headers: { Authorization: "Bearer someone-else" },
+        }),
+      })
+    );
+    const res = await point(id, { name: "matchmaker", url: "https://evil.example/mcp" });
+    expect(res.status).toBe(409);
+    expect((await servers(member, id))[0].url).toBe("https://mcp.test/theirs/mcp");
+  });
+
+  it("refuses a wrong token", async () => {
+    const { member, id } = await agentWithToken();
+    const res = await point(
+      id,
+      { name: "matchmaker", url: "https://mcp.test/mcp" },
+      "d".repeat(64)
+    );
+    expect(res.status).toBe(401);
+    expect(await servers(member, id)).toEqual([]);
+  });
+
+  it("refuses a URL that is not https, and a name that is not a slug", async () => {
+    const { id } = await agentWithToken();
+    expect((await point(id, { name: "matchmaker", url: "http://mcp.test/mcp" })).status).toBe(400);
+    expect((await point(id, { name: "Match Maker", url: "https://mcp.test/mcp" })).status).toBe(
+      400
+    );
   });
 });

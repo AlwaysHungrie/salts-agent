@@ -1,0 +1,54 @@
+{
+  "name": "Arjun Mehta",
+  "email": "arjun.mehta@example.com",
+  "phone": "+91 99887 76655",
+  "location": "Bengaluru",
+  "current_title": "Staff Software Engineer",
+  "roles": [
+    {
+      "title": "Staff Software Engineer",
+      "company": "Streamly",
+      "start": "2021-06",
+      "end": "present",
+      "highlights": [
+        "Owns event pipeline on Apache Kafka processing 2B events/day",
+        "Python and Go services on AWS EKS"
+      ]
+    },
+    {
+      "title": "Software Engineer",
+      "company": "Tapcab",
+      "start": "2017-07",
+      "end": "2021-05",
+      "highlights": [
+        "Built dispatch APIs in Python/Flask",
+        "Migrated MySQL to Aurora on AWS"
+      ]
+    }
+  ],
+  "skills": [
+    "Python",
+    "Go",
+    "k8s",
+    "AWS",
+    "kafka",
+    "Flask",
+    "MySQL",
+    "gRPC"
+  ],
+  "education": [
+    "B.Tech CSE, NIT Trichy, 2017"
+  ],
+  "certifications": [],
+  "industries": [
+    "Media",
+    "Mobility"
+  ],
+  "notice_period_days": 60,
+  "current_ctc": null,
+  "expected_ctc": null,
+  "languages": [
+    "English"
+  ],
+  "summary": "Software engineer working on Python and Go services and Kafka event pipelines on AWS. Previously built dispatch APIs for a ride-hailing company."
+}

@@ -1,0 +1,34 @@
+{
+  "id": "j3_data_scientist",
+  "expected_top": [
+    "c07_vikram_rao",
+    "c08_sara_khan"
+  ],
+  "jd_text": "Data Scientist - NLP\nHealthStack builds AI tools for hospitals. We need a Data Scientist to work on clinical language models.\n\nYou will:\n- Build and evaluate NLP and machine learning models on clinical text\n- Train and fine-tune deep learning models\n- Deploy models with the engineering team\n\nRequired:\n- 3+ years in data science or machine learning\n- Python and machine learning fundamentals\n- Experience with NLP\nPreferred:\n- PyTorch or TensorFlow\n- Hugging Face transformers\n- SQL, Spark\n- Healthcare domain\n\nLocation: Hyderabad or fully remote.\n",
+  "requirements": {
+    "title": "Data Scientist",
+    "must_have_skills": [
+      "Python",
+      "Machine Learning",
+      "NLP"
+    ],
+    "nice_to_have_skills": [
+      "PyTorch",
+      "TensorFlow",
+      "Hugging Face",
+      "SQL",
+      "Spark"
+    ],
+    "min_years": 3,
+    "max_years": null,
+    "locations": [
+      "Hyderabad"
+    ],
+    "remote_ok": true,
+    "industries": [
+      "Healthcare"
+    ],
+    "dealbreakers": [],
+    "summary": "Data scientist building NLP and ML models on clinical text."
+  }
+}

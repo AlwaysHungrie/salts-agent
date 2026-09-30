@@ -1,0 +1,38 @@
+{
+  "name": "Tanvi Patil",
+  "email": "tanvi.patil@example.com",
+  "phone": "+91 94444 55566",
+  "location": "Pune",
+  "current_title": "QA Automation Engineer",
+  "roles": [
+    {
+      "title": "QA Automation Engineer",
+      "company": "Finlytics",
+      "start": "2021-07",
+      "end": "present",
+      "highlights": [
+        "Built Selenium and pytest suite of 1,200 tests",
+        "Added API tests to CI/CD pipeline"
+      ]
+    }
+  ],
+  "skills": [
+    "Selenium",
+    "pytest",
+    "Python",
+    "Postman",
+    "Jenkins"
+  ],
+  "education": [],
+  "certifications": [],
+  "industries": [
+    "Fintech"
+  ],
+  "notice_period_days": 30,
+  "current_ctc": null,
+  "expected_ctc": null,
+  "languages": [
+    "English"
+  ],
+  "summary": "QA automation engineer building Selenium and pytest suites for a fintech product."
+}

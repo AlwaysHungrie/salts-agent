@@ -1,0 +1,37 @@
+{
+  "name": "Nikhil Reddy",
+  "email": "nikhil.reddy@example.com",
+  "phone": "+91 96666 77788",
+  "location": "Hyderabad",
+  "current_title": "iOS Developer",
+  "roles": [
+    {
+      "title": "iOS Developer",
+      "company": "FitTrack",
+      "start": "2020-02",
+      "end": "present",
+      "highlights": [
+        "Shipped SwiftUI rewrite of workout app, 4.8 star rating",
+        "Integrated HealthKit"
+      ]
+    }
+  ],
+  "skills": [
+    "Swift",
+    "SwiftUI",
+    "Objective-C",
+    "Xcode"
+  ],
+  "education": [],
+  "certifications": [],
+  "industries": [
+    "Health"
+  ],
+  "notice_period_days": 45,
+  "current_ctc": null,
+  "expected_ctc": null,
+  "languages": [
+    "English"
+  ],
+  "summary": "iOS developer building fitness apps in Swift and SwiftUI."
+}

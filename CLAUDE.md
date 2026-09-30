@@ -47,6 +47,8 @@
 - `agent/` — agent code
 - `frontend/` — Next.js app (pnpm)
 - `app-experiments/socratic-salt/` — Next.js app (pnpm): public challenge agents on the same Worker
+- `salts-tools/` — laptop CLI: runs local services behind one ngrok tunnel, pushes their URLs to the agent
+- `local-mcps/` — MCP servers salts-tools runs (`matchmaker-mcp`, Python/uv)
 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence

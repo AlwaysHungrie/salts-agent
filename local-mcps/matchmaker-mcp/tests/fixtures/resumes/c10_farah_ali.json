@@ -1,0 +1,50 @@
+{
+  "name": "Farah Ali",
+  "email": "farah.ali@example.com",
+  "phone": "+91 98989 12121",
+  "location": "Bengaluru",
+  "current_title": "DevOps Engineer",
+  "roles": [
+    {
+      "title": "DevOps Engineer",
+      "company": "PayWave",
+      "start": "2021-01",
+      "end": "present",
+      "highlights": [
+        "Built GitHub Actions CI/CD for 80 services",
+        "Terraform modules for AWS networking"
+      ]
+    },
+    {
+      "title": "Build Engineer",
+      "company": "Mindtree",
+      "start": "2019-01",
+      "end": "2020-12",
+      "highlights": [
+        "Maintained Jenkins and Docker builds"
+      ]
+    }
+  ],
+  "skills": [
+    "k8s",
+    "terraform",
+    "AWS",
+    "Docker",
+    "GitHub Actions",
+    "Python"
+  ],
+  "education": [
+    "B.Tech CSE, 2018"
+  ],
+  "certifications": [],
+  "industries": [
+    "Fintech"
+  ],
+  "notice_period_days": 30,
+  "current_ctc": null,
+  "expected_ctc": null,
+  "languages": [
+    "English"
+  ],
+  "summary": "DevOps engineer building CI/CD and Terraform infrastructure on AWS."
+}

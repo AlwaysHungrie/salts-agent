@@ -14,7 +14,8 @@ agent/         Cloudflare Worker + Durable Objects (the agent itself)
 frontend/      Next.js web app: chat, settings, capabilities, fleets, and the user guide at /guide
 landing-page/  Next.js marketing site
 admin-cli/     Owner dashboard: counts, users, limit requests, deployment settings + their defaults
-salts-web/     Optional: self-hosted SearXNG web search for an agent, tunnelled from a laptop
+salts-tools/   Optional: local services for an agent (SearXNG, local MCPs) behind one tunnel from a laptop
+local-mcps/    MCP servers salts-tools runs locally (matchmaker-mcp)
 infra/vercel/  Terraform for the two Vercel projects
 scripts/       Cloudflare cost queries (cost.sh, settle.sh)
 docs/          Architecture, infrastructure, costs, MCP catalogue, WhatsApp setup

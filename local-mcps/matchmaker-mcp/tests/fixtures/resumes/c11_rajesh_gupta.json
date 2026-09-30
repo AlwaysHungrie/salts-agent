@@ -1,0 +1,54 @@
+{
+  "name": "Rajesh Gupta",
+  "email": "rajesh.gupta@example.com",
+  "phone": "+91 98200 98200",
+  "location": "Mumbai",
+  "current_title": "Finance Manager",
+  "roles": [
+    {
+      "title": "Finance Manager",
+      "company": "Bharat Textiles",
+      "start": "2019-04",
+      "end": "present",
+      "highlights": [
+        "Monthly close for 3 entities under IFRS",
+        "Managed GST filings and audits"
+      ]
+    },
+    {
+      "title": "Senior Accountant",
+      "company": "Deloitte",
+      "start": "2015-07",
+      "end": "2019-03",
+      "highlights": [
+        "Statutory audits for manufacturing clients"
+      ]
+    }
+  ],
+  "skills": [
+    "GST",
+    "IFRS",
+    "Tally ERP",
+    "SAP FICO",
+    "Advanced Excel",
+    "Financial Modelling"
+  ],
+  "education": [
+    "Chartered Accountant, ICAI, 2015",
+    "B.Com, Mumbai University, 2012"
+  ],
+  "certifications": [
+    "CA"
+  ],
+  "industries": [
+    "Manufacturing",
+    "Audit"
+  ],
+  "notice_period_days": 90,
+  "current_ctc": "24 LPA",
+  "expected_ctc": null,
+  "languages": [
+    "English"
+  ],
+  "summary": "Chartered accountant and finance manager handling IFRS close and GST compliance."
+}

@@ -1,0 +1,301 @@
+alias,canonical
+js,JavaScript
+javascript,JavaScript
+ecmascript,JavaScript
+es6,JavaScript
+vanilla js,JavaScript
+ts,TypeScript
+typescript,TypeScript
+py,Python
+python3,Python
+python 3,Python
+golang,Go
+go lang,Go
+c plus plus,C++
+cpp,C++
+c sharp,C#
+csharp,C#
+dotnet,.NET
+dot net,.NET
+.net core,.NET
+asp.net,ASP.NET
+asp.net core,ASP.NET
+vb.net,VB.NET
+java8,Java
+java 8,Java
+core java,Java
+j2ee,Java EE
+jee,Java EE
+kotlin,Kotlin
+objective c,Objective-C
+objc,Objective-C
+swift ui,SwiftUI
+swiftui,SwiftUI
+rb,Ruby
+ror,Ruby on Rails
+rails,Ruby on Rails
+ruby on rails,Ruby on Rails
+php7,PHP
+rustlang,Rust
+scala,Scala
+r language,R
+matlab,MATLAB
+bash scripting,Bash
+shell scripting,Shell Scripting
+powershell,PowerShell
+react,React
+reactjs,React
+react.js,React
+react js,React
+react native,React Native
+rn,React Native
+vue,Vue.js
+vuejs,Vue.js
+vue.js,Vue.js
+angularjs,AngularJS
+angular.js,AngularJS
+angular 2+,Angular
+angular2,Angular
+next,Next.js
+nextjs,Next.js
+next.js,Next.js
+nuxt,Nuxt.js
+nuxtjs,Nuxt.js
+svelte,Svelte
+node,Node.js
+nodejs,Node.js
+node.js,Node.js
+node js,Node.js
+express,Express.js
+expressjs,Express.js
+express.js,Express.js
+nestjs,NestJS
+nest.js,NestJS
+django rest framework,Django REST Framework
+drf,Django REST Framework
+django,Django
+flask,Flask
+fastapi,FastAPI
+fast api,FastAPI
+spring,Spring
+springboot,Spring Boot
+spring boot,Spring Boot
+hibernate,Hibernate
+laravel,Laravel
+jquery,jQuery
+redux,Redux
+tailwind,Tailwind CSS
+tailwindcss,Tailwind CSS
+html5,HTML
+html,HTML
+css3,CSS
+css,CSS
+scss,Sass
+sass,Sass
+graphql,GraphQL
+gql,GraphQL
+rest,REST APIs
+rest api,REST APIs
+rest apis,REST APIs
+restful,REST APIs
+restful apis,REST APIs
+grpc,gRPC
+postgres,PostgreSQL
+postgresql,PostgreSQL
+psql,PostgreSQL
+pg,PostgreSQL
+mysql,MySQL
+my sql,MySQL
+mariadb,MariaDB
+mssql,SQL Server
+ms sql,SQL Server
+sql server,SQL Server
+microsoft sql server,SQL Server
+oracle db,Oracle Database
+oracle database,Oracle Database
+plsql,PL/SQL
+pl sql,PL/SQL
+tsql,T-SQL
+t sql,T-SQL
+mongo,MongoDB
+mongodb,MongoDB
+mongo db,MongoDB
+redis,Redis
+elasticsearch,Elasticsearch
+elastic search,Elasticsearch
+opensearch,OpenSearch
+dynamo,DynamoDB
+dynamodb,DynamoDB
+cassandra,Apache Cassandra
+sqlite,SQLite
+snowflake,Snowflake
+bigquery,BigQuery
+big query,BigQuery
+redshift,Amazon Redshift
+kafka,Apache Kafka
+apache kafka,Apache Kafka
+rabbitmq,RabbitMQ
+rabbit mq,RabbitMQ
+spark,Apache Spark
+apache spark,Apache Spark
+pyspark,PySpark
+hadoop,Apache Hadoop
+airflow,Apache Airflow
+apache airflow,Apache Airflow
+dbt,dbt
+aws,AWS
+amazon web services,AWS
+ec2,AWS EC2
+s3,AWS S3
+aws lambda,AWS Lambda
+lambda,AWS Lambda
+gcp,Google Cloud
+google cloud platform,Google Cloud
+google cloud,Google Cloud
+azure,Microsoft Azure
+ms azure,Microsoft Azure
+microsoft azure,Microsoft Azure
+k8s,Kubernetes
+kube,Kubernetes
+kubernetes,Kubernetes
+eks,Amazon EKS
+gke,Google Kubernetes Engine
+aks,Azure Kubernetes Service
+docker,Docker
+containerization,Docker
+helm,Helm
+terraform,Terraform
+iac,Infrastructure as Code
+infrastructure as code,Infrastructure as Code
+ansible,Ansible
+jenkins,Jenkins
+ci/cd,CI/CD
+cicd,CI/CD
+github actions,GitHub Actions
+gh actions,GitHub Actions
+gitlab ci,GitLab CI
+git,Git
+github,GitHub
+linux,Linux
+unix,Unix
+nginx,Nginx
+prometheus,Prometheus
+grafana,Grafana
+datadog,Datadog
+ml,Machine Learning
+machine learning,Machine Learning
+dl,Deep Learning
+deep learning,Deep Learning
+ai,Artificial Intelligence
+artificial intelligence,Artificial Intelligence
+nlp,Natural Language Processing
+natural language processing,Natural Language Processing
+cv,Computer Vision
+computer vision,Computer Vision
+llm,Large Language Models
+llms,Large Language Models
+genai,Generative AI
+gen ai,Generative AI
+generative ai,Generative AI
+tensorflow,TensorFlow
+tf2,TensorFlow
+pytorch,PyTorch
+torch,PyTorch
+sklearn,scikit-learn
+scikit-learn,scikit-learn
+pandas,pandas
+numpy,NumPy
+keras,Keras
+huggingface,Hugging Face
+hugging face,Hugging Face
+langchain,LangChain
+tableau,Tableau
+power bi,Power BI
+powerbi,Power BI
+ms excel,Microsoft Excel
+excel,Microsoft Excel
+advanced excel,Microsoft Excel
+ms office,Microsoft Office
+ms word,Microsoft Word
+powerpoint,Microsoft PowerPoint
+ms powerpoint,Microsoft PowerPoint
+google sheets,Google Sheets
+jira,Jira
+confluence,Confluence
+figma,Figma
+adobe xd,Adobe XD
+photoshop,Adobe Photoshop
+illustrator,Adobe Illustrator
+ui/ux,UI/UX Design
+ux,UX Design
+ui,UI Design
+qa,Quality Assurance
+manual testing,Manual Testing
+automation testing,Test Automation
+test automation,Test Automation
+selenium,Selenium
+cypress,Cypress
+playwright,Playwright
+junit,JUnit
+pytest,pytest
+jest,Jest
+tdd,Test-Driven Development
+microservices,Microservices
+micro services,Microservices
+system design,System Design
+oop,Object-Oriented Programming
+dsa,Data Structures and Algorithms
+agile,Agile
+scrum,Scrum
+kanban,Kanban
+sap,SAP
+sap fico,SAP FICO
+sap mm,SAP MM
+sap sd,SAP SD
+salesforce,Salesforce
+sfdc,Salesforce
+crm,CRM
+erp,ERP
+tally,Tally
+tally erp,Tally
+quickbooks,QuickBooks
+gst,GST
+tds,TDS
+ifrs,IFRS
+gaap,GAAP
+us gaap,US GAAP
+accounts payable,Accounts Payable
+ap,Accounts Payable
+accounts receivable,Accounts Receivable
+financial modelling,Financial Modeling
+financial modeling,Financial Modeling
+fp&a,FP&A
+seo,SEO
+search engine optimization,SEO
+sem,SEM
+google ads,Google Ads
+adwords,Google Ads
+google analytics,Google Analytics
+ga4,Google Analytics
+smm,Social Media Marketing
+social media marketing,Social Media Marketing
+content writing,Content Writing
+copywriting,Copywriting
+hubspot,HubSpot
+b2b sales,B2B Sales
+lead generation,Lead Generation
+lead gen,Lead Generation
+recruitment,Recruitment
+talent acquisition,Talent Acquisition
+hrbp,HR Business Partner
+payroll,Payroll
+hris,HRIS
+workday,Workday
+six sigma,Six Sigma
+lean,Lean
+pmp,PMP
+prince2,PRINCE2
+supply chain,Supply Chain Management
+scm,Supply Chain Management
+autocad,AutoCAD
+solidworks,SolidWorks

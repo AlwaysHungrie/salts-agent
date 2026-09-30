@@ -1,0 +1,26 @@
+Arjun Mehta — Staff Software Engineer
+Email: arjun.mehta@example.com
+Phone: +91 99887 76655
+Location: Bengaluru
+
+Professional Experience
+* Streamly (2021-06 to present)
+  Staff Software Engineer
+    · Owns event pipeline on Apache Kafka processing 2B events/day
+    · Python and Go services on AWS EKS
+* Tapcab (2017-07 to 2021-05)
+  Software Engineer
+    · Built dispatch APIs in Python/Flask
+    · Migrated MySQL to Aurora on AWS
+
+Technical Skills: Python / Go / k8s / AWS / kafka / Flask / MySQL / gRPC
+
+About
+Software engineer working on Python and Go services and Kafka event pipelines on AWS. Previously built dispatch APIs for a ride-hailing company.
+
+Education
+B.Tech CSE, NIT Trichy, 2017
+
+Notice period: 60 days
+
+Languages: English
