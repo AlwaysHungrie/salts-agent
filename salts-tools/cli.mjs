@@ -9,11 +9,11 @@
 //
 //   salts-tools start [service…]
 //                         check the machine, set up on first run, start the named services
-//                         (added to the ones already on) or, with none named, every one on
+//                         (beside any already running) or, with none named, the ones last on
 //   salts-tools stop [service]
 //                         stop one service, or with none named everything: the
 //                         supervisor, the tunnel and the containers
-//   salts-tools setup     the first-run questions again (agent id, token check)
+//   salts-tools setup     the first-run questions again (agent id, token); starts nothing
 //   salts-tools restart   bring the tunnel up again and push its new address
 //   salts-tools reset     forget the agent (state.json) and delete the saved token
 //   salts-tools autostart on|off
@@ -1083,11 +1083,43 @@ function report(state, names) {
   }
 }
 
-async function start({ interactive, forceSetup }) {
+async function askAutostart(rl) {
+  if (existsSync(AUTOSTART.file)) return;
+  const yes = (await rl.question("Start salts-tools automatically when you log in? [Y/n] ")).trim().toLowerCase();
+  if (yes === "" || yes === "y" || yes === "yes") {
+    autostartOn();
+    console.log(`${GREEN}✓${OFF} will start at login (undo with \`salts-tools ${withTarget("autostart")} off\`)`);
+  }
+}
+
+/** `salts-tools setup`: the questions only. Nothing starts until `start`. */
+async function setupOnly() {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    const before = readState().agentId;
+    // No autostart question here: turning it on runs the login item at once.
+    await setup(rl, { force: true });
+    const { agentId } = readState();
+    if (supervisorPid() && agentId !== before) {
+      console.log(`salts-tools is running for agent ${before}; \`salts-tools ${withTarget("stop")}\` and start again to switch.`);
+    } else if (!supervisorPid()) {
+      console.log(`Set up. Start a service with \`salts-tools ${withTarget("start")} <${NAMES.join("|")}>\`.`);
+    }
+  } finally {
+    rl.close();
+  }
+}
+
+async function start({ interactive }) {
   const named = namedServices();
-  const on = [...new Set([...(readState().services ?? []), ...named])];
-  // Nothing on and nothing named: SearXNG, what salts-web always ran.
-  const services = on.length ? on : ["web"];
+  const saved = readState().services ?? [];
+  // Named: those, plus whatever is already running beside them. None named (as at
+  // login): the ones that were on, or SearXNG, what salts-web always ran.
+  const services = named.length
+    ? [...new Set([...(supervisorPid() ? saved : []), ...named])]
+    : saved.length
+      ? saved
+      : ["web"];
 
   const problems = missingTools(services);
   if (problems.length) {
@@ -1121,12 +1153,12 @@ async function start({ interactive, forceSetup }) {
     }
 
     const firstRun = !readToken() || !readState().agentId;
-    if ((firstRun || forceSetup) && !rl) {
+    if (firstRun && !rl) {
       console.error(`${RED}✗${OFF} not set up yet — run \`salts-tools ${withTarget("start")}\` in a terminal`);
       process.exit(1);
     }
     let fresh = false;
-    if (firstRun || forceSetup) ({ fresh } = await setup(rl, { force: forceSetup }));
+    if (firstRun) ({ fresh } = await setup(rl, { force: false }));
     writeState({ services });
 
     // Running already: the new services join the same tunnel, so its address stays.
@@ -1182,13 +1214,7 @@ async function start({ interactive, forceSetup }) {
       process.exit(1);
     }
 
-    if ((fresh || forceSetup) && !existsSync(AUTOSTART.file)) {
-      const yes = (await rl.question("Start salts-tools automatically when you log in? [Y/n] ")).trim().toLowerCase();
-      if (yes === "" || yes === "y" || yes === "yes") {
-        autostartOn();
-        console.log(`${GREEN}✓${OFF} will start at login (undo with \`salts-tools ${withTarget("autostart")} off\`)`);
-      }
-    }
+    if (fresh) await askAutostart(rl);
   } finally {
     rl?.close();
   }
@@ -1247,7 +1273,7 @@ async function restart() {
   const pid = supervisorPid();
   if (!pid) {
     console.log("supervisor not running; starting it");
-    return await start({ interactive: process.stdin.isTTY, forceSetup: false });
+    return await start({ interactive: process.stdin.isTTY });
   }
   const since = new Date().toISOString();
   const services = readState().services ?? [];
@@ -1266,10 +1292,10 @@ try {
   if (cmd && cmd !== "_supervise") await migrateFromSaltsWeb();
   switch (cmd) {
     case "start":
-      await start({ interactive: process.stdin.isTTY, forceSetup: false });
+      await start({ interactive: process.stdin.isTTY });
       break;
     case "setup":
-      await start({ interactive: true, forceSetup: true });
+      await setupOnly();
       break;
     case "stop":
       await stop();
