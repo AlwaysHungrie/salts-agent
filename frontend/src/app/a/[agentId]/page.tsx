@@ -17,7 +17,43 @@ import {
   type TranscriptPage,
 } from "@/lib/agent";
 import { apiFetch } from "@/lib/identity";
+import { cached, forget, keys, remember } from "@/lib/cache";
 import { PageNotice } from "@/components/PageNotice";
+
+/** What `/api/agents/:id/config` answers with, as far as this page reads it. */
+type ConfigPayload = {
+  agent?: AgentRow;
+  config?: { cap_telegram?: number; telegram_bot_username?: string };
+};
+
+/** The bot's handle, or "" while Telegram is off or unconfigured. */
+function botOf(payload: ConfigPayload | undefined): string {
+  return payload?.config?.cap_telegram
+    ? (payload.config.telegram_bot_username ?? "")
+    : "";
+}
+
+function fromPage(page: TranscriptPage) {
+  return {
+    messages: page.messages,
+    hasOlder: page.has_more,
+    offset: page.offset,
+  };
+}
+
+/** Whether a fresh read says the same as the transcript on screen. */
+function sameTranscript(
+  shown: { messages: StoredMessage[]; offset: number },
+  page: TranscriptPage,
+): boolean {
+  const a = shown.messages;
+  const b = page.messages;
+  return (
+    a.length === b.length &&
+    shown.offset === page.offset &&
+    String(a[a.length - 1]?.id) === String(b[b.length - 1]?.id)
+  );
+}
 
 /**
  * One agent: its sessions, its settings, its bot. Everything on this page is scoped
@@ -30,10 +66,21 @@ export default function AgentPage({
   params: Promise<{ agentId: string }>;
 }) {
   const { agentId } = use(params);
-  const [agent, setAgent] = useState<AgentRow | null>(null);
+  // Everything below starts from what was last read for this agent, so coming back
+  // from capabilities or settings redraws the page as it was instead of from empty.
+  const held = cached<ConfigPayload>(keys.config(agentId));
+  const heldSessions = cached<{
+    sessions: SessionRow[];
+    cursor: string;
+    more: boolean;
+  }>(keys.sessions(agentId));
+  const heldSelected = cached<string | null>(keys.selected(agentId)) ?? null;
+  const [agent, setAgent] = useState<AgentRow | null>(held?.agent ?? null);
   /** No agent behind this id, for any of the three reasons a 404 covers. */
   const [missing, setMissing] = useState(false);
-  const [sessions, setSessions] = useState<SessionRow[]>([]);
+  const [sessions, setSessions] = useState<SessionRow[]>(
+    heldSessions?.sessions ?? [],
+  );
   /**
    * Where the session list has been read up to: the cursor for the next page, and
    * whether there is one. Empty cursor with `more` false means the list is whole.
@@ -41,8 +88,11 @@ export default function AgentPage({
   const [sessionCursor, setSessionCursor] = useState<{
     cursor: string;
     more: boolean;
-  }>({ cursor: "", more: false });
-  const [selected, setSelected] = useState<string | null>(null);
+  }>({
+    cursor: heldSessions?.cursor ?? "",
+    more: heldSessions?.more ?? false,
+  });
+  const [selected, setSelected] = useState<string | null>(heldSelected);
   // Keyed by session so switching sessions shows a loader instead of the previous
   // session's transcript, without having to null it out on every selection change.
   const [loaded, setLoaded] = useState<{
@@ -52,15 +102,29 @@ export default function AgentPage({
     hasOlder: boolean;
     /** How many messages precede the oldest one held. A fork's count is absolute. */
     offset: number;
-  } | null>(null);
-  const [summary, setSummary] = useState<Summary | null>(null);
+    /**
+     * Bumped when a fresh read replaces a transcript drawn from the cache, so the
+     * chat restarts from the fresh one — it only reads its messages on mount.
+     */
+    rev: number;
+  } | null>(() => {
+    const transcript = heldSelected
+      ? cached<TranscriptPage>(keys.transcript(heldSelected))
+      : undefined;
+    return heldSelected && transcript
+      ? { sessionId: heldSelected, ...fromPage(transcript), rev: 0 }
+      : null;
+  });
+  const [summary, setSummary] = useState<Summary | null>(() =>
+    heldSelected ? (cached<Summary>(keys.summary(heldSelected)) ?? null) : null,
+  );
   const [error, setError] = useState<string | null>(null);
   /**
    * The bot's handle, so a Telegram session can link back to the conversation — and
    * so the zero state can offer Telegram only once it actually works. Empty while
    * the capability is off or unconfigured.
    */
-  const [botUsername, setBotUsername] = useState("");
+  const [botUsername, setBotUsername] = useState(() => botOf(held));
   /** A forked question handed to one session's composer, waiting to be edited. */
   const [draft, setDraft] = useState<{
     sessionId: string;
@@ -95,30 +159,34 @@ export default function AgentPage({
   useEffect(() => {
     void apiFetch(`/api/agents/${encodeURIComponent(agentId)}/config`)
       .then((res) => (res.ok ? res.json() : null))
-      .then(
-        (
-          payload: {
-            agent?: AgentRow;
-            config?: { cap_telegram?: number; telegram_bot_username?: string };
-          } | null,
-        ) => {
-          // No agent behind this id: it was deleted, the link is stale, or it belongs
-          // to somebody else — the Worker answers all three with a 404, on purpose, so
-          // that an id cannot be probed for existence. The page says so and stays put.
-          if (!payload) {
-            setMissing(true);
-            return;
-          }
-          setAgent(payload.agent ?? null);
-          setBotUsername(
-            payload.config?.cap_telegram
-              ? (payload.config.telegram_bot_username ?? "")
-              : "",
-          );
-        },
-      )
+      .then((payload: ConfigPayload | null) => {
+        // No agent behind this id: it was deleted, the link is stale, or it belongs
+        // to somebody else — the Worker answers all three with a 404, on purpose, so
+        // that an id cannot be probed for existence. The page says so and stays put.
+        if (!payload) {
+          forget(keys.config(agentId));
+          setMissing(true);
+          return;
+        }
+        remember(keys.config(agentId), payload);
+        setAgent(payload.agent ?? null);
+        setBotUsername(botOf(payload));
+      })
       .catch(() => setBotUsername(""));
   }, [agentId]);
+
+  // Kept current as the page changes them, so the next visit starts from here.
+  useEffect(() => {
+    remember(keys.sessions(agentId), {
+      sessions,
+      cursor: sessionCursor.cursor,
+      more: sessionCursor.more,
+    });
+  }, [agentId, sessions, sessionCursor]);
+
+  useEffect(() => {
+    remember(keys.selected(agentId), selected);
+  }, [agentId, selected]);
 
   /**
    * The newest page of sessions, replacing whatever was held.
@@ -166,7 +234,9 @@ export default function AgentPage({
       const res = await apiFetch(
         `/api/sessions/${encodeURIComponent(id)}/summary`,
       );
-      setSummary(await readJson<Summary>(res));
+      const payload = await readJson<Summary>(res);
+      if (payload) remember(keys.summary(id), payload);
+      setSummary(payload);
     },
     [readJson],
   );
@@ -182,19 +252,35 @@ export default function AgentPage({
   }, [loadSessions]);
 
   // Loading history and metrics is what makes a session's Durable Object wake up.
+  // A session read before opens from that read at once; the fresh one replaces it
+  // only if the conversation moved on in between.
   useEffect(() => {
     if (!selected) return;
+    const heldTranscript = cached<TranscriptPage>(keys.transcript(selected));
     void (async () => {
+      if (heldTranscript) {
+        setLoaded((current) =>
+          current?.sessionId === selected
+            ? current
+            : { sessionId: selected, ...fromPage(heldTranscript), rev: 0 },
+        );
+        setSummary(cached<Summary>(keys.summary(selected)) ?? null);
+      }
       const res = await apiFetch(
         `/api/sessions/${encodeURIComponent(selected)}/messages`,
       );
       const payload = await readJson<TranscriptPage>(res);
       if (!payload) return;
-      setLoaded({
-        sessionId: selected,
-        messages: payload.messages,
-        hasOlder: payload.has_more,
-        offset: payload.offset,
+      remember(keys.transcript(selected), payload);
+      setLoaded((current) => {
+        if (current?.sessionId === selected && sameTranscript(current, payload)) {
+          return current;
+        }
+        return {
+          sessionId: selected,
+          ...fromPage(payload),
+          rev: current?.sessionId === selected ? current.rev + 1 : 0,
+        };
       });
       await loadSummary(selected);
     })();
@@ -251,23 +337,49 @@ export default function AgentPage({
     setSelected(row.id);
   };
 
-  /** Rename a session in place. The sidebar row follows from the reloaded list. */
+  /**
+   * After a change already drawn: read the list back so it matches what is stored,
+   * and when the change was refused, say why. The error is set after the reload,
+   * which would otherwise clear it.
+   */
+  const settle = async (res: Response, fallback: string) => {
+    const payload = res.ok
+      ? null
+      : ((await res.json().catch(() => null)) as { error?: string } | null);
+    await loadSessions();
+    if (!res.ok) setError(payload?.error ?? fallback);
+  };
+
+  /**
+   * Rename a session in place. The row takes the new title at once; the list is read
+   * again behind it, and a refused rename puts the stored title back.
+   */
   const renameSession = async (id: string, title: string) => {
+    setSessions((current) =>
+      current.map((s) => (s.id === id ? { ...s, title } : s)),
+    );
     const res = await apiFetch(`/api/sessions/${encodeURIComponent(id)}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ title }),
     });
-    if (!(await readJson<{ ok: boolean }>(res))) return;
-    await loadSessions();
+    await settle(res, "Couldn't rename that session. Try again.");
   };
 
+  /**
+   * Gone from the list the moment it is confirmed. A refused delete reads the list
+   * back, which returns the row along with the reason.
+   */
   const deleteSession = async (id: string) => {
-    await apiFetch(`/api/sessions/${encodeURIComponent(id)}`, {
+    const rest = sessions.filter((s) => s.id !== id);
+    setSessions(rest);
+    if (selected === id) setSelected(rest[0]?.id ?? null);
+    forget(keys.transcript(id));
+    forget(keys.summary(id));
+    const res = await apiFetch(`/api/sessions/${encodeURIComponent(id)}`, {
       method: "DELETE",
     });
-    const list = await loadSessions();
-    if (selected === id) setSelected(list[0]?.id ?? null);
+    if (!res.ok) await settle(res, "Couldn't delete that session. Try again.");
   };
 
   const onTurnEnd = useCallback(() => {
@@ -320,7 +432,7 @@ export default function AgentPage({
               </div>
             ) : (
               <Chat
-                key={selected}
+                key={`${selected}:${loaded.rev}`}
                 sessionId={selected}
                 initialMessages={loaded.messages}
                 initialHasOlder={loaded.hasOlder}

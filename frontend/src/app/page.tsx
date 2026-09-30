@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ChevronDown, ChevronRight, Plus, Settings } from "lucide-react";
 import { AuthModal } from "@/components/auth/AuthModal";
 import { apiFetch, useIdentity } from "@/lib/identity";
+import { cached, claim, keys, remember } from "@/lib/cache";
 import { UserMenu } from "@/components/auth/UserMenu";
 import {
   MetaSettingsDialog,
@@ -29,6 +30,14 @@ import {
  * list of doors and nothing more: there is no switcher, because there is nothing
  * shared to switch between. Opening one goes to its own page and stays there.
  */
+/** What is kept of the list between visits. */
+type HeldAgents = {
+  agents: AgentRow[];
+  cursor: string;
+  fleets: FleetRow[];
+  quota: { limit: number; owned: number } | null;
+};
+
 export default function Agents() {
   /**
    * Whoever this browser is acting as — a Clerk session, or an address typed into the
@@ -36,20 +45,24 @@ export default function Agents() {
    * and it is what decides admin from user on every row.
    */
   const { ready: isLoaded, signedIn: isSignedIn, email } = useIdentity();
+  if (isLoaded && isSignedIn) claim(email);
+  /** The list as it was last drawn, so coming back to this page starts from it. */
+  const held =
+    isLoaded && isSignedIn ? cached<HeldAgents>(keys.agents) : undefined;
   /**
    * The agents on this page that are not inside a fleet this account administers —
    * one's own agents, and the one agent somebody else's fleet made for them. Loaded
    * a page at a time, and appended to as the list is read down.
    */
-  const [agents, setAgents] = useState<AgentRow[] | null>(null);
+  const [agents, setAgents] = useState<AgentRow[] | null>(held?.agents ?? null);
   /** Where that list stopped, and whether there is more of it. "" means exhausted. */
-  const [cursor, setCursor] = useState("");
+  const [cursor, setCursor] = useState(held?.cursor ?? "");
   /**
    * The fleets this account administers: a name and a count each, never the agents.
    * They get their own tab — see `Fleet` for why the two lists are kept apart
    * rather than merged and sorted together.
    */
-  const [fleets, setFleets] = useState<FleetRow[]>([]);
+  const [fleets, setFleets] = useState<FleetRow[]>(held?.fleets ?? []);
   /** Whether another page of the list below is being fetched. */
   const [loadingMore, setLoadingMore] = useState(false);
   /**
@@ -63,7 +76,7 @@ export default function Agents() {
    * back, so the ask is made against what the account actually has today.
    */
   const [quota, setQuota] = useState<{ limit: number; owned: number } | null>(
-    null,
+    held?.quota ?? null,
   );
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -192,14 +205,32 @@ export default function Agents() {
     return null;
   };
 
+  // Kept current as the list changes, so the next visit starts from here.
+  useEffect(() => {
+    if (!agents) return;
+    remember<HeldAgents>(keys.agents, { agents, cursor, fleets, quota });
+  }, [agents, cursor, fleets, quota]);
+
+  /**
+   * Gone from every list the moment it is confirmed; the list is read back behind
+   * it for the new count. A refused delete returns the row with the reason.
+   */
   const remove = async (id: string) => {
-    setBusy(true);
     setRemoved((current) => [...current, id]);
-    await apiFetch(`/api/agents/${encodeURIComponent(id)}`, {
+    setAgents((current) => current?.filter((a) => a.id !== id) ?? current);
+    const res = await apiFetch(`/api/agents/${encodeURIComponent(id)}`, {
       method: "DELETE",
     });
-    setBusy(false);
+    if (res.ok) {
+      await load();
+      return;
+    }
+    const payload = (await res.json().catch(() => null)) as {
+      error?: string;
+    } | null;
+    setRemoved((current) => current.filter((r) => r !== id));
     await load();
+    setError(payload?.error ?? "Couldn't delete that agent. Try again.");
   };
 
   return (

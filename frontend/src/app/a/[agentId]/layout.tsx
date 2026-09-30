@@ -2,6 +2,7 @@
 
 import { PageNotice } from "@/components/PageNotice";
 import { useIdentity } from "@/lib/identity";
+import { claim } from "@/lib/cache";
 
 /**
  * Stop an agent page drawing for somebody who is not signed in.
@@ -23,7 +24,7 @@ import { useIdentity } from "@/lib/identity";
  * way in should be.
  */
 export default function AgentLayout({ children }: LayoutProps<"/a/[agentId]">) {
-  const { ready, signedIn } = useIdentity();
+  const { ready, signedIn, email } = useIdentity();
 
   // Nothing is drawn until the identity has resolved: localStorage cannot be read on
   // the server, so the first paint knows nothing about who this is.
@@ -39,5 +40,7 @@ export default function AgentLayout({ children }: LayoutProps<"/a/[agentId]">) {
     return <PageNotice message="You need to be signed in to access this page." />;
   }
 
+  // Before the page renders, so it never reads another account's cache.
+  claim(email);
   return <>{children}</>;
 }
