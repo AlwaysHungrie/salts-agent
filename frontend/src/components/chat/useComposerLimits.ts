@@ -6,7 +6,6 @@ import {
   type ClientLimits,
   type Config,
 } from "@/lib/agent";
-import { apiFetch } from "@/lib/identity";
 
 /**
  * The agent's ready input capabilities and the deployment's composer limits, from
@@ -20,7 +19,7 @@ export function useComposerLimits(sessionId: string) {
     void (async () => {
       const agentId = agentIdOf(sessionId);
       if (!agentId) return;
-      const res = await apiFetch(
+      const res = await fetch(
         `/api/agents/${encodeURIComponent(agentId)}/config`,
       );
       const payload = (await res.json().catch(() => null)) as {

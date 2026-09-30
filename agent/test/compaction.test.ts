@@ -8,6 +8,7 @@ import {
   replyTo,
 } from "./openrouter-mock";
 import { SHIPPED } from "./shipped";
+import { signedIn } from "./clerk";
 
 /**
  * Compaction: `!compact`, and the automatic kind past `compact_after_tokens`.
@@ -28,8 +29,7 @@ function as(email: string, init: RequestInit = {}) {
     ...init,
     headers: {
       "content-type": "application/json",
-      "x-api-secret": SECRET,
-      "x-user-email": email,
+      ...signedIn(email),
       ...(init.headers as Record<string, string> | undefined),
     },
   };

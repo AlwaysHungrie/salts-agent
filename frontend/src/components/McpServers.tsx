@@ -10,7 +10,6 @@ import {
 } from "@/lib/agent";
 import { Toggle } from "@/components/CapabilitySection";
 import { McpPresetStrip, type McpPreset } from "@/components/McpPresets";
-import { apiFetch } from "@/lib/identity";
 import { cached, remember } from "@/lib/cache";
 
 const AUTH_MODES: { id: McpAuth; label: string; hint?: string }[] = [
@@ -552,7 +551,7 @@ export function McpServers({
   // admin settings — but they arrive with the list itself rather than from `/meta`,
   // which only the agent's admin may read.
   const load = useCallback(async () => {
-    const res = await apiFetch(`${base}${asOwner}`, { cache: "no-store" });
+    const res = await fetch(`${base}${asOwner}`, { cache: "no-store" });
     const payload = (await res.json().catch(() => null)) as {
       servers: McpServer[];
       redirect_uri: string;
@@ -602,7 +601,7 @@ export function McpServers({
     init: RequestInit,
   ): Promise<McpServer | null> => {
     setBusy(true);
-    const res = await apiFetch(path, {
+    const res = await fetch(path, {
       headers: { "content-type": "application/json" },
       ...init,
     });
@@ -647,7 +646,7 @@ export function McpServers({
   ) => {
     const previous = servers.find((s) => s.id === id);
     setServers((all) => all.map((s) => (s.id === id ? { ...s, ...patch } : s)));
-    const res = await apiFetch(`${base}/${id}${asOwner}`, {
+    const res = await fetch(`${base}/${id}${asOwner}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
@@ -675,7 +674,7 @@ export function McpServers({
   /** Gone at once; a refused delete reads the list back, which returns the row. */
   const remove = async (id: string) => {
     setServers((all) => all.filter((s) => s.id !== id));
-    const res = await apiFetch(`${base}/${id}${asOwner}`, { method: "DELETE" });
+    const res = await fetch(`${base}/${id}${asOwner}`, { method: "DELETE" });
     if (!res.ok) {
       const payload = (await res.json().catch(() => null)) as {
         error?: string;
@@ -692,7 +691,7 @@ export function McpServers({
    */
   const recommend = async (id: string) => {
     setRecommending(id);
-    const res = await apiFetch(`${base}/${id}/recommend${asOwner}`, {
+    const res = await fetch(`${base}/${id}/recommend${asOwner}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: "{}",

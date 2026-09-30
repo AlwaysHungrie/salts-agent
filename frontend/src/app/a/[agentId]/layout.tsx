@@ -7,12 +7,6 @@ import { claim } from "@/lib/cache";
 /**
  * Stop an agent page drawing for somebody who is not signed in.
  *
- * Middleware used to do this. It no longer can: the second way to be somebody here is
- * the localStorage back door, which middleware cannot see — a page navigation carries
- * no headers of ours — so protecting routes there would bounce every impersonated
- * visitor to a sign-in screen they have no use for. The check moved here, where the
- * browser is known.
- *
  * It says so and waits. Nothing redirects: a page that navigates away on its own takes
  * the explanation with it, and the way out is a button that was always going to be
  * faster to read than to be surprised by.
@@ -26,8 +20,7 @@ import { claim } from "@/lib/cache";
 export default function AgentLayout({ children }: LayoutProps<"/a/[agentId]">) {
   const { ready, signedIn, email } = useIdentity();
 
-  // Nothing is drawn until the identity has resolved: localStorage cannot be read on
-  // the server, so the first paint knows nothing about who this is.
+  // Nothing is drawn until Clerk has loaded, so the first paint does not guess.
   if (!ready) {
     return (
       <div className="bg-canvas text-ink flex min-h-screen items-center justify-center">

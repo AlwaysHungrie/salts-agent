@@ -9,14 +9,10 @@ import { useIdentity } from "@/lib/identity";
  *
  * Clerk's own <UserButton> carries a profile manager, an org switcher and its
  * branding; none of that has a place here. This is the picture and a way out.
- *
- * An impersonated address has no Clerk user behind it and so no picture; it gets its
- * first letter on a plain disc, and logging out clears the two localStorage keys
- * rather than ending a session there was never one of.
  */
 export function UserMenu() {
   const { user } = useUser();
-  const { ready, mode, email, signedIn, signOut } = useIdentity();
+  const { ready, email, signedIn, signOut } = useIdentity();
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
 
@@ -41,8 +37,8 @@ export function UserMenu() {
 
   const label = email || "Account";
   // Google accounts arrive with a picture; email sign-ups get Clerk's generated
-  // initials image. An impersonated address has neither, so it gets a letter.
-  const picture = mode === "clerk" ? user?.imageUrl : undefined;
+  // initials image. The letter is the fallback while neither has loaded.
+  const picture = user?.imageUrl;
 
   return (
     <div ref={root} className="relative">
