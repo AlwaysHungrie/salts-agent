@@ -545,8 +545,7 @@ export function storageFullMessage(used: number, size: number, limit: number): s
 /** What every refusal says, so the wording does not drift between four callers. */
 export function sessionLimitMessage(maxSessions: number): string {
   return (
-    `This agent has reached its limit of ${maxSessions} sessions. ` +
-    `Delete one to start another.`
+    `This agent has reached its limit of ${maxSessions} sessions. ` + `Delete one to start another.`
   );
 }
 
@@ -621,7 +620,8 @@ const SESSION_REGISTRY_MIGRATIONS: readonly Migration[] = [
         `chat_type TEXT NOT NULL DEFAULT ''`,
         `chat_username TEXT NOT NULL DEFAULT ''`,
         `chat_thread_id TEXT NOT NULL DEFAULT ''`,
-      ]) addColumnIfMissing(sql, "sessions", col);
+      ])
+        addColumnIfMissing(sql, "sessions", col);
       sql.exec(
         `CREATE TABLE IF NOT EXISTS config (
            id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -709,7 +709,8 @@ const SESSION_REGISTRY_MIGRATIONS: readonly Migration[] = [
          )`
       );
       // Bring forward server rows created before a column was added.
-      for (const col of [`disabled_tools TEXT NOT NULL DEFAULT ''`]) addColumnIfMissing(sql, "mcp_servers", col);
+      for (const col of [`disabled_tools TEXT NOT NULL DEFAULT ''`])
+        addColumnIfMissing(sql, "mcp_servers", col);
     },
   },
   {
@@ -1128,8 +1129,7 @@ export class SessionRegistry extends DurableObject {
   meta(): MetaSettings {
     this.ensureSchema();
     const row = this.ctx.storage.sql.exec(`SELECT json FROM meta WHERE id = 1`).toArray()[0] as
-      | { json: string }
-      | undefined;
+      { json: string } | undefined;
     if (!row?.json) return DEFAULT_META;
     try {
       const stored = JSON.parse(row.json) as Partial<MetaSettings>;
@@ -1214,8 +1214,7 @@ export class SessionRegistry extends DurableObject {
   sessionCount(): number {
     this.ensureSchema();
     const row = this.ctx.storage.sql.exec(`SELECT COUNT(*) AS n FROM sessions`).toArray()[0] as
-      | { n: number }
-      | undefined;
+      { n: number } | undefined;
     return row?.n ?? 0;
   }
 
@@ -1253,9 +1252,8 @@ export class SessionRegistry extends DurableObject {
   /** How many sessions this agent holds. What `max_sessions` is measured against. */
   countSessions(): number {
     this.ensureSchema();
-    const row = this.ctx.storage.sql
-      .exec(`SELECT COUNT(*) AS n FROM sessions`)
-      .toArray()[0] as { n: number } | undefined;
+    const row = this.ctx.storage.sql.exec(`SELECT COUNT(*) AS n FROM sessions`).toArray()[0] as
+      { n: number } | undefined;
     return Number(row?.n ?? 0);
   }
 
@@ -1662,7 +1660,8 @@ const AGENT_DIRECTORY_MIGRATIONS: readonly Migration[] = [
         // fleets existed, which is exactly what "stands alone" means.
         `fleet_id TEXT NOT NULL DEFAULT ''`,
         `fleet_name TEXT NOT NULL DEFAULT ''`,
-      ]) addColumnIfMissing(sql, "agents", col);
+      ])
+        addColumnIfMissing(sql, "agents", col);
       // Agents made before the split have no admin, and no record of who created them:
       // everyone on the list was both user and administrator. The first address on the
       // list is the closest thing to the creator that was ever written down — the
@@ -1685,18 +1684,12 @@ const AGENT_DIRECTORY_MIGRATIONS: readonly Migration[] = [
            PRIMARY KEY (agent_id, email)
          )`
       );
-      sql.exec(
-        `CREATE INDEX IF NOT EXISTS idx_agent_members_email ON agent_members(email)`
-      );
-      sql.exec(
-        `CREATE INDEX IF NOT EXISTS idx_agents_admin_email ON agents(admin_email)`
-      );
+      sql.exec(`CREATE INDEX IF NOT EXISTS idx_agent_members_email ON agent_members(email)`);
+      sql.exec(`CREATE INDEX IF NOT EXISTS idx_agents_admin_email ON agents(admin_email)`);
       // One fleet's agents, in page order. A fleet is the one list here that can run
       // to thousands of rows, so the index carries the sort key as well as the
       // grouping key: a page of it is a range scan, never a sort of the whole fleet.
-      sql.exec(
-        `CREATE INDEX IF NOT EXISTS idx_agents_fleet ON agents(fleet_id, created_at, id)`
-      );
+      sql.exec(`CREATE INDEX IF NOT EXISTS idx_agents_fleet ON agents(fleet_id, created_at, id)`);
 
       // Absence is the ordinary case: an account with no row here administers at most
       // `default_agent_limit` agent. A row is only ever written by the owner's own
@@ -1737,7 +1730,6 @@ const AGENT_DIRECTORY_MIGRATIONS: readonly Migration[] = [
            created_at INTEGER NOT NULL
          )`
       );
-
     },
   },
   {
@@ -1851,17 +1843,17 @@ export class AgentDirectory extends DurableObject {
     sql.exec(`CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)`);
     const current = Number(
       (sql.exec(`SELECT version FROM schema_version LIMIT 1`).toArray()[0]?.version as
-        | number
-        | undefined) ?? 0
+        number | undefined) ?? 0
     );
 
     // v1: membership moves from the newline-separated column to its own table. The
     // column is the only record of who was on which list, so it is read, not cleared.
     if (current < 1) {
       this.ctx.storage.transactionSync(() => {
-        const rows = sql
-          .exec(`SELECT id, allowed_emails FROM agents`)
-          .toArray() as unknown as { id: string; allowed_emails: string }[];
+        const rows = sql.exec(`SELECT id, allowed_emails FROM agents`).toArray() as unknown as {
+          id: string;
+          allowed_emails: string;
+        }[];
         for (const row of rows) {
           for (const email of splitEmails(row.allowed_emails)) {
             sql.exec(
@@ -2049,10 +2041,22 @@ export class AgentDirectory extends DurableObject {
         after?.id ?? "",
         size + 1
       )
-      .toArray() as unknown as { id: string; name: string; created_at: number; updated_at: number; admin_email: string }[];
+      .toArray() as unknown as {
+      id: string;
+      name: string;
+      created_at: number;
+      updated_at: number;
+      admin_email: string;
+    }[];
     // A guest learns the agent's name and nothing about who else is on it.
     return this.page(
-      rows.map((r) => ({ ...r, allowed_emails: "", admin_email: "", fleet_id: "", fleet_name: "" })),
+      rows.map((r) => ({
+        ...r,
+        allowed_emails: "",
+        admin_email: "",
+        fleet_id: "",
+        fleet_name: "",
+      })),
       size
     );
   }
@@ -2320,9 +2324,7 @@ export class AgentDirectory extends DurableObject {
    * failure it should answer 500 for — and answering 500 to "that number is too big"
    * is the difference between a dialog that can be corrected and one that looks broken.
    */
-  setSettings(
-    patch: unknown
-  ): { settings: StoredSettings; missing: string[] } | { error: string } {
+  setSettings(patch: unknown): { settings: StoredSettings; missing: string[] } | { error: string } {
     this.ensureSchema();
     let next: StoredSettings;
     try {
@@ -2482,7 +2484,12 @@ export class AgentDirectory extends DurableObject {
         wanted,
         wanted
       )
-      .toArray() as unknown as { id: string; name: string; admin_email: string; sessions: number }[];
+      .toArray() as unknown as {
+      id: string;
+      name: string;
+      admin_email: string;
+      sessions: number;
+    }[];
     return {
       email: wanted,
       agent_limit: this.getAgentLimit(wanted),
@@ -2590,26 +2597,26 @@ export class AgentDirectory extends DurableObject {
     this.ensureSchema();
     const size = Math.max(1, Math.min(limit, 100));
     const [afterTime, afterId] = cursor.split(":");
-    const after = cursor && Number.isFinite(Number(afterTime))
-      ? { created_at: Number(afterTime), id: afterId ?? "" }
-      : undefined;
+    const after =
+      cursor && Number.isFinite(Number(afterTime))
+        ? { created_at: Number(afterTime), id: afterId ?? "" }
+        : undefined;
     // One row past the page: its existence is all `has_more` needs.
-    const rows = (
-      after
-        ? this.ctx.storage.sql.exec(
-            `SELECT id, email, requested_increase, created_at FROM business_requests
+    const rows = (after
+      ? this.ctx.storage.sql.exec(
+          `SELECT id, email, requested_increase, created_at FROM business_requests
              WHERE created_at > ? OR (created_at = ? AND id > ?)
              ORDER BY created_at ASC, id ASC LIMIT ?`,
-            after.created_at,
-            after.created_at,
-            after.id,
-            size + 1
-          )
-        : this.ctx.storage.sql.exec(
-            `SELECT id, email, requested_increase, created_at FROM business_requests
+          after.created_at,
+          after.created_at,
+          after.id,
+          size + 1
+        )
+      : this.ctx.storage.sql.exec(
+          `SELECT id, email, requested_increase, created_at FROM business_requests
              ORDER BY created_at ASC, id ASC LIMIT ?`,
-            size + 1
-          )
+          size + 1
+        )
     ).toArray() as unknown as BusinessRequest[];
     const page = rows.slice(0, size).map((r) => ({
       ...r,

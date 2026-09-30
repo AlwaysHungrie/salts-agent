@@ -349,7 +349,6 @@ const CAPABILITY_FIELDS: CapabilityField[] = CAPABILITIES.flatMap((c) => c.field
  */
 const CORE_SECRETS = ["openrouter_api_key"] as const satisfies readonly (keyof Config)[];
 
-
 /**
  * The longest note an agent keeps, each of `private_notes` and `public_notes`. Long
  * enough for a brief with its evidence; both are resent every turn, so the model's
@@ -397,7 +396,8 @@ function validateConfig(body: Partial<Config>): Partial<Config> {
     patch.reasoning_effort = body.reasoning_effort;
   }
   if (body.context_messages !== undefined) {
-    if (!Number.isFinite(body.context_messages)) throw new Error("context_messages must be a number");
+    if (!Number.isFinite(body.context_messages))
+      throw new Error("context_messages must be a number");
     patch.context_messages = Math.round(clamp(body.context_messages, 0, 200));
   }
 
@@ -500,7 +500,6 @@ async function syncWebhook(
   }
 }
 
-
 /**
  * Subscribe this agent's Meta app to its WhatsApp Business Account, so deliveries
  * reach the callback URL at all.
@@ -570,10 +569,7 @@ function mcpView(row: McpServerRow, reveal: boolean): McpServerView {
  * connection, and whenever the user asks for a refresh. A failure is recorded rather
  * than thrown: the card shows why, and the server stays editable.
  */
-async function syncMcpTools(
-  reg: Registry,
-  row: McpServerRow
-): Promise<McpServerRow> {
+async function syncMcpTools(reg: Registry, row: McpServerRow): Promise<McpServerRow> {
   if (!mcpServerReady(row)) {
     return (await reg.updateMcpServer(row.id, { tools_json: "", last_error: "" })) ?? row;
   }
@@ -762,11 +758,7 @@ function validateMcpBody(body: Record<string, unknown>): Partial<McpServerRow> {
  * under, so two servers called the same thing would offer the model two different
  * tools under one name.
  */
-async function assertNameFree(
-  reg: Registry,
-  name: string,
-  exceptId?: string
-): Promise<void> {
+async function assertNameFree(reg: Registry, name: string, exceptId?: string): Promise<void> {
   const taken = (await reg.mcpServers()).some(
     (s) => s.id !== exceptId && s.name.toLowerCase() === name.toLowerCase()
   );
@@ -943,10 +935,7 @@ async function handleMcp(
   const LIST_FIELDS = ["name", "url", "auth", "headers"] as const;
 
   const refused = withCors(
-    Response.json(
-      { error: "This agent's MCP servers are managed for you." },
-      { status: 403 }
-    )
+    Response.json({ error: "This agent's MCP servers are managed for you." }, { status: 403 })
   );
 
   if (request.method === "GET" && !id) {
@@ -1151,7 +1140,6 @@ async function handleMcp(
   return undefined;
 }
 
-
 /* ---------------------------------------------------------- meta settings -- */
 
 /** The tuning settings a meta default may be given for. */
@@ -1170,10 +1158,7 @@ const META_TUNABLES = [
  * its switch and every field it declares, because half a locked capability — a switch
  * nobody may flip over credentials anybody may rewrite — is not a useful thing.
  */
-const LOCKABLE = new Set<string>([
-  ...META_TUNABLES,
-  ...CAPABILITIES.map((c) => c.id),
-]);
+const LOCKABLE = new Set<string>([...META_TUNABLES, ...CAPABILITIES.map((c) => c.id)]);
 
 /**
  * What the settings page may offer as models.
@@ -1324,7 +1309,8 @@ function validateMeta(
       if (!MODEL_ID.test(id)) throw new Error(`not an OpenRouter model id: ${id}`);
       if (seen.has(id)) continue;
       seen.add(id);
-      const vision = typeof entry === "string" || entry.vision === undefined ? true : !!entry.vision;
+      const vision =
+        typeof entry === "string" || entry.vision === undefined ? true : !!entry.vision;
       meta.models.push({ id, vision });
     }
   }
@@ -1421,7 +1407,8 @@ function validateMeta(
       if (!Array.isArray(body.mcp.catalog)) throw new Error("mcp.catalog must be an array");
       meta.mcp.catalog = body.mcp.catalog.map((entry) => {
         const valid = validateCatalogEntry(entry);
-        if (valid.icon) checkIconSize(valid.icon, settings.max_icon_bytes, `MCP template ${valid.id}`);
+        if (valid.icon)
+          checkIconSize(valid.icon, settings.max_icon_bytes, `MCP template ${valid.id}`);
         return valid;
       });
     }
@@ -1466,11 +1453,13 @@ function validateMeta(
  * the three this Worker can actually connect with.
  */
 function validateCatalogEntry(entry: unknown): McpCatalogEntry {
-  if (typeof entry !== "object" || entry === null) throw new Error("each MCP template must be an object");
+  if (typeof entry !== "object" || entry === null)
+    throw new Error("each MCP template must be an object");
   const raw = entry as Record<string, unknown>;
   const text = (key: string): string => {
     const value = raw[key];
-    if (typeof value !== "string" || !value.trim()) throw new Error(`each MCP template needs a ${key}`);
+    if (typeof value !== "string" || !value.trim())
+      throw new Error(`each MCP template needs a ${key}`);
     return value.trim();
   };
   const url = text("url");
@@ -1648,7 +1637,9 @@ async function handleFleets(
   // Only the address that administers the fleet. Its agents' users reach their own
   // agent's pages and nothing here: the fleet is the administrator's instrument.
   const email = await callerEmail(request, env);
-  const fleet = email ? (await dir.listFleets(email)).find((f) => f.fleet_id === fleetId) : undefined;
+  const fleet = email
+    ? (await dir.listFleets(email)).find((f) => f.fleet_id === fleetId)
+    : undefined;
   if (!fleet) return withCors(Response.json({ error: "not allowed" }, { status: 403 }));
 
   /** The fleet's stored settings, or the factory document when it has none. */
@@ -1772,7 +1763,10 @@ async function handleFleets(
 
     const first = await dir.listFleetPage(fleetId, 1, "");
     const name =
-      (body.name ?? "").trim().slice(0, 60) || first.agents[0]?.name || fleet.fleet_name || "New agent";
+      (body.name ?? "").trim().slice(0, 60) ||
+      first.agents[0]?.name ||
+      fleet.fleet_name ||
+      "New agent";
     const meta = await stored();
     const created: AgentRow[] = [];
     for (const member of members) {
@@ -1875,7 +1869,9 @@ function metadataFilter(url: URL): MetadataFilter | undefined {
   const without = url.searchParams.get("without") ?? "";
   const cut = withParam.indexOf(":");
   const filter: MetadataFilter = {
-    ...(cut > 0 ? { with: [withParam.slice(0, cut), withParam.slice(cut + 1)] as [string, string] } : {}),
+    ...(cut > 0
+      ? { with: [withParam.slice(0, cut), withParam.slice(cut + 1)] as [string, string] }
+      : {}),
     ...(without ? { without } : {}),
   };
   return filter.with || filter.without ? filter : undefined;
@@ -1889,7 +1885,8 @@ function validateMetadata(raw: unknown): Record<string, string> {
   if (entries.length > 10) throw new Error("metadata may have at most 10 keys");
   const out: Record<string, string> = {};
   for (const [key, value] of entries) {
-    if (!METADATA_KEY.test(key)) throw new Error(`metadata key "${key}" must match ${METADATA_KEY}`);
+    if (!METADATA_KEY.test(key))
+      throw new Error(`metadata key "${key}" must match ${METADATA_KEY}`);
     if (typeof value !== "string" || value.length > 100) {
       throw new Error(`metadata "${key}" must be a string of at most 100 characters`);
     }
@@ -2728,9 +2725,7 @@ async function handleSession(
     // to throw away, and the answer would be the same after it.
     const { max_sessions } = await deploymentSettings(env);
     if ((await reg.countSessions()) >= max_sessions) {
-      return withCors(
-        Response.json({ error: sessionLimitMessage(max_sessions) }, { status: 409 })
-      );
+      return withCors(Response.json({ error: sessionLimitMessage(max_sessions) }, { status: 409 }));
     }
     const exported = await routeAgentRequest(
       new Request(
@@ -2739,7 +2734,9 @@ async function handleSession(
       env
     );
     if (!exported?.ok) {
-      return withCors(Response.json({ error: "could not read the source session" }, { status: 502 }));
+      return withCors(
+        Response.json({ error: "could not read the source session" }, { status: 502 })
+      );
     }
     const snapshot = await exported.text();
 
@@ -2776,9 +2773,7 @@ async function handleSession(
       // The session object says why when it is a reason the person can act on — no
       // room left for the files this fork would copy. Anything else is a failure
       // they can only retry.
-      const reason = (await imported
-        ?.json()
-        .catch(() => null)) as { error?: string } | null;
+      const reason = (await imported?.json().catch(() => null)) as { error?: string } | null;
       return withCors(
         Response.json(
           { error: reason?.error ?? "could not seed the fork" },
@@ -2871,14 +2866,14 @@ async function handleWebhook(
   const allowed =
     message.chat.type === "private"
       ? allowedBy(config.telegram_user_whitelist, [
-        message.from?.username,
-        message.from?.id !== undefined ? String(message.from.id) : undefined,
-      ])
+          message.from?.username,
+          message.from?.id !== undefined ? String(message.from.id) : undefined,
+        ])
       : allowedBy(config.telegram_group_whitelist, [
-        threadId ? `${chatId}:${threadId}` : chatId,
-        chatId,
-        message.chat.username,
-      ]);
+          threadId ? `${chatId}:${threadId}` : chatId,
+          chatId,
+          message.chat.username,
+        ]);
   if (!allowed) return new Response("ok");
 
   const existing = await reg.forChat(chatId, threadId);
@@ -3161,7 +3156,12 @@ export default {
     // URI is registered with the provider and cannot carry an agent id — so it is
     // matched before anything else under /api/mcp, and the agent comes out of the
     // OAuth state instead.
-    if (segments[0] === "api" && segments[1] === "mcp" && segments[2] === "oauth" && segments[3] === "callback") {
+    if (
+      segments[0] === "api" &&
+      segments[1] === "mcp" &&
+      segments[2] === "oauth" &&
+      segments[3] === "callback"
+    ) {
       return await handleOauthCallback(url, env);
     }
 
@@ -3355,10 +3355,7 @@ export default {
     //
     // `clerkEmail` caches by token, so the verification this forces is paid once per
     // token rather than once per request, and the checks further down reuse it.
-    if (
-      (segments[0] === "api" || segments[0] === "agents") &&
-      !(await callerEmail(request, env))
-    ) {
+    if ((segments[0] === "api" || segments[0] === "agents") && !(await callerEmail(request, env))) {
       return withCors(Response.json({ error: "unauthorized" }, { status: 401 }));
     }
 
@@ -3478,12 +3475,16 @@ export default {
             tasks: "GET /agents/session-agent/:sessionId/tasks, DELETE .../tasks/:taskId",
             metrics: "GET /agents/session-agent/:sessionId/metrics",
             telegram: "POST /telegram/webhook/:agentId",
-            whatsapp: "GET|POST /whatsapp/webhook/:agentId  -> GET verifies the subscription, POST delivers a message",
-            searxng: "POST /searxng/:agentId/url { url }  -> Authorization: Bearer <the agent's SearXNG token>",
-            admin: "POST /api/admin/business-account { email, agent_limit }, GET /api/admin/stats  -> owner only, via API_SECRET",
+            whatsapp:
+              "GET|POST /whatsapp/webhook/:agentId  -> GET verifies the subscription, POST delivers a message",
+            searxng:
+              "POST /searxng/:agentId/url { url }  -> Authorization: Bearer <the agent's SearXNG token>",
+            admin:
+              "POST /api/admin/business-account { email, agent_limit }, GET /api/admin/stats  -> owner only, via API_SECRET",
             settings:
               "GET /api/admin/settings -> { settings, missing, fields }; PATCH /api/admin/settings { <field>: value } -> owner only, via API_SECRET",
-            business_requests: "POST /api/business-requests { increase } -> signed-in caller; GET /api/admin/business-requests, POST .../:id/approve, DELETE .../:id -> owner only, via API_SECRET",
+            business_requests:
+              "POST /api/business-requests { increase } -> signed-in caller; GET /api/admin/business-requests, POST .../:id/approve, DELETE .../:id -> owner only, via API_SECRET",
           },
           note: "A session id is `<agentId>~<local>`; every /agents/session-agent route takes that whole id.",
         })

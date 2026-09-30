@@ -87,7 +87,9 @@ describe("capabilityReady", () => {
   it("ignores optional fields", () => {
     const capability = CAPABILITY_BY_ID.get("web_search")!;
     // Brave and SearXNG are both optional; the capability has a fallback either way.
-    expect(capabilityReady(capability, config({ cap_web_search: 1, brave_api_key: "" }))).toBe(true);
+    expect(capabilityReady(capability, config({ cap_web_search: 1, brave_api_key: "" }))).toBe(
+      true
+    );
   });
 });
 

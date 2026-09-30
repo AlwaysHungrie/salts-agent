@@ -98,7 +98,12 @@ describe("applyMigrations", () => {
     const stub = host();
     const broken: Migration[] = [
       { name: "fine", up: (sql) => sql.exec(`CREATE TABLE ok (id INTEGER PRIMARY KEY)`) },
-      { name: "explodes", up: () => { throw new Error("boom"); } },
+      {
+        name: "explodes",
+        up: () => {
+          throw new Error("boom");
+        },
+      },
     ];
     await expect(
       runInDurableObject(stub, (_i, ctx) => applyMigrations(ctx, broken))
@@ -109,7 +114,12 @@ describe("applyMigrations", () => {
     const stub = host();
     const broken: Migration[] = [
       { name: "fine", up: (sql) => sql.exec(`CREATE TABLE ok (id INTEGER PRIMARY KEY)`) },
-      { name: "explodes", up: () => { throw new Error("boom"); } },
+      {
+        name: "explodes",
+        up: () => {
+          throw new Error("boom");
+        },
+      },
     ];
     await expect(
       runInDurableObject(stub, (_i, ctx) => applyMigrations(ctx, broken))
@@ -141,7 +151,9 @@ describe("applyMigrations", () => {
       const version = schemaVersion(ctx.storage.sql);
       let rows = -1;
       try {
-        rows = (ctx.storage.sql.exec(`SELECT COUNT(*) AS n FROM half`).toArray()[0] as { n: number }).n;
+        rows = (
+          ctx.storage.sql.exec(`SELECT COUNT(*) AS n FROM half`).toArray()[0] as { n: number }
+        ).n;
       } catch {
         rows = -1; // The table itself was rolled back, which is the stronger outcome.
       }
@@ -166,7 +178,9 @@ describe("applyMigrations", () => {
         },
       },
     ];
-    await expect(runInDurableObject(stub, (_i, ctx) => applyMigrations(ctx, flaky))).rejects.toThrow();
+    await expect(
+      runInDurableObject(stub, (_i, ctx) => applyMigrations(ctx, flaky))
+    ).rejects.toThrow();
     fail = false;
     const version = await runInDurableObject(stub, (_i, ctx) => applyMigrations(ctx, flaky));
     expect(version).toBe(1);

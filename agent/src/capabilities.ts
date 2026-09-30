@@ -237,7 +237,7 @@ export const CAPABILITIES: Capability[] = [
       {
         key: "telegram_bot_token",
         label: "Bot token",
-        hint: "Get a bot token by sending this message \"/newbot\" to @BotFather in Telegram.",
+        hint: 'Get a bot token by sending this message "/newbot" to @BotFather in Telegram.',
         secret: true,
         required: true,
         placeholder: "123456:ABC…",
@@ -276,8 +276,7 @@ export const CAPABILITIES: Capability[] = [
     channel: true,
     label: "WhatsApp",
     summary: "Talk to the agent on WhatsApp. Follow the setup guide below.",
-    note:
-      "Meta will only provide one additional test phone number per user pending business verification",
+    note: "Meta will only provide one additional test phone number per user pending business verification",
     guide: { label: "WhatsApp setup guide", href: "/guides/whatsapp" },
     tools: [],
     fields: [
@@ -331,7 +330,8 @@ export const CAPABILITIES: Capability[] = [
     flag: "cap_mcp",
     alwaysOn: true,
     label: "MCP servers",
-    summary: "Connect to any external MCP server or select an MCP server template from the list below.",
+    summary:
+      "Connect to any external MCP server or select an MCP server template from the list below.",
     // The servers are rows, not settings, so this capability's editor is its own
     // component rather than a list of fields.
     tools: [],
@@ -341,7 +341,8 @@ export const CAPABILITIES: Capability[] = [
     id: "memory",
     flag: "cap_memory",
     label: "Private Memory",
-    summary: "Let the agent remember facts from conversations. These facts are not shared with other agents.",
+    summary:
+      "Let the agent remember facts from conversations. These facts are not shared with other agents.",
     tools: ["remember", "recall"],
     fields: [],
   },
@@ -516,7 +517,7 @@ async function searxngSearch(
   base: string,
   token: string,
   query: string,
-  count: number,
+  count: number
 ): Promise<SearchResult[]> {
   if (!base) throw new Error("no Brave API key and no SearXNG URL is set");
   const url = `${base}/search?q=${encodeURIComponent(query)}&format=json`;
@@ -565,11 +566,11 @@ export const TOOLS: ToolSpec[] = [
       const results = brave
         ? await braveSearch(brave, query, count)
         : await searxngSearch(
-          str(ctx.config.searxng_url).trim().replace(/\/+$/, ""),
-          str(ctx.config.searxng_token).trim(),
-          query,
-          count,
-        );
+            str(ctx.config.searxng_url).trim().replace(/\/+$/, ""),
+            str(ctx.config.searxng_token).trim(),
+            query,
+            count
+          );
       if (results.length === 0) return `No results for "${query}".`;
       return results
         .map((r, i) => `${i + 1}. ${r.title}\n${r.url}\n${htmlToText(r.description ?? "")}`)
@@ -714,7 +715,8 @@ export const TOOLS: ToolSpec[] = [
       });
       if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
       const pcm = await spokenSamples(res);
-      if (pcm.length === 0) return "The voice model returned no audio. Try a different voice model.";
+      if (pcm.length === 0)
+        return "The voice model returned no audio. Try a different voice model.";
       return await ctx.sendVoiceNote(pcm16ToOggOpus(pcm, VOICE_SAMPLE_RATE));
     },
   },
@@ -853,9 +855,7 @@ export async function withMcpAuth<T>(
     if (!refreshed?.oauth_access_token) {
       throw refreshed?.last_error ? new Error(refreshed.last_error) : err;
     }
-    const retried = await run(
-      new McpClient(refreshed.url, {}, refreshed.oauth_access_token)
-    );
+    const retried = await run(new McpClient(refreshed.url, {}, refreshed.oauth_access_token));
     // The call works again, so whatever the card was reporting is out of date.
     if (server.last_error) await registry.noteMcpError(server.id, "");
     return retried;

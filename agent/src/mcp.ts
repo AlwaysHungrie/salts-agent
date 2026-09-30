@@ -283,7 +283,8 @@ export class McpClient {
     if (res.status === 401) throw new McpUnauthorized();
     if (!res.ok) throw new Error(`${res.status} ${(await res.text()).slice(0, 300)}`);
     const { upload_id } = (await res.json().catch(() => ({}))) as { upload_id?: unknown };
-    if (typeof upload_id !== "string" || !upload_id) throw new Error("upload returned no upload_id");
+    if (typeof upload_id !== "string" || !upload_id)
+      throw new Error("upload returned no upload_id");
     return upload_id;
   }
 }
@@ -306,7 +307,10 @@ type AuthServerMetadata = {
 };
 
 const base64url = (bytes: Uint8Array) =>
-  btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
 
 export function randomToken(bytes = 32): string {
   return base64url(crypto.getRandomValues(new Uint8Array(bytes)));
@@ -401,7 +405,10 @@ export async function registerClient(
       token_endpoint_auth_method: "none",
     }),
   });
-  if (!res.ok) throw new Error(`client registration failed: ${res.status} ${(await res.text()).slice(0, 300)}`);
+  if (!res.ok)
+    throw new Error(
+      `client registration failed: ${res.status} ${(await res.text()).slice(0, 300)}`
+    );
   return (await res.json()) as { client_id: string; client_secret?: string };
 }
 

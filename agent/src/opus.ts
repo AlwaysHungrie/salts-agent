@@ -121,7 +121,9 @@ export function pcm16ToOggOpus(pcm: Int16Array, sampleRate = VOICE_SAMPLE_RATE):
     // What the encoder buffers before it emits anything, in samples at the input rate.
     // Ogg states it at 48 kHz, which is the rate every granule position is counted in
     // regardless of what went in, so the player knows how much to discard.
-    const preSkip = Math.round((api.opus_encoder_ctl_get(encoder, OPUS_GET_LOOKAHEAD) * 48000) / sampleRate);
+    const preSkip = Math.round(
+      (api.opus_encoder_ctl_get(encoder, OPUS_GET_LOOKAHEAD) * 48000) / sampleRate
+    );
 
     const ogg = new Ogg();
     ogg.page([identification(preSkip, sampleRate)], { first: true });
@@ -156,9 +158,7 @@ export function pcm16ToOggOpus(pcm: Int16Array, sampleRate = VOICE_SAMPLE_RATE):
 /** One frame in, one Opus packet out, through the buffers the instance already holds. */
 function encode(api: OpusExports, encoder: number, frame: Int16Array): Uint8Array {
   memory.set(new Uint8Array(frame.buffer, frame.byteOffset, frame.byteLength), pcmPtr);
-  const size = checked(
-    api.opus_encode(encoder, pcmPtr, frame.length, packetPtr, PACKET_CAPACITY)
-  );
+  const size = checked(api.opus_encode(encoder, pcmPtr, frame.length, packetPtr, PACKET_CAPACITY));
   return memory.slice(packetPtr, packetPtr + size);
 }
 

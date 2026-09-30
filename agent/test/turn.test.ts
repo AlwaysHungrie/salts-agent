@@ -81,7 +81,7 @@ describe("a turn", () => {
     const { sessionId, email } = await chatFixture();
     const res = await say(sessionId, email, "hello");
     expect(res.status).toBe(200);
-    expect((await res.json() as { reply: string }).reply).toBe(replyTo("hello"));
+    expect(((await res.json()) as { reply: string }).reply).toBe(replyTo("hello"));
   });
 
   it("writes both sides into the transcript", async () => {
@@ -170,7 +170,7 @@ describe("tools inside a turn", () => {
     expect(res.status).toBe(200);
     // Two legs: the model asks for `list`, the agent runs it, the model answers. A
     // break anywhere in that chain shows up as the wrong reply here.
-    expect((await res.json() as { reply: string }).reply).toBe("I listed the workspace.");
+    expect(((await res.json()) as { reply: string }).reply).toBe("I listed the workspace.");
   });
 
   it("records the tool step on the reply", async () => {
@@ -210,14 +210,14 @@ describe("when the provider fails", () => {
     await say(sessionId, email, "!!fail500 hello");
     // The session must not be wedged by one bad turn.
     const res = await say(sessionId, email, "hello");
-    expect((await res.json() as { reply: string }).reply).toBe(replyTo("hello"));
+    expect(((await res.json()) as { reply: string }).reply).toBe(replyTo("hello"));
   });
 });
 
 describe("the spending limit", () => {
   it("answers normally when there is no limit", async () => {
     const { sessionId, email } = await chatFixture();
-    expect((await (await say(sessionId, email, "hi")).json() as { reply: string }).reply).toBe(
+    expect(((await (await say(sessionId, email, "hi")).json()) as { reply: string }).reply).toBe(
       replyTo("hi")
     );
   });
@@ -228,7 +228,8 @@ describe("the spending limit", () => {
     await registry.setMeta({ ...(await registry.meta()), monthly_spend_limit: 0.001 });
     await registry.addSpend(0.002);
 
-    const reply = (await (await say(sessionId, email, "hello")).json() as { reply: string }).reply;
+    const reply = ((await (await say(sessionId, email, "hello")).json()) as { reply: string })
+      .reply;
     // Said in words the person can act on, rather than a silent failure or a 402.
     expect(reply).toContain("spending limit");
   });
@@ -251,7 +252,9 @@ describe("bang commands over chat", () => {
     const res = await say(sessionId, email, "!new");
     expect(res.status).toBe(200);
     // The command is handled before a turn is ever started, so it costs nothing.
-    expect((await res.json() as { _meta: { request: { cost_usd: number } } })._meta.request.cost_usd).toBe(0);
+    expect(
+      ((await res.json()) as { _meta: { request: { cost_usd: number } } })._meta.request.cost_usd
+    ).toBe(0);
   });
 
   it("does not spend on a command", async () => {
@@ -263,7 +266,7 @@ describe("bang commands over chat", () => {
   it("treats a sentence mentioning a command as an ordinary message", async () => {
     const { sessionId, email } = await chatFixture();
     const res = await say(sessionId, email, "what does !new do?");
-    expect((await res.json() as { reply: string }).reply).toBe(replyTo("what does !new do?"));
+    expect(((await res.json()) as { reply: string }).reply).toBe(replyTo("what does !new do?"));
   });
 });
 
@@ -305,7 +308,9 @@ describe("!enable-mcp and !disable-mcp", () => {
 
   it("reports a server it cannot find", async () => {
     const { sessionId, email } = await withServer();
-    expect(await reply(await say(sessionId, email, "!enable-mcp nope"))).toContain('No MCP server named "nope"');
+    expect(await reply(await say(sessionId, email, "!enable-mcp nope"))).toContain(
+      'No MCP server named "nope"'
+    );
     expect(await reply(await say(sessionId, email, "!disable-mcp nope"))).toBe(
       "Error disabling MCP server, please visit the web UI."
     );
@@ -318,7 +323,9 @@ describe("!enable-mcp and !disable-mcp", () => {
 
   it("reports a server it cannot reach", async () => {
     const { sessionId, email, agentId } = await withServer({ url: "https://unreachable.test/" });
-    expect(await reply(await say(sessionId, email, "!enable-mcp docs"))).toMatch(/^Error connecting to Docs/);
+    expect(await reply(await say(sessionId, email, "!enable-mcp docs"))).toMatch(
+      /^Error connecting to Docs/
+    );
     expect((await row(agentId)).last_error).not.toBe("");
   });
 });
@@ -434,7 +441,10 @@ describe("the OpenRouter key", () => {
     const agent = (await (
       await SELF.fetch(
         `${BASE}/api/agents`,
-        as(email, { method: "POST", body: JSON.stringify({ name: "No key", allowed_emails: email }) })
+        as(email, {
+          method: "POST",
+          body: JSON.stringify({ name: "No key", allowed_emails: email }),
+        })
       )
     ).json()) as { id: string };
     const session = (await (
@@ -502,7 +512,8 @@ describe("a PDF sent to an MCP server that takes uploads", () => {
   }
 
   type Upload = { upload_id: string; mime: string; bytes: number; authorization: string };
-  const uploads = async () => (await (await fetch("https://mcp.test/__uploads")).json()) as Upload[];
+  const uploads = async () =>
+    (await (await fetch("https://mcp.test/__uploads")).json()) as Upload[];
 
   /** The user messages on the turn that carried this token, as the model received them. */
   async function turnFor(token: string): Promise<string> {

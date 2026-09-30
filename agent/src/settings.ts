@@ -187,7 +187,12 @@ export const SETTINGS_FIELDS: readonly SettingsField[] = [
   INT("max_agent_bytes", 1, 1_000_000_000_000, "file storage one agent may hold, in bytes"),
   INT("max_members", 1, 100_000, "addresses one agent's access list may hold"),
   INT("default_agent_limit", 1, 100_000, "agents an ordinary account may administer"),
-  { key: "max_upload_bytes", kind: "json", doc: "attachment ceiling per kind: text, pdf, image, audio", group: "limit" },
+  {
+    key: "max_upload_bytes",
+    kind: "json",
+    doc: "attachment ceiling per kind: text, pdf, image, audio",
+    group: "limit",
+  },
   INT("max_thumbnail_bytes", 1, 100_000_000_000, "largest bytes a PDF thumbnail may take"),
   INT("max_tool_rounds", 1, 100, "tool rounds one turn may take before it must answer"),
   INT("message_page", 1, 1000, "transcript page size when none is asked for"),
@@ -199,13 +204,43 @@ export const SETTINGS_FIELDS: readonly SettingsField[] = [
   INT("max_files_per_message", 1, 100, "attachments one message may carry"),
   INT("max_session_page", 1, 10_000, "largest session page a caller may ask for"),
   INT("max_icon_bytes", 1, 1_000_000, "largest SVG icon an MCP template may carry, in bytes"),
-  INT("compact_after_tokens", 0, 10_000_000, "prompt tokens past which older messages are summarised; 0 never auto-compacts"),
+  INT(
+    "compact_after_tokens",
+    0,
+    10_000_000,
+    "prompt tokens past which older messages are summarised; 0 never auto-compacts"
+  ),
 
-  { key: "models", kind: "json", doc: "models the settings page offers: [{id,label,vision}], at least one", group: "default" },
-  { key: "default_model", kind: "string", doc: "model a new agent is seeded with", group: "default" },
-  { key: "system_prompt", kind: "string", doc: "line every agent is told first; blank says nothing", group: "default" },
-  { key: "config_defaults", kind: "json", doc: `starting values for every one of: ${SETTABLE_CONFIG_KEYS.join(", ")}`, group: "default" },
-  { key: "mcp_catalog", kind: "json", doc: "MCP templates offered: [{id,name,url,auth,icon?,letter?,color?}], icon an SVG; empty offers none", group: "default" },
+  {
+    key: "models",
+    kind: "json",
+    doc: "models the settings page offers: [{id,label,vision}], at least one",
+    group: "default",
+  },
+  {
+    key: "default_model",
+    kind: "string",
+    doc: "model a new agent is seeded with",
+    group: "default",
+  },
+  {
+    key: "system_prompt",
+    kind: "string",
+    doc: "line every agent is told first; blank says nothing",
+    group: "default",
+  },
+  {
+    key: "config_defaults",
+    kind: "json",
+    doc: `starting values for every one of: ${SETTABLE_CONFIG_KEYS.join(", ")}`,
+    group: "default",
+  },
+  {
+    key: "mcp_catalog",
+    kind: "json",
+    doc: "MCP templates offered: [{id,name,url,auth,icon?,letter?,color?}], icon an SVG; empty offers none",
+    group: "default",
+  },
   {
     key: "field_options",
     kind: "json",
@@ -293,10 +328,7 @@ function requireInt(key: string, value: unknown, min: number, max: number): numb
  * no log to find out which. `null` is refused too: every field is required, so there
  * is nothing for "unset" to fall back to.
  */
-export function validateSettingsPatch(
-  input: unknown,
-  current: StoredSettings
-): StoredSettings {
+export function validateSettingsPatch(input: unknown, current: StoredSettings): StoredSettings {
   if (!isObject(input)) throw new SettingsError("a settings object is required");
   // A key this Worker no longer has a field for is dropped on the way through, so a
   // setting removed from the code leaves the stored document on its next save.
@@ -406,7 +438,9 @@ export function validateSettingsPatch(
             );
           }
           if (setting === null) {
-            throw new SettingsError(`config_defaults.${column} cannot be unset: every setting is required`);
+            throw new SettingsError(
+              `config_defaults.${column} cannot be unset: every setting is required`
+            );
           }
           merged[column] = validateConfigDefault(column as SettableConfigKey, setting);
         }
@@ -426,7 +460,12 @@ export function validateSettingsPatch(
         break;
       }
       default: {
-        next[field.key] = requireInt(key, value, field.min ?? 1, field.max ?? Number.MAX_SAFE_INTEGER) as never;
+        next[field.key] = requireInt(
+          key,
+          value,
+          field.min ?? 1,
+          field.max ?? Number.MAX_SAFE_INTEGER
+        ) as never;
       }
     }
   }
