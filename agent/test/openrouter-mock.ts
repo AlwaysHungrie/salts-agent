@@ -563,6 +563,22 @@ export const MCP_TOOLS = [
 export const MCP_KEPT = MCP_TOOLS.filter((t) => !t.name.includes("admin")).map((t) => t.name);
 
 /**
+ * A tool that takes a file's bytes by id, which is what marks a server as one the
+ * agent posts attachments to. Advertised by the server at `/files/mcp`.
+ */
+export const MCP_UPLOAD_TOOL = {
+  name: "ingest_resume",
+  description: "Store a resume.",
+  inputSchema: {
+    type: "object",
+    properties: { text: { type: "string" }, upload_id: { type: "string" } },
+  },
+};
+
+/** What was posted to `/files/uploads`, oldest first. Read at `https://mcp.test/__uploads`. */
+const mcpUploads: { upload_id: string; mime: string; bytes: number; authorization: string }[] = [];
+
+/**
  * An MCP server, enough of one to be connected to and asked what it can do.
  *
  * Plain JSON-RPC over one POST, which is the half of Streamable HTTP this Worker uses.
@@ -570,6 +586,17 @@ export const MCP_KEPT = MCP_TOOLS.filter((t) => !t.name.includes("admin")).map((
  * it first" answer without deleting a row's tools behind its back.
  */
 async function mcpMock(request: Request, url: URL): Promise<Response> {
+  if (url.pathname === "/__uploads") return json(mcpUploads);
+  if (url.pathname === "/files/uploads") {
+    const upload_id = `up-${mcpUploads.length + 1}`;
+    mcpUploads.push({
+      upload_id,
+      mime: request.headers.get("content-type") ?? "",
+      bytes: (await request.arrayBuffer()).byteLength,
+      authorization: request.headers.get("authorization") ?? "",
+    });
+    return json({ upload_id });
+  }
   const body = (await request.json().catch(() => ({}))) as { id?: number; method?: string };
   const reply = (result: unknown) =>
     json({ jsonrpc: "2.0", id: body.id ?? 1, result }, 200);
@@ -589,6 +616,7 @@ async function mcpMock(request: Request, url: URL): Promise<Response> {
     );
   }
   if (body.method === "tools/list") {
+    if (url.pathname === "/files/mcp") return reply({ tools: [...MCP_TOOLS, MCP_UPLOAD_TOOL] });
     return reply({ tools: url.pathname === "/empty" ? [] : MCP_TOOLS });
   }
   if (body.method === "tools/call") return reply({ content: [{ type: "text", text: "done" }] });
