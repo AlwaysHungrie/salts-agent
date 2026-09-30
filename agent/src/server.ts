@@ -532,8 +532,12 @@ async function syncWhatsappSubscription(
 /** Where the authorization server sends the browser back to. Always this Worker. */
 const redirectUri = (origin: string) => `${origin}/api/mcp/oauth/callback`;
 
-/** A server as the browser may see it: header values and tokens stay in the Worker. */
-function mcpView(row: McpServerRow): McpServerView {
+/**
+ * A server as the browser may see it: tokens stay in the Worker. Header values go back
+ * to a caller that may edit them, so a saved key can be read and corrected; anyone
+ * else gets the names with each value masked.
+ */
+function mcpView(row: McpServerRow, reveal: boolean): McpServerView {
   const {
     oauth_client_secret: _secret,
     oauth_access_token: token,
@@ -547,7 +551,12 @@ function mcpView(row: McpServerRow): McpServerView {
   } = row;
   return {
     ...rest,
-    header_names: Object.keys(parseHeaders(headers)),
+    headers: Object.fromEntries(
+      Object.entries(parseHeaders(headers)).map(([key, value]) => [
+        key,
+        reveal ? value : SECRET_MASK,
+      ])
+    ),
     tools: parseTools(tools_json),
     disabled_tools: parseNames(disabled_tools),
     connected: row.auth !== "oauth" || token !== "",
@@ -942,11 +951,12 @@ async function handleMcp(
 
   if (request.method === "GET" && !id) {
     const servers = await reg.mcpServers();
+    const reveal = await manages();
     const { mcp } = await reg.meta();
     const settings = await deploymentSettings(env);
     return withCors(
       Response.json({
-        servers: servers.map(mcpView),
+        servers: servers.map((row) => mcpView(row, reveal)),
         /** Shown on the page, because a provider may ask for it when registering by hand. */
         redirect_uri: redirectUri(url.origin),
         // The two admin settings the list itself has to draw: which providers the
@@ -996,7 +1006,7 @@ async function handleMcp(
     await reg.addMcpServer(row);
     // OAuth has nothing to list yet — the tools are read once the user has approved.
     const synced = row.auth === "oauth" ? row : await syncMcpTools(reg, row);
-    return withCors(Response.json({ server: mcpView(synced) }));
+    return withCors(Response.json({ server: mcpView(synced, true) }));
   }
 
   if (id && action === "connect" && request.method === "POST") {
@@ -1026,13 +1036,14 @@ async function handleMcp(
       last_error: "",
     });
     if (!row) return withCors(Response.json({ error: "no such server" }, { status: 404 }));
-    return withCors(Response.json({ server: mcpView(row) }));
+    return withCors(Response.json({ server: mcpView(row, await manages()) }));
   }
 
   if (id && action === "refresh" && request.method === "POST") {
     const row = await reg.mcpServer(id);
     if (!row) return withCors(Response.json({ error: "no such server" }, { status: 404 }));
-    return withCors(Response.json({ server: mcpView(await syncMcpTools(reg, row)) }));
+    const synced = await syncMcpTools(reg, row);
+    return withCors(Response.json({ server: mcpView(synced, await manages()) }));
   }
 
   /**
@@ -1084,7 +1095,7 @@ async function handleMcp(
       ),
     });
     if (!updated) return withCors(Response.json({ error: "no such server" }, { status: 404 }));
-    return withCors(Response.json({ server: mcpView(updated) }));
+    return withCors(Response.json({ server: mcpView(updated, await manages()) }));
   }
 
   if (id && request.method === "PATCH") {
@@ -1125,7 +1136,9 @@ async function handleMcp(
     const rereads = ["url", "auth", "headers", "enabled"] as const;
     const changed = rereads.some((key) => patch[key] !== undefined);
     return withCors(
-      Response.json({ server: mcpView(changed ? await syncMcpTools(reg, updated) : updated) })
+      Response.json({
+        server: mcpView(changed ? await syncMcpTools(reg, updated) : updated, await manages()),
+      })
     );
   }
 

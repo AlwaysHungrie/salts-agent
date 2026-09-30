@@ -38,7 +38,7 @@ export type McpServer = {
   id: string;
   name: string;
   url: string;
-  header_names: string[];
+  headers: Record<string, string>;
   tools: { name: string }[];
   last_error?: string;
 };
