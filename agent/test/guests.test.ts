@@ -1,5 +1,6 @@
 import { SELF, env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
+import { signedIn } from "./clerk";
 
 /**
  * Guests, owner notes and agent metadata: what an app like socratic-salt builds on.
@@ -19,8 +20,7 @@ function as(email: string, init: RequestInit = {}) {
     ...init,
     headers: {
       "content-type": "application/json",
-      "x-api-secret": SECRET,
-      "x-user-email": email,
+      ...signedIn(email),
       ...(init.headers as Record<string, string> | undefined),
     },
   };

@@ -58,7 +58,7 @@ for that one and the preflight lets it through.
 ## Run locally
 
 ```bash
-cp .dev.vars.example .dev.vars   # optional: holds API_SECRET, the back door
+cp .dev.vars.example .dev.vars   # optional: holds API_SECRET, the admin key
 npm install
 npm run dev                       # wrangler dev on http://localhost:8787
 ```
@@ -183,7 +183,7 @@ because removing yourself would hand the agent to the remaining addresses and lo
 out of the page that could undo it. Either way the list may not end up empty: an agent
 nobody is on is one nobody can get back into.
 
-There are two ways to be somebody here, and they do not overlap.
+There is one way to be somebody here.
 
 **A Clerk session token**, sent as `authorization: Bearer <token>`. The Worker verifies
 its signature against Clerk's published keys and takes the address out of the verified
@@ -191,13 +191,10 @@ claims, so it is an address Clerk vouched for rather than one the caller typed. 
 the only identity a normal user of the app ever has, and it is the gate: everything
 under `/api` and `/agents` refuses a caller it cannot identify.
 
-**`x-api-secret` + `x-user-email`**, which is a back door on purpose. Present the
-deployment's `API_SECRET` and the Worker takes the address beside it at face value —
-any address, no sign-in, no proof — and treats the caller as that person for the whole
-request, including addresses that have never signed up. It exists so a holder of the
-secret can act as anyone. It is not an origin check: `API_SECRET` is a master key to
-every identity in this deployment, and it should be read that way. Leave it unset and
-the door is not there at all, which is the safe direction to fail in.
+**`x-api-secret`** opens the owner's admin routes (`/api/admin/*` and the other
+owner-only operations). It names nobody: an `x-user-email` header is ignored, with or
+without the secret, so the secret cannot be used to act as a user. Leave it unset and
+the admin routes are closed.
 
 An address not on an agent's access list is told the agent does not exist rather than
 that it may not have it, however it was arrived at. Session routes are covered by the
@@ -234,19 +231,17 @@ the API — it returns 503 to every request, naming what is missing, before it l
 the method or the path. See `unconfigured()` in [src/server.ts](src/server.ts).
 
 The reason is that it is what makes ordinary sign-in work at all. With no issuer no
-signature can be checked, so no Clerk user can be identified, and the only identity left
-standing is the `API_SECRET` back door — a deployment where impersonation is the only
-way in. Refusing to start is better than that.
+signature can be checked, so no Clerk user can be identified and nobody could sign in.
+Refusing to start is better than that.
 
-`API_SECRET` is deliberately **not** required. It is the back door, not the gate, and a
-deployment without one simply has one fewer way in.
+`API_SECRET` is deliberately **not** required. It only opens the admin routes, and a
+deployment without one simply has them closed.
 
 Two layers, because the one that matters is the version that is already live:
 
 - **`npm run deploy`** runs [scripts/preflight.mjs](scripts/preflight.mjs) first, which
   refuses if `CLERK_ISSUER` is missing or if it could not check at all, and says out
-  loud whether `API_SECRET` is set — a live back door is not something to ship without
-  noticing. Secrets are listable but not readable, which is all this needs.
+  whether `API_SECRET` is set, i.e. whether the admin routes are open. Secrets are listable but not readable, which is all this needs.
 - **The Worker itself** refuses to serve, so a deploy made by running `wrangler deploy`
   directly still fails closed.
 
@@ -257,9 +252,8 @@ with `Deployment is missing default settings` until they are written. `npm run d
 init` after `wrangler deploy`. The root [README](../README.md#deployment-settings) has
 the full sequence.
 
-Set the back door with `wrangler secret put API_SECRET`, or in `agent/.dev.vars` for
-`wrangler dev`. The frontend does not hold it: it is pasted into a single browser's
-localStorage, and that browser sends it.
+Set the admin key with `wrangler secret put API_SECRET`, or in `agent/.dev.vars` for
+`wrangler dev`. The frontend does not hold it; `admin-cli` does.
 
 Two routes are deliberately outside all of this:
 

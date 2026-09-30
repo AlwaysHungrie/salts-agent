@@ -18,7 +18,7 @@ import type {
   SpendState,
 } from "@/lib/agent";
 import { formatUsdShort } from "@/lib/format";
-import { apiFetch, useIdentity } from "@/lib/identity";
+import { useIdentity } from "@/lib/identity";
 import { cached, keys, remember, revise } from "@/lib/cache";
 
 /**
@@ -204,7 +204,7 @@ export default function Settings({
 
   useEffect(() => {
     void (async () => {
-      const res = await apiFetch(
+      const res = await fetch(
         `/api/agents/${encodeURIComponent(agentId)}/config`,
       );
       const payload = (await res.json().catch(() => null)) as ConfigPayload | null;
@@ -261,7 +261,7 @@ export default function Settings({
       return;
     }
     setSaving(true);
-    const res = await apiFetch(`/api/agents/${encodeURIComponent(agentId)}`, {
+    const res = await fetch(`/api/agents/${encodeURIComponent(agentId)}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ name: cleaned }),
@@ -283,7 +283,7 @@ export default function Settings({
    */
   const saveEmails = async (next: string) => {
     setSaving(true);
-    const res = await apiFetch(`/api/agents/${encodeURIComponent(agentId)}`, {
+    const res = await fetch(`/api/agents/${encodeURIComponent(agentId)}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ allowed_emails: next }),
@@ -306,7 +306,7 @@ export default function Settings({
 
   const save = async (patch: Partial<Config>) => {
     setSaving(true);
-    const res = await apiFetch(
+    const res = await fetch(
       `/api/agents/${encodeURIComponent(agentId)}/config`,
       {
         method: "PATCH",

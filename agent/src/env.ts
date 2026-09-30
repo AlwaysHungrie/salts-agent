@@ -9,14 +9,13 @@ export type Env = {
   /** Object storage the workspace spills large files into: images, PDFs, clips. */
   FILES: R2Bucket;
   /**
-   * The impersonation back door: with this as `x-api-secret`, the `x-user-email` beside it
-   * is trusted as-is. A master key to every identity, not an API password.
-   * Optional; unset means no back door, which is the safe default.
+   * The owner's key to the admin routes, sent as `x-api-secret`. It names nobody: acting
+   * as a user always takes that user's Clerk token. Optional; unset disables the admin routes.
    */
   API_SECRET?: string;
   /**
    * The exact `iss` of the Clerk tokens this Worker verifies (e.g.
-   * `https://<subdomain>.clerk.accounts.dev`). The only identity `API_SECRET` cannot forge.
+   * `https://<subdomain>.clerk.accounts.dev`). The only source of identity.
    */
   CLERK_ISSUER?: string;
   /** Telegram's API host. Only set to stand a local Bot API server in its place. */
