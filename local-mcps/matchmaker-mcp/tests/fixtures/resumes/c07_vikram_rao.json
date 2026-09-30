@@ -1,0 +1,52 @@
+{
+  "name": "Vikram Rao",
+  "email": "vikram.rao@example.com",
+  "phone": "+91 99001 22334",
+  "location": "Hyderabad",
+  "current_title": "Data Scientist",
+  "roles": [
+    {
+      "title": "Data Scientist",
+      "company": "HealthAI",
+      "start": "2021-02",
+      "end": "present",
+      "highlights": [
+        "Built NLP models for clinical note classification, F1 0.91",
+        "Fine-tuned transformer models with PyTorch and Hugging Face"
+      ]
+    },
+    {
+      "title": "Data Analyst",
+      "company": "RetailIQ",
+      "start": "2019-05",
+      "end": "2021-01",
+      "highlights": [
+        "Demand forecasting in Python and scikit-learn"
+      ]
+    }
+  ],
+  "skills": [
+    "Python",
+    "PyTorch",
+    "NLP",
+    "Hugging Face",
+    "sklearn",
+    "SQL",
+    "pandas"
+  ],
+  "education": [
+    "M.Tech Data Science, IIIT Hyderabad, 2019"
+  ],
+  "certifications": [],
+  "industries": [
+    "Healthcare",
+    "Retail"
+  ],
+  "notice_period_days": 60,
+  "current_ctc": null,
+  "expected_ctc": null,
+  "languages": [
+    "English"
+  ],
+  "summary": "Data scientist working on NLP models for clinical text with PyTorch."
+}

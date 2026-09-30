@@ -1,0 +1,25 @@
+Vikram Rao — Data Scientist
+Email: vikram.rao@example.com
+Phone: +91 99001 22334
+Location: Hyderabad
+
+Professional Experience
+* HealthAI (2021-02 to present)
+  Data Scientist
+    · Built NLP models for clinical note classification, F1 0.91
+    · Fine-tuned transformer models with PyTorch and Hugging Face
+* RetailIQ (2019-05 to 2021-01)
+  Data Analyst
+    · Demand forecasting in Python and scikit-learn
+
+Technical Skills: Python / PyTorch / NLP / Hugging Face / sklearn / SQL / pandas
+
+About
+Data scientist working on NLP models for clinical text with PyTorch.
+
+Education
+M.Tech Data Science, IIIT Hyderabad, 2019
+
+Notice period: 60 days
+
+Languages: English

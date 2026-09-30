@@ -1,0 +1,27 @@
+PRIYA SHARMA
+Senior Backend Engineer
+priya.sharma@example.com | +91 98765 43210 | Pune
+
+SUMMARY
+Backend engineer with Python and AWS experience in fintech and e-commerce. Led a payments migration to microservices. Based in Pune.
+
+EXPERIENCE
+Senior Backend Engineer, Finlytics   2022-03 - present
+  - Led payments migration from monolith to Python microservices on AWS
+  - Cut p99 latency from 900ms to 180ms with Redis caching
+  - Designed REST APIs serving 40M requests/day
+Backend Engineer, CartNest   2019-01 - 2022-02
+  - Built order service in Django and PostgreSQL
+  - Moved batch jobs to AWS Lambda, saving 30% infra cost
+
+SKILLS
+Python, Django, FastAPI, AWS, Lambda, PostgreSQL, Redis, Docker, REST APIs, Kafka
+
+Education
+B.E. Computer Engineering, Pune University, 2018
+
+Notice period: 30 days
+Current CTC: 28 LPA
+Expected CTC: 36 LPA
+
+Languages: English

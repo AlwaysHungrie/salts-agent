@@ -1,0 +1,37 @@
+{
+  "name": "Amit Singh",
+  "email": "amit.singh@example.com",
+  "phone": "+91 97777 88899",
+  "location": "Delhi",
+  "current_title": "Enterprise Sales Manager",
+  "roles": [
+    {
+      "title": "Enterprise Sales Manager",
+      "company": "CloudSoft",
+      "start": "2018-05",
+      "end": "present",
+      "highlights": [
+        "Closed 12 Cr ARR in FY24",
+        "Managed 30 enterprise accounts"
+      ]
+    }
+  ],
+  "skills": [
+    "B2B Sales",
+    "Salesforce",
+    "Lead Generation",
+    "CRM"
+  ],
+  "education": [],
+  "certifications": [],
+  "industries": [
+    "SaaS"
+  ],
+  "notice_period_days": 90,
+  "current_ctc": null,
+  "expected_ctc": null,
+  "languages": [
+    "English"
+  ],
+  "summary": "Enterprise SaaS sales manager handling large accounts in north India."
+}

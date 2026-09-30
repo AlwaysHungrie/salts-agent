@@ -1,0 +1,32 @@
+{
+  "id": "j5_finance_manager",
+  "expected_top": [
+    "c11_rajesh_gupta",
+    "c12_pooja_nair"
+  ],
+  "jd_text": "Finance Manager\nA mid-size manufacturing group is hiring a Finance Manager for its Mumbai head office.\n\nResponsibilities:\n- Monthly and annual closing across group entities\n- GST and TDS compliance, statutory audits\n- Financial reporting under Ind AS / IFRS\n\nRequirements:\n- 6+ years in accounting or finance\n- Must have hands-on GST compliance experience\n- Must have worked on Tally or SAP\n- Chartered Accountant preferred\n- Advanced Excel\n\nLocation: Mumbai (office-based).\n",
+  "requirements": {
+    "title": "Finance Manager",
+    "must_have_skills": [
+      "GST",
+      "Tally"
+    ],
+    "nice_to_have_skills": [
+      "IFRS",
+      "SAP FICO",
+      "Microsoft Excel",
+      "TDS"
+    ],
+    "min_years": 6,
+    "max_years": null,
+    "locations": [
+      "Mumbai"
+    ],
+    "remote_ok": false,
+    "industries": [
+      "Manufacturing"
+    ],
+    "dealbreakers": [],
+    "summary": "Finance manager handling closing, GST/TDS compliance and IFRS reporting in Mumbai."
+  }
+}

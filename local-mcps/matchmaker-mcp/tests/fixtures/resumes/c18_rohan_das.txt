@@ -1,0 +1,21 @@
+ROHAN DAS
+Junior Python Developer
+rohan.das@example.com | +91 90000 11122 | Pune
+
+SUMMARY
+Junior Python developer with one year of experience on a Flask API.
+
+EXPERIENCE
+Junior Python Developer, CodeCraft   2024-07 - present
+  - Bug fixes in Flask API
+  - Wrote unit tests with pytest
+
+SKILLS
+Python, Flask, pytest, Git
+
+Education
+B.Tech IT, 2024
+
+Notice period: Immediate
+
+Languages: English

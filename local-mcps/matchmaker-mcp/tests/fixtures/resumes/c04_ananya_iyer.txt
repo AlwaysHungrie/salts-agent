@@ -1,0 +1,25 @@
+Ananya Iyer — Frontend Engineer
+Email: ananya.iyer@example.com
+Phone: +91 97000 12345
+Location: Mumbai
+
+Professional Experience
+* ShopKart (2021-04 to present)
+  Frontend Engineer
+    · Rebuilt checkout in React and TypeScript, +12% conversion
+    · Set up Jest and Cypress test suites
+* PixelWorks (2020-01 to 2021-03)
+  UI Developer
+    · Built marketing sites in Next.js
+
+Technical Skills: reactjs / TypeScript / Next.js / Redux / Jest / Cypress / Tailwind
+
+About
+Frontend engineer building React and TypeScript applications for e-commerce checkout.
+
+Education
+B.E. IT, VJTI, 2019
+
+Notice period: 30 days
+
+Languages: English

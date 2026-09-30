@@ -1,0 +1,27 @@
+Sara Khan
+sara.khan@example.com | +91 98111 22233 | Remote
+
+Profile
+Machine learning engineer deploying CTR prediction models and feature pipelines.
+
+Skills
+• Python
+• ML
+• TensorFlow
+• Spark
+• Airflow
+• SQL
+
+Work History
+Machine Learning Engineer | AdPulse | 2020-03 – present
+- Deployed CTR prediction models serving 5k QPS
+- Built feature store on Spark and Airflow
+ML Intern | AdPulse | 2019-09 – 2020-02
+- Experimented with gradient boosting models
+
+Education
+B.Tech EE, IIT Delhi, 2019
+
+Notice period: 30 days
+
+Languages: English

@@ -1,0 +1,33 @@
+{
+  "name": "Lata Pillai",
+  "email": "lata.pillai@example.com",
+  "phone": null,
+  "location": "Kochi",
+  "current_title": "Content Writer",
+  "roles": [
+    {
+      "title": "Content Writer",
+      "company": "Freelance",
+      "start": null,
+      "end": null,
+      "highlights": [
+        "Blog posts for SaaS companies"
+      ]
+    }
+  ],
+  "skills": [
+    "Content Writing",
+    "Copywriting",
+    "SEO"
+  ],
+  "education": [],
+  "certifications": [],
+  "industries": [],
+  "notice_period_days": 0,
+  "current_ctc": null,
+  "expected_ctc": null,
+  "languages": [
+    "English"
+  ],
+  "summary": "Freelance content writer producing blog posts for SaaS companies."
+}

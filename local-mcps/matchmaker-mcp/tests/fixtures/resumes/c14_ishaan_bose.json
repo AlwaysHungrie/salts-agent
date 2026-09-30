@@ -1,0 +1,38 @@
+{
+  "name": "Ishaan Bose",
+  "email": "ishaan.bose@example.com",
+  "phone": "+91 93333 44455",
+  "location": "Kolkata",
+  "current_title": "Digital Marketing Manager",
+  "roles": [
+    {
+      "title": "Digital Marketing Manager",
+      "company": "Glowup Cosmetics",
+      "start": "2020-01",
+      "end": "present",
+      "highlights": [
+        "Managed 2 Cr annual Google Ads budget",
+        "Grew organic traffic 3x through SEO"
+      ]
+    }
+  ],
+  "skills": [
+    "SEO",
+    "Google Ads",
+    "GA4",
+    "HubSpot",
+    "Content Writing"
+  ],
+  "education": [],
+  "certifications": [],
+  "industries": [
+    "Consumer goods"
+  ],
+  "notice_period_days": 60,
+  "current_ctc": null,
+  "expected_ctc": null,
+  "languages": [
+    "English"
+  ],
+  "summary": "Digital marketing manager running paid search and SEO for a cosmetics brand."
+}

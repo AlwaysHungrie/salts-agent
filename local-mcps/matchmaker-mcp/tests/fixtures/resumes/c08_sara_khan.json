@@ -1,0 +1,50 @@
+{
+  "name": "Sara Khan",
+  "email": "sara.khan@example.com",
+  "phone": "+91 98111 22233",
+  "location": "Remote",
+  "current_title": "Machine Learning Engineer",
+  "roles": [
+    {
+      "title": "Machine Learning Engineer",
+      "company": "AdPulse",
+      "start": "2020-03",
+      "end": "present",
+      "highlights": [
+        "Deployed CTR prediction models serving 5k QPS",
+        "Built feature store on Spark and Airflow"
+      ]
+    },
+    {
+      "title": "ML Intern",
+      "company": "AdPulse",
+      "start": "2019-09",
+      "end": "2020-02",
+      "highlights": [
+        "Experimented with gradient boosting models"
+      ]
+    }
+  ],
+  "skills": [
+    "Python",
+    "ML",
+    "TensorFlow",
+    "Spark",
+    "Airflow",
+    "SQL"
+  ],
+  "education": [
+    "B.Tech EE, IIT Delhi, 2019"
+  ],
+  "certifications": [],
+  "industries": [
+    "Advertising"
+  ],
+  "notice_period_days": 30,
+  "current_ctc": null,
+  "expected_ctc": null,
+  "languages": [
+    "English"
+  ],
+  "summary": "Machine learning engineer deploying CTR prediction models and feature pipelines."
+}

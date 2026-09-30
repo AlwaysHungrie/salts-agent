@@ -1,0 +1,50 @@
+{
+  "name": "Kabir Shah",
+  "email": "kabir.shah@example.com",
+  "phone": "+91 98200 55443",
+  "location": "Mumbai",
+  "current_title": "Senior UI Engineer",
+  "roles": [
+    {
+      "title": "Senior UI Engineer",
+      "company": "TravelGo",
+      "start": "2019-09",
+      "end": "present",
+      "highlights": [
+        "Led migration from AngularJS to React",
+        "Built design system with 60 components in TypeScript"
+      ]
+    },
+    {
+      "title": "Web Developer",
+      "company": "Brandly",
+      "start": "2018-01",
+      "end": "2019-08",
+      "highlights": [
+        "jQuery and CSS for client sites"
+      ]
+    }
+  ],
+  "skills": [
+    "React",
+    "TS",
+    "AngularJS",
+    "Storybook",
+    "CSS",
+    "GraphQL"
+  ],
+  "education": [
+    "B.Sc. IT, 2017"
+  ],
+  "certifications": [],
+  "industries": [
+    "Travel"
+  ],
+  "notice_period_days": 90,
+  "current_ctc": null,
+  "expected_ctc": null,
+  "languages": [
+    "English"
+  ],
+  "summary": "UI engineer who led an AngularJS to React migration and built a TypeScript design system."
+}

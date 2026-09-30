@@ -1,0 +1,41 @@
+{
+  "name": "Meera Joshi",
+  "email": null,
+  "phone": "091234 56780",
+  "location": "Thane",
+  "current_title": "React Developer",
+  "roles": [
+    {
+      "title": "React Developer",
+      "company": "EduSpark",
+      "start": "2022-01",
+      "end": "present",
+      "highlights": [
+        "Student dashboard in React with TypeScript",
+        "Accessibility fixes to WCAG AA"
+      ]
+    }
+  ],
+  "skills": [
+    "React",
+    "TypeScript",
+    "HTML",
+    "CSS",
+    "Vite",
+    "Next.js"
+  ],
+  "education": [
+    "B.E. Computer, 2021"
+  ],
+  "certifications": [],
+  "industries": [
+    "Edtech"
+  ],
+  "notice_period_days": 30,
+  "current_ctc": null,
+  "expected_ctc": null,
+  "languages": [
+    "English"
+  ],
+  "summary": "React developer building student dashboards in TypeScript for an edtech company."
+}

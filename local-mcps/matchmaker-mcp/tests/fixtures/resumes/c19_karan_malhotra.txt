@@ -1,0 +1,22 @@
+KARAN MALHOTRA
+Backend Engineer
+karan.m@example.com | +91 98760 00001 | Gurugram
+
+SUMMARY
+Backend engineer on Node.js and TypeScript services, with earlier Java and Django work.
+
+EXPERIENCE
+Backend Engineer, LogiTrack   2021-01 - present
+  - Node.js and TypeScript services on AWS
+  - Owns shipment tracking APIs
+Freelance Developer, Self-employed   2020 - 2022-06
+  - Built Django sites for small businesses
+Software Engineer, Wipro   2018-07 - 2020-12
+  - Java Spring Boot services
+
+SKILLS
+Node.js, TypeScript, AWS, Python, Django, Java, Spring Boot
+
+Notice period: 30 days
+
+Languages: English
