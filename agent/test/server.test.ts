@@ -1,6 +1,7 @@
 import { SELF, env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { SHIPPED } from "./shipped";
+import { signedIn } from "./clerk";
 
 const DEFAULT_AGENT_LIMIT = SHIPPED.default_agent_limit;
 
@@ -8,11 +9,9 @@ const DEFAULT_AGENT_LIMIT = SHIPPED.default_agent_limit;
  * The Worker over HTTP — the same surface the browser and the CLI reach.
  *
  * These are the tests that say the pieces are wired together: a route exists, it is
- * gated by the right check, and the gate fails closed. Clerk cannot sign a token in a
- * test, so callers here are identified through the documented back door — `API_SECRET`
- * plus `x-user-email` — which is the same code path `callerEmail` takes in production
- * when there is no verified token. Tests that assert a *refusal* deliberately send no
- * secret, so they exercise the anonymous case rather than a privileged one.
+ * gated by the right check, and the gate fails closed. Callers are signed in with tokens
+ * from the suite's test issuer (test/clerk.ts), verified exactly as production verifies
+ * Clerk's. Tests that assert a *refusal* send no token, so they exercise the anonymous case.
  */
 
 const SECRET = env.API_SECRET as string;
@@ -37,8 +36,7 @@ function as(email: string, init: RequestInit = {}) {
     ...init,
     headers: {
       "content-type": "application/json",
-      "x-api-secret": SECRET,
-      "x-user-email": email,
+      ...signedIn(email),
       ...(init.headers as Record<string, string> | undefined),
     },
   };
@@ -108,9 +106,8 @@ describe("the identity gate", () => {
   });
 
   it("ignores x-user-email from a caller with no secret", async () => {
-    // This is the header's whole risk: it names anybody. Without the secret it must
-    // carry no weight at all, so a caller claiming an address is simply nobody — and
-    // the agent list refuses nobody outright rather than answering with an empty one.
+    // A caller claiming an address is simply nobody — and the agent list refuses
+    // nobody outright rather than answering with an empty one.
     const owner = someone("owner");
     await createAgent(owner, "Private");
     const res = await SELF.fetch(`${BASE}/api/agents`, {
@@ -118,6 +115,30 @@ describe("the identity gate", () => {
     });
     expect(res.status).toBe(401);
     expect(await res.text()).not.toContain("Private");
+  });
+
+  it("ignores x-user-email even beside the secret", async () => {
+    // The secret opens the owner's routes and names nobody: without a signed token the
+    // claimed address carries no weight, so the owner's key cannot become the owner's
+    // user, or anyone else.
+    const owner = someone("owner");
+    await createAgent(owner, "Private");
+    const res = await SELF.fetch(`${BASE}/api/agents`, {
+      headers: { "x-api-secret": SECRET, "x-user-email": owner },
+    });
+    expect(res.status).toBe(401);
+    expect(await res.text()).not.toContain("Private");
+  });
+
+  it("refuses a token the test issuer did not sign", async () => {
+    const owner = someone("owner");
+    await createAgent(owner, "Private");
+    const [header, payload] = signedIn(owner).authorization.slice(7).split(".");
+    const forged = `${header}.${payload}.${"A".repeat(86)}`;
+    const res = await SELF.fetch(`${BASE}/api/agents`, {
+      headers: { authorization: `Bearer ${forged}` },
+    });
+    expect(res.status).toBe(401);
   });
 
   it("refuses an anonymous caller on the owner's stats", async () => {

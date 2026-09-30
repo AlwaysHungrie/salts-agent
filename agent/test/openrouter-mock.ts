@@ -38,6 +38,8 @@
  * exercised rather than assumed.
  */
 
+import { TEST_CLERK_JWKS } from "./clerk-key";
+
 /* ---------------------------------------------------------------- telegram -- */
 
 /**
@@ -677,6 +679,9 @@ export async function openrouterMock(request: Request): Promise<Response> {
   if (url.hostname === "graph.facebook.com") return graphMock(request, url);
   if (url.hostname === "telegram.test") return telegramMock(request, url);
   if (url.hostname === "mcp.test") return mcpMock(request, url);
+  // The test issuer's public keys, so tokens from test/clerk.ts verify for real.
+  if (url.hostname === "clerk.test" && url.pathname === "/.well-known/jwks.json")
+    return json(TEST_CLERK_JWKS);
   if (url.hostname !== "openrouter.ai") {
     return new Response(`blocked outbound request to ${url.hostname}`, { status: 503 });
   }
