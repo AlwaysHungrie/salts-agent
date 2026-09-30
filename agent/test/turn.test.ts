@@ -2,6 +2,7 @@ import { SELF, env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { COST_PER_TURN, MCP_TOOLS, MCP_UPLOAD_TOOL, replyTo } from "./openrouter-mock";
 import { EMPTY_MCP_SERVER, agentIdOf } from "../src/registry";
+import { signedIn } from "./clerk";
 
 /**
  * A whole turn, end to end.
@@ -17,7 +18,6 @@ import { EMPTY_MCP_SERVER, agentIdOf } from "../src/registry";
  * production.
  */
 
-const SECRET = env.API_SECRET as string;
 const BASE = "https://worker.test";
 
 const someone = (label = "user") => `${label}-${crypto.randomUUID().slice(0, 8)}@x.com`;
@@ -27,8 +27,7 @@ function as(email: string, init: RequestInit = {}) {
     ...init,
     headers: {
       "content-type": "application/json",
-      "x-api-secret": SECRET,
-      "x-user-email": email,
+      ...signedIn(email),
       ...(init.headers as Record<string, string> | undefined),
     },
   };
@@ -505,7 +504,7 @@ describe("a PDF sent to an MCP server that takes uploads", () => {
     form.set("file", new File(["%PDF-1.4 a resume"], "resume.pdf", { type: "application/pdf" }));
     const res = await SELF.fetch(`${BASE}/agents/session-agent/${sessionId}/files`, {
       method: "POST",
-      headers: { "x-api-secret": SECRET, "x-user-email": email },
+      headers: signedIn(email),
       body: form,
     });
     expect(res.ok).toBe(true);

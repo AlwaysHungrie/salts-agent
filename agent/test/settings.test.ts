@@ -9,6 +9,7 @@ import {
 } from "../src/settings";
 import { normalizeEmails, sessionLimitMessage } from "../src/registry";
 import { SHIPPED } from "./shipped";
+import { signedIn } from "./clerk";
 
 /**
  * The deployment's own knobs.
@@ -329,7 +330,7 @@ describe("a deployment with incomplete settings", () => {
     await patch({ max_sessions: 9 });
     const res = await SELF.fetch(
       `${BASE}/api/agents`,
-      asOwner({ headers: { "x-user-email": "refused@x.com" } })
+      asOwner({ headers: signedIn("refused@x.com") })
     );
     expect(res.status).toBe(503);
     // The UI shows this verbatim: no field names, no tooling. The list is the owner's,
@@ -355,7 +356,7 @@ describe("a deployment with incomplete settings", () => {
     expect((await saved.json<{ missing: string[] }>()).missing).toEqual([]);
     const res = await SELF.fetch(
       `${BASE}/api/agents`,
-      asOwner({ headers: { "x-user-email": "served@x.com" } })
+      asOwner({ headers: signedIn("served@x.com") })
     );
     expect(res.status).toBe(200);
   });
@@ -374,7 +375,7 @@ describe("a setting the owner changed is the one enforced", () => {
         `${BASE}/api/agents`,
         asOwner({
           method: "POST",
-          headers: { "x-user-email": email },
+          headers: signedIn(email),
           body: JSON.stringify({ name, allowed_emails: email }),
         })
       );
@@ -394,7 +395,7 @@ describe("a setting the owner changed is the one enforced", () => {
       `${BASE}/api/agents`,
       asOwner({
         method: "POST",
-        headers: { "x-user-email": email },
+        headers: signedIn(email),
         body: JSON.stringify({ name: "Capped", allowed_emails: email }),
       })
     );
@@ -403,7 +404,7 @@ describe("a setting the owner changed is the one enforced", () => {
     const session = () =>
       SELF.fetch(
         `${BASE}/api/agents/${id}/sessions`,
-        asOwner({ method: "POST", headers: { "x-user-email": email }, body: JSON.stringify({}) })
+        asOwner({ method: "POST", headers: signedIn(email), body: JSON.stringify({}) })
       );
     expect((await session()).status).toBe(200);
     const refused = await session();
@@ -415,7 +416,7 @@ describe("a setting the owner changed is the one enforced", () => {
     await patch({ models: [{ id: "owner/model", label: "Owner's", vision: false }] });
     const res = await SELF.fetch(
       `${BASE}/api/agents/catalog`,
-      asOwner({ headers: { "x-user-email": "catalog@x.com" } })
+      asOwner({ headers: signedIn("catalog@x.com") })
     );
     const body = await res.json<{ models: { id: string }[] }>();
     expect(body.models).toEqual([{ id: "owner/model", label: "Owner's", vision: false }]);
@@ -427,7 +428,7 @@ describe("a setting the owner changed is the one enforced", () => {
     await patch({ mcp_catalog: [mine] });
     const res = await SELF.fetch(
       `${BASE}/api/agents/catalog`,
-      asOwner({ headers: { "x-user-email": "catalog@x.com" } })
+      asOwner({ headers: signedIn("catalog@x.com") })
     );
     const body = await res.json<{ mcp_catalog: unknown[] }>();
     expect(body.mcp_catalog).toEqual([mine]);
@@ -442,14 +443,14 @@ describe("a setting the owner changed is the one enforced", () => {
       `${BASE}/api/agents`,
       asOwner({
         method: "POST",
-        headers: { "x-user-email": email },
+        headers: signedIn(email),
         body: JSON.stringify({ name: "Composer", allowed_emails: email }),
       })
     );
     const { id } = await created.json<{ id: string }>();
     const res = await SELF.fetch(
       `${BASE}/api/agents/${id}/config`,
-      asOwner({ headers: { "x-user-email": email } })
+      asOwner({ headers: signedIn(email) })
     );
     const body = await res.json<{
       limits: { max_files_per_message: number; max_upload_bytes: { image: number } };
@@ -464,7 +465,7 @@ describe("a setting the owner changed is the one enforced", () => {
     });
     const res = await SELF.fetch(
       `${BASE}/api/agents/catalog`,
-      asOwner({ headers: { "x-user-email": "catalog@x.com" } })
+      asOwner({ headers: signedIn("catalog@x.com") })
     );
     const body = await res.json<{
       capabilities: {
@@ -482,7 +483,7 @@ describe("a setting the owner changed is the one enforced", () => {
     await patch({ max_upload_bytes: { pdf: 32_000_000 } });
     const res = await SELF.fetch(
       `${BASE}/api/agents/catalog`,
-      asOwner({ headers: { "x-user-email": "catalog@x.com" } })
+      asOwner({ headers: signedIn("catalog@x.com") })
     );
     const body = await res.json<{ capabilities: { id: string; note?: string }[] }>();
     const note = body.capabilities.find((c) => c.id === "file_ingest")?.note ?? "";

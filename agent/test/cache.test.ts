@@ -1,6 +1,7 @@
-import { SELF, env } from "cloudflare:test";
+import { SELF } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { cachedPromptTokens, prepareOpenRouterRequest } from "../src/openrouter";
+import { signedIn } from "./clerk";
 
 /**
  * The cache breakpoint, and the number that proves it landed.
@@ -15,7 +16,6 @@ import { cachedPromptTokens, prepareOpenRouterRequest } from "../src/openrouter"
  * body the AI SDK actually builds is not something a hand-assembled body can answer.
  */
 
-const SECRET = env.API_SECRET as string;
 const BASE = "https://worker.test";
 
 const someone = (label = "user") => `${label}-${crypto.randomUUID().slice(0, 8)}@x.com`;
@@ -25,8 +25,7 @@ function as(email: string, init: RequestInit = {}) {
     ...init,
     headers: {
       "content-type": "application/json",
-      "x-api-secret": SECRET,
-      "x-user-email": email,
+      ...signedIn(email),
       ...(init.headers as Record<string, string> | undefined),
     },
   };

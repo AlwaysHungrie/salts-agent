@@ -1,12 +1,12 @@
-import { SELF, env } from "cloudflare:test";
+import { SELF } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
+import { signedIn } from "./clerk";
 
 /**
  * Header values on an MCP server: readable by whoever may edit them, masked for
  * everyone else, and editable after the server is saved.
  */
 
-const SECRET = env.API_SECRET as string;
 const BASE = "https://worker.test";
 const MASK = "••••••••";
 
@@ -17,8 +17,7 @@ function as(email: string, init: RequestInit = {}) {
     ...init,
     headers: {
       "content-type": "application/json",
-      "x-api-secret": SECRET,
-      "x-user-email": email,
+      ...signedIn(email),
     },
   };
 }

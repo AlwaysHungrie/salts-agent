@@ -94,8 +94,7 @@ if (!vars.CLERK_ISSUER && !secrets.includes("CLERK_ISSUER")) {
     "",
     "It is what lets the Worker verify a Clerk session token, and a verified token",
     "is how every ordinary caller becomes somebody. Without it nobody can sign in",
-    "to this deployment at all — the Worker refuses to serve rather than fall back",
-    "to the API_SECRET back door as its only identity.",
+    "to this deployment at all, so the Worker refuses to serve.",
     "",
     "Add it to `vars` in wrangler.jsonc — it is a public URL, not a secret:",
     "",
@@ -128,11 +127,9 @@ try {
   ]);
 }
 
-// API_SECRET is optional now: it is the impersonation back door, not the gate, so a
-// deployment without one is a deployment with one fewer way in. Worth saying out loud
-// on the way past, because a live back door is not something to ship unnoticed.
+// API_SECRET is optional: it unlocks the owner's admin routes and names nobody.
 console.log(
   secrets.includes("API_SECRET")
-    ? `  preflight ok (${label}) — CLERK_ISSUER configured. API_SECRET is set: the\n  impersonation back door is live on this deployment.`
-    : `  preflight ok (${label}) — CLERK_ISSUER configured. No API_SECRET: no\n  impersonation door.`
+    ? `  preflight ok (${label}) — CLERK_ISSUER configured. API_SECRET is set: admin routes enabled.`
+    : `  preflight ok (${label}) — CLERK_ISSUER configured. No API_SECRET: admin routes disabled.`
 );

@@ -50,34 +50,11 @@ insert, with failures held for 30 seconds so a client retrying a stale token can
 its retries into key lookups. The steady state is a map lookup, not a public-key
 operation. See [clerk.ts](../agent/src/clerk.ts).
 
-### The back door
+### API_SECRET
 
-`API_SECRET` still exists, and it is exactly one thing now: **a way to be anyone.**
-
-Send `x-api-secret` matching the Worker's `API_SECRET`, with an `x-user-email` beside
-it, and the Worker treats the caller as that address — any address, no sign-in, no
-proof, including addresses that have never signed up. It is a feature, kept for
-development, and it is why the secret is better understood as a master key to every
-identity in the deployment than as a password for the API.
-
-It is reached from a browser, not from this app's environment:
-
-| Where | What |
-| --- | --- |
-| `localStorage.API_SECRET` | The deployment secret. Pasted in by hand; no UI writes it. |
-| `localStorage.API_EMAIL` | The address being impersonated, set by the box on screen. |
-
-[identity.ts](../frontend/src/lib/identity.ts) reads both at call time and attaches them
-to every `/api` call; [upstream.ts](../frontend/src/lib/upstream.ts) passes them through
-to the Worker untouched and skips the Clerk token entirely when it sees them, so the two
-identities never mix on one request. The secret therefore lives in one browser and in
-the Worker, and nowhere in between.
-
-Both keys are set by hand, in devtools, and reloaded. **Nothing in the app writes
-either one** — there is no screen that asks and no code path that sets them, so nothing
-here can be talked into opening the door for somebody. Logging out clears both: leaving
-the secret behind would strand the browser signed out of the back door with no screen
-anywhere that could put an address back.
+`API_SECRET`, sent as `x-api-secret`, opens the owner's admin routes. It names nobody:
+the Worker ignores `x-user-email`, with or without the secret, so the only way to act as
+a user is that user's Clerk token.
 
 Three consequences worth stating plainly:
 
@@ -105,15 +82,15 @@ Three consequences worth stating plainly:
 **A Worker without `CLERK_ISSUER` does not run.** There is no unset case: `unconfigured()`
 in [server.ts](../agent/src/server.ts) is checked at the top of `fetch`, before CORS and
 before routing, and returns 503 naming what is missing. Without an issuer no signature
-can be checked and no Clerk user can be identified, which would leave the back door as
-the only working identity — worth refusing to start over. `API_SECRET` is deliberately
-not required; a deployment without one has one fewer way in.
+can be checked and no Clerk user can be identified, so nobody could sign in — worth
+refusing to start over. `API_SECRET` is deliberately not required; a deployment without
+one has its admin routes closed.
 
 The deploy is guarded ahead of that: `npm run deploy` runs
 [scripts/preflight.mjs](../agent/scripts/preflight.mjs), which refuses when
 `CLERK_ISSUER` is missing or when it could not check at all — a preflight that passes on
-"unknown" is worse than none — and says whether the back door is live on the deployment
-it is about to ship to.
+"unknown" is worse than none — and says whether `API_SECRET` (the admin routes) is set
+on the deployment it is about to ship to.
 
 Two Worker routes sit outside all of this on purpose. `POST /telegram/webhook/:agentId`
 authenticates with a per-bot secret token that Telegram echoes back, derived by SHA-256
@@ -268,8 +245,6 @@ message protocol, so it calls `fetch` itself and adds the same headers by hand.
     │  retry? trigger === "regenerate-message"
     │  agentHeaders() → reads Clerk server-side
     │        → authorization: Bearer <session token>
-    │        (or, under the back door, the browser's own
-    │         x-api-secret + x-user-email, passed through)
     ▼
   POST {AGENT_URL}/agents/session-agent/<id>/stream   { message, retry }
     │
