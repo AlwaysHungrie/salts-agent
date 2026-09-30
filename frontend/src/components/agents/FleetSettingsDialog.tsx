@@ -1,6 +1,5 @@
 import { MetaSettingsForm } from "@/components/MetaSettings";
 import { type Capability, EMPTY_META, type FleetRow, type McpCatalogEntry, type MetaSettings, type ModelOption } from "@/lib/agent";
-import { apiFetch } from "@/lib/identity";
 import { useEffect, useState } from "react";
 
 /**
@@ -30,7 +29,7 @@ export function FleetSettingsDialog({
 
   useEffect(() => {
     void (async () => {
-      const res = await apiFetch(base, { cache: "no-store" });
+      const res = await fetch(base, { cache: "no-store" });
       const payload = (await res.json().catch(() => null)) as {
         meta?: MetaSettings;
         models?: ModelOption[];
@@ -58,7 +57,7 @@ export function FleetSettingsDialog({
     // The first call saves the document and takes the first batch; the ones after it
     // carry the cursor and take the rest.
     for (let cursor = "", more = true; more; ) {
-      const res = await apiFetch(base, {
+      const res = await fetch(base, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(

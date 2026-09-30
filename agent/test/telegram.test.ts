@@ -1,5 +1,6 @@
-import { SELF, env } from "cloudflare:test";
+import { SELF } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
+import { signedIn } from "./clerk";
 import {
   PLATFORM_RESET,
   RESET_FILE_ID,
@@ -23,7 +24,6 @@ import {
  * channel has a line of code of its own for either.
  */
 
-const SECRET = env.API_SECRET as string;
 const BASE = "https://worker.test";
 const BOT_TOKEN = "123456:mock-bot-token";
 
@@ -37,8 +37,7 @@ function as(email: string, init: RequestInit = {}) {
     ...init,
     headers: {
       "content-type": "application/json",
-      "x-api-secret": SECRET,
-      "x-user-email": email,
+      ...signedIn(email),
       ...(init.headers as Record<string, string> | undefined),
     },
   };

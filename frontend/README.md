@@ -23,8 +23,7 @@ This package uses pnpm. The agent Worker uses npm.
 - `CLERK_JWT_TEMPLATE`: only if your Clerk session token has no `email` claim.
 
 It holds no shared secret. The Worker identifies a caller by the Clerk session token this
-app forwards. The Worker's `API_SECRET` back door is read from one browser's
-localStorage, never from this app. See the root [README](../README.md#run-it).
+app forwards. See the root [README](../README.md#run-it).
 
 ## How it talks to the Worker
 

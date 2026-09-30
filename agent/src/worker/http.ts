@@ -1,15 +1,11 @@
 export const CORS = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "GET,POST,DELETE,PATCH,OPTIONS",
-  "access-control-allow-headers": "content-type, authorization, x-api-secret, x-user-email",
+  "access-control-allow-headers": "content-type, authorization, x-api-secret",
 };
 
-/**
- * Two ways to be someone: a Clerk token in `authorization` (verified), or `x-api-secret`
- * plus `x-user-email`, a deliberate back door that makes `API_SECRET` a master key.
- */
+/** The owner's key to the admin routes. Identity comes only from a Clerk token. */
 export const API_SECRET_HEADER = "x-api-secret";
-export const USER_EMAIL_HEADER = "x-user-email";
 
 export function withCors(res: Response) {
   const headers = new Headers(res.headers);

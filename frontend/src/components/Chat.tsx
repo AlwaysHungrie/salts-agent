@@ -5,7 +5,6 @@ import { DefaultChatTransport } from "ai";
 import { useEffect, useRef, useState } from "react";
 import type { ChatUIMessage, MetaData } from "@/app/api/sessions/[id]/chat/route";
 import type { StoredMessage, TranscriptPage } from "@/lib/agent";
-import { identityHeaders } from "@/lib/identity";
 import { Bubble } from "./chat/Bubble";
 import { ChannelFooter, type ContinueAt } from "./chat/ChannelFooter";
 import { Composer } from "./chat/Composer";
@@ -73,12 +72,9 @@ export function Chat({
       messages: toUIMessages(initialMessages),
       transport: new DefaultChatTransport({
         api: `/api/sessions/${encodeURIComponent(sessionId)}/chat`,
-        // Read at send time, so a change of address mid-session applies next turn.
-        headers: identityHeaders,
         // Reconnecting is a GET to the same route, not to `<api>/<id>/stream`.
         prepareReconnectToStreamRequest: ({ api }) => ({
           api: `${api}?has=${encodeURIComponent(lastReply)}`,
-          headers: identityHeaders(),
         }),
       }),
       // A reload does not stop the turn, so the reply is picked up where it got to.

@@ -1,5 +1,4 @@
 import type { AgentRow, FleetRow } from "@/lib/agent";
-import { apiFetch } from "@/lib/identity";
 import { useState } from "react";
 
 /** Add agents to a fleet: one per address, created from the fleet's own settings. */
@@ -30,7 +29,7 @@ export function AddFleetAgentsDialog({
     if (!members.length || busy) return;
     setBusy(true);
     setError(null);
-    const res = await apiFetch(
+    const res = await fetch(
       `/api/fleets/${encodeURIComponent(fleet.fleet_id)}/agents`,
       {
         method: "POST",

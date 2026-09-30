@@ -1,6 +1,7 @@
 import { cloudflareTest } from "@cloudflare/vitest-pool-workers";
 import { defineConfig } from "vitest/config";
 import { openrouterMock } from "./test/openrouter-mock";
+import { TEST_CLERK_ISSUER } from "./test/clerk-key";
 
 /**
  * Tests run inside workerd, not Node.
@@ -48,14 +49,19 @@ export default defineConfig({
         // `API_SECRET` is the owner's back door, and it is unset in wrangler.jsonc
         // because it is a secret. The owner-only routes are unreachable without one,
         // so the suite sets one — including for the tests that assert it stays shut
-        // for everyone who does not present it. `CLERK_ISSUER` comes from the config's
-        // own `vars`, which is what production reads too.
+        // for everyone who does not present it. `CLERK_ISSUER` points at the suite's own
+        // issuer (test/clerk-key.ts), whose keys the mock serves, so signed-in callers
+        // go through the same token verification production does.
         //
         // `TELEGRAM_API_BASE` points the Bot API at the stand-in in the mock rather
         // than at Telegram. Production uses the same variable to reach a local Bot API
         // server, and pointing it away from `api.telegram.org` is what lets the suite
         // keep its seal — and the test that proves it — on the real host.
-        bindings: { API_SECRET: "test-secret", TELEGRAM_API_BASE: "https://telegram.test" },
+        bindings: {
+          API_SECRET: "test-secret",
+          TELEGRAM_API_BASE: "https://telegram.test",
+          CLERK_ISSUER: TEST_CLERK_ISSUER,
+        },
         // Every outbound `fetch` from the Worker and from its Durable Objects, routed
         // to a fake OpenRouter. This is what makes the turn loop testable: the real
         // agent, the real AI SDK client and the real transcript writes all run, with

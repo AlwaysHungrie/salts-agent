@@ -1,12 +1,12 @@
 import type { Env } from "../env";
 import { clerkEmail } from "../clerk";
 import { type AccessRow, type AgentRow, emailAllowed, splitEmails } from "../registry";
-import { API_SECRET_HEADER, USER_EMAIL_HEADER } from "./http";
+import { API_SECRET_HEADER } from "./http";
 import { directory, registry } from "./stores";
 
 /**
  * Whether the request carries `API_SECRET`. An unset secret is always false, so a
- * missing secret closes the back door rather than opening it.
+ * missing secret closes the admin routes rather than opening them.
  */
 export function trustedCaller(request: Request, env: Env): boolean {
   if (!env.API_SECRET) return false;
@@ -15,7 +15,7 @@ export function trustedCaller(request: Request, env: Env): boolean {
 
 /**
  * Required configuration: `CLERK_ISSUER`, without which no ordinary caller can be
- * identified. `API_SECRET` is optional (no back door). Checked per request so the
+ * identified. `API_SECRET` is optional (no admin routes). Checked per request so the
  * error says what is missing rather than a module-load 1101.
  */
 export function unconfigured(env: Env): string[] {
@@ -25,15 +25,11 @@ export function unconfigured(env: Env): string[] {
 }
 
 /**
- * The caller's address, or "" (which matches no access list). A verified Clerk token wins;
- * `x-user-email` is only trusted alongside `API_SECRET`.
+ * The caller's address, or "" (which matches no access list). Only a verified Clerk token
+ * names anyone; `API_SECRET` unlocks the owner routes, never another person's identity.
  */
 export async function callerEmail(request: Request, env: Env): Promise<string> {
-  const verified = await clerkEmail(request, env);
-  if (verified) return verified;
-  // The back door: closed unless `API_SECRET` is set and presented.
-  if (!trustedCaller(request, env)) return "";
-  return (request.headers.get(USER_EMAIL_HEADER) ?? "").trim().toLowerCase();
+  return await clerkEmail(request, env);
 }
 
 /**
