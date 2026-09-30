@@ -39,7 +39,10 @@ function asOwner(init: RequestInit = {}) {
 }
 
 const patch = (body: unknown) =>
-  SELF.fetch(`${BASE}/api/admin/settings`, asOwner({ method: "PATCH", body: JSON.stringify(body) }));
+  SELF.fetch(
+    `${BASE}/api/admin/settings`,
+    asOwner({ method: "PATCH", body: JSON.stringify(body) })
+  );
 
 const reset = () => patch(SHIPPED);
 
@@ -132,9 +135,9 @@ describe("validating a patch", () => {
   it("refuses a config column that is not settable deployment-wide", () => {
     // Secrets and per-agent columns are not defaults anybody should be able to set
     // for every agent at once.
-    expect(() => validateSettingsPatch({ config_defaults: { telegram_bot_token: "x" } }, {})).toThrow(
-      /not a settable column/
-    );
+    expect(() =>
+      validateSettingsPatch({ config_defaults: { telegram_bot_token: "x" } }, {})
+    ).toThrow(/not a settable column/);
   });
 
   it("checks a settable config column's own range", () => {
@@ -171,7 +174,10 @@ describe("validating a patch", () => {
 
   it("refuses a field_options entry that is not a model id", () => {
     expect(() =>
-      validateSettingsPatch({ field_options: { voice_model: [{ id: "not a model", label: "X" }] } }, {})
+      validateSettingsPatch(
+        { field_options: { voice_model: [{ id: "not a model", label: "X" }] } },
+        {}
+      )
     ).toThrow(/not an OpenRouter model id/);
   });
 
@@ -186,15 +192,23 @@ describe("validating a patch", () => {
       { field_options: { voice_model: [{ id: "openai/gpt-audio" }, { id: "openai/gpt-audio" }] } },
       {}
     );
-    expect(next.field_options).toEqual({ voice_model: [{ id: "openai/gpt-audio", label: "openai/gpt-audio" }] });
+    expect(next.field_options).toEqual({
+      voice_model: [{ id: "openai/gpt-audio", label: "openai/gpt-audio" }],
+    });
   });
 
   it("counts a menu column as unset while it is absent or still holds bare ids", () => {
     const stored = {
       ...SHIPPED,
-      field_options: { image_model: SHIPPED.field_options.image_model, voice_model: ["openai/gpt-audio"] },
+      field_options: {
+        image_model: SHIPPED.field_options.image_model,
+        voice_model: ["openai/gpt-audio"],
+      },
     } as never;
-    expect(missingSettings(stored)).toEqual(["field_options.transcription_model", "field_options.voice_model"]);
+    expect(missingSettings(stored)).toEqual([
+      "field_options.transcription_model",
+      "field_options.voice_model",
+    ]);
   });
 
   it("refuses an MCP catalogue entry that names no url", () => {
@@ -227,7 +241,9 @@ describe("validating a patch", () => {
   it("ships Notion with its own logo", () => {
     const notion = SHIPPED.mcp_catalog.find((t) => t.id === "notion");
     expect(notion?.icon).toMatch(/^data:image\/svg\+xml;base64,/);
-    expect(() => validateSettingsPatch({ mcp_catalog: SHIPPED.mcp_catalog }, SHIPPED as never)).not.toThrow();
+    expect(() =>
+      validateSettingsPatch({ mcp_catalog: SHIPPED.mcp_catalog }, SHIPPED as never)
+    ).not.toThrow();
   });
 
   it("refuses mcp_templates, and drops it from a document saved before its removal", () => {
@@ -443,17 +459,20 @@ describe("a setting the owner changed is the one enforced", () => {
   });
 
   it("offers the voice models the owner listed, under the names given", async () => {
-    await patch({ field_options: { voice_model: [{ id: "openai/gpt-audio", label: "Owner's voice" }] } });
+    await patch({
+      field_options: { voice_model: [{ id: "openai/gpt-audio", label: "Owner's voice" }] },
+    });
     const res = await SELF.fetch(
       `${BASE}/api/agents/catalog`,
       asOwner({ headers: { "x-user-email": "catalog@x.com" } })
     );
     const body = await res.json<{
-      capabilities: { id: string; fields: { key: string; options?: { value: string; label: string }[] }[] }[];
+      capabilities: {
+        id: string;
+        fields: { key: string; options?: { value: string; label: string }[] }[];
+      }[];
     }>();
-    const field = body.capabilities
-      .flatMap((c) => c.fields)
-      .find((f) => f.key === "voice_model");
+    const field = body.capabilities.flatMap((c) => c.fields).find((f) => f.key === "voice_model");
     expect(field?.options).toEqual([{ value: "openai/gpt-audio", label: "Owner's voice" }]);
   });
 

@@ -1,11 +1,6 @@
 import { env, runInDurableObject } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
-import {
-  DEFAULT_CONFIG,
-  sessionIdForChat,
-  sessionLimitMessage,
-  thisMonth,
-} from "../src/registry";
+import { DEFAULT_CONFIG, sessionIdForChat, sessionLimitMessage, thisMonth } from "../src/registry";
 import { SHIPPED } from "./shipped";
 
 const SEED = SHIPPED.config_defaults;
@@ -262,7 +257,8 @@ describe("sessions", () => {
   });
 
   it("pages with a cursor rather than an offset", async () => {
-    for (let i = 0; i < 5; i++) await reg.create(`s${i}`, `t${i}`, `o${i}`, undefined, MAX_SESSIONS);
+    for (let i = 0; i < 5; i++)
+      await reg.create(`s${i}`, `t${i}`, `o${i}`, undefined, MAX_SESSIONS);
     const first = await reg.list(2);
     expect(first.sessions).toHaveLength(2);
     expect(first.cursor).toBeTruthy();
@@ -280,7 +276,8 @@ describe("sessions", () => {
   });
 
   it("refuses a new session past the ceiling", async () => {
-    for (let i = 0; i < MAX_SESSIONS; i++) await reg.create(`s${i}`, `t${i}`, `o${i}`, undefined, MAX_SESSIONS);
+    for (let i = 0; i < MAX_SESSIONS; i++)
+      await reg.create(`s${i}`, `t${i}`, `o${i}`, undefined, MAX_SESSIONS);
     // Caught rather than asserted through `.rejects`: a Durable Object RPC stub
     // surfaces the rejection to the runtime as well as to the caller, and `.rejects`
     // leaves the runtime's copy unhandled.
@@ -292,10 +289,13 @@ describe("sessions", () => {
   });
 
   it("still allows updating an existing session at the ceiling", async () => {
-    for (let i = 0; i < MAX_SESSIONS; i++) await reg.create(`s${i}`, `t${i}`, `o${i}`, undefined, MAX_SESSIONS);
+    for (let i = 0; i < MAX_SESSIONS; i++)
+      await reg.create(`s${i}`, `t${i}`, `o${i}`, undefined, MAX_SESSIONS);
     // Otherwise renaming the oldest session starts failing the moment an agent fills
     // up, which is precisely when someone is trying to tidy it.
-    await expect(reg.create("s0", "renamed", "o0", undefined, MAX_SESSIONS)).resolves.toMatchObject({ id: "s0" });
+    await expect(reg.create("s0", "renamed", "o0", undefined, MAX_SESSIONS)).resolves.toMatchObject(
+      { id: "s0" }
+    );
   });
 });
 

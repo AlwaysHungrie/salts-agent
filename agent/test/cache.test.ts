@@ -1,6 +1,6 @@
 import { SELF, env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
-import { cachedPromptTokens, prepareOpenRouterRequest } from "../src/agent";
+import { cachedPromptTokens, prepareOpenRouterRequest } from "../src/openrouter";
 
 /**
  * The cache breakpoint, and the number that proves it landed.
@@ -114,7 +114,11 @@ describe("prepareOpenRouterRequest", () => {
   it("asks for nothing on a provider that caches by itself", () => {
     // DeepSeek, OpenAI and Gemini cache a repeated prefix with no breakpoint at all,
     // so marking one buys nothing and would only narrow what they match on.
-    for (const model of ["deepseek/deepseek-v4-flash", "openai/gpt-5-mini", "google/gemini-2.5-flash"]) {
+    for (const model of [
+      "deepseek/deepseek-v4-flash",
+      "openai/gpt-5-mini",
+      "google/gemini-2.5-flash",
+    ]) {
       const body = prepared(anthropic({ model }));
       expect(system(body)?.content).toBe("You are a concise assistant.");
       expect(body.usage?.include).toBe(true);
@@ -161,7 +165,9 @@ describe("cachedPromptTokens", () => {
   const step = (raw: unknown) => ({ usage: { raw } }) as never;
 
   it("reads what the provider says it served from cache", () => {
-    expect(cachedPromptTokens(step({ prompt_tokens_details: { cached_tokens: 70_000 } }))).toBe(70_000);
+    expect(cachedPromptTokens(step({ prompt_tokens_details: { cached_tokens: 70_000 } }))).toBe(
+      70_000
+    );
   });
 
   it("is zero when the provider says nothing", () => {

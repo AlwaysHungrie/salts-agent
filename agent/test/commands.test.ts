@@ -62,7 +62,10 @@ describe("parseCommand", () => {
 
   it("parses !enable-mcp and !disable-mcp with a server name", () => {
     expect(parseCommand("!enable-mcp Notion")).toEqual({ mcp: "enable", server: "Notion" });
-    expect(parseCommand("  !DISABLE-MCP  my server ")).toEqual({ mcp: "disable", server: "my server" });
+    expect(parseCommand("  !DISABLE-MCP  my server ")).toEqual({
+      mcp: "disable",
+      server: "my server",
+    });
     expect(parseCommand("@mybot !enable-mcp notion")).toEqual({ mcp: "enable", server: "notion" });
   });
 
