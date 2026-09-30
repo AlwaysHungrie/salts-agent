@@ -1,0 +1,55 @@
+{
+  "name": "Aditya Verma",
+  "email": "aditya.verma@example.com",
+  "phone": "+91 97654 32109",
+  "location": "Pune",
+  "current_title": "Site Reliability Engineer",
+  "roles": [
+    {
+      "title": "Site Reliability Engineer",
+      "company": "CloudNine",
+      "start": "2020-11",
+      "end": "present",
+      "highlights": [
+        "Runs 40 EKS clusters with Terraform and Helm",
+        "Cut incident MTTR by 45% with Prometheus alerts"
+      ]
+    },
+    {
+      "title": "Systems Engineer",
+      "company": "Infosys",
+      "start": "2017-06",
+      "end": "2020-10",
+      "highlights": [
+        "Linux administration and Jenkins pipelines"
+      ]
+    }
+  ],
+  "skills": [
+    "Kubernetes",
+    "Terraform",
+    "AWS",
+    "Helm",
+    "Prometheus",
+    "Grafana",
+    "Linux",
+    "Jenkins"
+  ],
+  "education": [
+    "B.E. Electronics, 2017"
+  ],
+  "certifications": [
+    "CKA",
+    "AWS Solutions Architect Associate"
+  ],
+  "industries": [
+    "SaaS"
+  ],
+  "notice_period_days": 60,
+  "current_ctc": null,
+  "expected_ctc": null,
+  "languages": [
+    "English"
+  ],
+  "summary": "SRE running Kubernetes clusters on AWS with Terraform."
+}

@@ -1,0 +1,37 @@
+{
+  "name": "Rohan Das",
+  "email": "rohan.das@example.com",
+  "phone": "+91 90000 11122",
+  "location": "Pune",
+  "current_title": "Junior Python Developer",
+  "roles": [
+    {
+      "title": "Junior Python Developer",
+      "company": "CodeCraft",
+      "start": "2024-07",
+      "end": "present",
+      "highlights": [
+        "Bug fixes in Flask API",
+        "Wrote unit tests with pytest"
+      ]
+    }
+  ],
+  "skills": [
+    "Python",
+    "Flask",
+    "pytest",
+    "Git"
+  ],
+  "education": [
+    "B.Tech IT, 2024"
+  ],
+  "certifications": [],
+  "industries": [],
+  "notice_period_days": 0,
+  "current_ctc": null,
+  "expected_ctc": null,
+  "languages": [
+    "English"
+  ],
+  "summary": "Junior Python developer with one year of experience on a Flask API."
+}

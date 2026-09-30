@@ -1,0 +1,37 @@
+{
+  "name": "Divya Menon",
+  "email": "divya.menon@example.com",
+  "phone": "+91 95555 12345",
+  "location": "Chennai",
+  "current_title": "Talent Acquisition Specialist",
+  "roles": [
+    {
+      "title": "Talent Acquisition Specialist",
+      "company": "HireRight",
+      "start": "2021-03",
+      "end": "present",
+      "highlights": [
+        "Closed 120 tech hires in 2024",
+        "Ran campus hiring across 15 colleges"
+      ]
+    }
+  ],
+  "skills": [
+    "Recruitment",
+    "Talent Acquisition",
+    "LinkedIn Recruiter",
+    "Workday"
+  ],
+  "education": [],
+  "certifications": [],
+  "industries": [
+    "Staffing"
+  ],
+  "notice_period_days": 30,
+  "current_ctc": null,
+  "expected_ctc": null,
+  "languages": [
+    "English"
+  ],
+  "summary": "Talent acquisition specialist focused on technology hiring."
+}

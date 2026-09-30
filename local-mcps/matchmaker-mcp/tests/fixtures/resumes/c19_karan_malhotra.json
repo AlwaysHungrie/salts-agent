@@ -1,0 +1,58 @@
+{
+  "name": "Karan Malhotra",
+  "email": "karan.m@example.com",
+  "phone": "+91 98760 00001",
+  "location": "Gurugram",
+  "current_title": "Backend Engineer",
+  "roles": [
+    {
+      "title": "Backend Engineer",
+      "company": "LogiTrack",
+      "start": "2021-01",
+      "end": "present",
+      "highlights": [
+        "Node.js and TypeScript services on AWS",
+        "Owns shipment tracking APIs"
+      ]
+    },
+    {
+      "title": "Freelance Developer",
+      "company": null,
+      "start": "2020",
+      "end": "2022-06",
+      "highlights": [
+        "Built Django sites for small businesses"
+      ]
+    },
+    {
+      "title": "Software Engineer",
+      "company": "Wipro",
+      "start": "2018-07",
+      "end": "2020-12",
+      "highlights": [
+        "Java Spring Boot services"
+      ]
+    }
+  ],
+  "skills": [
+    "Node.js",
+    "TypeScript",
+    "AWS",
+    "Python",
+    "Django",
+    "Java",
+    "Spring Boot"
+  ],
+  "education": [],
+  "certifications": [],
+  "industries": [
+    "Logistics"
+  ],
+  "notice_period_days": 30,
+  "current_ctc": null,
+  "expected_ctc": null,
+  "languages": [
+    "English"
+  ],
+  "summary": "Backend engineer on Node.js and TypeScript services, with earlier Java and Django work."
+}

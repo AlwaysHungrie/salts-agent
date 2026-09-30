@@ -1,0 +1,35 @@
+{
+  "id": "j2_frontend_react",
+  "expected_top": [
+    "c04_ananya_iyer",
+    "c05_kabir_shah",
+    "c06_meera_joshi"
+  ],
+  "jd_text": "Frontend Engineer (React)\nWe are a consumer internet company in Mumbai looking for a Frontend Engineer.\n\nResponsibilities:\n- Build fast, accessible user interfaces in React\n- Own our component library and front-end testing\n- Collaborate closely with design\n\nMust have:\n- 3-7 years of frontend experience\n- React and TypeScript in production\nGood to have:\n- Next.js, Redux, GraphQL\n- Testing with Jest or Cypress\n- E-commerce experience\n\nThis role is based in our Mumbai office (5 days on-site). No remote option.\n",
+  "requirements": {
+    "title": "Frontend Engineer",
+    "must_have_skills": [
+      "React",
+      "TypeScript"
+    ],
+    "nice_to_have_skills": [
+      "Next.js",
+      "Redux",
+      "GraphQL",
+      "Jest",
+      "Cypress"
+    ],
+    "min_years": 3,
+    "max_years": 7,
+    "locations": [
+      "Mumbai"
+    ],
+    "remote_ok": false,
+    "industries": [
+      "E-commerce",
+      "Consumer internet"
+    ],
+    "dealbreakers": [],
+    "summary": "Frontend engineer building React and TypeScript interfaces, on-site in Mumbai."
+  }
+}

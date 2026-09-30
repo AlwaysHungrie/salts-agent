@@ -16,7 +16,7 @@ This guide will help you run your own free search engine, called SearXNG, on you
 
 ## 1. Install the tools
 
-1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/). If you already use OrbStack or Colima, those work too. On Linux you can use Docker Engine instead; we recommend starting it with `sudo systemctl enable --now docker` and adding yourself to the `docker` group, so salts-web can use it without asking for your password.
+1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/). If you already use OrbStack or Colima, those work too. On Linux you can use Docker Engine instead; we recommend starting it with `sudo systemctl enable --now docker` and adding yourself to the `docker` group, so salts-tools can use it without asking for your password.
 2. Install [Node.js](https://nodejs.org), version 20 or later.
 3. Install ngrok. On a Mac with Homebrew, run this in Terminal:
 
@@ -34,17 +34,17 @@ This guide will help you run your own free search engine, called SearXNG, on you
 
 4. Create a free account on [ngrok.com](https://ngrok.com) and open [your authtoken page](https://dashboard.ngrok.com/get-started/your-authtoken). Keep this tab open, since you will need the authtoken in step 3.
 
-## 2. Download salts-web
+## 2. Download salts-tools
 
-salts-web is a small program that starts the search engine and connects it to your agent. In your terminal, run these three commands one at a time:
+salts-tools is a small program that starts the search engine and connects it to your agent. In your terminal, run these three commands one at a time:
 
 ```
 git clone https://github.com/AlwaysHungrie/salts-agent.git
-cd salts-agent/salts-web
+cd salts-agent/salts-tools
 npm link
 ```
 
-## 3. Start salts-web
+## 3. Start salts-tools
 
 First, open your agent in the browser and copy its agent ID. It is the part of the address after `/a/`:
 
@@ -55,14 +55,14 @@ https://salts-agent-app.vercel.app/a/<your-agent-id>
 Then run:
 
 ```
-salts-web start
+salts-tools start
 ```
 
-salts-web will ask you a few questions:
+salts-tools will ask you a few questions:
 
 1. **ngrok authtoken**: paste the authtoken from step 1. You only need to do this once.
 2. **Agent ID**: paste your agent ID.
-3. salts-web will then show you a **token**. Copy it, and leave your terminal open while you do the next step.
+3. salts-tools will then show you a **token**. Copy it, and leave your terminal open while you do the next step.
 
 ## 4. Add the token to your agent
 
@@ -70,11 +70,11 @@ Open your agent, go to **Capabilities**, and find **Web search**.
 
 1. Switch **Web search** on.
 2. Paste the token into **SearXNG token** and save.
-3. Leave **Brave Search API key** and **SearXNG URL** empty. salts-web fills in the URL for you.
+3. Leave **Brave Search API key** and **SearXNG URL** empty. salts-tools fills in the URL for you.
 
-Go back to your terminal and press **Enter**. When salts-web is done, you will see three green ticks, ending with `agent <your-agent-id> now searches through it`.
+Go back to your terminal and press **Enter**. When salts-tools is done, you will see three green ticks, ending with `SearXNG: agent <your-agent-id> reaches it at …`.
 
-Finally, salts-web asks whether it should start automatically when you log in. We recommend saying yes, otherwise your agent loses web search every time you restart your computer.
+Finally, salts-tools asks whether it should start automatically when you log in. We recommend saying yes, otherwise your agent loses web search every time you restart your computer.
 
 ## You are done
 
@@ -86,12 +86,12 @@ If you also want your agent to open search results and read the full page, switc
 
 | Command | What it does |
 |---|---|
-| `salts-web start` | Starts the search engine. |
-| `salts-web stop` | Stops the search engine. |
-| `salts-web restart` | Restarts the search engine and reconnects it to your agent. |
-| `salts-web setup` | Asks the setup questions again, for example to connect a different agent. |
-| `salts-web reset` | Forgets the token and agent ID. Run `salts-web stop` first. |
-| `salts-web autostart on` | Starts salts-web when you log in. Use `off` to turn this off. |
+| `salts-tools start` | Starts the search engine. |
+| `salts-tools stop` | Stops the search engine. |
+| `salts-tools restart` | Restarts the search engine and reconnects it to your agent. |
+| `salts-tools setup` | Asks the setup questions again, for example to connect a different agent. |
+| `salts-tools reset` | Forgets the token and agent ID. Run `salts-tools stop` first. |
+| `salts-tools autostart on` | Starts salts-tools when you log in. Use `off` to turn this off. |
 
 ## Using Brave instead
 
@@ -99,6 +99,6 @@ If you would rather not run anything on your computer, you can use Brave's searc
 
 ## Footnotes
 
-1. If your agent stops searching, check that your computer is awake and online, then run `salts-web restart`.
-2. If salts-web says your agent refused the token, paste the token into **SearXNG token** again, save, and choose **retry**.
+1. If your agent stops searching, check that your computer is awake and online, then run `salts-tools restart`.
+2. If salts-tools says your agent refused the token, paste the token into **SearXNG token** again, save, and choose **retry**.
 3. If your agent is not searching when it should, add this to **Custom instructions** in **Settings**: "Search the web for anything about current events, prices or dates." A stronger model also helps.

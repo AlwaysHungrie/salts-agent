@@ -1,0 +1,25 @@
+Farah Ali — DevOps Engineer
+Email: farah.ali@example.com
+Phone: +91 98989 12121
+Location: Bengaluru
+
+Professional Experience
+* PayWave (2021-01 to present)
+  DevOps Engineer
+    · Built GitHub Actions CI/CD for 80 services
+    · Terraform modules for AWS networking
+* Mindtree (2019-01 to 2020-12)
+  Build Engineer
+    · Maintained Jenkins and Docker builds
+
+Technical Skills: k8s / terraform / AWS / Docker / GitHub Actions / Python
+
+About
+DevOps engineer building CI/CD and Terraform infrastructure on AWS.
+
+Education
+B.Tech CSE, 2018
+
+Notice period: 30 days
+
+Languages: English

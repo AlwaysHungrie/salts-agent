@@ -6,7 +6,7 @@ import { handleAgents } from "./routes/agents";
 import { handleFleets } from "./routes/fleets";
 import { ROUTE_INDEX } from "./routes/index-page";
 import { handleOauthCallback } from "./routes/mcp-oauth";
-import { handleSearxngUrl } from "./routes/searxng";
+import { handleSearxngMcp, handleSearxngUrl } from "./routes/searxng";
 import { handleSession } from "./routes/sessions";
 import { handleWebhook } from "./routes/telegram";
 import { handleWhatsappWebhook } from "./routes/whatsapp";
@@ -127,9 +127,12 @@ async function channelRoute(
   ) {
     return await handleWhatsappWebhook(request, env, ctx, url, third);
   }
-  // salts-web posts its tunnel URL here; the agent's SearXNG token is the proof.
+  // salts-tools posts its tunnel URLs here; the agent's SearXNG token is the proof.
   if (method === "POST" && first === "searxng" && second && third === "url" && !segments[3]) {
     return await handleSearxngUrl(request, env, decodeURIComponent(second));
+  }
+  if (method === "POST" && first === "searxng" && second && third === "mcp" && !segments[3]) {
+    return await handleSearxngMcp(request, env, decodeURIComponent(second));
   }
   return undefined;
 }

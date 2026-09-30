@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    # HNSW index builds use shared memory; Docker's 64 MB default fails on large rebuilds.
+    shm_size: 1g
+    environment:
+      POSTGRES_USER: recruiter
+      POSTGRES_PASSWORD: recruiter
+      POSTGRES_DB: recruiter
+    # salts-tools sets MM_PG_PORT from a free-port scan; 5432 when run by hand.
+    ports: ["127.0.0.1:${MM_PG_PORT:-5432}:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U recruiter"]
+      interval: 2s
+      retries: 30
+
+volumes:
+  pgdata:

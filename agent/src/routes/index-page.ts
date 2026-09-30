@@ -24,7 +24,7 @@ export const ROUTE_INDEX = {
     whatsapp:
       "GET|POST /whatsapp/webhook/:agentId  -> GET verifies the subscription, POST delivers a message",
     searxng:
-      "POST /searxng/:agentId/url { url }  -> Authorization: Bearer <the agent's SearXNG token>",
+      "POST /searxng/:agentId/url { url }, POST /searxng/:agentId/mcp { name, url }  -> Authorization: Bearer <the agent's SearXNG token>",
     admin:
       "POST /api/admin/business-account { email, agent_limit }, GET /api/admin/stats  -> owner only, via API_SECRET",
     settings:
