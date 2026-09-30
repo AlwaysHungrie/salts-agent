@@ -19,6 +19,7 @@ import type {
 } from "@/lib/agent";
 import { formatUsdShort } from "@/lib/format";
 import { apiFetch, useIdentity } from "@/lib/identity";
+import { cached, keys, remember, revise } from "@/lib/cache";
 
 /**
  * The OpenRouter key is not a capability's credential — it is what every model call
@@ -134,6 +135,18 @@ function Slider({
   );
 }
 
+/** What `/api/agents/:id/config` answers with. */
+type ConfigPayload = {
+  agent: AgentRow;
+  config: Config;
+  models: ModelOption[];
+  capabilities: Capability[];
+  locked?: string[];
+  spend?: SpendState;
+  member_limit?: number;
+  error?: string;
+};
+
 export default function Settings({
   params,
 }: {
@@ -142,35 +155,43 @@ export default function Settings({
   const { agentId } = use(params);
   /** The signed-in address. It is on the list whatever the box says, so it is shown apart from it. */
   const { email: ownEmail } = useIdentity();
-  const [agent, setAgent] = useState<AgentRow | null>(null);
-  const [name, setName] = useState("");
+  // Drawn from the last read of this agent at once; the read below refreshes it.
+  const held = cached<ConfigPayload>(keys.config(agentId));
+  const [agent, setAgent] = useState<AgentRow | null>(held?.agent ?? null);
+  const [name, setName] = useState(held?.agent?.name ?? "");
   /** The stored access list, one address per line, the signed-in address included. */
-  const [emails, setEmails] = useState("");
-  const [models, setModels] = useState<ModelOption[]>([]);
-  const [config, setConfig] = useState<Config | null>(null);
+  const [emails, setEmails] = useState(held?.agent?.allowed_emails ?? "");
+  const [models, setModels] = useState<ModelOption[]>(held?.models ?? []);
+  const [config, setConfig] = useState<Config | null>(held?.config ?? null);
   /**
    * Settings this agent may not change for itself: config columns and capability
    * ids, locked in the meta dialog on the home page. A locked setting is not drawn
    * here at all — the Worker drops it from a PATCH, so an editor for it would be an
    * edit that silently does nothing.
    */
-  const [locked, setLocked] = useState<Set<string>>(new Set());
+  const [locked, setLocked] = useState<Set<string>>(
+    () => new Set(held?.locked ?? []),
+  );
   /**
    * What the agent has spent this month, and the ceiling its administrator set.
    * Shown, never edited: this page is the agent's user's, and the ceiling is the
    * one thing on it that belongs to whoever provides the agent.
    */
-  const [spend, setSpend] = useState<SpendState | null>(null);
+  const [spend, setSpend] = useState<SpendState | null>(held?.spend ?? null);
   /**
    * How many addresses this agent's access list may hold, or 0 for no ceiling.
    * Set by whoever administers the agent; shown here so a list that is about to be
    * refused says so before it is saved rather than after.
    */
-  const [memberLimit, setMemberLimit] = useState(0);
+  const [memberLimit, setMemberLimit] = useState(held?.member_limit ?? 0);
   /** Connecting the bot is setup rather than a tool, so it is shown here, first. */
-  const [telegram, setTelegram] = useState<Capability | null>(null);
+  const [telegram, setTelegram] = useState<Capability | null>(
+    held?.capabilities.find((c) => c.id === "telegram") ?? null,
+  );
   /** Same reasoning as Telegram: connecting a number is setup, not a tool. */
-  const [whatsapp, setWhatsapp] = useState<Capability | null>(null);
+  const [whatsapp, setWhatsapp] = useState<Capability | null>(
+    held?.capabilities.find((c) => c.id === "whatsapp") ?? null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   /** What OpenRouter said about the key that was last pasted. Cleared on the next save. */
@@ -186,16 +207,7 @@ export default function Settings({
       const res = await apiFetch(
         `/api/agents/${encodeURIComponent(agentId)}/config`,
       );
-      const payload = (await res.json().catch(() => null)) as {
-        agent: AgentRow;
-        config: Config;
-        models: ModelOption[];
-        capabilities: Capability[];
-        locked?: string[];
-        spend?: SpendState;
-        member_limit?: number;
-        error?: string;
-      } | null;
+      const payload = (await res.json().catch(() => null)) as ConfigPayload | null;
       if (!res.ok || !payload) {
         setError(
           payload?.error ??
@@ -203,14 +215,23 @@ export default function Settings({
         );
         return;
       }
+      remember(keys.config(agentId), payload);
       setModels(payload.models);
-      setConfig(payload.config);
+      // What was drawn from the cache is replaced only where it has not been edited
+      // since: a late read must not undo a change already made on this page.
+      setConfig((current) => (current === (held?.config ?? null) ? payload.config : current));
       setLocked(new Set(payload.locked ?? []));
       setSpend(payload.spend ?? null);
       setMemberLimit(payload.member_limit ?? 0);
       setAgent(payload.agent ?? null);
-      setName(payload.agent?.name ?? "");
-      setEmails(payload.agent?.allowed_emails ?? "");
+      setName((current) =>
+        current === (held?.agent?.name ?? "") ? (payload.agent?.name ?? "") : current,
+      );
+      setEmails((current) =>
+        current === (held?.agent?.allowed_emails ?? "")
+          ? (payload.agent?.allowed_emails ?? "")
+          : current,
+      );
       setTelegram(
         payload.capabilities.find((c) => c.id === "telegram") ?? null,
       );
@@ -218,7 +239,19 @@ export default function Settings({
         payload.capabilities.find((c) => c.id === "whatsapp") ?? null,
       );
     })();
+    // Only the first render's cache matters here; later ones are this page's own.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentId]);
+
+  // What is saved here is what the other pages of this agent open with next.
+  useEffect(() => {
+    if (!agent || !config) return;
+    revise<ConfigPayload>(keys.config(agentId), (payload) => ({
+      ...payload,
+      agent,
+      config,
+    }));
+  }, [agentId, agent, config]);
 
   /** The agent's name. It is the agent itself, not one of its settings. */
   const rename = async (next: string) => {

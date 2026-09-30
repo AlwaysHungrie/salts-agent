@@ -10,9 +10,35 @@ import {
 import { McpServers } from "@/components/McpServers";
 import type { Capability, Config, ModelOption } from "@/lib/agent";
 import { apiFetch } from "@/lib/identity";
+import { cached, keys, remember, revise } from "@/lib/cache";
 
 /** The MCP section's wash. */
 const EMBER = "#FF6A1A";
+
+type ConfigPayload = {
+  config: Config;
+  capabilities: Capability[];
+  models: ModelOption[];
+  /** Capability ids and columns the meta dialog keeps to itself. */
+  locked?: string[];
+  error?: string;
+};
+
+/**
+ * The capabilities this page draws, in its order. Telegram and WhatsApp are
+ * connection setup, not tools the agent calls: both live in Settings. MCP goes
+ * first: it is the one capability the user builds out themselves, so it is what they
+ * come back to this page for. A locked capability is decided in meta settings and
+ * nowhere else, so it is not drawn here at all — a switch this page cannot save is
+ * worse than none.
+ */
+function shownCapabilities(payload: ConfigPayload | undefined): Capability[] {
+  if (!payload) return [];
+  const locked = new Set(payload.locked ?? []);
+  return payload.capabilities
+    .filter((c) => c.id !== "telegram" && c.id !== "whatsapp" && !locked.has(c.id))
+    .sort((a, b) => Number(b.id === "mcp") - Number(a.id === "mcp"));
+}
 
 export default function Capabilities({
   params,
@@ -20,9 +46,15 @@ export default function Capabilities({
   params: Promise<{ agentId: string }>;
 }) {
   const { agentId } = use(params);
-  const [capabilities, setCapabilities] = useState<Capability[]>([]);
-  const [models, setModels] = useState<ModelOption[]>([]);
-  const [config, setConfig] = useState<Config | null>(null);
+  // Drawn from the last read of this agent at once; the read below refreshes it.
+  const held = cached<ConfigPayload>(keys.config(agentId));
+  const [capabilities, setCapabilities] = useState<Capability[]>(() =>
+    shownCapabilities(held),
+  );
+  const [models, setModels] = useState<ModelOption[]>(held?.models ?? []);
+  const [config, setConfig] = useState<Config | null>(held?.config ?? null);
+  /** Set by the first change made here, after which a late read must not undo it. */
+  const touched = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   // Credentials save on a timer so a PATCH does not fire on every keystroke.
@@ -31,32 +63,14 @@ export default function Capabilities({
   useEffect(() => {
     void (async () => {
       const res = await apiFetch(`/api/agents/${encodeURIComponent(agentId)}/config`);
-      const payload = (await res.json().catch(() => null)) as {
-        config: Config;
-        capabilities: Capability[];
-        models: ModelOption[];
-        /** Capability ids and columns the meta dialog keeps to itself. */
-        locked?: string[];
-        error?: string;
-      } | null;
+      const payload = (await res.json().catch(() => null)) as ConfigPayload | null;
       if (!res.ok || !payload) {
         setError(payload?.error ?? "Couldn't load your capabilities. Refresh the page to try again.");
         return;
       }
-      setConfig(payload.config);
-      // Telegram and WhatsApp are connection setup, not tools the agent calls: both
-      // live in Settings. MCP goes first: it is the one capability the user builds out
-      // themselves, so it is what they come back to this page for.
-      // A locked capability is decided in meta settings and nowhere else, so it is
-      // not drawn here at all — a switch this page cannot save is worse than none.
-      const locked = new Set(payload.locked ?? []);
-      setCapabilities(
-        payload.capabilities
-          .filter(
-            (c) => c.id !== "telegram" && c.id !== "whatsapp" && !locked.has(c.id),
-          )
-          .sort((a, b) => Number(b.id === "mcp") - Number(a.id === "mcp")),
-      );
+      remember(keys.config(agentId), payload);
+      if (!touched.current) setConfig(payload.config);
+      setCapabilities(shownCapabilities(payload));
       setModels(payload.models);
     })();
   }, [agentId]);
@@ -81,11 +95,16 @@ export default function Capabilities({
       return;
     }
     setConfig(payload.config);
+    revise<ConfigPayload>(keys.config(agentId), (held) => ({
+      ...held,
+      config: payload.config,
+    }));
     setError(null);
   };
 
   /** Apply locally right away, then persist — immediately, or debounced for text. */
   const set = (patch: Partial<Config>, wait = 0) => {
+    touched.current = true;
     setConfig((c) => (c ? { ...c, ...patch } : c));
     if (debounce.current) clearTimeout(debounce.current);
     if (wait === 0) {
