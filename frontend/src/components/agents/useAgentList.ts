@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import { apiFetch } from "@/lib/identity";
 import { cached, keys, remember } from "@/lib/cache";
 import type { AgentPage, AgentRow, FleetRow, MetaSettings } from "@/lib/agent";
 
@@ -37,7 +36,7 @@ export function useAgentList(signedIn: boolean) {
   /** The first page of the list, and the fleets above it. Replaces what is on screen. */
   const load = useCallback(async () => {
     // Agents another app made for itself carry an `app` tag and are that app's to show.
-    const res = await apiFetch(`/api/agents?without=app`, {
+    const res = await fetch(`/api/agents?without=app`, {
       cache: "no-store",
     });
     const payload = (await res.json().catch(() => null)) as
@@ -71,7 +70,7 @@ export function useAgentList(signedIn: boolean) {
   const loadMore = useCallback(async () => {
     if (!cursor || loadingMore) return;
     setLoadingMore(true);
-    const res = await apiFetch(
+    const res = await fetch(
       `/api/agents?without=app&cursor=${encodeURIComponent(cursor)}`,
       { cache: "no-store" },
     );
@@ -108,7 +107,7 @@ export function useAgentList(signedIn: boolean) {
     onMade?: () => void,
   ): Promise<string | null> => {
     setBusy(true);
-    const res = await apiFetch("/api/agents", {
+    const res = await fetch("/api/agents", {
       method: "POST",
       headers: { "content-type": "application/json" },
       // `fleet_name` non-empty makes one agent per address; `meta` carries everything
@@ -136,7 +135,7 @@ export function useAgentList(signedIn: boolean) {
   const remove = async (id: string) => {
     setRemoved((current) => [...current, id]);
     setAgents((current) => current?.filter((a) => a.id !== id) ?? current);
-    const res = await apiFetch(`/api/agents/${encodeURIComponent(id)}`, {
+    const res = await fetch(`/api/agents/${encodeURIComponent(id)}`, {
       method: "DELETE",
     });
     if (res.ok) {

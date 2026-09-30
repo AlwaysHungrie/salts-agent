@@ -56,7 +56,7 @@ operation. See [clerk.ts](../agent/src/clerk.ts).
 the Worker ignores `x-user-email`, with or without the secret, so the only way to act as
 a user is that user's Clerk token.
 
-Three consequences worth stating plainly:
+Two consequences worth stating plainly:
 
 - **The Worker's gate is identity, not origin.** Anyone who can obtain a valid token
   from this Clerk instance can reach the API. Agent access lists still decide what they
@@ -65,19 +65,14 @@ Three consequences worth stating plainly:
   OpenRouter key, so an agent someone else makes spends their key or does not answer.
   Closing Clerk sign-up is what bounds the rest.
 - **The middleware no longer protects routes.** [proxy.ts](../frontend/src/proxy.ts)
-  establishes the Clerk session and stops. It cannot see localStorage, and a page
-  navigation carries no headers, so protecting there would bounce every impersonated
-  visitor. The pages are shells; the gate was always on the other side of `AGENT_URL`.
-  What replaces it, for the visitor rather than for the data, is `useIdentity()` — the
+  establishes the Clerk session and stops. The pages are shells; the gate was always on
+  the other side of `AGENT_URL`. What replaces it, for the visitor rather than for the data, is `useIdentity()` — the
   home page draws the front door, and [the agent
   layout](../frontend/src/app/a/[agentId]/layout.tsx) says so and stops. Nothing
   redirects: a page that navigates away on its own takes its own explanation with it,
   so the way out is a button instead. An agent that does not exist, or is not yours,
   is the same sentence — the Worker answers all three cases with a 404 so that an id
   cannot be probed for existence.
-- **Images need help.** A browser attaches none of our headers to a subresource it
-  fetches itself, so under the back door an `<img src>` pointed at a guarded route would
-  401. `useAuthedUrl` reads the bytes with headers attached and hands back a blob URL.
 
 **A Worker without `CLERK_ISSUER` does not run.** There is no unset case: `unconfigured()`
 in [server.ts](../agent/src/server.ts) is checked at the top of `fetch`, before CORS and
@@ -253,7 +248,7 @@ message protocol, so it calls `fetch` itself and adds the same headers by hand.
     │  1. callerEmail() must name somebody, or 401 — no anonymous callers
     │  2. session-route gate: agentIdOf(id) → mayUseAgent()
     │        └── callerEmail() → clerkEmail(): verify the bearer token against
-    │              Clerk's JWKS (cached), else the x-api-secret back door
+    │              Clerk's JWKS (cached)
     │        └── agentAccess() → SessionRegistry(agentId).access()
     │              the AGENT'S OWN object answers. The directory is not read.
     │              (unwritten access row only: one directory read, then seedAccess())

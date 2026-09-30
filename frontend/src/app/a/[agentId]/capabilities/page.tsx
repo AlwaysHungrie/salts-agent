@@ -9,7 +9,6 @@ import {
 } from "@/components/CapabilitySection";
 import { McpServers } from "@/components/McpServers";
 import type { Capability, Config, ModelOption } from "@/lib/agent";
-import { apiFetch } from "@/lib/identity";
 import { cached, keys, remember, revise } from "@/lib/cache";
 
 /** The MCP section's wash. */
@@ -62,7 +61,7 @@ export default function Capabilities({
 
   useEffect(() => {
     void (async () => {
-      const res = await apiFetch(`/api/agents/${encodeURIComponent(agentId)}/config`);
+      const res = await fetch(`/api/agents/${encodeURIComponent(agentId)}/config`);
       const payload = (await res.json().catch(() => null)) as ConfigPayload | null;
       if (!res.ok || !payload) {
         setError(payload?.error ?? "Couldn't load your capabilities. Refresh the page to try again.");
@@ -77,7 +76,7 @@ export default function Capabilities({
 
   const save = async (patch: Partial<Config>) => {
     setSaving(true);
-    const res = await apiFetch(`/api/agents/${encodeURIComponent(agentId)}/config`, {
+    const res = await fetch(`/api/agents/${encodeURIComponent(agentId)}/config`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(patch),

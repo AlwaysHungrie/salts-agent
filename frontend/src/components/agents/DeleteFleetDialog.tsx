@@ -1,5 +1,4 @@
 import type { FleetRow } from "@/lib/agent";
-import { apiFetch } from "@/lib/identity";
 import { useEffect, useRef, useState } from "react";
 
 /**
@@ -34,7 +33,7 @@ export function DeleteFleetDialog({
     setError(null);
     // Each batch is complete; a failure stops here and the count shows what is left.
     for (;;) {
-      const res = await apiFetch(
+      const res = await fetch(
         `/api/agents?fleet=${encodeURIComponent(fleet.fleet_id)}&limit=10`,
         { method: "DELETE" },
       );
