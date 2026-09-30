@@ -870,6 +870,21 @@ export function mcpServerReady(server: McpServerRow): boolean {
 }
 
 /**
+ * Whether a server takes attachments at `<base>/uploads`. Nothing in MCP says so, so
+ * it is read off the tools: one the agent may call that asks for an `upload_id` is a
+ * server expecting the file's bytes to have gone ahead of the call.
+ */
+export function acceptsUploads(server: McpServerRow): boolean {
+  if (!mcpServerReady(server)) return false;
+  const off = new Set(parseNames(server.disabled_tools));
+  return parseTools(server.tools_json).some((tool) => {
+    if (off.has(tool.name)) return false;
+    const properties = tool.inputSchema?.properties;
+    return typeof properties === "object" && properties !== null && "upload_id" in properties;
+  });
+}
+
+/**
  * The tools of every connected MCP server, as tool specs the agent can register
  * alongside its own. The schemas are the server's own, passed through untouched, and
  * the list comes from the cached `tools/list` so a turn costs no extra round trip.
