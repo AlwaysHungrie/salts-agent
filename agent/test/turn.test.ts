@@ -1,6 +1,6 @@
 import { SELF, env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
-import { COST_PER_TURN, MCP_TOOLS, replyTo } from "./openrouter-mock";
+import { COST_PER_TURN, MCP_TOOLS, MCP_UPLOAD_TOOL, replyTo } from "./openrouter-mock";
 import { EMPTY_MCP_SERVER, agentIdOf } from "../src/registry";
 
 /**
@@ -469,6 +469,96 @@ describe("the suite's own network seal", () => {
  * agent offered to message a phone number it was given, asked for the number, and ran
  * bash when no tool appeared.
  */
+describe("a PDF sent to an MCP server that takes uploads", () => {
+  /** A session on an agent that reads PDFs, with one MCP server connected. */
+  async function withServer(url: string, tools: unknown[]) {
+    const fixture = await chatFixture();
+    await SELF.fetch(
+      `${BASE}/api/agents/${fixture.agentId}/config`,
+      as(fixture.email, { method: "PATCH", body: JSON.stringify({ cap_file_ingest: 1 }) })
+    );
+    await registryFor(fixture.agentId).addMcpServer({
+      ...EMPTY_MCP_SERVER,
+      id: crypto.randomUUID(),
+      name: "Recruiter",
+      url,
+      auth: "headers",
+      headers: JSON.stringify({ Authorization: "Bearer mcp-token" }),
+      tools_json: JSON.stringify(tools),
+      created_at: Date.now(),
+    });
+    return fixture;
+  }
+
+  async function attachPdf(sessionId: string, email: string) {
+    const form = new FormData();
+    form.set("file", new File(["%PDF-1.4 a resume"], "resume.pdf", { type: "application/pdf" }));
+    const res = await SELF.fetch(`${BASE}/agents/session-agent/${sessionId}/files`, {
+      method: "POST",
+      headers: { "x-api-secret": SECRET, "x-user-email": email },
+      body: form,
+    });
+    expect(res.ok).toBe(true);
+  }
+
+  type Upload = { upload_id: string; mime: string; bytes: number; authorization: string };
+  const uploads = async () => (await (await fetch("https://mcp.test/__uploads")).json()) as Upload[];
+
+  /** The user messages on the turn that carried this token, as the model received them. */
+  async function turnFor(token: string): Promise<string> {
+    const all = (await (
+      await fetch(`https://openrouter.ai/__requests?contains=${token}`)
+    ).json()) as { stream?: boolean; messages?: unknown[] }[];
+    return JSON.stringify(all.filter((b) => b.stream).at(-1)?.messages ?? []);
+  }
+
+  it("uploads the bytes and tells the model the upload id", async () => {
+    const { sessionId, email } = await withServer("https://mcp.test/files/mcp", [
+      ...MCP_TOOLS,
+      MCP_UPLOAD_TOOL,
+    ]);
+    const before = (await uploads()).length;
+    await attachPdf(sessionId, email);
+    const token = crypto.randomUUID().slice(0, 8);
+    await say(sessionId, email, `store this ${token}`);
+
+    const sent = (await uploads()).slice(before);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({
+      mime: "application/pdf",
+      bytes: 17,
+      authorization: "Bearer mcp-token",
+    });
+    expect(await turnFor(token)).toContain(
+      `[Attachment resume.pdf uploaded to Recruiter: upload_id=${sent[0].upload_id}]`
+    );
+  });
+
+  it("uploads a file once and names the same id on later turns", async () => {
+    const { sessionId, email } = await withServer("https://mcp.test/files/mcp", [MCP_UPLOAD_TOOL]);
+    const before = (await uploads()).length;
+    await attachPdf(sessionId, email);
+    await say(sessionId, email, "store this");
+    const token = crypto.randomUUID().slice(0, 8);
+    await say(sessionId, email, `and again ${token}`);
+
+    const sent = (await uploads()).slice(before);
+    expect(sent).toHaveLength(1);
+    expect(await turnFor(token)).toContain(`upload_id=${sent[0].upload_id}`);
+  });
+
+  it("uploads nothing to a server whose tools take no upload id", async () => {
+    const { sessionId, email } = await withServer("https://mcp.test/", MCP_TOOLS);
+    const before = (await uploads()).length;
+    await attachPdf(sessionId, email);
+    const token = crypto.randomUUID().slice(0, 8);
+    await say(sessionId, email, `store this ${token}`);
+
+    expect((await uploads()).length).toBe(before);
+    expect(await turnFor(token)).not.toContain("upload_id=");
+  });
+});
+
 describe("what the agent is told it can reach", () => {
   /** An agent with WhatsApp switched on and every credential it asks for. */
   async function whatsappFixture() {
