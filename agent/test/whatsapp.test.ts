@@ -49,10 +49,16 @@ function as(email: string, init: RequestInit = {}) {
  * is shared by the whole file, so "did this test's reply go out" is only answerable
  * if each test owns its recipient.
  */
-const waNumber = () => `91${Math.floor(Math.random() * 1e10).toString().padStart(10, "0")}`;
+const waNumber = () =>
+  `91${Math.floor(Math.random() * 1e10)
+    .toString()
+    .padStart(10, "0")}`;
 
 /** A WhatsApp Business Account id no other test uses, for the same reason. */
-const wabaId = () => `1${Math.floor(Math.random() * 1e14).toString().padStart(14, "0")}`;
+const wabaId = () =>
+  `1${Math.floor(Math.random() * 1e14)
+    .toString()
+    .padStart(14, "0")}`;
 
 /** Which accounts the Worker has asked Graph to subscribe. */
 async function subscribed(): Promise<string[]> {
