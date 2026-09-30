@@ -1,5 +1,4 @@
 import { type AgentRow, type Capability, type Config, EMPTY_META, type McpCatalogEntry, type MetaSettings, type ModelOption, type SpendState } from "@/lib/agent";
-import { apiFetch } from "@/lib/identity";
 import { X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { MetaSettingsForm } from "./MetaSettingsForm";
@@ -30,7 +29,7 @@ export function MetaSettingsDialog({
     void (async () => {
       // One request: the settings come with the meta document, since `/config` refuses an admin
       // who is not a member.
-      const metaRes = await apiFetch(base, { cache: "no-store" });
+      const metaRes = await fetch(base, { cache: "no-store" });
       const payload = (await metaRes.json().catch(() => null)) as {
         meta: MetaSettings;
         config: Config;
@@ -66,7 +65,7 @@ export function MetaSettingsDialog({
   const save = async () => {
     if (!meta) return;
     setBusy(true);
-    const res = await apiFetch(base, {
+    const res = await fetch(base, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ ...meta, config: changed }),

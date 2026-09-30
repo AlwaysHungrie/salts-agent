@@ -1,4 +1,3 @@
-import { apiFetch } from "@/lib/identity";
 import { useEffect, useState } from "react";
 
 /**
@@ -43,7 +42,7 @@ export function BusinessRequestDialog({
     }
     setBusy(true);
     setError(null);
-    const res = await apiFetch("/api/business-requests", {
+    const res = await fetch("/api/business-requests", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ increase: parsed }),

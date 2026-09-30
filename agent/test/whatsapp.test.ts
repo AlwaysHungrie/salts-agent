@@ -1,4 +1,4 @@
-import { SELF, env } from "cloudflare:test";
+import { SELF } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import {
   SCHEDULED_PROMPT,
@@ -9,6 +9,7 @@ import {
 } from "./openrouter-mock";
 import { isVoiceNote } from "../src/channel";
 import { inboundOf, isOwnNumber, verifySignature } from "../src/whatsapp";
+import { signedIn } from "./clerk";
 
 /**
  * The WhatsApp channel, from the handshake to a delivered answer.
@@ -18,7 +19,6 @@ import { inboundOf, isOwnNumber, verifySignature } from "../src/whatsapp";
  * number rather than a whitelist. See docs/whatsapp-setup.md.
  */
 
-const SECRET = env.API_SECRET as string;
 const BASE = "https://worker.test";
 const APP_SECRET = "test-app-secret";
 const VERIFY_TOKEN = "test-verify-token";
@@ -37,8 +37,7 @@ function as(email: string, init: RequestInit = {}) {
     ...init,
     headers: {
       "content-type": "application/json",
-      "x-api-secret": SECRET,
-      "x-user-email": email,
+      ...signedIn(email),
       ...(init.headers as Record<string, string> | undefined),
     },
   };
@@ -168,7 +167,7 @@ async function uploadToSession(sessionId: string, email: string, name: string) {
   form.set("file", new File(["notes from the browser"], name, { type: "text/plain" }));
   const res = await SELF.fetch(`${BASE}/agents/session-agent/${sessionId}/files`, {
     method: "POST",
-    headers: { "x-api-secret": SECRET, "x-user-email": email },
+    headers: signedIn(email),
     body: form,
   });
   expect(res.ok).toBe(true);

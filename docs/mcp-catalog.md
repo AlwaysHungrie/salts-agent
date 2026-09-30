@@ -87,7 +87,7 @@ to keep that icon. Remove the `"icon"` key to fall back to the letter mark.
 ## Checking it
 
 ```sh
-curl -s <worker>/api/agents/catalog -H "x-api-secret: $SECRET" -H "x-user-email: <you>" \
+curl -s <worker>/api/agents/catalog -H "authorization: Bearer <your Clerk session token>" \
   | python3 -c 'import sys,json; print([e["id"] for e in json.load(sys.stdin)["mcp_catalog"]])'
 ```
 

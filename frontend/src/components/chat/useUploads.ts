@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { imageTarget, type Attachment, type ClientLimits } from "@/lib/agent";
 import { fitImage } from "@/lib/image";
 import { pdfThumbnail } from "@/lib/pdf";
-import { apiFetch } from "@/lib/identity";
 import { isPdfFile, uploadFailure } from "./format";
 
 /** A file on its way to the Worker, drawn from the browser's own copy until it lands. */
@@ -42,7 +41,7 @@ export function useUploads(sessionId: string, limits: ClientLimits | null) {
   // are restored when the session is reopened.
   useEffect(() => {
     void (async () => {
-      const res = await apiFetch(filesUrl(sessionId));
+      const res = await fetch(filesUrl(sessionId));
       const payload = (await res.json().catch(() => null)) as {
         attachments?: Attachment[];
       } | null;
@@ -54,7 +53,7 @@ export function useUploads(sessionId: string, limits: ClientLimits | null) {
     // The strip is what the notice was about, so changing it retires the notice.
     setUploadError(null);
     setAttachments((a) => a.filter((x) => x.id !== id));
-    await apiFetch(`${filesUrl(sessionId)}/${id}`, { method: "DELETE" });
+    await fetch(`${filesUrl(sessionId)}/${id}`, { method: "DELETE" });
   };
 
   /**
@@ -63,14 +62,14 @@ export function useUploads(sessionId: string, limits: ClientLimits | null) {
    */
   const reconcilePending = async (accepted: string[] = []) => {
     try {
-      const res = await apiFetch(filesUrl(sessionId));
+      const res = await fetch(filesUrl(sessionId));
       const payload = (await res.json()) as { attachments?: Attachment[] };
       const keep = new Set([...kept.current, ...accepted]);
       const stray = (payload.attachments ?? []).filter((a) => !keep.has(a.id));
       strayPossible.current = false;
       await Promise.all(
         stray.map((a) =>
-          apiFetch(`${filesUrl(sessionId)}/${a.id}`, { method: "DELETE" }),
+          fetch(`${filesUrl(sessionId)}/${a.id}`, { method: "DELETE" }),
         ),
       );
     } catch {
@@ -181,7 +180,7 @@ export function useUploads(sessionId: string, limits: ClientLimits | null) {
       let res: Response;
       let payload: UploadPayload = null;
       try {
-        res = await apiFetch(filesUrl(sessionId), {
+        res = await fetch(filesUrl(sessionId), {
           method: "POST",
           body: form,
           signal: controller.signal,

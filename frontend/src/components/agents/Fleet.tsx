@@ -1,5 +1,4 @@
 import type { AgentPage, AgentRow, FleetRow } from "@/lib/agent";
-import { apiFetch } from "@/lib/identity";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useCallback, useState } from "react";
 import { AgentListRow } from "./AgentListRow";
@@ -37,7 +36,7 @@ export function Fleet({
   const page = useCallback(
     async (after: string) => {
       setBusy(true);
-      const res = await apiFetch(
+      const res = await fetch(
         `/api/agents?fleet=${encodeURIComponent(fleet.fleet_id)}` +
           (after ? `&cursor=${encodeURIComponent(after)}` : ""),
         { cache: "no-store" },

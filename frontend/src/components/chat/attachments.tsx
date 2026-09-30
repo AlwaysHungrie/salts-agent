@@ -1,18 +1,13 @@
 import type { Attachment } from "@/lib/agent";
-import { useAuthedUrl } from "@/lib/identity";
 import { Download, FileText, FileType2, Mic, X } from "lucide-react";
 import { VoiceNote } from "./VoiceNote";
 import { FADE, fileUrl, isAudio, thumbUrl } from "./files";
 
-/**
- * A thumbnail fetched with identity headers (`useAuthedUrl`), since a plain `<img>`
- * carries none and the back-door identity would get a 401.
- */
+/** A thumbnail; the route handler behind `src` attaches the Clerk session itself. */
 export function Thumb({ src }: { src: string }) {
-  const href = useAuthedUrl(src);
-  if (!href) return null;
+  if (!src) return null;
   // eslint-disable-next-line @next/next/no-img-element
-  return <img src={href} alt="" className="w-full object-cover object-top" />;
+  return <img src={src} alt="" className="w-full object-cover object-top" />;
 }
 
 /** Attachments queued in the composer: images as thumbnails, files as chips. */

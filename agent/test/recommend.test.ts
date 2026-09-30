@@ -1,6 +1,7 @@
-import { SELF, env } from "cloudflare:test";
+import { SELF } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { INVENTED_TOOL, MCP_KEPT, MCP_TOOLS } from "./openrouter-mock";
+import { signedIn } from "./clerk";
 
 /**
  * Letting the model choose which of a server's tools stay switched on.
@@ -14,7 +15,6 @@ import { INVENTED_TOOL, MCP_KEPT, MCP_TOOLS } from "./openrouter-mock";
  * answer it could not parse as "keep none of them".
  */
 
-const SECRET = env.API_SECRET as string;
 const BASE = "https://worker.test";
 
 const someone = (label = "user") => `${label}-${crypto.randomUUID().slice(0, 8)}@x.com`;
@@ -24,8 +24,7 @@ function as(email: string, init: RequestInit = {}) {
     ...init,
     headers: {
       "content-type": "application/json",
-      "x-api-secret": SECRET,
-      "x-user-email": email,
+      ...signedIn(email),
       ...(init.headers as Record<string, string> | undefined),
     },
   };
