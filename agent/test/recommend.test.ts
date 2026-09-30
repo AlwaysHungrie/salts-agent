@@ -40,11 +40,7 @@ type Server = {
 };
 
 /** An agent with one connected MCP server, whose tools the stand-in has listed. */
-async function withServer(
-  name = "Notes",
-  path = "/",
-  patch: Record<string, unknown> = {}
-) {
+async function withServer(name = "Notes", path = "/", patch: Record<string, unknown> = {}) {
   const email = someone("member");
   const agent = (await (
     await SELF.fetch(
@@ -116,9 +112,9 @@ describe("POST /mcp/:id/recommend", () => {
     // — but a model that invented a name instead of a real one would silently switch
     // the real one off, which is the failure this guards.
     const { agentId, email, server } = await withServer();
-    const { server: chosen } = (await (
-      await recommend(agentId, email, server.id)
-    ).json()) as { server: Server };
+    const { server: chosen } = (await (await recommend(agentId, email, server.id)).json()) as {
+      server: Server;
+    };
     expect(chosen.disabled_tools).not.toContain(INVENTED_TOOL);
     expect(chosen.tools.map((t) => t.name)).not.toContain(INVENTED_TOOL);
     expect(MCP_KEPT.every((name) => !chosen.disabled_tools.includes(name))).toBe(true);

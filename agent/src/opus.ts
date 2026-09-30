@@ -1,17 +1,6 @@
 /**
- * Ogg Opus, packed here because no model hands one over.
- *
- * A voice note has to be Ogg Opus — that is the one container Telegram and WhatsApp
- * draw a waveform for, and `isVoiceNote` in channel.ts is the check. OpenRouter cannot
- * produce it: audio output is served only on a stream, and on a stream the only format
- * its providers accept is `pcm16`. Asking for `opus` earns a 400 either way. So the
- * speaking model returns raw samples and this module turns them into the file.
- *
- * Two halves, both small. `libopus` compiled to WebAssembly does the encoding — the
- * binary ships with `@evan/opus`, whose own loader reads it off disk and so cannot run
- * in a Worker; the module is imported directly instead and instantiated below. The Ogg
- * framing is written by hand: an identification page, a comment page, then the encoded
- * frames, which is all a voice note needs.
+ * Pack PCM samples into Ogg Opus, the only container Telegram and WhatsApp play as a
+ * voice note. libopus runs as WebAssembly; the Ogg framing is written by hand.
  */
 
 import wasmModule from "@evan/opus/wasm/opus.wasm";
@@ -41,11 +30,8 @@ const PCM_CAPACITY = 32768;
 const PACKET_CAPACITY = 8192;
 
 /**
- * The instance, built once per isolate.
- *
- * The imports are the ones the build asks for and nothing more: four WASI stubs it
- * never reaches, and the growth hook, which matters — every `Uint8Array` over the
- * memory is detached when it grows, so the view is taken again there.
+ * The WASM instance, once per isolate. The memory view is retaken on growth, since
+ * growing detaches existing views.
  */
 let wasm: OpusExports;
 let memory: Uint8Array;
@@ -104,13 +90,7 @@ function checked(code: number): number {
   })();
 }
 
-/**
- * Samples to a voice note.
- *
- * Mono only, because both channels play a voice note in mono and the model speaks in
- * mono. A trailing partial frame is padded with silence: Opus encodes whole frames, and
- * the alternative is dropping the last few milliseconds of a sentence.
- */
+/** Mono samples to a voice note; a trailing partial frame is padded with silence. */
 export function pcm16ToOggOpus(pcm: Int16Array, sampleRate = VOICE_SAMPLE_RATE): Uint8Array {
   const api = instance();
   const samplesPerFrame = (sampleRate / 1000) * FRAME_MS;
@@ -118,10 +98,10 @@ export function pcm16ToOggOpus(pcm: Int16Array, sampleRate = VOICE_SAMPLE_RATE):
   try {
     checked(api.opus_encoder_init(encoder, sampleRate, 1, APPLICATION_VOIP));
     checked(api.opus_encoder_ctl_set(encoder, OPUS_SET_BITRATE, BITRATE));
-    // What the encoder buffers before it emits anything, in samples at the input rate.
-    // Ogg states it at 48 kHz, which is the rate every granule position is counted in
-    // regardless of what went in, so the player knows how much to discard.
-    const preSkip = Math.round((api.opus_encoder_ctl_get(encoder, OPUS_GET_LOOKAHEAD) * 48000) / sampleRate);
+    // Encoder pre-skip, stated at 48 kHz (the rate all granule positions use).
+    const preSkip = Math.round(
+      (api.opus_encoder_ctl_get(encoder, OPUS_GET_LOOKAHEAD) * 48000) / sampleRate
+    );
 
     const ogg = new Ogg();
     ogg.page([identification(preSkip, sampleRate)], { first: true });
@@ -156,19 +136,13 @@ export function pcm16ToOggOpus(pcm: Int16Array, sampleRate = VOICE_SAMPLE_RATE):
 /** One frame in, one Opus packet out, through the buffers the instance already holds. */
 function encode(api: OpusExports, encoder: number, frame: Int16Array): Uint8Array {
   memory.set(new Uint8Array(frame.buffer, frame.byteOffset, frame.byteLength), pcmPtr);
-  const size = checked(
-    api.opus_encode(encoder, pcmPtr, frame.length, packetPtr, PACKET_CAPACITY)
-  );
+  const size = checked(api.opus_encode(encoder, pcmPtr, frame.length, packetPtr, PACKET_CAPACITY));
   return memory.slice(packetPtr, packetPtr + size);
 }
 
 /* -------------------------------------------------------------------- ogg -- */
 
-/**
- * The Opus identification header: the first thing in the file, and what `isVoiceNote`
- * looks for. The input rate is recorded for information only — a decoder outputs 48 kHz
- * whatever it says — but a player shows it, so it is the true one.
- */
+/** The Opus identification header, which `isVoiceNote` checks for. */
 function identification(preSkip: number, sampleRate: number): Uint8Array {
   const head = new Uint8Array(19);
   const view = new DataView(head.buffer);
@@ -195,11 +169,8 @@ function comment(): Uint8Array {
 }
 
 /**
- * Ogg pages, in order.
- *
- * A page is a 27-byte header, a table saying how the payload divides into packets, and
- * the packets themselves. The checksum covers the whole page with its own field zeroed,
- * which is why it is written last.
+ * Ogg pages: header, segment table, packets. The CRC covers the page with its field
+ * zeroed, so it is written last.
  */
 class Ogg {
   /** One logical stream, named by any number; a voice note has nothing to collide with. */

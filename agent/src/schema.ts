@@ -1,36 +1,7 @@
 /**
- * Versioned schema migrations for a Durable Object's own SQLite.
- *
- * Every object in a namespace carries its own database, so a migration does not run
- * once for a deployment — it runs once per object, lazily, the first time that object
- * is touched after the new code is live. A fleet is therefore never all on the same
- * version at the same moment, and that is fine as long as each step is written to be
- * safe against the code that ran before it.
- *
- * What this replaces: a list of `ALTER TABLE` statements each wrapped in `catch {}`.
- * That shape works, and it is why nothing has broken so far, but it has three costs.
- * A genuine failure — a malformed statement, a constraint violation, a disk error —
- * is swallowed exactly like the duplicate-column case it was meant to tolerate, and
- * the object then serves a half-built schema until some later query fails somewhere
- * unrelated. There is no record of what an object has already applied, so nothing can
- * ever run once: no backfill, no rename, no drop. And there is no way to ask how far
- * through the ladder the fleet has got.
- *
- * So: a numbered ladder, a row saying where each object stands, and errors that are
- * allowed to be errors.
- *
- * Step 0 is always the baseline — the schema as it stood when this runner was
- * introduced, still written idempotently (`CREATE TABLE IF NOT EXISTS`, tolerant
- * `ALTER`) because objects that predate the ladder already have those tables and will
- * run it anyway. Every step after 0 runs exactly once per object and may assume the
- * baseline exists. Those steps do not need to be idempotent, and should not pretend
- * to be: if one fails, it throws, the version is not advanced, and the next request
- * into that object tries again from the same rung.
- *
- * `AgentDirectory` has its own older `schema_version` table guarding the membership
- * backfill (see `migrate` in registry.ts). This runner deliberately uses a different
- * table — `schema_migrations` — so the two do not have to agree about what a number
- * means, and the older one can keep its meaning for as long as it is needed.
+ * Versioned migrations for a Durable Object's own SQLite, applied lazily per object.
+ * Step 0 is the idempotent baseline; later steps run exactly once and may fail loudly,
+ * leaving the version unadvanced. Tracked in `schema_migrations`.
  */
 
 /** The SQL surface a migration is handed. Narrower than the storage object on purpose. */
@@ -53,14 +24,8 @@ type MigrationCtx = {
 };
 
 /**
- * Bring this object's database up to the end of `migrations`, and return the version
- * it now stands at — which is the number of steps applied, so `migrations.length`
- * unless one threw.
- *
- * Each step runs inside `transactionSync` together with the write that records it, so
- * an object is never left believing it applied a step that did not finish. A step that
- * throws propagates: the caller's request fails, loudly, on the object whose migration
- * failed and on no other.
+ * Apply pending steps and return the version reached. Each step and its record commit
+ * in one `transactionSync`; a throwing step fails this request only.
  */
 export function applyMigrations(ctx: MigrationCtx, migrations: readonly Migration[]): number {
   const sql = ctx.storage.sql;
@@ -110,15 +75,8 @@ function readVersion(sql: MigrationSql): number {
 }
 
 /**
- * `ALTER TABLE ... ADD COLUMN`, tolerating only the column already being there.
- *
- * The baseline step needs this: objects created before a column existed have to get
- * it, objects created after already have it, and both run the same statement. Every
- * other error — a bad type, a bad default, a missing table — is re-thrown, which is
- * the whole difference from the bare `catch {}` this replaces.
- *
- * Steps after the baseline run once and should call `sql.exec` directly. A duplicate
- * column there means the ladder is wrong, and that is worth a failure.
+ * `ALTER TABLE ... ADD COLUMN`, tolerating only an existing column; other errors rethrow.
+ * For the baseline only: later steps use `sql.exec`, where a duplicate is a real bug.
  */
 export function addColumnIfMissing(sql: MigrationSql, table: string, column: string): void {
   try {

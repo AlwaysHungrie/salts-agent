@@ -68,7 +68,7 @@ describe("worker basics", () => {
   it("answers the root with its route listing", async () => {
     const res = await SELF.fetch(`${BASE}/`);
     expect(res.status).toBe(200);
-    expect((await res.json() as { routes: unknown }).routes).toBeTruthy();
+    expect(((await res.json()) as { routes: unknown }).routes).toBeTruthy();
   });
 
   it("404s an unknown path", async () => {
@@ -161,7 +161,7 @@ describe("creating an agent", () => {
   it("does not list it to anyone else", async () => {
     await createAgent(someone("owner"), "Mine");
     const res = await SELF.fetch(`${BASE}/api/agents`, as(someone("stranger")));
-    expect((await res.json() as { agents: unknown[] }).agents).toEqual([]);
+    expect(((await res.json()) as { agents: unknown[] }).agents).toEqual([]);
   });
 
   it("refuses an agent with nobody on its access list", async () => {
@@ -350,7 +350,7 @@ describe("business requests over HTTP", () => {
       as(asker, { method: "POST", body: JSON.stringify({ increase: 5 }) })
     );
     expect(res.status).toBe(200);
-    expect((await res.json() as { email: string }).email).toBe(asker);
+    expect(((await res.json()) as { email: string }).email).toBe(asker);
   });
 
   it("refuses an increase that is not a positive integer", async () => {
@@ -500,7 +500,7 @@ describe("sessions over HTTP", () => {
       as(member, { method: "POST", body: JSON.stringify({ title: "First chat" }) })
     );
     expect(res.status).toBe(200);
-    expect((await res.json() as { id: string }).id).toContain(String(body.id));
+    expect(((await res.json()) as { id: string }).id).toContain(String(body.id));
   });
 
   it("lists the agent's sessions", async () => {
@@ -527,10 +527,13 @@ describe("sessions over HTTP", () => {
   it("refuses a session id that names no agent", async () => {
     // `agentIdOf` returns "" for an id with no separator, and the route has to treat
     // that as "not one of ours" rather than as an agent named "".
-    const res = await SELF.fetch(`${BASE}/api/sessions/bogusid`, as(someone("member"), {
-      method: "PATCH",
-      body: JSON.stringify({ title: "nope" }),
-    }));
+    const res = await SELF.fetch(
+      `${BASE}/api/sessions/bogusid`,
+      as(someone("member"), {
+        method: "PATCH",
+        body: JSON.stringify({ title: "nope" }),
+      })
+    );
     expect(res.status).toBe(404);
   });
 });

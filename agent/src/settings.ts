@@ -1,28 +1,11 @@
 import type { Config, McpCatalogEntry } from "./registry";
-import type { Env, ModelOption } from "./agent";
+import type { Env } from "./env";
+import type { ModelOption } from "./models";
 
 /**
- * The deployment's own knobs: every ceiling this Worker enforces, and every value an
- * agent starts out holding, in one document the owner can change without a deploy.
- *
- * Why a document and not constants. A ceiling is a decision about a deployment, not
- * about the code — the same Worker runs a demo where 20 sessions is generous and a
- * business account where 256 is tight.
- *
- * Why there is no fallback. This Worker ships with no values of its own: every field
- * has to be in the stored document, and a deployment missing any of them refuses to
- * serve (see `SettingsIncompleteError`) until the owner sets it. The values a fresh
- * deployment starts from ship with the admin CLI (`admin-cli/defaults.json`), which
- * writes them here — so the number in force is always one somebody wrote down for
- * this deployment, never one the code decided on its behalf.
- *
- * Why `0` is not "absent". Several of these are legitimately zero (`max_tokens: 0` is
- * "no cap"), so absence has to be key-not-present rather than a sentinel.
- *
- * Secrets are deliberately not here. An OpenRouter key, a bot token and a Meta app
- * secret belong to one agent and are billed to it; a deployment-wide default for one
- * would be a deployment-wide key, which is the thing `openrouter_api_key` exists to
- * prevent. `config_defaults` is restricted to `SETTABLE_CONFIG_KEYS` for that reason.
+ * The deployment's settings: every ceiling and starting value, in one stored document
+ * the owner edits without a deploy. No fallbacks (the admin CLI ships the defaults), and
+ * no secrets, so there is no deployment-wide key.
  */
 
 /** The attachment kinds a ceiling is set for. */
@@ -32,11 +15,8 @@ export const UPLOAD_KINDS = ["text", "pdf", "image", "audio"] as const;
 export type UploadLimits = Record<(typeof UPLOAD_KINDS)[number], number>;
 
 /**
- * The config columns a deployment may pick a starting value for.
- *
- * Tuning and capability switches only. Every column left out is either a secret, or
- * per-agent by nature (`agent_name`, the whitelists, the WhatsApp number), or the
- * model — which has its own field because it is also validated against the catalogue.
+ * Config columns a deployment may seed: tuning and capability switches only (not secrets,
+ * per-agent fields, or the model, which has its own field).
  */
 export const SETTABLE_CONFIG_KEYS = [
   "temperature",
@@ -63,16 +43,8 @@ export const SETTABLE_CONFIG_KEYS = [
 export type SettableConfigKey = (typeof SETTABLE_CONFIG_KEYS)[number];
 
 /**
- * The config columns whose *list of choices* the deployment sets.
- *
- * These three are the fixed-choice fields on the capabilities page: the page offers a
- * menu rather than a text box, because most OpenRouter ids would fail outright for the
- * modality the capability needs. Which ids are on that menu is a question about the
- * deployment, so it is answered here and nowhere in the code — `MetaSettings.field_options`
- * narrows it one agent at a time, and wins where it has an answer.
- *
- * Named here rather than read off `CAPABILITIES` so this module does not import
- * `capabilities.ts`, which imports this one.
+ * Fixed-choice config columns whose menu the deployment sets (per-agent
+ * `field_options` narrows it). Listed here to avoid importing capabilities.ts.
  */
 export const CHOICE_FIELD_KEYS = ["image_model", "transcription_model", "voice_model"] as const;
 
@@ -108,22 +80,15 @@ export type DeploymentSettings = {
   max_agent_page: number;
   /** How much text one voice note may carry. */
   voice_note_limit: number;
-  /**
-   * How many attachments one message may carry.
-   *
-   * Enforced in the composer rather than in the Worker — it is about how much a single
-   * turn should be asked to read, not about what the deployment can hold — so it is
-   * served to the page alongside the upload ceilings it sits next to.
-   */
+  /** Attachments per message, enforced in the composer and served beside the upload limits. */
   max_files_per_message: number;
   /** The largest session page any caller may ask for. */
   max_session_page: number;
   /** The largest SVG icon an MCP template may carry, in bytes. */
   max_icon_bytes: number;
   /**
-   * Past this many prompt tokens in one model call, the session's older messages are
-   * summarised before its next turn. `0` never compacts on its own; `!compact` still
-   * works. See `maybeCompact` in agent.ts.
+   * Prompt tokens after which older messages are summarised before the next turn (0 =
+   * never automatically; `!compact` still works).
    */
   compact_after_tokens: number;
 
@@ -149,20 +114,10 @@ export type DeploymentSettings = {
   field_options: Record<(typeof CHOICE_FIELD_KEYS)[number], ChoiceOption[]>;
 };
 
-/**
- * The document as stored. Partial, because a deployment is set up one field at a time
- * and a Worker upgraded to a version with a new field has not been told it yet — but
- * never served partial: see `completeSettings`.
- */
+/** The stored document. Partial while being set up, but never served partial. */
 export type StoredSettings = Partial<DeploymentSettings>;
 
-/**
- * One field, as the admin CLI needs to draw and check it.
- *
- * Served over `/api/admin/settings` rather than duplicated in the CLI, so a field
- * added here shows up in the dialog without a second edit — and so the range the CLI
- * refuses is the same range the Worker refuses.
- */
+/** One field as the admin CLI draws and checks it, served so the CLI needs no copy. */
 export type SettingsField = {
   key: keyof DeploymentSettings;
   kind: "int" | "number" | "string" | "json";
@@ -187,7 +142,12 @@ export const SETTINGS_FIELDS: readonly SettingsField[] = [
   INT("max_agent_bytes", 1, 1_000_000_000_000, "file storage one agent may hold, in bytes"),
   INT("max_members", 1, 100_000, "addresses one agent's access list may hold"),
   INT("default_agent_limit", 1, 100_000, "agents an ordinary account may administer"),
-  { key: "max_upload_bytes", kind: "json", doc: "attachment ceiling per kind: text, pdf, image, audio", group: "limit" },
+  {
+    key: "max_upload_bytes",
+    kind: "json",
+    doc: "attachment ceiling per kind: text, pdf, image, audio",
+    group: "limit",
+  },
   INT("max_thumbnail_bytes", 1, 100_000_000_000, "largest bytes a PDF thumbnail may take"),
   INT("max_tool_rounds", 1, 100, "tool rounds one turn may take before it must answer"),
   INT("message_page", 1, 1000, "transcript page size when none is asked for"),
@@ -199,13 +159,43 @@ export const SETTINGS_FIELDS: readonly SettingsField[] = [
   INT("max_files_per_message", 1, 100, "attachments one message may carry"),
   INT("max_session_page", 1, 10_000, "largest session page a caller may ask for"),
   INT("max_icon_bytes", 1, 1_000_000, "largest SVG icon an MCP template may carry, in bytes"),
-  INT("compact_after_tokens", 0, 10_000_000, "prompt tokens past which older messages are summarised; 0 never auto-compacts"),
+  INT(
+    "compact_after_tokens",
+    0,
+    10_000_000,
+    "prompt tokens past which older messages are summarised; 0 never auto-compacts"
+  ),
 
-  { key: "models", kind: "json", doc: "models the settings page offers: [{id,label,vision}], at least one", group: "default" },
-  { key: "default_model", kind: "string", doc: "model a new agent is seeded with", group: "default" },
-  { key: "system_prompt", kind: "string", doc: "line every agent is told first; blank says nothing", group: "default" },
-  { key: "config_defaults", kind: "json", doc: `starting values for every one of: ${SETTABLE_CONFIG_KEYS.join(", ")}`, group: "default" },
-  { key: "mcp_catalog", kind: "json", doc: "MCP templates offered: [{id,name,url,auth,icon?,letter?,color?}], icon an SVG; empty offers none", group: "default" },
+  {
+    key: "models",
+    kind: "json",
+    doc: "models the settings page offers: [{id,label,vision}], at least one",
+    group: "default",
+  },
+  {
+    key: "default_model",
+    kind: "string",
+    doc: "model a new agent is seeded with",
+    group: "default",
+  },
+  {
+    key: "system_prompt",
+    kind: "string",
+    doc: "line every agent is told first; blank says nothing",
+    group: "default",
+  },
+  {
+    key: "config_defaults",
+    kind: "json",
+    doc: `starting values for every one of: ${SETTABLE_CONFIG_KEYS.join(", ")}`,
+    group: "default",
+  },
+  {
+    key: "mcp_catalog",
+    kind: "json",
+    doc: "MCP templates offered: [{id,name,url,auth,icon?,letter?,color?}], icon an SVG; empty offers none",
+    group: "default",
+  },
   {
     key: "field_options",
     kind: "json",
@@ -216,12 +206,7 @@ export const SETTINGS_FIELDS: readonly SettingsField[] = [
 
 const FIELD_BY_KEY = new Map(SETTINGS_FIELDS.map((f) => [f.key as string, f]));
 
-/**
- * Every field the stored document does not have yet, as dotted paths.
- *
- * Nested ones are named per key (`max_upload_bytes.pdf`, `config_defaults.cap_mcp`)
- * so the refusal says exactly what to set, not just which object is short.
- */
+/** Every missing field as a dotted path (`max_upload_bytes.pdf`). */
 export function missingSettings(stored: StoredSettings): string[] {
   const missing: string[] = [];
   for (const field of SETTINGS_FIELDS) {
@@ -286,17 +271,10 @@ function requireInt(key: string, value: unknown, min: number, max: number): numb
 }
 
 /**
- * Check an incoming patch and return the part of it that is a setting.
- *
- * Unknown keys are refused rather than ignored: a typo in `max_session` that silently
- * did nothing would look exactly like a limit that does not work, and the owner has
- * no log to find out which. `null` is refused too: every field is required, so there
- * is nothing for "unset" to fall back to.
+ * Validate a settings patch. Unknown keys and `null` are refused rather than ignored,
+ * so a typo cannot look like a limit that does not work.
  */
-export function validateSettingsPatch(
-  input: unknown,
-  current: StoredSettings
-): StoredSettings {
+export function validateSettingsPatch(input: unknown, current: StoredSettings): StoredSettings {
   if (!isObject(input)) throw new SettingsError("a settings object is required");
   // A key this Worker no longer has a field for is dropped on the way through, so a
   // setting removed from the code leaves the stored document on its next save.
@@ -406,7 +384,9 @@ export function validateSettingsPatch(
             );
           }
           if (setting === null) {
-            throw new SettingsError(`config_defaults.${column} cannot be unset: every setting is required`);
+            throw new SettingsError(
+              `config_defaults.${column} cannot be unset: every setting is required`
+            );
           }
           merged[column] = validateConfigDefault(column as SettableConfigKey, setting);
         }
@@ -426,14 +406,17 @@ export function validateSettingsPatch(
         break;
       }
       default: {
-        next[field.key] = requireInt(key, value, field.min ?? 1, field.max ?? Number.MAX_SAFE_INTEGER) as never;
+        next[field.key] = requireInt(
+          key,
+          value,
+          field.min ?? 1,
+          field.max ?? Number.MAX_SAFE_INTEGER
+        ) as never;
       }
     }
   }
 
-  // A page default above its own ceiling would clamp to the ceiling on every read,
-  // which reads as the default being ignored. Refuse instead of silently winning.
-  // Checked once both halves of a pair are set; until then there is nothing to compare.
+  // A page default above its own ceiling is refused once both halves are set.
   for (const [page, max] of [
     ["message_page", "max_message_page"],
     ["agent_page", "max_agent_page"],
@@ -486,12 +469,7 @@ function validateConfigDefault(column: SettableConfigKey, value: unknown): numbe
   return id;
 }
 
-/**
- * Read the stored document back, tolerating the row never having been written.
- *
- * A row nobody can parse reads as empty, which `completeSettings` then refuses field
- * by field — the owner sees what to set rather than a parse error.
- */
+/** The stored document; an unparseable row reads as empty so the refusal lists fields. */
 export function parseStoredSettings(json: string): StoredSettings {
   if (!json) return {};
   try {
@@ -503,18 +481,8 @@ export function parseStoredSettings(json: string): StoredSettings {
 }
 
 /**
- * How long a cached copy of the settings may be trusted, in milliseconds.
- *
- * The document is read on paths that run per turn and per upload, and it lives in one
- * Durable Object, so reading it every time would put an RPC hop in front of every
- * message this deployment answers. Ten seconds is short enough that a change made in
- * the admin CLI is in force before the owner has finished reading the confirmation,
- * and long enough that a busy isolate reads it once rather than hundreds of times.
- *
- * The cost of the staleness is bounded and one-directional: for up to ten seconds an
- * object may enforce the old ceiling. Nothing here is a security boundary — the
- * identity gates are elsewhere — so an extra upload against a lowered limit is the
- * worst case, and it corrects itself.
+ * Cache lifetime for the settings. Ten seconds keeps an RPC hop off every message, and
+ * staleness only means briefly enforcing an old ceiling (no security gate depends on it).
  */
 const SETTINGS_TTL = 10_000;
 
@@ -530,13 +498,8 @@ function directoryStub(env: Env) {
 }
 
 /**
- * The deployment's settings, cached for `SETTINGS_TTL`.
- *
- * Use this everywhere a ceiling or a default is needed. Throws
- * `SettingsIncompleteError` while any field is unset — an incomplete document is never
- * cached, so the request after the owner fills it in is served. A directory that
- * cannot be reached keeps the last complete copy this isolate read, if it has one;
- * with none, the error goes to the caller, because there is nothing else to serve.
+ * The deployment settings, cached for `SETTINGS_TTL`. Throws `SettingsIncompleteError`
+ * while incomplete (never cached); an unreachable directory serves the last good copy.
  */
 export async function deploymentSettings(env: Env): Promise<DeploymentSettings> {
   const now = Date.now();
@@ -554,12 +517,7 @@ export async function deploymentSettings(env: Env): Promise<DeploymentSettings> 
   return value;
 }
 
-/**
- * Drop the cached copy, so the next read goes to the directory.
- *
- * Called by the write route: the owner who just changed a limit is the one caller who
- * should never see the old value, and it costs one read.
- */
+/** Drop the cache so the owner who just saved sees the new value. */
 export function forgetCachedSettings(): void {
   cached = null;
 }
@@ -567,11 +525,8 @@ export function forgetCachedSettings(): void {
 const SVG_DATA_URL = "data:image/svg+xml;base64,";
 
 /**
- * An MCP template's icon, as the one form it is stored and served in: an SVG data URL.
- *
- * Raw `<svg>` markup is taken too and encoded here, so a caller can send the file as
- * it is. Nothing but SVG is accepted. The page draws it with `<img>`, which runs no
- * script an SVG carries — so the markup is never checked for any, only for being SVG.
+ * An MCP template icon as an SVG data URL (raw `<svg>` is encoded). Only SVG is
+ * accepted; it is drawn with `<img>`, which runs no script.
  */
 export function svgIcon(value: unknown, name: string): string {
   if (typeof value !== "string") throw new SettingsError(`${name} must be an SVG`);
