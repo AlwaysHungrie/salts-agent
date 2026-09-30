@@ -270,6 +270,29 @@ export class McpClient {
     if (result?.isError) throw new Error(text);
     return text.length > 24000 ? `${text.slice(0, 24000)}\n\n[truncated]` : text;
   }
+
+  /**
+   * Hands the server a file's bytes out of band, for a server that takes files that
+   * way. A model can read an attachment but cannot copy its bytes into a tool call, so
+   * the agent posts them here and the model passes the id that comes back.
+   */
+  async upload(bytes: ArrayBuffer, mime: string): Promise<string> {
+    const headers: Record<string, string> = { ...this.extraHeaders, "content-type": mime };
+    if (this.bearer) headers.authorization = `Bearer ${this.bearer}`;
+    const res = await fetch(uploadsUrl(this.url), { method: "POST", headers, body: bytes });
+    if (res.status === 401) throw new McpUnauthorized();
+    if (!res.ok) throw new Error(`${res.status} ${(await res.text()).slice(0, 300)}`);
+    const { upload_id } = (await res.json().catch(() => ({}))) as { upload_id?: unknown };
+    if (typeof upload_id !== "string" || !upload_id) throw new Error("upload returned no upload_id");
+    return upload_id;
+  }
+}
+
+/** Where a server takes uploads: its URL without the `/mcp`, plus `/uploads`. */
+export function uploadsUrl(url: string): string {
+  const u = new URL(url);
+  u.pathname = `${u.pathname.replace(/\/mcp\/?$/, "").replace(/\/$/, "")}/uploads`;
+  return u.toString();
 }
 
 /* ----------------------------------------------------------------- oauth -- */

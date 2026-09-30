@@ -12,6 +12,7 @@ import {
 } from "ai";
 import { COMPACTION_PREFIX, createCompactFunction } from "agents/experimental/memory/utils";
 import {
+  acceptsUploads,
   capabilityLabels,
   channelLabels,
   mcpServerReady,
@@ -325,6 +326,24 @@ const SESSION_AGENT_MIGRATIONS: readonly Migration[] = [
            to_id TEXT NOT NULL,
            summary TEXT NOT NULL,
            ts INTEGER NOT NULL
+         )`
+      );
+    },
+  },
+  {
+    // The id an MCP server handed back for an attachment's bytes, so a file goes to a
+    // server once per session rather than once per turn. Keyed on the URL too: a server
+    // pointed somewhere new has never seen the file.
+    name: "mcp_uploads",
+    up: (sql) => {
+      sql.exec(
+        `CREATE TABLE mcp_uploads (
+           attachment_id TEXT NOT NULL,
+           server_id TEXT NOT NULL,
+           url TEXT NOT NULL,
+           upload_id TEXT NOT NULL,
+           ts INTEGER NOT NULL,
+           PRIMARY KEY (attachment_id, server_id, url)
          )`
       );
     },
@@ -843,6 +862,7 @@ export class SessionAgent extends Think<Env> {
       // first turn that needs its words.
       for (const a of attachments) await this.ensureParsed(a);
       const parsed = await this.parsedDocuments(attachments);
+      const uploads = await this.mcpUploadNotes(config, attachments);
       // A PDF that has been parsed travels as its own words. The file itself is only
       // sent when there is no parse to send instead — a failed parse, or one that came
       // back empty — because carrying eight megabytes of base64 to a provider that
@@ -850,6 +870,7 @@ export class SessionAgent extends Think<Env> {
       const parts = await this.fileParts(attachments, new Set(parsed.map((p) => p.id)));
       const content = [
         { type: "text" as const, text },
+        ...uploads.map((note) => ({ type: "text" as const, text: note })),
         ...parsed.map((p) => ({
           type: "text" as const,
           text: `--- contents of ${p.name} ---\n${p.text}`,
@@ -861,6 +882,57 @@ export class SessionAgent extends Think<Env> {
       );
     }
     return messages;
+  }
+
+  /**
+   * Send each PDF a message carried to every connected MCP server that takes uploads,
+   * and name the id it came back under. The model sees the PDF's words but cannot copy
+   * its bytes into a tool call, so without this a server that stores the original gets
+   * the text alone. Uploaded once per server, on the first turn that needs it; a failed
+   * upload is not a failed turn, and is tried again on the next.
+   */
+  private async mcpUploadNotes(config: Config, attachments: Attachment[]): Promise<string[]> {
+    const servers = enabled(config, "mcp") ? this.mcpServers.filter(acceptsUploads) : [];
+    const notes: string[] = [];
+    for (const a of attachments) {
+      if (a.kind !== "pdf") continue;
+      for (const server of servers) {
+        const id = await this.ensureMcpUpload(a, server);
+        if (id) notes.push(`[Attachment ${a.name} uploaded to ${server.name}: upload_id=${id}]`);
+      }
+    }
+    return notes;
+  }
+
+  private async ensureMcpUpload(attachment: Attachment, server: McpServerRow): Promise<string> {
+    const cached = this.exec<{ upload_id: string }>(
+      `SELECT upload_id FROM mcp_uploads WHERE attachment_id = ? AND server_id = ? AND url = ?`,
+      attachment.id,
+      server.id,
+      server.url
+    )[0];
+    if (cached) return cached.upload_id;
+    const bytes = await this.workspace.readFileBytes(attachment.path);
+    if (!bytes) return "";
+    try {
+      const uploadId = await withMcpAuth(server, this.registry(), (client) =>
+        client.upload(toArrayBuffer(bytes), attachment.mime)
+      );
+      this.exec(
+        `INSERT OR REPLACE INTO mcp_uploads (attachment_id, server_id, url, upload_id, ts) VALUES (?, ?, ?, ?, ?)`,
+        attachment.id,
+        server.id,
+        server.url,
+        uploadId,
+        Date.now()
+      );
+      return uploadId;
+    } catch (err) {
+      console.error(
+        `mcp upload of ${attachment.id} to ${server.name} failed: ${err instanceof Error ? err.message : err}`
+      );
+      return "";
+    }
   }
 
   /**
