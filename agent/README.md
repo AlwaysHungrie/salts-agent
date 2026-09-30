@@ -132,7 +132,8 @@ curl -X POST http://localhost:8787/agents/session-agent/my-session/chat \
 | `POST /api/business-requests` | A signed-in account asks for a higher agent limit |
 | `POST /telegram/webhook/:agentId` | One route per agent, because one bot per agent |
 | `GET\|POST /whatsapp/webhook/:agentId` | WhatsApp's subscription handshake (`GET`) and deliveries (`POST`) |
-| `POST /searxng/:agentId/url` | salts-web reports its tunnel address. Bearer token must match the agent's SearXNG token |
+| `POST /searxng/:agentId/url` | salts-tools reports its tunnel address. Bearer token must match the agent's SearXNG token |
+| `POST /searxng/:agentId/mcp` | salts-tools points the agent's MCP server `{ name }` at its tunnel `{ url }`: creates it with `Authorization: Bearer <token>`, or repoints one whose Authorization is already that token (409 otherwise). Same token proof |
 | `GET /api/mcp/oauth/callback` | Where an MCP provider's OAuth sends the browser back |
 | `GET /api/admin/settings` | The stored settings and what they still lack: `{ settings, missing, fields }`. Owner only, via `API_SECRET` |
 | `PATCH /api/admin/settings` | Merge a patch: `{ <field>: value }`. No field can be unset. Owner only |
@@ -278,7 +279,7 @@ that page renders, so a new capability needs no frontend change.
 
 | Capability | Needs | Tools |
 |---|---|---|
-| Web search | Brave Search API key, or a SearXNG URL and token (see [salts-web](../salts-web/README.md)) | `web_search` |
+| Web search | Brave Search API key, or a SearXNG URL and token (see [salts-tools](../salts-tools/README.md)) | `web_search` |
 | Read a URL | — | `fetch_url` |
 | File ingest | — | — |
 | Image input | a multimodal model | — |

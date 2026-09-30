@@ -1,0 +1,27 @@
+Kabir Shah
+kabir.shah@example.com | +91 98200 55443 | Mumbai
+
+Profile
+UI engineer who led an AngularJS to React migration and built a TypeScript design system.
+
+Skills
+• React
+• TS
+• AngularJS
+• Storybook
+• CSS
+• GraphQL
+
+Work History
+Senior UI Engineer | TravelGo | 2019-09 – present
+- Led migration from AngularJS to React
+- Built design system with 60 components in TypeScript
+Web Developer | Brandly | 2018-01 – 2019-08
+- jQuery and CSS for client sites
+
+Education
+B.Sc. IT, 2017
+
+Notice period: 90 days
+
+Languages: English

@@ -1,0 +1,29 @@
+Neha Kulkarni
+neha.k@example.com | 9822012345 | Mumbai
+
+Profile
+Python backend developer building Django REST APIs for insurance products on AWS.
+
+Skills
+• Python
+• Django
+• DRF
+• postgres
+• AWS
+• Celery
+• pandas
+
+Work History
+Backend Developer | InsureNow | 2020-08 – present
+- Django REST APIs for policy issuance
+- Postgres query tuning, 3x faster reports
+- Deployed services on AWS ECS
+Python Developer | DataWeave Labs | 2019-06 – 2020-07
+- ETL scripts in Python and pandas
+
+Education
+M.Sc. Computer Science, Mumbai University, 2019
+
+Notice period: 15 days
+
+Languages: English

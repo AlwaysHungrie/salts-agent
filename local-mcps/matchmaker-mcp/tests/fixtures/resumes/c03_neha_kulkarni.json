@@ -1,0 +1,52 @@
+{
+  "name": "Neha Kulkarni",
+  "email": "neha.k@example.com",
+  "phone": "9822012345",
+  "location": "Mumbai",
+  "current_title": "Backend Developer",
+  "roles": [
+    {
+      "title": "Backend Developer",
+      "company": "InsureNow",
+      "start": "2020-08",
+      "end": "present",
+      "highlights": [
+        "Django REST APIs for policy issuance",
+        "Postgres query tuning, 3x faster reports",
+        "Deployed services on AWS ECS"
+      ]
+    },
+    {
+      "title": "Python Developer",
+      "company": "DataWeave Labs",
+      "start": "2019-06",
+      "end": "2020-07",
+      "highlights": [
+        "ETL scripts in Python and pandas"
+      ]
+    }
+  ],
+  "skills": [
+    "Python",
+    "Django",
+    "DRF",
+    "postgres",
+    "AWS",
+    "Celery",
+    "pandas"
+  ],
+  "education": [
+    "M.Sc. Computer Science, Mumbai University, 2019"
+  ],
+  "certifications": [],
+  "industries": [
+    "Insurance"
+  ],
+  "notice_period_days": 15,
+  "current_ctc": null,
+  "expected_ctc": null,
+  "languages": [
+    "English"
+  ],
+  "summary": "Python backend developer building Django REST APIs for insurance products on AWS."
+}

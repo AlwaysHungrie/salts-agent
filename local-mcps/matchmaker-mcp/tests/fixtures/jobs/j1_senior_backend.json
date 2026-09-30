@@ -1,0 +1,33 @@
+{
+  "id": "j1_senior_backend",
+  "expected_top": [
+    "c01_priya_sharma",
+    "c03_neha_kulkarni",
+    "c02_arjun_mehta"
+  ],
+  "jd_text": "Senior Backend Engineer - Payments Platform\nFinlytics is hiring a Senior Backend Engineer to build and scale our payments infrastructure.\n\nWhat you'll do:\n- Design and build high-throughput REST APIs and microservices for payment processing\n- Own services end to end on AWS: design, deployment, monitoring\n- Work with product and data teams on reconciliation and ledger systems\n\nRequirements (must have):\n- 5-8 years of backend development experience\n- Strong Python (Django, Flask or FastAPI)\n- Hands-on AWS experience (Lambda, ECS/EKS, RDS)\n- Solid understanding of relational databases\n\nNice to have:\n- Apache Kafka or other event streaming\n- PostgreSQL performance tuning\n- Docker and containerised deployments\n- Fintech or payments background\n\nLocation: Pune office, hybrid; remote within India is fine for the right candidate.\n",
+  "requirements": {
+    "title": "Senior Backend Engineer",
+    "must_have_skills": [
+      "Python",
+      "AWS"
+    ],
+    "nice_to_have_skills": [
+      "Kafka",
+      "PostgreSQL",
+      "Docker"
+    ],
+    "min_years": 5,
+    "max_years": 8,
+    "locations": [
+      "Pune"
+    ],
+    "remote_ok": true,
+    "industries": [
+      "Fintech",
+      "Payments"
+    ],
+    "dealbreakers": [],
+    "summary": "Senior backend role building Python microservices and REST APIs for payments on AWS."
+  }
+}

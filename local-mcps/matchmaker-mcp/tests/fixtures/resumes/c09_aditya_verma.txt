@@ -1,0 +1,25 @@
+ADITYA VERMA
+Site Reliability Engineer
+aditya.verma@example.com | +91 97654 32109 | Pune
+
+SUMMARY
+SRE running Kubernetes clusters on AWS with Terraform.
+
+EXPERIENCE
+Site Reliability Engineer, CloudNine   2020-11 - present
+  - Runs 40 EKS clusters with Terraform and Helm
+  - Cut incident MTTR by 45% with Prometheus alerts
+Systems Engineer, Infosys   2017-06 - 2020-10
+  - Linux administration and Jenkins pipelines
+
+SKILLS
+Kubernetes, Terraform, AWS, Helm, Prometheus, Grafana, Linux, Jenkins
+
+Education
+B.E. Electronics, 2017
+
+Certifications: CKA, AWS Solutions Architect Associate
+
+Notice period: 60 days
+
+Languages: English

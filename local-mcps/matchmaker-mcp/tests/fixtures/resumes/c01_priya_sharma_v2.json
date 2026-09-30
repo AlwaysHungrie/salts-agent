@@ -1,0 +1,67 @@
+{
+  "name": "Priya Sharma",
+  "email": "priya.sharma@example.com",
+  "phone": "+91 98765 43210",
+  "location": "Pune",
+  "current_title": "Engineering Lead",
+  "roles": [
+    {
+      "title": "Engineering Lead",
+      "company": "Finlytics",
+      "start": "2025-06",
+      "end": "present",
+      "highlights": [
+        "Leads team of 6 backend engineers",
+        "Owns payments platform roadmap"
+      ]
+    },
+    {
+      "title": "Senior Backend Engineer",
+      "company": "Finlytics",
+      "start": "2022-03",
+      "end": "2025-05",
+      "highlights": [
+        "Led payments migration from monolith to Python microservices on AWS",
+        "Cut p99 latency from 900ms to 180ms with Redis caching",
+        "Designed REST APIs serving 40M requests/day"
+      ]
+    },
+    {
+      "title": "Backend Engineer",
+      "company": "CartNest",
+      "start": "2019-01",
+      "end": "2022-02",
+      "highlights": [
+        "Built order service in Django and PostgreSQL",
+        "Moved batch jobs to AWS Lambda, saving 30% infra cost"
+      ]
+    }
+  ],
+  "skills": [
+    "Python",
+    "Django",
+    "FastAPI",
+    "AWS",
+    "Lambda",
+    "PostgreSQL",
+    "Redis",
+    "Docker",
+    "REST APIs",
+    "Kafka"
+  ],
+  "education": [
+    "B.E. Computer Engineering, Pune University, 2018"
+  ],
+  "certifications": [],
+  "industries": [
+    "Fintech",
+    "E-commerce"
+  ],
+  "notice_period_days": 30,
+  "current_ctc": "28 LPA",
+  "expected_ctc": "36 LPA",
+  "languages": [
+    "English"
+  ],
+  "summary": "Backend engineer with Python and AWS experience in fintech and e-commerce. Led a payments migration to microservices. Based in Pune."
+}

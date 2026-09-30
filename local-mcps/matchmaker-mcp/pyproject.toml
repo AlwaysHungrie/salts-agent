@@ -1,0 +1,45 @@
+[project]
+name = "recruiter-mcp"
+version = "0.1.0"
+description = "MCP server for resume ingestion and job matching"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "mcp[cli]>=1.12",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    "asyncpg>=0.29",
+    "pgvector>=0.3",
+    "httpx>=0.27",
+    "openai>=1.40",
+    "uvicorn>=0.30",
+    "starlette>=0.37",
+]
+
+[dependency-groups]
+dev = [
+    "fpdf2>=2.8.9",
+    "numpy>=2.5.3",
+    "pytest>=8",
+    "pytest-asyncio>=0.23",
+]
+
+[project.scripts]
+recruiter-mcp = "recruiter_mcp.server:main"
+recruiter-mcp-migrate = "recruiter_mcp.migrate:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/recruiter_mcp"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]

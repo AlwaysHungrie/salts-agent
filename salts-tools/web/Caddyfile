@@ -1,6 +1,6 @@
 # Bearer-token gate in front of SearXNG.
 #
-# The token never enters this folder: salts-web reads it from the OS secret store and
+# The token never enters this folder: salts-tools reads it from the OS secret store and
 # hands it to this container as SALTS_TOKEN, and `{$SALTS_TOKEN}` is substituted when
 # the Caddyfile loads. docker-compose.yml refuses to start without it, so the gate can
 # never come up matching an empty token.

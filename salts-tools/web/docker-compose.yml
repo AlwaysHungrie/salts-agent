@@ -1,11 +1,11 @@
 # Self-hosted SearXNG: a metasearch engine that fronts Google, Bing, DuckDuckGo,
 # Brave and friends and answers over a plain JSON API. Replaces the Brave API key.
 #
-# Driven by the salts-web CLI (see README), which supplies SALTS_TOKEN from the
+# Driven by the salts-tools CLI (see README), which supplies SALTS_TOKEN from the
 # OS secret store and SALTS_PORT from a free-port scan.
 
 # `searxng` is kept from before the folder was renamed, so a stack already running is
-# recreated in place rather than colliding with its own container names. salts-web
+# recreated in place rather than colliding with its own container names. salts-tools
 # sets `searxng-staging` for the staging instance, so the two can run side by side.
 name: ${SALTS_PROJECT:-searxng}
 
@@ -73,7 +73,7 @@ services:
     ports:
       - "127.0.0.1:${SALTS_PORT:-8080}:8081"
     environment:
-      - SALTS_TOKEN=${SALTS_TOKEN:?run salts-web start; it supplies the token from the OS secret store}
+      - SALTS_TOKEN=${SALTS_TOKEN:?run salts-tools start; it supplies the token from the OS secret store}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data

@@ -1,0 +1,18 @@
+TANVI PATIL
+QA Automation Engineer
+tanvi.patil@example.com | +91 94444 55566 | Pune
+
+SUMMARY
+QA automation engineer building Selenium and pytest suites for a fintech product.
+
+EXPERIENCE
+QA Automation Engineer, Finlytics   2021-07 - present
+  - Built Selenium and pytest suite of 1,200 tests
+  - Added API tests to CI/CD pipeline
+
+SKILLS
+Selenium, pytest, Python, Postman, Jenkins
+
+Notice period: 30 days
+
+Languages: English

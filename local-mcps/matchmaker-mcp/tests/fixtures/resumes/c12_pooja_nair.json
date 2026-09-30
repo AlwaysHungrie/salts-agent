@@ -1,0 +1,49 @@
+{
+  "name": "Pooja Nair",
+  "email": "pooja.nair@example.com",
+  "phone": "+91 90040 50607",
+  "location": "Navi Mumbai",
+  "current_title": "Accounts Lead",
+  "roles": [
+    {
+      "title": "Accounts Lead",
+      "company": "FreshBasket",
+      "start": "2020-06",
+      "end": "present",
+      "highlights": [
+        "Owns accounts payable and GST returns",
+        "Automated reconciliations in Excel, saving 20 hrs/month"
+      ]
+    },
+    {
+      "title": "Accountant",
+      "company": "SmallBiz Co",
+      "start": "2016",
+      "end": "2020",
+      "highlights": [
+        "Bookkeeping in Tally"
+      ]
+    }
+  ],
+  "skills": [
+    "Tally",
+    "GST",
+    "TDS",
+    "Accounts Payable",
+    "Excel"
+  ],
+  "education": [
+    "M.Com, 2016"
+  ],
+  "certifications": [],
+  "industries": [
+    "Retail"
+  ],
+  "notice_period_days": 30,
+  "current_ctc": null,
+  "expected_ctc": null,
+  "languages": [
+    "English"
+  ],
+  "summary": "Accounts lead managing payables, GST and TDS for a grocery retailer."
+}

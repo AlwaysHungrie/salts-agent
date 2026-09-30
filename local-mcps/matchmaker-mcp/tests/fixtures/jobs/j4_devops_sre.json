@@ -1,0 +1,35 @@
+{
+  "id": "j4_devops_sre",
+  "expected_top": [
+    "c09_aditya_verma",
+    "c10_farah_ali"
+  ],
+  "jd_text": "DevOps / Site Reliability Engineer\nJoin our platform team to run production infrastructure for a fast-growing SaaS product.\n\nWhat you'll do:\n- Operate Kubernetes clusters on AWS\n- Write and maintain infrastructure as code with Terraform\n- Improve CI/CD pipelines, monitoring and on-call\n\nMust have:\n- 4+ years in DevOps, SRE or infrastructure roles\n- Kubernetes in production\n- Terraform\n- AWS\nNice to have:\n- Helm, Prometheus, Grafana\n- GitHub Actions or Jenkins\n- CKA certification\n\nLocation: Pune or Bengaluru (hybrid).\n",
+  "requirements": {
+    "title": "DevOps / Site Reliability Engineer",
+    "must_have_skills": [
+      "Kubernetes",
+      "Terraform",
+      "AWS"
+    ],
+    "nice_to_have_skills": [
+      "Helm",
+      "Prometheus",
+      "Grafana",
+      "GitHub Actions",
+      "Jenkins"
+    ],
+    "min_years": 4,
+    "max_years": null,
+    "locations": [
+      "Pune",
+      "Bengaluru"
+    ],
+    "remote_ok": false,
+    "industries": [
+      "SaaS"
+    ],
+    "dealbreakers": [],
+    "summary": "DevOps/SRE running Kubernetes on AWS with Terraform and CI/CD."
+  }
+}
