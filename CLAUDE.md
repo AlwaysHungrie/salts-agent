@@ -46,6 +46,7 @@
 
 - `agent/` — agent code
 - `frontend/` — Next.js app (pnpm)
+- `socratic-salt/` — Next.js app (pnpm): public challenge agents on the same Worker
 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence

@@ -116,7 +116,13 @@ describe("access", () => {
 
   it("seeds an unseeded agent from the directory's copy", async () => {
     const seeded = await reg.seedAccess("old@x.com", "old@x.com");
-    expect(seeded).toEqual({ allowed_emails: "old@x.com", admin_email: "old@x.com", seeded: 1 });
+    expect(seeded).toEqual({
+      allowed_emails: "old@x.com",
+      admin_email: "old@x.com",
+      seeded: 1,
+      guests: 0,
+      guest_emails: "",
+    });
   });
 
   it("refuses to overwrite access that has already been decided", async () => {

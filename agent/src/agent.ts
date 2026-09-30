@@ -741,6 +741,16 @@ export class SessionAgent extends Think<Env> {
     const custom = this.config().system_prompt.trim();
     const instructions = [...(name ? [`Your name is ${name}.`] : []), ...(custom ? [custom] : [])];
     if (instructions.length > 0) parts.push(instructions.join("\n"));
+    // The owner's notes: the brief only the model sees, then what the person talking
+    // to it was shown before starting, so it knows exactly what they have read.
+    const privateNotes = (this.config().private_notes ?? "").trim();
+    if (privateNotes) parts.push(privateNotes);
+    const publicNotes = (this.config().public_notes ?? "").trim();
+    if (publicNotes) {
+      parts.push(
+        `What the person you are talking with was shown before starting:\n\n${publicNotes}`
+      );
+    }
     if (this.memories.length > 0) {
       // Memories are injected rather than recalled by tool call, so the model can use
       // what it knows without spending a round trip to find out that it knows it.

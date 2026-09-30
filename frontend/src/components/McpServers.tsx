@@ -32,10 +32,12 @@ const AUTH_MODES: { id: McpAuth; label: string; hint?: string }[] = [
 /** A header pair while it is being edited. Stored as a JSON object server-side. */
 type HeaderPair = { key: string; value: string };
 
-const pairsFrom = (names: string[]): HeaderPair[] =>
-  names.length > 0
-    ? names.map((key) => ({ key, value: SECRET_MASK }))
+const pairsFrom = (headers: Record<string, string>): HeaderPair[] => {
+  const entries = Object.entries(headers);
+  return entries.length > 0
+    ? entries.map(([key, value]) => ({ key, value }))
     : [{ key: "", value: "" }];
+};
 
 const objectFrom = (pairs: HeaderPair[]): Record<string, string> =>
   Object.fromEntries(
@@ -81,9 +83,9 @@ function AuthPicker({
 }
 
 /**
- * The header editor: a name and a value per row. A value already saved reads back as
- * the mask and is left alone unless it is typed over, so editing one header never
- * wipes the key in another.
+ * The header editor: a name and a value per row, both in plain text so a saved key
+ * can be read and corrected. A value that reads back as the mask is left alone unless
+ * it is typed over, so editing one header never wipes the key in another.
  */
 function HeaderEditor({
   pairs,
@@ -110,7 +112,6 @@ function HeaderEditor({
             className={`${input} flex-[2]`}
           />
           <input
-            type={pair.value === SECRET_MASK ? "text" : "password"}
             value={pair.value}
             placeholder="Bearer sk-…"
             onFocus={() => pair.value === SECRET_MASK && set(i, { value: "" })}
@@ -172,7 +173,7 @@ function ServerCard({
   const [name, setName] = useState(server.name);
   const [url, setUrl] = useState(server.url);
   const [pairs, setPairs] = useState<HeaderPair[]>(
-    pairsFrom(server.header_names),
+    pairsFrom(server.headers),
   );
 
   const off = new Set(server.disabled_tools);
@@ -311,20 +312,24 @@ function ServerCard({
                 value={server.auth}
                 onChange={(auth) => onPatch({ auth })}
               />
-
-              {server.auth === "headers" && (
-                <div className="space-y-3">
-                  <HeaderEditor pairs={pairs} onChange={setPairs} />
-                  <button
-                    onClick={() => onPatch({ headers: objectFrom(pairs) })}
-                    disabled={busy}
-                    className={button}
-                  >
-                    Save headers
-                  </button>
-                </div>
-              )}
             </>
+          )}
+
+          {/*
+            Outside the block above: a headers server counts as connected as soon as it
+            is saved, and a key that has to be rotated is still a key worth editing.
+          */}
+          {manage && server.auth === "headers" && (
+            <div className="space-y-3">
+              <HeaderEditor pairs={pairs} onChange={setPairs} />
+              <button
+                onClick={() => onPatch({ headers: objectFrom(pairs) })}
+                disabled={busy}
+                className={button}
+              >
+                Save headers
+              </button>
+            </div>
           )}
 
           {server.tools.length > 0 && (
@@ -524,7 +529,7 @@ export function McpServers({
   // admin settings — but they arrive with the list itself rather than from `/meta`,
   // which only the agent's admin may read.
   const load = useCallback(async () => {
-    const res = await apiFetch(base, { cache: "no-store" });
+    const res = await apiFetch(`${base}${asOwner}`, { cache: "no-store" });
     const payload = (await res.json().catch(() => null)) as {
       servers: McpServer[];
       redirect_uri: string;
@@ -545,7 +550,7 @@ export function McpServers({
     // setting decides. An agent with no meta document has never been narrowed.
     if (!meta) setManage(payload.user_servers ?? true);
     setError(null);
-  }, [base, meta]);
+  }, [base, asOwner, meta]);
 
   useEffect(() => {
     void (async () => {
@@ -618,7 +623,7 @@ export function McpServers({
   ) => {
     const previous = servers.find((s) => s.id === id);
     setServers((all) => all.map((s) => (s.id === id ? { ...s, ...patch } : s)));
-    const res = await apiFetch(`${base}/${id}`, {
+    const res = await apiFetch(`${base}/${id}${asOwner}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
@@ -657,7 +662,7 @@ export function McpServers({
    */
   const recommend = async (id: string) => {
     setRecommending(id);
-    const res = await apiFetch(`${base}/${id}/recommend`, {
+    const res = await apiFetch(`${base}/${id}/recommend${asOwner}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: "{}",
@@ -699,7 +704,7 @@ export function McpServers({
 
       {servers.map((server) => (
         <ServerCard
-          key={`${server.id}:${server.name}:${server.url}:${server.header_names.join(",")}`}
+          key={`${server.id}:${server.name}:${server.url}:${JSON.stringify(server.headers)}`}
           server={server}
           busy={busy}
           manage={manage}
@@ -721,7 +726,7 @@ export function McpServers({
           onRecommend={() => void recommend(server.id)}
           recommending={recommending === server.id}
           onAction={(action) =>
-            void call(`${base}/${server.id}/${action}`, {
+            void call(`${base}/${server.id}/${action}${asOwner}`, {
               method: "POST",
               body: JSON.stringify({ return_to: window.location.href }),
             })
