@@ -16,7 +16,6 @@ import {
   type Summary,
   type TranscriptPage,
 } from "@/lib/agent";
-import { apiFetch } from "@/lib/identity";
 import { cached, forget, keys, remember } from "@/lib/cache";
 import { PageNotice } from "@/components/PageNotice";
 
@@ -157,7 +156,7 @@ export default function AgentPage({
 
   // Read once: the agent's name for the sidebar, and the bot handle for the links.
   useEffect(() => {
-    void apiFetch(`/api/agents/${encodeURIComponent(agentId)}/config`)
+    void fetch(`/api/agents/${encodeURIComponent(agentId)}/config`)
       .then((res) => (res.ok ? res.json() : null))
       .then((payload: ConfigPayload | null) => {
         // No agent behind this id: it was deleted, the link is stale, or it belongs
@@ -198,7 +197,7 @@ export default function AgentPage({
    */
   const loadSessions = useCallback(async () => {
     const payload = await readJson<SessionPage>(
-      await apiFetch(
+      await fetch(
         `/api/agents/${encodeURIComponent(agentId)}/sessions`,
       ),
     );
@@ -214,7 +213,7 @@ export default function AgentPage({
   const loadMoreSessions = useCallback(async () => {
     if (!sessionCursor.more || !sessionCursor.cursor) return;
     const payload = await readJson<SessionPage>(
-      await apiFetch(
+      await fetch(
         `/api/agents/${encodeURIComponent(agentId)}/sessions` +
           `?cursor=${encodeURIComponent(sessionCursor.cursor)}`,
       ),
@@ -231,7 +230,7 @@ export default function AgentPage({
 
   const loadSummary = useCallback(
     async (id: string) => {
-      const res = await apiFetch(
+      const res = await fetch(
         `/api/sessions/${encodeURIComponent(id)}/summary`,
       );
       const payload = await readJson<Summary>(res);
@@ -266,7 +265,7 @@ export default function AgentPage({
         );
         setSummary(cached<Summary>(keys.summary(selected)) ?? null);
       }
-      const res = await apiFetch(
+      const res = await fetch(
         `/api/sessions/${encodeURIComponent(selected)}/messages`,
       );
       const payload = await readJson<TranscriptPage>(res);
@@ -294,7 +293,7 @@ export default function AgentPage({
   const loadOlderMessages = useCallback(
     async (beforeId: string): Promise<TranscriptPage | null> => {
       if (!selected) return null;
-      const res = await apiFetch(
+      const res = await fetch(
         `/api/sessions/${encodeURIComponent(selected)}/messages` +
           `?before=${encodeURIComponent(beforeId)}`,
       );
@@ -306,7 +305,7 @@ export default function AgentPage({
   const createSession = async () => {
     // No title: the session is called "New session" until the agent names it from
     // the first exchange.
-    const res = await apiFetch(
+    const res = await fetch(
       `/api/agents/${encodeURIComponent(agentId)}/sessions`,
       { method: "POST" },
     );
@@ -324,7 +323,7 @@ export default function AgentPage({
    * session, which then opens. The original is left exactly as it was.
    */
   const forkSession = async (id: string, count: number, draft: string) => {
-    const res = await apiFetch(`/api/sessions/${encodeURIComponent(id)}/fork`, {
+    const res = await fetch(`/api/sessions/${encodeURIComponent(id)}/fork`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ count }),
@@ -358,7 +357,7 @@ export default function AgentPage({
     setSessions((current) =>
       current.map((s) => (s.id === id ? { ...s, title } : s)),
     );
-    const res = await apiFetch(`/api/sessions/${encodeURIComponent(id)}`, {
+    const res = await fetch(`/api/sessions/${encodeURIComponent(id)}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ title }),
@@ -376,7 +375,7 @@ export default function AgentPage({
     if (selected === id) setSelected(rest[0]?.id ?? null);
     forget(keys.transcript(id));
     forget(keys.summary(id));
-    const res = await apiFetch(`/api/sessions/${encodeURIComponent(id)}`, {
+    const res = await fetch(`/api/sessions/${encodeURIComponent(id)}`, {
       method: "DELETE",
     });
     if (!res.ok) await settle(res, "Couldn't delete that session. Try again.");

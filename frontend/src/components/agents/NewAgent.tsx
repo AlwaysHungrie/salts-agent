@@ -1,6 +1,6 @@
 import { MetaSettingsForm } from "@/components/MetaSettings";
 import { type Capability, EMPTY_META, type McpCatalogEntry, type MetaSettings, type ModelOption } from "@/lib/agent";
-import { apiFetch, useIdentity } from "@/lib/identity";
+import { useIdentity } from "@/lib/identity";
 import { useEffect, useRef, useState } from "react";
 
 /**
@@ -48,7 +48,7 @@ export function NewAgent({
   // yet, so they come from the deployment rather than from one agent's config.
   useEffect(() => {
     void (async () => {
-      const res = await apiFetch("/api/agents/catalog", { cache: "no-store" });
+      const res = await fetch("/api/agents/catalog", { cache: "no-store" });
       const payload = (await res.json().catch(() => null)) as {
         models?: ModelOption[];
         mcp_catalog?: McpCatalogEntry[];
