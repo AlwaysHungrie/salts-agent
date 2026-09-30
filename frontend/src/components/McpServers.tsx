@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, Plus, Sparkles, Trash2, X } from "lucide-react";
 import {
   SECRET_MASK,
@@ -11,6 +11,7 @@ import {
 import { Toggle } from "@/components/CapabilitySection";
 import { McpPresetStrip, type McpPreset } from "@/components/McpPresets";
 import { apiFetch } from "@/lib/identity";
+import { cached, remember } from "@/lib/cache";
 
 const AUTH_MODES: { id: McpAuth; label: string; hint?: string }[] = [
   {
@@ -492,6 +493,15 @@ function oauthResult(): { connected: string | null; failed: string | null } {
  * An OAuth connection leaves the app — the provider's consent screen is the point —
  * and comes back to this page with the result in the query string.
  */
+/** What is kept of the list between visits. */
+type Held = {
+  servers: McpServer[];
+  redirectUri: string;
+  templates: string[];
+  catalog: McpCatalogEntry[];
+  manage: boolean;
+};
+
 export function McpServers({
   agentId,
   meta = false,
@@ -509,8 +519,13 @@ export function McpServers({
   const base = `/api/agents/${encodeURIComponent(agentId)}/mcp`;
   /** The flag that tells the Worker this is the dialog that owns the list. */
   const asOwner = meta ? "?meta=1" : "";
-  const [servers, setServers] = useState<McpServer[]>([]);
-  const [redirectUri, setRedirectUri] = useState("");
+  // The list as it was last seen, so reopening the page draws it at once.
+  const key = `mcp:${agentId}${asOwner}`;
+  const held = cached<Held>(key);
+  /** Whether the state below is a real list yet, and so worth keeping. */
+  const known = useRef(!!held);
+  const [servers, setServers] = useState<McpServer[]>(held?.servers ?? []);
+  const [redirectUri, setRedirectUri] = useState(held?.redirectUri ?? "");
   // A picked provider, and a counter that remounts the form so it takes the values.
   const [preset, setPreset] = useState<McpPreset | null>(null);
   const [picks, setPicks] = useState(0);
@@ -522,11 +537,16 @@ export function McpServers({
   /** Which server, if any, is having its tools chosen for it right now. */
   const [recommending, setRecommending] = useState<string | null>(null);
   /** Preset ids this agent's meta settings offer. Empty means every preset. */
-  const [templates, setTemplates] = useState<string[]>([]);
+  const [templates, setTemplates] = useState<string[]>(held?.templates ?? []);
   /** Templates provisioned for this agent, which replace the built-in strip. */
-  const [catalog, setCatalog] = useState<McpCatalogEntry[]>([]);
+  const [catalog, setCatalog] = useState<McpCatalogEntry[]>(held?.catalog ?? []);
   /** Whether the list itself may be changed from here. */
-  const [manage, setManage] = useState(meta);
+  const [manage, setManage] = useState(held?.manage ?? meta);
+
+  useEffect(() => {
+    if (!known.current) return;
+    remember<Held>(key, { servers, redirectUri, templates, catalog, manage });
+  }, [key, servers, redirectUri, templates, catalog, manage]);
 
   // Which templates the strip offers, and whether the list may be changed here, are
   // admin settings — but they arrive with the list itself rather than from `/meta`,
@@ -552,6 +572,7 @@ export function McpServers({
     // The dialog manages the list whatever the setting says; everywhere else the
     // setting decides. An agent with no meta document has never been narrowed.
     if (!meta) setManage(payload.user_servers ?? true);
+    known.current = true;
     setError(null);
   }, [base, asOwner, meta]);
 
@@ -651,11 +672,17 @@ export function McpServers({
       body: JSON.stringify(body),
     })) !== null;
 
+  /** Gone at once; a refused delete reads the list back, which returns the row. */
   const remove = async (id: string) => {
-    setBusy(true);
-    await apiFetch(`${base}/${id}${asOwner}`, { method: "DELETE" });
-    setBusy(false);
     setServers((all) => all.filter((s) => s.id !== id));
+    const res = await apiFetch(`${base}/${id}${asOwner}`, { method: "DELETE" });
+    if (!res.ok) {
+      const payload = (await res.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+      await load();
+      setError(payload?.error ?? "Couldn't remove that server. Try again.");
+    }
   };
 
   /**
