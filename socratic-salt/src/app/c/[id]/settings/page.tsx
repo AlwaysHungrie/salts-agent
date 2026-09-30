@@ -41,7 +41,7 @@ export default async function SettingsPage({ params }: { params: Promise<{ id: s
                   <p className="text-muted truncate text-xs">{s.url}</p>
                   <p className="text-faint mt-1 text-xs">
                     {s.last_error || `${s.tools.length} tool${s.tools.length === 1 ? "" : "s"}`}
-                    {s.header_names.length > 0 && ` · header ${s.header_names.join(", ")}`}
+                    {Object.keys(s.headers).length > 0 && ` · header ${Object.keys(s.headers).join(", ")}`}
                   </p>
                 </div>
                 <form action={removeMcp.bind(null, id, s.id)}>

@@ -320,9 +320,9 @@ export type McpTool = {
 };
 
 /**
- * An external MCP server as the Worker hands it back. Header values, access tokens
- * and refresh tokens are never included: only the header *names*, so a saved key
- * shows as set without being sent to the browser.
+ * An external MCP server as the Worker hands it back. Access and refresh tokens are
+ * never included. Header values are, to a caller that may edit the server; anyone
+ * else gets each value as the mask.
  */
 export type McpServer = {
   id: string;
@@ -330,7 +330,7 @@ export type McpServer = {
   url: string;
   auth: McpAuth;
   enabled: number;
-  header_names: string[];
+  headers: Record<string, string>;
   tools: McpTool[];
   /**
    * Names from `tools` the agent may not call. Held as the exclusions, so a tool the
