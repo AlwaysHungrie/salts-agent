@@ -6,13 +6,8 @@ import { webhookSecret } from "../worker/integrations";
 import { callSession, readConfig, registry, syncSessionCount } from "../worker/stores";
 
 /**
- * One Telegram update, for one agent. The chat is resolved to that agent's session —
- * created on first contact — and the message is handed to the session's own object,
- * which answers in the chat itself. Telegram retries anything that is not a fast 200,
- * so the turn runs after the response rather than under it.
- *
- * Every agent is a different bot with a different token, so each has its own route
- * and its own secret. The same chat talking to two agents gets two sessions.
+ * One Telegram update for one agent: resolve (or create) the chat's session and hand the
+ * message over, after a fast 200 so Telegram does not retry. Each bot has its own route.
  */
 export async function handleWebhook(
   request: Request,
@@ -40,9 +35,8 @@ export async function handleWebhook(
   const topic = topicId(message);
   const threadId = topic ? String(topic) : "";
 
-  // The whitelists, when filled in, decide who gets an answer: a DM is judged by who
-  // sent it, a group by which group — and which topic of it — the message is in. An
-  // update from anywhere else is dropped silently, before a session exists for it.
+  // Whitelists: a DM is judged by sender, a group by chat and topic. Others are dropped
+  // before any session exists.
   const allowed =
     message.chat.type === "private"
       ? allowedBy(config.telegram_user_whitelist, [
@@ -59,9 +53,7 @@ export async function handleWebhook(
   const existing = await reg.forChat(chatId, threadId);
   const sessionId = existing?.id ?? (await reg.freeChatSessionId(agentId, chatId, threadId));
   if (!existing) {
-    // A chat the agent has never spoken to needs a session of its own, and a full
-    // agent has none to give. Said in the chat rather than swallowed: to whoever is
-    // typing, an agent that answers nothing is a broken one.
+    // A full agent says so in the chat rather than going silent.
     const { max_sessions: telegramSessionCap } = await deploymentSettings(env);
     if ((await reg.countSessions()) >= telegramSessionCap) {
       const config = await readConfig(env, reg);

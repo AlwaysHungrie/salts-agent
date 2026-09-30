@@ -119,11 +119,7 @@ async function listAgents(request: Request, env: Env, url: URL): Promise<Respons
   });
 }
 
-/**
- * Tear down one batch of a fleet's agents. A fleet can hold thousands and each agent
- * is several subrequests, so the caller repeats until `done`; every batch removes
- * whole agents.
- */
+/** Delete one batch of a fleet's agents; the caller repeats until `done`. */
 async function deleteFleetBatch(request: Request, env: Env, url: URL): Promise<Response> {
   const dir = directory(env);
   const email = await callerEmail(request, env);
@@ -154,11 +150,7 @@ type CreateBody = {
   metadata?: unknown;
 };
 
-/**
- * Create one agent, or a fleet of them. Everything is validated (metadata, meta, the
- * access list, the OpenRouter key, the agent ceiling) before anything is written, so a
- * refused call leaves nothing behind.
- */
+/** Create one agent or a fleet. Everything is validated before anything is written. */
 async function createAgents(request: Request, env: Env, url: URL): Promise<Response> {
   const dir = directory(env);
   const body = await readJson<CreateBody>(request);

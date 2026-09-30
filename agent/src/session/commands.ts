@@ -6,24 +6,14 @@ import { spendBlocked } from "./turns";
 import type { SessionHost } from "./types";
 
 /**
- * Run a bang command and say what it did. The answer is written for whoever typed
- * it, because on Telegram it is the only feedback there is.
- *
- * A command that ends the session reports before it acts: destroying the object
- * aborts the isolate, so anything left to say afterwards may never be said. That is
- * what `destroy` is for — the caller sends the reply and then calls `finishDelete`.
+ * Run a bang command and say what it did. A command that ends the session reports first
+ * (`destroy`), because destroying the object aborts the isolate.
  */
 export async function runCommand(host: SessionHost, command: Command): Promise<CommandResult> {
   if (typeof command === "object") return await mcpCommand(host, command);
-  // TEMP — remove with the `oom` command itself. Allocates a megabyte at a time
-  // until the isolate is killed, to see what a session looks like on the way down
-  // and what is left of it afterwards. The strings are held in an array so nothing
-  // can be collected, and logged as they go so the log says how far it got.
+  // TEMP, remove with `oom`: allocate until the isolate is killed, logging progress.
   if (command === "oom") {
-    // Byte buffers rather than strings: a string of one repeated character is the
-    // kind of thing a runtime is free to represent cleverly, and 4 GB of them
-    // surviving says the allocation was never real. A filled Uint8Array cannot be
-    // anything but the bytes it holds.
+    // Filled byte buffers, which a runtime cannot represent cleverly the way it can strings.
     const held: Uint8Array[] = [];
     let mb = 0;
     try {
@@ -60,10 +50,8 @@ export async function runCommand(host: SessionHost, command: Command): Promise<C
     // Counted before the cancel, because cancelling is what makes it zero.
     const running = host.turn.running;
     host.turn.stoppedOnPurpose = true;
-    // The same teardown `!unstick` does, and for the same reason: cancelling a turn
-    // aborts its model call but does not always settle it, and a turn that never
-    // settles leaves the concurrency state that makes every later question fail.
-    // Stopping one reply must not cost the session the next one.
+    // The same teardown as `!unstick`: a cancelled turn may never settle, and would break
+    // every later question.
     host.unstick();
     return {
       text: running
@@ -97,11 +85,8 @@ export async function runCommand(host: SessionHost, command: Command): Promise<C
 }
 
 /**
- * `!compact`: summarise now, whatever the size — everything but the latest message,
- * which is kept word for word so the conversation carries on from it. Unlike the
- * automatic kind it keeps no head: asked for by hand, even a single exchange compacts. Refused while a reply is being written — the turn has already read the
- * history it is answering from — and once the month's spend is used up, because the
- * summary is a model call like any other.
+ * `!compact`: summarise everything but the latest message now. Refused while a reply is
+ * being written, and when the month's spend is used up.
  */
 export async function compactCommand(host: SessionHost): Promise<CommandResult> {
   if (host.turn.running > 0) {
@@ -137,9 +122,8 @@ export async function compactCommand(host: SessionHost): Promise<CommandResult> 
 }
 
 /**
- * `!enable-mcp` / `!disable-mcp`. Enabling switches every tool back on and re-reads
- * the server's tool list, so a server that cannot be reached says so here rather
- * than on the next turn. Disabling leaves the tool selection alone.
+ * `!enable-mcp` / `!disable-mcp`. Enabling turns every tool on and re-reads the tool list
+ * so an unreachable server says so now; disabling leaves the selection alone.
  */
 export async function mcpCommand(
   host: SessionHost,
@@ -193,39 +177,23 @@ export async function mcpCommand(
 }
 
 /**
- * Hand the chat to a fresh session and go quiet. The successor is created here
- * rather than left to the next message, because the scheduled tasks have to be
- * moved onto a session that already exists — and it has to be the same one the next
- * message will land in, which is what makes the id come from the registry.
- *
- * `discard` is the difference between `!new` and `!clear`. `!new` detaches the chat
- * and leaves the old conversation readable in the browser; `!clear` drops it. Either
- * way the old session loses the chat before the successor claims it, so no moment
- * exists where two sessions answer the same messages.
- *
- * Dropping the row rather than detaching it is also what lets `!clear` work at the
- * session ceiling: the slot is free by the time the successor asks for one. The cost
- * is that a create that still fails leaves nothing behind — which is what was asked
- * for, and the next message gets a fresh session in the same chat anyway.
+ * Hand the chat to a fresh session (created now, so scheduled tasks can move onto the
+ * session the next message will reach). `discard`: `!clear` drops the old session,
+ * `!new` keeps it readable. The old one lets go of the chat before the new one claims it.
  */
 export async function startOver(
   host: SessionHost,
   row: SessionRow,
   discard: boolean
 ): Promise<CommandResult> {
-  // Asked before the chat is detached. A successor that cannot be created would
-  // otherwise leave the chat belonging to nothing, and the next message would only
-  // meet the same ceiling with the conversation already cut loose. `!clear` frees a
-  // slot as it goes, so the ceiling cannot stop it.
+  // Checked before detaching, so a failed create cannot leave the chat orphaned. `!clear`
+  // frees its own slot.
   const { max_sessions } = await host.settingsNow();
   if (!discard && (await host.registry().countSessions()) >= max_sessions) {
     return { text: sessionLimitMessage(max_sessions), destroy: false };
   }
   const tasks = host.taskHandover();
-  // Named before this session's row goes, and only then dropped. The successor is a
-  // Durable Object picked by name, so a name this object already answers to would
-  // make it *this* object — which `!clear` is about to destroy. Asking while the row
-  // is still there is what guarantees a different one.
+  // Named while this row still exists, so the successor cannot be this same object.
   const next = await host
     .registry()
     .freeChatSessionId(
@@ -253,9 +221,7 @@ export async function startOver(
       max_sessions
     );
   } catch (err) {
-    // Only reachable if the agent filled up between the check above and here. The
-    // chat no longer belongs to this session either way, so say what state it is in
-    // rather than pretending the handover worked.
+    // Only if the agent filled up since the check; say what state the chat is in.
     return {
       text: discard
         ? `${(err as Error).message} This conversation has been deleted; send a message to start a new one.`

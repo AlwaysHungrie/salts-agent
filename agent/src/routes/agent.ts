@@ -19,11 +19,8 @@ import { guestsView, handleGuest, publicView } from "./guest";
 import { handleMcp } from "./mcp";
 
 /**
- * Everything a route under `/api/agents/:agentId` needs to know about the call.
- *
- * A *user* is on the access list and owns the agent's pages. An *admin* made the agent
- * and owns its meta document and its deletion, nothing else. Both are true when the
- * admin put their own address on the list.
+ * What a route under `/api/agents/:agentId` knows about the call. A user is on the
+ * access list; an admin made the agent and owns only its meta and deletion.
  */
 export type AgentCall = {
   request: Request;

@@ -95,9 +95,7 @@ export function touchAgent(storage: DurableObjectStorage, id: string) {
 }
 
 export function removeAgent(storage: DurableObjectStorage, id: string) {
-  // The member rows go too. Nothing else points at them, so one left behind would
-  // be invisible for good — and would put the agent back on somebody's list if its
-  // id were ever reused.
+  // Member and guest rows go too, or a reused id would reappear on someone's list.
   storage.transactionSync(() => {
     storage.sql.exec(`DELETE FROM agent_members WHERE agent_id = ?`, id);
     storage.sql.exec(`DELETE FROM agent_guests WHERE agent_id = ?`, id);

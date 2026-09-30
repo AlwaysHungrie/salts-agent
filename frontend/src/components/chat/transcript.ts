@@ -66,9 +66,8 @@ export function toUIMessages(rows: StoredMessage[]): ChatUIMessage[] {
 }
 
 /**
- * Where a fork taken at message `i` of the drawn page should cut, and what goes back
- * into the composer: the user's question is dropped from the copy and returned as a draft
- * so it can be reworded. An assistant reply with no question before it just cuts.
+ * Where a fork at drawn message `i` cuts, and the draft it returns: the preceding
+ * question is dropped from the copy and handed back for rewording.
  */
 export function forkAt(
   messages: ChatUIMessage[],
@@ -76,9 +75,7 @@ export function forkAt(
   offset: number,
 ): [count: number, draft: string] {
   const prev = messages[i - 1];
-  // `offset` is the messages the transcript starts with that were never loaded: the
-  // agent copies the first `count` of the whole conversation, so an index into the
-  // drawn page alone would cut the fork short by everything above it.
+  // The agent counts from the start of the whole transcript, so add the unloaded `offset`.
   if (!prev || prev.role !== "user") return [offset + i, ""];
   const draft = prev.parts
     .filter((p) => p.type === "text")

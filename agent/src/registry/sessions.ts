@@ -84,14 +84,8 @@ export function createSession(
   /** Who started it on the web. Written once; an update keeps the first owner. */
   owner = ""
 ): SessionRow {
-  // The ceiling, enforced here because here is where every path meets: the web
-  // button, a fork, `!new`, and the first message from a Telegram chat nobody has
-  // spoken to before. A caller that checked first and then created would still be
-  // racing the other three.
-  //
-  // A row that already exists is an update, not a new session, so it is let
-  // through whatever the count is — otherwise renaming the oldest session would
-  // start failing the moment the agent filled up.
+  // The session ceiling is enforced here, where every creation path meets. An existing row
+  // is an update and always allowed, so renames keep working at the limit.
   if (countSessions(storage) >= maxSessions && !getSession(storage, id)) {
     throw new Error(sessionLimitMessage(maxSessions));
   }

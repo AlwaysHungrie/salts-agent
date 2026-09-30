@@ -15,17 +15,9 @@ import { LimitsSection, ModelOptionSections } from "./PolicySections";
 import { TuningSections } from "./TuningSections";
 
 /**
- * Meta settings: the settings page, plus the decisions the agent's owner does not get
- * to make.
- *
- * Every setting the agent's own pages offer is here with a lock beside it; a locked
- * setting disappears from those pages. Around them sit the choices those pages have no
- * editor for: which models may be offered, what a fixed choice may be widened to,
- * which MCP templates are shown.
- *
- * Reached from the create dialog's second step (collecting defaults, no agent yet) and
- * from a dialog on the home page (editing a live agent) — see `metaEditor` for how one
- * form serves both.
+ * Meta settings: every agent setting with a lock beside it (locked ones vanish from the
+ * agent's pages), plus model lists, choice widening and MCP templates. Used for new
+ * agents' defaults and live agents alike; see `metaEditor`.
  */
 export function MetaSettingsForm({
   meta,

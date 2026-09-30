@@ -14,9 +14,8 @@ type HeldAgents = {
 export type Quota = { limit: number; owned: number };
 
 /**
- * The home page's list: the agents not inside a fleet this account administers (paged,
- * appended to as it is read down), the fleets it administers (a name and count each),
- * and the account's agent ceiling. Drawn from the last visit's copy until it loads.
+ * The home page's list: agents outside this account's fleets (paged), its fleets, and its
+ * agent ceiling. Starts from the last visit's copy.
  */
 export function useAgentList(signedIn: boolean) {
   const held = signedIn ? cached<HeldAgents>(keys.agents) : undefined;
@@ -98,9 +97,8 @@ export function useAgentList(signedIn: boolean) {
   }, [agents, cursor, fleets, quota]);
 
   /**
-   * Make an agent (or a fleet) and stay on this page. A rejected key never gets this
-   * far: the Worker checks it first, and the dialog stays open with the reason.
-   * Returns the error to show, or null on success; `onMade` runs before the reload.
+   * Create an agent or fleet and stay on this page. Returns the error to show, or null;
+   * `onMade` runs before the reload.
    */
   const create = async (
     name: string,

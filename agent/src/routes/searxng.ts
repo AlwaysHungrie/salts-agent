@@ -10,12 +10,8 @@ export async function sameSecret(a: string, b: string): Promise<boolean> {
 }
 
 /**
- * Repoint an agent's SearXNG URL, on the strength of the SearXNG token alone.
- *
- * The tunnel in front of a self-hosted instance changes address whenever it restarts,
- * and the machine running it has no Clerk session. The token it holds is the one the
- * agent sends to that instance, so it already proves the caller runs the instance. An
- * agent with no token set can never be repointed this way. Only `searxng_url` moves.
+ * Repoint an agent's SearXNG URL using its SearXNG token as proof (the tunnel host has
+ * no Clerk session). Agents without a token cannot be repointed. Only the URL changes.
  */
 export async function handleSearxngUrl(
   request: Request,

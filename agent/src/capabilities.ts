@@ -12,18 +12,8 @@ import {
 import { VOICE_SAMPLE_RATE, pcm16ToOggOpus } from "./opus";
 
 /**
- * A capability is something the agent can *do* beyond producing text: reach the web,
- * read a file, see an image, draw one, hear an audio clip, do work later, remember.
- *
- * Two kinds live here:
- *
- * - Tool capabilities (`tools` non-empty) hand the model functions it may call. They
- *   run inside the tool loop in `agent.ts`.
- * - Input capabilities (`tools` empty) change what a turn may carry in — files,
- *   images, audio — and are applied when the turn's messages are assembled.
- *
- * The metadata is shipped to the frontend as-is, so the capabilities page never has
- * to keep its own copy of what exists or what a capability needs to work.
+ * Something the agent can do beyond writing. Tool capabilities give the model functions;
+ * input capabilities change what a turn may carry (files, images, audio). Sent to the UI as-is.
  */
 export type CapabilityId =
   | "web_search"
@@ -47,12 +37,8 @@ export type CapabilityField = {
   /** Secrets are write-only over the API: reads return a mask, not the value. */
   secret: boolean;
   /**
-   * When present the field is a fixed choice, not free text. Every model this app can
-   * pick is an OpenRouter model, and OpenRouter's catalogue is far too large and too
-   * uneven to type an id into: most ids would fail for the capability at hand.
-   *
-   * Empty in `CAPABILITIES`: the menu is the deployment's `field_options`, written in
-   * by `capabilitiesFor` before a capability list leaves the Worker.
+   * A fixed choice rather than free text, since most OpenRouter ids would not work. Empty
+   * here: `capabilitiesFor` fills it from the deployment's `field_options`.
    */
   options?: { value: string; label: string }[];
   /**
@@ -75,32 +61,23 @@ export type Capability = {
   /** The config column that switches it on. */
   flag: keyof Config;
   /**
-   * A channel is not something the model can do — it is where the conversation
-   * arrived from. It carries no tools, and the agent replies on the channel a message
-   * came in on rather than choosing one. Named beside the capabilities it would read
-   * as an action the model can take, which is how an agent comes to offer to send a
-   * WhatsApp message to a number it was handed and has no way to reach.
+   * Where the conversation arrived from, not an action: no tools, and replies go back on
+   * the same channel. Listed as a capability, the model offered to message arbitrary numbers.
    */
   channel?: true;
   label: string;
   summary: string;
   /** What it costs or risks, shown under the toggle. */
   note?: string;
-  /**
-   * A page explaining how to get the credentials this capability asks for, opened in
-   * a new tab so the setup being worked through is not lost. Telegram needs no such
-   * page: one message to @BotFather is the whole of it, and the hint says so.
-   */
+  /** Setup guide for this capability's credentials, opened in a new tab. */
   guide?: { label: string; href: string };
   tools: string[];
   fields: CapabilityField[];
 };
 
 /**
- * What the whitelists start out as the first time Telegram is switched on. A list
- * that is empty lets everyone in, so the switch would open the bot to the whole of
- * Telegram the moment it is flipped. These are placeholders that match nothing: the
- * bot is closed until the owner replaces them with the people and groups it is for.
+ * Whitelist placeholders that match nothing, seeded on first enable: an empty list
+ * would open the bot to all of Telegram.
  */
 export const TELEGRAM_WHITELIST_DEFAULTS = {
   telegram_user_whitelist: "@no-user",
@@ -360,11 +337,7 @@ export function capabilityReady(capability: Capability, config: Config): boolean
   return capability.fields.every((f) => !f.required || String(config[f.key] ?? "").trim() !== "");
 }
 
-/**
- * What to tell the model it can do. Channels are left out: they are not abilities, and
- * a capability with no tool behind it is still worth naming when it changes what the
- * model can be given — an image it can see, a file it can be handed.
- */
+/** The ready capabilities to name to the model. Channels are excluded: they are not abilities. */
 export function capabilityLabels(config: Config): string[] {
   return CAPABILITIES.filter((c) => !c.channel && capabilityReady(c, config)).map((c) => c.label);
 }
@@ -384,9 +357,8 @@ export function enabled(config: Config, id: CapabilityId): boolean {
 export type ScheduledTask = { id: string; prompt: string; when: string };
 
 /**
- * What a tool is allowed to touch. The agent supplies it: tools stay pure functions
- * of their arguments plus this context, which keeps them testable and keeps the
- * Durable Object's internals out of the tool code.
+ * What a tool may touch. Tools are pure functions of their arguments plus this, which
+ * keeps them testable and the Durable Object's internals out of them.
  */
 export type ToolContext = {
   config: Config;
@@ -401,9 +373,8 @@ export type ToolContext = {
   /** Transcribes a stored audio attachment by id, caching the words on its row. */
   transcribeAttachment: (id: string) => Promise<string>;
   /**
-   * Sends an Ogg Opus file into the chat this session belongs to, as a voice note.
-   * Throws with a reason the model can act on when the session's channel cannot carry
-   * one — a browser session, or a channel whose credentials are missing.
+   * Send an Ogg Opus voice note to this session's chat. Throws a reason the model can act
+   * on when the channel cannot carry one.
    */
   sendVoiceNote: (bytes: Uint8Array) => Promise<string>;
   schedule: (when: string, prompt: string) => Promise<ScheduledTask>;
@@ -425,17 +396,8 @@ const SPEAK_PROMPT =
   "You are a text-to-speech voice. Read the user's message aloud exactly as written, in its own language. Do not answer it, introduce it, or add a word of your own.";
 
 /**
- * The samples a spoken answer arrives in.
- *
- * Audio is only ever streamed, so the whole note is a run of `delta.audio.data` chunks
- * — each its own base64 string, each a slice of 16-bit little-endian samples — and it is
- * complete only once the stream ends. They are collected rather than played as they
- * arrive because a voice note is one file: nothing can be sent until the last frame is
- * known.
- *
- * An error can also arrive mid-stream, after the 200 that opened it. That is thrown
- * here rather than swallowed, so the model is told why there is no note instead of
- * being handed silence.
+ * Collect a streamed spoken answer: base64 16-bit little-endian PCM chunks, complete only
+ * at stream end. A mid-stream error is thrown so the model can explain the missing note.
  */
 async function spokenSamples(res: Response): Promise<Int16Array> {
   const body = res.body;
@@ -697,16 +659,12 @@ export const TOOLS: ToolSpec[] = [
         },
         body: JSON.stringify({
           model: ctx.config.voice_model,
-          // Both of these are OpenRouter's rules rather than choices. Audio output is
-          // refused outright without `stream`, and on a stream the providers accept no
-          // format but `pcm16` — so the note comes back as raw samples and is packed
-          // into the Ogg Opus a chat app plays by `pcm16ToOggOpus`.
+          // OpenRouter's rules: audio output requires `stream`, and streams only offer `pcm16`,
+          // which `pcm16ToOggOpus` packs into the Ogg Opus chat apps play.
           stream: true,
           modalities: ["text", "audio"],
           audio: { voice: "alloy", format: "pcm16" },
-          // These models answer a message rather than read it, so the instruction is
-          // what keeps the note from being the speaker's reply to the words it was
-          // handed.
+          // These models answer rather than read, so this keeps the note from being a reply to its text.
           messages: [
             { role: "system", content: SPEAK_PROMPT },
             { role: "user", content: text },
@@ -812,11 +770,8 @@ export function toolsFor(config: Config): ToolSpec[] {
 /* ------------------------------------------------------------ mcp tools -- */
 
 /**
- * A live client for one server, with its credentials applied.
- *
- * An OAuth access token that has expired (or is about to) is refreshed here and
- * written back, so a connection made weeks ago keeps working without the user being
- * sent through the provider's consent screen again.
+ * A client for one server with credentials applied; an expiring OAuth token is
+ * refreshed and written back so old connections keep working.
  */
 export async function mcpClientFor(
   server: McpServerRow,
@@ -831,13 +786,8 @@ export async function mcpClientFor(
 }
 
 /**
- * Run something against a server, once, and again on a fresh token if the provider
- * says the credentials are no good.
- *
- * The stored expiry is only ever a guess about someone else's state: a token can be
- * revoked, or a session ended at the provider, long before it was due to run out. So
- * the 401 is treated as the authority and the clock as the optimization, rather than
- * the other way round.
+ * Run against a server, retrying once with a fresh token on a 401: the stored expiry is
+ * only a guess, and the provider's refusal is the authority.
  */
 export async function withMcpAuth<T>(
   server: McpServerRow,
@@ -849,9 +799,7 @@ export async function withMcpAuth<T>(
   } catch (err) {
     if (!(err instanceof McpUnauthorized) || server.auth !== "oauth") throw err;
     const refreshed = await registry.refreshMcpToken(server.id, true);
-    // A refresh that cleared the tokens has already worked out why and said so in
-    // words the user can act on. Carrying that up beats reporting the 401 that
-    // followed it, which would only say the credentials were refused.
+    // A refresh that cleared the tokens already explained why in actionable words; prefer that.
     if (!refreshed?.oauth_access_token) {
       throw refreshed?.last_error ? new Error(refreshed.last_error) : err;
     }
@@ -870,9 +818,8 @@ export function mcpServerReady(server: McpServerRow): boolean {
 }
 
 /**
- * Whether a server takes attachments at `<base>/uploads`. Nothing in MCP says so, so
- * it is read off the tools: one the agent may call that asks for an `upload_id` is a
- * server expecting the file's bytes to have gone ahead of the call.
+ * Whether a server takes uploads at `<base>/uploads`, inferred from a callable tool that
+ * asks for an `upload_id`.
  */
 export function acceptsUploads(server: McpServerRow): boolean {
   if (!mcpServerReady(server)) return false;
@@ -885,9 +832,8 @@ export function acceptsUploads(server: McpServerRow): boolean {
 }
 
 /**
- * The tools of every connected MCP server, as tool specs the agent can register
- * alongside its own. The schemas are the server's own, passed through untouched, and
- * the list comes from the cached `tools/list` so a turn costs no extra round trip.
+ * Every connected MCP server's tools as specs, schemas passed through, from the cached
+ * `tools/list` so a turn adds no round trip.
  */
 export function mcpToolSpecs(servers: McpServerRow[]): ToolSpec[] {
   const specs: ToolSpec[] = [];
@@ -928,11 +874,7 @@ export function toolDefinitions(config: Config) {
   }));
 }
 
-/**
- * Run one tool. A failure is not thrown: the model is shown the message so it can
- * correct itself, and `ok` lets the caller tell the user when the turn ends with
- * nothing but failed tools behind it.
- */
+/** Run one tool. Failures are returned, not thrown, so the model can correct itself. */
 export async function runTool(
   name: string,
   args: Record<string, unknown>,

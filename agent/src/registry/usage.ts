@@ -1,23 +1,14 @@
 import { readMeta } from "./agent-config";
 
-/**
- * The calendar month a spend row is keyed by, as `YYYY-MM` in UTC.
- *
- * UTC rather than anybody's local month: the agent, its administrator and its user
- * can each be somewhere different, and a ceiling that resets at a different hour for
- * each of them is one nobody can reason about.
- */
+/** Spend-row month as `YYYY-MM` in UTC, so the ceiling resets at one moment for everyone. */
 export function thisMonth(at = Date.now()): string {
   return new Date(at).toISOString().slice(0, 7);
 }
 
 export function addStorageBytes(storage: DurableObjectStorage, delta: number): void {
   if (!Number.isFinite(delta) || delta === 0) return;
-  // The delta is bound twice, and deliberately not through `excluded`: `excluded.bytes`
-  // is the *insert* value, which is already clamped to zero by `MAX(?, 0)` for the
-  // no-row-yet case — so an update reading it added zero for every negative delta, and
-  // deleting a file never gave its bytes back. The two branches want different values,
-  // so they get two bindings.
+  // The delta is bound twice, not read via `excluded` (which holds the zero-clamped
+  // insert value), or deletes would never give bytes back.
   const bytes = Math.trunc(delta);
   storage.sql.exec(
     `INSERT INTO storage (id, bytes) VALUES (1, MAX(?, 0))

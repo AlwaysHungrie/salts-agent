@@ -22,11 +22,7 @@ type FleetCall = {
   dir: ReturnType<typeof directory>;
 };
 
-/**
- * Everything under `/api/fleets/:id`: the fleet's settings, and adding agents to it.
- * The fleet's document is what its agents' own copies are written from, at creation
- * and at every apply. Only its administrator may reach it.
- */
+/** Everything under `/api/fleets/:id`, for the fleet's administrator only. */
 export async function handleFleets(
   request: Request,
   env: Env,
@@ -75,9 +71,8 @@ async function getFleet(call: FleetCall): Promise<Response> {
 }
 
 /**
- * Save the fleet's settings and overwrite its agents with them, one batch per call.
- * The document is stored on the first call only, so an interrupted run resumes from
- * the returned cursor without the settings changing underneath it.
+ * Save the fleet's settings and apply them to its agents, a batch per call. Stored on the
+ * first call only, so a resumed run uses the same document.
  */
 async function patchFleet(call: FleetCall): Promise<Response> {
   const { request, env, url, fleetId, dir } = call;

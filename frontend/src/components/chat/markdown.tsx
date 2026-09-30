@@ -79,8 +79,7 @@ export const MARKDOWN_COMPONENTS = (sessionId: string) => ({
     />
   ),
   img: ({ src, alt }: React.ComponentProps<"img">) => (
-    // The Worker names its own path for a generated image; the browser reaches it
-    // through the API route.
+    // Rewrite the Worker's own image path to the browser's API route.
     // eslint-disable-next-line @next/next/no-img-element
     <img
       src={String(src ?? "").replace(

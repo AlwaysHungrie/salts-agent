@@ -21,10 +21,8 @@ import { useIdentity } from "@/lib/identity";
 import type { AgentRow, FleetRow, MetaSettings } from "@/lib/agent";
 
 /**
- * Every agent this account may open, and the fleets it administers.
- *
- * Agents share nothing (bot, key, MCP servers, memory, sessions), so this page is a
- * list of doors: there is no switcher, and opening one goes to its own page.
+ * Every agent this account may open, and the fleets it administers. Agents share
+ * nothing, so this is a list of doors with no switcher.
  */
 export default function Agents() {
   // A Clerk session or an address typed into the back door: either way an address,

@@ -4,12 +4,8 @@ import type { TranscriptPage } from "@/lib/agent";
 import { toUIMessages } from "./transcript";
 
 /**
- * Scrolling the transcript: follow each new message to the bottom, and load the page
- * before the oldest message when the top comes into view.
- *
- * A prepend is pinned against the bottom of the content (`scrollHeight - scrollTop`
- * held fixed), so the message the reader was looking at stays put, and it does not
- * trigger the follow-to-bottom.
+ * Follow new messages to the bottom, and load older pages when the top is reached. A
+ * prepend holds `scrollHeight - scrollTop` so the reader's place stays put.
  */
 export function useTranscriptScroll({
   messages,

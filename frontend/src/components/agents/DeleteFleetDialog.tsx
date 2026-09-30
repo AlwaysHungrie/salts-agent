@@ -3,14 +3,8 @@ import { apiFetch } from "@/lib/identity";
 import { useEffect, useRef, useState } from "react";
 
 /**
- * Delete a fleet, and every agent inside it.
- *
- * The teardown is batched — a few agents per request, asked for over and over until
- * the Worker says none are left — because deleting one agent is several round trips
- * and a fleet can hold thousands. That is why this is a screen with a count on it
- * rather than a button that spins: it can take minutes, and what has already gone is
- * gone whether or not the tab stays open. The count says exactly that, so closing
- * early is an informed choice rather than a lost one.
+ * Delete a fleet and every agent in it, in batches until none are left. Shown with a
+ * count because it can take minutes, and deleted agents stay deleted if the tab closes.
  */
 export function DeleteFleetDialog({
   fleet,
@@ -38,9 +32,7 @@ export function DeleteFleetDialog({
     if (!matches || busy) return;
     setBusy(true);
     setError(null);
-    // Batch after batch, each one complete in itself. A failure stops the loop
-    // where it is: the agents already deleted stay deleted, and the count on screen
-    // is what is left to do if it is tried again.
+    // Each batch is complete; a failure stops here and the count shows what is left.
     for (;;) {
       const res = await apiFetch(
         `/api/agents?fleet=${encodeURIComponent(fleet.fleet_id)}&limit=10`,

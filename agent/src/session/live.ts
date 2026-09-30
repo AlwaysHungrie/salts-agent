@@ -29,15 +29,8 @@ export function streamSentence(text: string): Response {
 }
 
 /**
- * The turn that is streaming now, and the one that just finished.
- *
- * Every event a streaming turn sends is kept, so a browser that reloads mid-reply is
- * handed the reply from the start and then follows it live. Memory is the right
- * lifetime: an evicted object takes its turn with it.
- *
- * The finished turn covers the race at the end of a reply: the transcript is read just
- * before the reply is banked and the reconnection arrives just after, so neither would
- * carry it.
+ * The streaming turn and the one just finished, kept in memory so a reloading browser
+ * can replay the reply. The finished turn covers the reload racing the end of a reply.
  */
 export class LiveTurns {
   private current: {
@@ -86,9 +79,8 @@ export class LiveTurns {
   }
 
   /**
-   * Attach to the running turn: the events it has sent, then the rest live. With
-   * nothing running, a turn that ended after the browser's last reply (`has`) is
-   * replayed; otherwise 204 says the transcript is complete.
+   * Attach to the running turn: its sent events, then the rest live. With nothing running,
+   * replay a turn that ended after the browser's last reply (`has`), else 204.
    */
   attach(has = ""): Response {
     const live = this.current;

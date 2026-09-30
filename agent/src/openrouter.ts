@@ -11,11 +11,7 @@ export type FileAnnotation = {
   file?: { name?: string; hash?: string; content?: unknown };
 };
 
-/**
- * The words out of a parse. The content array interleaves text with a rendered image
- * per page; the images are dropped, which is most of the bytes and none of the meaning
- * for anything that reads.
- */
+/** The text of a parse; the per-page rendered images are dropped. */
 export function annotationText(annotation: FileAnnotation): string {
   const content = annotation.file?.content;
   if (typeof content === "string") return content;
@@ -47,9 +43,8 @@ export type ChatRequestBody = {
 export const CACHE_CONTROL = { type: "ephemeral" } as const;
 
 /**
- * The two things an OpenRouter request wants that the AI SDK does not send: the usage
- * block carrying what the call actually cost, and — on Anthropic — the breakpoint
- * saying where the cacheable prefix ends.
+ * Add what the AI SDK does not send: `usage.include` for the real cost, the Anthropic
+ * cache breakpoint, and (for WhatsApp) the no-training provider rule.
  */
 export function prepareOpenRouterRequest(
   init: RequestInit | undefined,
@@ -70,21 +65,9 @@ export function prepareOpenRouterRequest(
 }
 
 /**
- * Mark where the cacheable prefix ends, for the provider that has to be asked.
- *
- * Every model this Worker offers caches prompt prefixes, but only Anthropic's needs
- * telling: OpenAI, DeepSeek and Gemini all do it on their own, and Anthropic does
- * nothing without an explicit breakpoint. It is worth asking for because of what sits
- * in that prefix — a connected MCP server can put tens of thousands of tokens of JSON
- * Schema in front of every request, and the tools are re-sent on every tool round of
- * every turn. A cache read costs a tenth of what writing it did.
- *
- * The breakpoint goes on the system prompt, the last thing before the conversation
- * starts. OpenRouter renders `tools` ahead of `system`, so one breakpoint there covers
- * the tool definitions as well — and because it sits before the messages, a new
- * message does not move it and cannot force the tools to be written again. That is
- * why it is not left to OpenRouter's own top-level `cache_control`, which advances
- * with the conversation and so pays to write the whole prefix afresh every turn.
+ * Put an Anthropic cache breakpoint on the last system message (others cache on their
+ * own). Tools render before system, so this caches the MCP schemas too, and new messages
+ * do not move it — unlike OpenRouter's top-level `cache_control`.
  */
 export function markCacheablePrefix(body: ChatRequestBody): boolean {
   if (!(body.model ?? "").startsWith("anthropic/")) return false;
@@ -110,13 +93,9 @@ export function markCacheablePrefix(body: ChatRequestBody): boolean {
 }
 
 /**
- * OpenRouter attaches an `annotations` array to the assistant delta whenever a plugin
- * enriched the request — the file parser adds one entry per parsed document, carrying
- * the whole extracted PDF (text plus base64 page images). The AI SDK's OpenAI chat
- * schema only knows the `url_citation` annotation, so any other kind fails validation
- * and kills the stream after the request was already paid for. Nothing here reads
- * annotations, so the safe move is to drop the ones the SDK cannot parse before it
- * ever sees them.
+ * Drop annotation kinds the AI SDK cannot parse (it only knows `url_citation`), which
+ * would otherwise fail validation and kill a paid-for stream. File parses and the
+ * reported cost are handed to the callbacks on the way past.
  */
 
 export function stripUnsupportedAnnotations(
@@ -217,11 +196,7 @@ export function stripUnsupportedAnnotations(
   });
 }
 
-/**
- * What of this step's prompt was served from cache, as OpenRouter reports it. Zero
- * when the provider says nothing, which is also what a miss looks like — the two are
- * worth separating only against a provider known to be caching.
- */
+/** Cached prompt tokens as OpenRouter reports them; 0 when unreported (same as a miss). */
 export function cachedPromptTokens(step: StepContext): number {
   const raw = (step.usage as { raw?: Record<string, unknown> } | undefined)?.raw;
   const details = raw?.prompt_tokens_details as { cached_tokens?: unknown } | undefined;

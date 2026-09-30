@@ -1,12 +1,7 @@
 import type { AgentRow } from "@/lib/agent";
 import { useEffect, useRef, useState } from "react";
 
-/**
- * Typing the name out is the only guard between a click and something
- * unrecoverable: chats, files, memories, settings, MCP connections, a Telegram
- * bot that stops answering. Matched exactly, case included, so it takes reading
- * the name rather than pattern-matching a few letters.
- */
+/** Deleting is unrecoverable, so the name must be typed exactly, case included. */
 export function DeleteAgentDialog({
   agent,
   onCancel,

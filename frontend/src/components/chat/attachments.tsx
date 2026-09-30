@@ -5,12 +5,8 @@ import { VoiceNote } from "./VoiceNote";
 import { FADE, fileUrl, isAudio, thumbUrl } from "./files";
 
 /**
- * A thumbnail from a route that wants to know who is asking.
- *
- * A browser attaches none of our identity headers to an image it fetches itself, so
- * under the localStorage back door a plain `<img src>` would come back 401. `useAuthedUrl`
- * reads the bytes with the headers attached and hands back a blob URL instead; with an
- * ordinary Clerk session it passes the URL straight through and this is just an `img`.
+ * A thumbnail fetched with identity headers (`useAuthedUrl`), since a plain `<img>`
+ * carries none and the back-door identity would get a 401.
  */
 export function Thumb({ src }: { src: string }) {
   const href = useAuthedUrl(src);
@@ -82,12 +78,7 @@ export function AttachmentStrip({
   );
 }
 
-/**
- * Non-image attachments on a sent message: one fixed-width card per file. The card
- * leads with the file's own first words, faded out at the foot of the sample so the
- * cut reads as a page continuing rather than as text that ended — with the name
- * sitting in the fade, the way a thumbnail of a first page is captioned.
- */
+/** Non-image attachments on a sent message: one card per file, led by a faded preview. */
 export function MessageDocs({
   docs,
   isUser,

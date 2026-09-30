@@ -1,19 +1,7 @@
 /**
- * The WhatsApp Cloud API, as much of it as the agent needs: read a webhook, prove it
- * came from Meta, and answer. Nothing here knows about sessions or turns.
- *
- * The shape of this module deliberately mirrors `telegram.ts` — a transport class
- * plus pure helpers — so the two channels stay comparable. Where they differ, they
- * differ because Meta does:
- *
- * - Every delivery is signed. Telegram hands back a secret header this Worker chose;
- *   Meta signs the raw body with the app secret, so the body has to be read as text
- *   and verified before it is parsed.
- * - Deliveries repeat. Meta re-sends anything that is not answered with a fast 200,
- *   and the same message id arrives again. Telegram needs no dedupe; this does.
- * - A business may only send free-form text inside 24 hours of the user's last
- *   message. Outside that window Graph refuses with error 131047 and only a
- *   pre-approved template will go through.
+ * The WhatsApp Cloud API: read a webhook, verify it came from Meta, reply. Unlike
+ * Telegram: deliveries are signed over the raw body, repeat until a fast 200, and
+ * free-form sends only work within 24 hours of the user's last message.
  */
 
 import { split } from "./telegram";
@@ -78,11 +66,7 @@ export type WhatsappValue = {
   metadata?: { display_phone_number?: string; phone_number_id?: string };
   contacts?: { profile?: { name?: string }; wa_id: string }[];
   messages?: WhatsappMessage[];
-  /**
-   * Delivery receipts: sent, delivered, read. They arrive on the same webhook as
-   * messages and carry no `messages` key, so anything that does not check for this
-   * answers its own replies.
-   */
+  /** Delivery receipts share the webhook and have no `messages` key; skip them. */
   statuses?: { id: string; status: string }[];
 };
 
@@ -100,11 +84,7 @@ export type WhatsappInbound = {
   /** The sender's WhatsApp profile name, when they publish one. */
   name: string;
   text: string;
-  /**
-   * The business number the message was sent to, digits only. Kept because it is the
-   * only way back to the conversation: `wa.me/<number>` opens the chat with the
-   * agent, and nothing else in the payload names it.
-   */
+  /** The business number the message was sent to (digits), for `wa.me/<number>` links. */
   businessNumber: string;
   /**
    * What the message carried, undownloaded. Ids rather than bytes, because this whole
@@ -145,9 +125,8 @@ export class WhatsApp {
   }
 
   /**
-   * Send a reply, split at WhatsApp's 4096-character limit. Only the first chunk
-   * quotes the message being answered: quoting every chunk would repeat the question
-   * above each paragraph of one answer. Returns the `wamid`s sent.
+   * Send a reply split at WhatsApp's 4096-character limit; only the first chunk quotes.
+   * Returns the `wamid`s sent.
    */
   async send(to: string, text: string, replyTo?: string): Promise<string[]> {
     const ids: string[] = [];
@@ -171,14 +150,8 @@ export class WhatsApp {
   }
 
   /**
-   * Upload a file to Graph's media store and return the id a message may name.
-   *
-   * A voice note is two calls, not one: Meta takes no bytes on the send. The id it
-   * hands back is good for 30 days and belongs to this phone number only, which is
-   * why nothing caches it — a note is spoken once and sent once.
-   *
-   * Multipart, so `call` (which is JSON) cannot serve: `content-type` is left unset
-   * deliberately, because `fetch` writes it with the boundary it generated.
+   * Upload a file to Graph's media store and return its id (messages take ids, not bytes).
+   * Multipart, so `content-type` is left for `fetch` to set with the boundary.
    */
   async upload(bytes: ArrayBuffer, mime: string, filename: string): Promise<string> {
     const form = new FormData();
@@ -204,13 +177,8 @@ export class WhatsApp {
   }
 
   /**
-   * Send an uploaded audio file. WhatsApp shows it as a voice note — one bubble, a
-   * waveform, play speed — rather than as a file, and it does so on the codec alone:
-   * Ogg Opus is a voice note, everything else is an attachment. See `VOICE_MIME`
-   * in channel.ts.
-   *
-   * Nothing is quoted. The written reply that goes out beside the note already
-   * carries the quote, and two bubbles quoting one question reads as a stutter.
+   * Send uploaded audio; Ogg Opus shows as a voice note. Unquoted: the written reply
+   * beside it already quotes.
    */
   async sendVoice(to: string, mediaId: string): Promise<string | undefined> {
     const sent = await this.call<{ messages?: { id: string }[] }>(
@@ -225,12 +193,7 @@ export class WhatsApp {
     return sent.messages?.[0]?.id;
   }
 
-  /**
-   * Send an uploaded image, with the prompt it was drawn from as its caption.
-   *
-   * Same two steps as a voice note, and for the same reason: Graph takes an id, never
-   * bytes, on a message.
-   */
+  /** Send an uploaded image, captioned with the prompt it was drawn from. */
   async sendImage(to: string, mediaId: string, caption?: string): Promise<string | undefined> {
     const sent = await this.call<{ messages?: { id: string }[] }>(
       `${this.phoneNumberId}/messages`,
@@ -246,9 +209,8 @@ export class WhatsApp {
   }
 
   /**
-   * Fetch a file the user sent. Two hops, because Graph hands over an id and not bytes:
-   * the id resolves to a short-lived URL on Meta's CDN, and that URL still wants the
-   * access token — fetched without it, it answers with an error page rather than a file.
+   * Fetch a file the user sent: the id resolves to a short-lived CDN URL, which still
+   * needs the access token.
    */
   async download(mediaId: string): Promise<ArrayBuffer> {
     const auth = { authorization: `Bearer ${this.token}` };
@@ -270,11 +232,7 @@ export class WhatsApp {
     return await file.arrayBuffer();
   }
 
-  /**
-   * Blue ticks plus the typing bubble, in one call — Meta only offers the indicator
-   * as part of a read receipt. Best effort: nothing depends on it, and a turn that
-   * failed to look busy must not fail.
-   */
+  /** Read receipt plus typing indicator (Meta only offers them together). Best effort. */
   async typing(messageId: string): Promise<void> {
     await this.call(`${this.phoneNumberId}/messages`, {
       messaging_product: "whatsapp",
@@ -288,15 +246,8 @@ export class WhatsApp {
 }
 
 /**
- * Subscribe this app to the WhatsApp Business Account's webhooks.
- *
- * Saving the callback URL is an app-level setting; this is the account-level one, and
- * both are required before a single message is delivered. A test number arrives
- * subscribed to Meta's own first-party app, so the account's list is never empty and
- * nothing in the dashboard looks wrong — which is why this is done from here rather
- * than left to a curl the owner has to know about.
- *
- * The POST is idempotent: subscribing an already-subscribed app answers success.
+ * Subscribe the app to the Business Account's webhooks, which is required alongside the
+ * callback URL and easy to miss (test numbers look subscribed). Idempotent.
  */
 export async function subscribeApp(
   token: string,
@@ -332,14 +283,8 @@ export class WhatsappError extends Error {
 }
 
 /**
- * Whether this delivery really came from Meta.
- *
- * `x-hub-signature-256` is `sha256=<hex>`, the HMAC of the **raw** body under the app
- * secret. It has to be checked against the bytes as they arrived: re-serialising the
- * parsed JSON changes the whitespace and the signature with it.
- *
- * A missing secret is a refusal, not a pass. An unconfigured Worker that accepts
- * unsigned webhooks is worse than one that accepts none: it looks like it works.
+ * Whether a delivery came from Meta: HMAC-SHA256 of the raw body under the app secret,
+ * checked before parsing. A missing secret refuses rather than passes.
  */
 export async function verifySignature(
   secret: string,
@@ -362,11 +307,7 @@ export async function verifySignature(
   return timingSafeEqual(expected, offered.toLowerCase());
 }
 
-/**
- * Compare without leaking where two strings first differ. `===` on a hex digest
- * returns as soon as it finds a mismatch, which is a measurable hint to anyone
- * guessing a signature one byte at a time.
- */
+/** Constant-time comparison, so a signature cannot be guessed byte by byte. */
 function timingSafeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   let diff = 0;
@@ -375,16 +316,8 @@ function timingSafeEqual(a: string, b: string): boolean {
 }
 
 /**
- * The one message worth answering in a delivery, or nothing.
- *
- * Meta batches: a payload may carry several entries, several changes, several
- * messages, or none at all — a status receipt is the common case and must be a no-op.
- * A message carrying a file is read too: it names the file and the bytes are fetched
- * later, by whoever decides the agent is allowed to keep it.
- *
- * Anything else — a sticker, a contact card, a location, an order — is skipped rather
- * than answered with its empty text, which would look like the agent replying to
- * nothing.
+ * The one message worth answering in a batched delivery, or nothing (status receipts are
+ * the common case). File messages are read; stickers, contacts and the like are skipped.
  */
 export function inboundOf(payload: WhatsappPayload | null): WhatsappInbound | undefined {
   for (const entry of payload?.entry ?? []) {
@@ -421,12 +354,8 @@ function mediaOf(message: WhatsappMessage): WhatsappMedia | undefined {
 }
 
 /**
- * A name for a file that mostly arrives without one. Only a document keeps the name it
- * had on the sender's phone; a voice note and a picture are named after the moment they
- * were sent, which is all WhatsApp knows about them.
- *
- * The extension matters beyond tidiness: transcription and PDF parsing both read it
- * when the type alone is ambiguous.
+ * A name for a file that usually arrives without one; the extension helps transcription
+ * and PDF parsing when the type is ambiguous.
  */
 function fileOf(message: WhatsappMessage, media: WhatsappMedia): WhatsappFile {
   const mime = (media.mime_type ?? "").split(";")[0].trim() || "application/octet-stream";
@@ -449,15 +378,8 @@ const EXTENSIONS: Record<string, string> = {
 };
 
 /**
- * Whether this sender is the person the agent belongs to.
- *
- * There is no whitelist here, unlike Telegram. An agent on WhatsApp answers one
- * number, configured and required, so there is no empty state that could mean
- * "everyone" and no second entry to add by mistake. A blank setting answers nobody,
- * and the capability counts as unconfigured until the number is filled in.
- *
- * Both sides are reduced to digits before comparing: people write a number with a
- * leading `+`, spaces or dashes, and Meta reports it with none of them.
+ * Whether the sender is the agent's one configured number (blank answers nobody).
+ * Both sides are reduced to digits before comparing.
  */
 export function isOwnNumber(configured: string, from: string): boolean {
   const wanted = digits(configured);

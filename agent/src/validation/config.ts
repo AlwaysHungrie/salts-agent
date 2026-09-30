@@ -4,10 +4,8 @@ import type { Config } from "../registry";
 export const REASONING_EFFORTS = ["off", "low", "medium", "high"] as const;
 
 /**
- * An OpenRouter model id: `vendor/model`, with the suffixes OpenRouter uses for
- * variants (`:free`, `:nitro`). Deliberately a shape check and not a catalogue —
- * the catalogue is OpenRouter's, it changes weekly, and meta settings exist so a
- * deployment can name a model this Worker has never heard of.
+ * An OpenRouter model id shape (`vendor/model` with optional `:variant`); deliberately
+ * not a catalogue, so meta settings can name any model.
  */
 export const MODEL_ID = /^[a-z0-9._-]+\/[a-z0-9._:-]+$/i;
 
@@ -18,35 +16,22 @@ export const CAPABILITY_FLAGS = CAPABILITIES.map((c) => c.flag);
 export const CAPABILITY_FIELDS: CapabilityField[] = CAPABILITIES.flatMap((c) => c.fields);
 
 /**
- * Secrets that belong to no capability. The OpenRouter key is what every model call
- * is billed to, so it belongs to the agent itself rather than to any one thing the
- * agent can do — but it follows the same contract as a capability's credentials:
- * masked on the way out, and the mask on the way back in means "leave it alone".
- *
- * They are listed separately because `redact` and `validateConfig` walk
- * `CAPABILITY_FIELDS`, and a settings column reachable through neither would go to
- * the browser in the clear.
+ * Secrets outside any capability, masked and handled like capability credentials. Listed
+ * separately because `redact` only walks `CAPABILITY_FIELDS`.
  */
 export const CORE_SECRETS = ["openrouter_api_key"] as const satisfies readonly (keyof Config)[];
 
-/**
- * The longest note an agent keeps, each of `private_notes` and `public_notes`. Long
- * enough for a brief with its evidence; both are resent every turn, so the model's
- * context is the real ceiling.
- */
+/** Maximum length of each owner's note; both are resent every turn. */
 export const MAX_NOTES = 64_000;
 /**
- * Keep the settings row trustworthy: the agent reads it straight into an OpenRouter
- * request, so every value is checked and clamped here rather than at the call site.
- * Only the keys actually present are returned, so a PATCH stays a partial update.
+ * Check and clamp a config patch before it reaches an OpenRouter request. Only keys
+ * present are returned, so a PATCH stays partial.
  */
 export function validateConfig(body: Partial<Config>): Partial<Config> {
   const patch: Partial<Config> = {};
 
   if (body.model !== undefined) {
-    // Not checked against the Worker's own list any more: meta settings may name any
-    // OpenRouter id, so the shape is what can be checked here. Which ids this agent
-    // may actually be switched to is enforced where the meta document is readable.
+    // Only the shape is checked here; which ids an agent may use is enforced with its meta.
     if (typeof body.model !== "string" || !MODEL_ID.test(body.model.trim())) {
       throw new Error(`not an OpenRouter model id: ${String(body.model)}`);
     }
@@ -100,9 +85,7 @@ export function validateConfig(body: Partial<Config>): Partial<Config> {
     // The mask is what a secret reads back as, so it means "leave this one alone".
     if (field.secret && value === SECRET_MASK) continue;
     let cleaned = value.trim();
-    // A Telegram handle is written with an @ everywhere it is shown, so the field
-    // accepts one — but the stored form is bare: links and mention matching build
-    // the @ back themselves.
+    // Accept a leading @ but store the handle bare.
     if (field.key === "telegram_bot_username") cleaned = cleaned.replace(/^@+/, "");
     // A list holds many entries, so it gets more room than a single credential.
     (patch[field.key] as string) = cleaned.slice(0, field.list ? 8000 : 1000);

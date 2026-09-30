@@ -38,11 +38,7 @@ export function buildSteps(parts: ChatUIMessage["parts"]): Step[] {
   return steps;
 }
 
-/**
- * A message that came in as a reply carries the quoted message ahead of it, as
- * blockquote lines. Split the two apart so the quote can be shown as a quote rather
- * than as a stray "> " in the middle of a sentence.
- */
+/** Split a reply's leading blockquote from its text, so the quote renders as a quote. */
 export function splitQuote(text: string): { quote: string; body: string } {
   if (!text.startsWith(">")) return { quote: "", body: text };
   const lines = text.split("\n");
@@ -57,9 +53,8 @@ export function splitQuote(text: string): { quote: string; body: string } {
 }
 
 /**
- * One message: its files above, the bubble itself, and its actions below. Voice notes
- * and documents sit outside the bubble — a clip with nothing said alongside it should
- * not be dressed up as a sentence — while images stay inside it, inset from the edge.
+ * One message: files above, the bubble, actions below. Voice notes and documents sit
+ * outside the bubble; images stay inside it.
  */
 export function Bubble({
   message,
@@ -93,9 +88,7 @@ export function Bubble({
     (p): p is { type: "data-tool"; id?: string; data: ToolData } =>
       p.type === "data-tool",
   );
-  // The turn as it happened: text the model wrote, the tools it then ran, the text it
-  // wrote after them. Consecutive tool calls collapse into one block; everything else
-  // stays in the order the stream produced it.
+  // The turn in order: text, then the tools it ran (consecutive calls grouped), then text.
   const steps = useMemo(() => buildSteps(message.parts), [message.parts]);
   const files = message.parts.find((p) => p.type === "data-files") as
     | { type: "data-files"; data: FilesData }

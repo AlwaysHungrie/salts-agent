@@ -53,9 +53,8 @@ export function McpTemplatesSection({
 }
 
 /**
- * The agent's MCP servers, and whether its owner may add more. A live agent's servers
- * are real rows, edited with the capabilities page's own editor; before the agent
- * exists, all that can be written down is what to create.
+ * The agent's MCP servers and whether its owner may add more: the live editor once the
+ * agent exists, else the list to create.
  */
 export function McpServersSection({
   editor,

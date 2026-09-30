@@ -1,12 +1,6 @@
 import type { Migration } from "../schema";
 
-/**
- * A session's own tables, in the order they were introduced.
- *
- * Step 0 is the baseline: the schema as it stood before this file had a ladder. It is
- * written idempotently because every existing session already has these tables and
- * will run it once anyway. Append below it; do not edit it.
- */
+/** A session's migration ladder. Step 0 is the idempotent baseline; append, never edit. */
 export const SESSION_AGENT_MIGRATIONS: readonly Migration[] = [
   {
     name: "baseline",
@@ -51,10 +45,8 @@ export const SESSION_AGENT_MIGRATIONS: readonly Migration[] = [
            ts INTEGER NOT NULL DEFAULT 0
          )`
       );
-      // What OpenRouter's file parser made of a PDF, so the same PDF is parsed once per
-      // session instead of once per turn. The parse output itself is a workspace file:
-      // it carries the document's text and a base64 image per page, which is far too
-      // large to want in a SQLite row.
+      // The PDF parse cache, so a document is parsed once per session. The text is a workspace
+      // file, too large for a row.
       sql.exec(
         `CREATE TABLE IF NOT EXISTS file_cache (
            attachment_id TEXT PRIMARY KEY,
@@ -65,10 +57,8 @@ export const SESSION_AGENT_MIGRATIONS: readonly Migration[] = [
     },
   },
   {
-    // Compaction. `context_tokens` is the largest prompt one model call in the turn
-    // sent, which is what a context window is measured against — `prompt_tokens` is
-    // summed across tool rounds. `compaction` holds the one summary the model reads in
-    // place of a run of older messages; the transcript itself is never touched.
+    // `context_tokens` is a turn's largest single prompt (what the window is measured
+    // against); `compaction` holds the one summary overlay.
     name: "compaction",
     up: (sql) => {
       sql.exec(`ALTER TABLE usage ADD COLUMN context_tokens INTEGER NOT NULL DEFAULT 0`);
@@ -84,9 +74,8 @@ export const SESSION_AGENT_MIGRATIONS: readonly Migration[] = [
     },
   },
   {
-    // The id an MCP server handed back for an attachment's bytes, so a file goes to a
-    // server once per session rather than once per turn. Keyed on the URL too: a server
-    // pointed somewhere new has never seen the file.
+    // Upload ids an MCP server returned, so a file goes to a server once per session. Keyed
+    // on the URL too: a repointed server has never seen the file.
     name: "mcp_uploads",
     up: (sql) => {
       sql.exec(

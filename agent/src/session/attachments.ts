@@ -21,9 +21,8 @@ export function pendingAttachments(host: SessionHost): Attachment[] {
 }
 
 /**
- * The files a turn is opening with: the ones it names, or every pending one when it
- * names none. Named ids are looked up whatever their `used` flag says — the caller
- * has just written them and is the only party that could claim them.
+ * The files a turn opens with: the named ids (whatever their `used` flag), or every
+ * pending file when none are named.
  */
 export function claimed(host: SessionHost, only?: string[]): Attachment[] {
   if (!only) return pendingAttachments(host);
@@ -36,9 +35,8 @@ export function claimed(host: SessionHost, only?: string[]): Attachment[] {
 }
 
 /**
- * Every file this session writes goes through here, so this is where the agent's
- * byte total is moved. Reported rather than awaited: the file is already written,
- * and a count that lands a moment later is better than an upload that waits on it.
+ * Every file write goes through here, so this moves the agent's byte total (reported,
+ * not awaited).
  */
 export function insertAttachment(
   host: SessionHost,
@@ -76,12 +74,8 @@ export function storedBytes(host: SessionHost): number {
 }
 
 /**
- * Hand this session's bytes back to the agent's total.
- *
- * Called before the rows are deleted, never after — and before the object destroys
- * itself, because a destroyed object cannot report anything. A session whose
- * isolate dies mid-teardown leaves its bytes counted against the agent; the total
- * is a ceiling, not an invoice, so the cost of that is headroom.
+ * Give this session's bytes back to the agent's total. Must run before rows are deleted
+ * and before the object destroys itself.
  */
 export function releaseStorage(host: SessionHost): void {
   const held = storedBytes(host);
@@ -179,9 +173,7 @@ async function capabilityRefusal(
 
 /**
  * Take one uploaded file. The per-kind size limit and the agent's storage ceiling are
- * checked before the bytes are read; then the capability for that kind of file. PDFs
- * and audio are stored whole (the read tool and `transcribe_audio` get at them later);
- * a PDF's first-page PNG is rendered by the browser and arrives beside it.
+ * checked before the bytes are read, then the capability for that kind of file.
  */
 export async function upload(host: SessionHost, request: Request): Promise<UploadResult> {
   const form = await request.formData();
@@ -273,9 +265,8 @@ export function drawnIds(host: SessionHost): Set<string> {
 }
 
 /**
- * Every object this session spilled into the bucket. It is swept by key prefix
- * rather than by what the workspace remembers, so a row lost to a failed write or
- * an interrupted delete cannot leave its bytes behind for good.
+ * Delete every bucket object under this session's prefix, so rows lost to failed writes
+ * cannot leave bytes behind.
  */
 export async function sweepBucket(host: SessionHost): Promise<void> {
   let cursor: string | undefined;

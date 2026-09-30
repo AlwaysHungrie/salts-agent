@@ -1,10 +1,8 @@
 import { describeSessionFailure } from "@/lib/agent";
 
 /**
- * Why an upload did not land, in the strip under the composer. The Worker's own
- * refusals — too large, wrong kind, capability off — are written to be read and are
- * passed through. A failure from underneath it is not: it arrives as a runtime's
- * internal wording, and naming the file the user picked is more use than quoting it.
+ * Why an upload failed. The Worker's own refusals are shown; internal-looking errors are
+ * replaced with a plain sentence naming the file.
  */
 export function uploadFailure(name: string, error?: string): string {
   const raw = error?.trim();

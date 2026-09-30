@@ -13,13 +13,7 @@ export function MetaSettingsDialog({
 }) {
   const [meta, setMeta] = useState<MetaSettings | null>(null);
   const [config, setConfig] = useState<Config | null>(null);
-  /**
-   * The settings changed since the dialog opened, and nothing else.
-   *
-   * Sending the whole config back would mean sending every secret as its mask, which
-   * is harmless but says "keep all of these" about keys nobody touched. A patch says
-   * what was actually meant.
-   */
+  /** Only the settings changed since opening, so untouched secrets are not sent back. */
   const [changed, setChanged] = useState<Partial<Config>>({});
   const [models, setModels] = useState<ModelOption[]>([]);
   const [mcpCatalog, setMcpCatalog] = useState<McpCatalogEntry[]>([]);
@@ -34,9 +28,8 @@ export function MetaSettingsDialog({
 
   useEffect(() => {
     void (async () => {
-      // One request, not two. The settings the dialog edits ride along with the meta
-      // document: `/config` is the agent's own page, and an admin who was never
-      // added to the access list is answered there the same way a stranger is.
+      // One request: the settings come with the meta document, since `/config` refuses an admin
+      // who is not a member.
       const metaRes = await apiFetch(base, { cache: "no-store" });
       const payload = (await metaRes.json().catch(() => null)) as {
         meta: MetaSettings;
@@ -67,11 +60,8 @@ export function MetaSettingsDialog({
   };
 
   /**
-   * Save the locks and the option lists, and the settings themselves, in one request.
-   *
-   * They go together because they decide each other: a model added to the list is
-   * what makes the model beside it selectable, and a lock is what says whose setting
-   * the value below it is. The Worker writes the document first for that reason.
+   * Save meta and settings in one request; the Worker writes meta first, so a newly listed
+   * model can be selected in the same save.
    */
   const save = async () => {
     if (!meta) return;

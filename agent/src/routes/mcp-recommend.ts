@@ -2,12 +2,8 @@ import type { McpServerRow, McpTool } from "../mcp";
 import type { Config } from "../registry";
 
 /**
- * How many tools a recommendation may keep, and how much of each description it reads.
- *
- * The cap is the whole point rather than a safety rail: a model asked which tools are
- * useful will answer "most of them", and a list of most of them is the cost the button
- * exists to cut. Descriptions are prose and some servers write paragraphs — the first
- * couple of sentences say what a tool is for, which is all that is being judged.
+ * Keep at most this many tools (a model otherwise keeps most of them), and read only
+ * the start of each description.
  */
 export const RECOMMEND_CAP = 12;
 export const RECOMMEND_DESCRIPTION = 200;
@@ -15,11 +11,7 @@ export const RECOMMEND_DESCRIPTION = 200;
 /** As much of the agent's own instructions as is worth sending to choose tools by. */
 export const RECOMMEND_INSTRUCTIONS = 1500;
 
-/**
- * What the model is being asked. Written as a system prompt because the tool list that
- * follows is the user turn, and a server whose tool descriptions contain instructions
- * should not be read as changing the task.
- */
+/** A system prompt, so instructions inside tool descriptions cannot change the task. */
 export const RECOMMEND_PROMPT = `You choose which of an MCP server's tools an AI assistant should keep loaded.
 
 Every tool kept is re-sent to the assistant on every message it ever receives, whether or not it is used, so a short list is the point. Keep the tools that do the work the assistant's instructions describe: reading, searching, creating and updating the things it handles. Drop tools that are redundant with one you kept, administrative (workspace, billing, user and permission management), rarely reached for, or useful only to a developer debugging the server.
@@ -44,18 +36,8 @@ export function firstJsonObject(text: string): unknown {
 }
 
 /**
- * Ask the agent's own model which of a server's tools are worth keeping.
- *
- * A connected server's whole schema sits in front of every request of every turn —
- * Notion's is tens of thousands of tokens the agent pays for on every message, mostly
- * for tools it will never call. The switches to cut that already exist; what does not
- * is the patience to read forty descriptions and decide. This reads them, with the
- * agent's own name and instructions as the thing being chosen for, so a support agent
- * and a research agent do not get the same six tools.
- *
- * Returns the names to keep. A name the model invents is dropped rather than trusted:
- * the answer is filtered back through what the server actually advertises, so a
- * hallucinated tool cannot switch a real one off by taking its place in the list.
+ * Ask the agent's model which of a server's tools to keep, judged against the agent's
+ * name and instructions. Invented names are dropped against the advertised list.
  */
 export async function recommendMcpTools(
   row: McpServerRow,
