@@ -42,6 +42,10 @@ OTHER_CITIES = {
     "vijayawada", "bhubaneswar", "goa", "patna", "dehradun",
 }
 
+# A job "located" in a country or anywhere in it restricts no city.
+REGIONS = {"india", "pan india", "anywhere in india", "across india", "all india", "any location", "multiple locations",
+           "multiple cities", "asia", "apac", "sea", "south asia"}
+
 KNOWN_CITIES = set(ALIASES.values()) | set(METROS) | set().union(*METROS.values()) | OTHER_CITIES
 
 
@@ -74,11 +78,12 @@ def location_keys(raws: list[str]) -> list[str]:
 
 
 def expand_job_locations(locations: list[str]) -> list[str]:
-    """Job location strings -> every candidate location_key that satisfies them."""
+    """Job location strings -> every candidate location_key that satisfies them. Countries and regions add none, so
+    a job in "India" alone filters nothing."""
     keys: set[str] = set()
     for loc in locations:
         k = location_key(loc)
-        if not k or k == "remote":
+        if not k or k == "remote" or k in REGIONS:
             continue
         keys.add(k)
         for metro, members in METROS.items():

@@ -1,0 +1,99 @@
+AI Engineer (Agentic AI) – AWS & Microsoft Copilot Studio
+Location: India
+Position Summary
+We are seeking an experienced AI Engineer to design, develop, and deploy enterprise-grade AI agents and intelligent automation solutions using Microsoft Copilot Studio, AWS AI Services, and modern Generative AI frameworks.
+This role will focus on building AI-powered assistants, multi-agent workflows, enterprise search experiences, and intelligent process automation using Large Language Models (LLMs), Retrieval-Augmented Generation (RAG), and cloud-native AI services. The ideal candidate will bridge AI engineering, software engineering, and cloud architecture to deliver secure and scalable AI solutions.
+Copilot Studio capabilities are expected to include orchestration, knowledge grounding, connectors, flows, prompts, REST APIs, and integration with enterprise data sources.
+Key Responsibilities
+Agentic AI Development
+Design and develop AI agents using Microsoft Copilot Studio.
+Build multi-agent and agent-to-agent workflows.
+Implement conversational AI, task automation, and intelligent assistants.
+Develop enterprise knowledge assistants using RAG architectures.
+Create reusable AI skills, tools, prompts, and orchestrations.
+Microsoft Copilot Studio
+Develop and maintain Copilot Studio agents leveraging:
+Copilot Studio
+Dataverse
+Power Automate
+SharePoint
+Microsoft Teams
+REST APIs
+Enterprise Connectors
+Configure knowledge grounding from enterprise content repositories.
+Design conversation flows, actions, prompts, and AI-driven workflows.
+Build integrations with internal business systems and enterprise applications.
+Copilot Studio implementations frequently involve orchestrators, knowledge sources, connectors, flows, prompts, APIs, and connected agents.
+AWS Generative AI Engineering
+Build AI solutions using:
+Amazon Bedrock
+RAG
+Claude Models
+Amazon Knowledge Bases
+Lambda
+Step Functions
+S3
+API Gateway
+DynamoDB
+EventBridge
+Design AI pipelines supporting:
+Prompt Engineering
+Agent Frameworks
+Tool Calling
+Memory Management
+Deploy secure and scalable AI services in AWS.
+AI Application Development
+Develop APIs and backend services supporting AI agents.
+Implement LLM integrations and orchestration layers.
+Build AI observability and monitoring capabilities.
+Develop guardrails and content safety controls.
+Support AI model evaluation and continuous improvement.
+Required Qualifications
+Experience
+Minimum 2 years working with Generative AI solutions.
+Hands-on experience building AI assistants or AI agents.
+Experience with AWS cloud-native development.
+Experience with Microsoft Power Platform and Copilot Studio preferred.
+Technical Skills
+Programming
+Python
+JavaScript / TypeScript
+SQL
+REST APIs
+Microsoft AI Stack
+Microsoft Copilot Studio
+Power Automate
+Dataverse
+Power Platform
+Microsoft Graph
+Azure OpenAI (Preferred)
+AWS AI Stack
+Amazon Bedrock
+Claude
+Knowledge Bases
+Lambda
+Step Functions
+DynamoDB
+S3
+API Gateway
+AI Engineering
+RAG
+Agentic AI
+Prompt Engineering
+Vector Databases
+Semantic Search
+LLM Evaluation
+AI Guardrails
+MCP (Model Context Protocol)
+Preferred Qualifications
+Experience with healthcare, life sciences, or MedTech environments.
+Experience with enterprise search platforms.
+Experience integrating SAP, Salesforce, ServiceNow, or M365 ecosystems.
+Experience with LangChain, Semantic Kernel, AutoGen, CrewAI, or similar frameworks.
+Experience implementing AI governance and responsible AI controls.
+Success Metrics (First 12 Months)
+Deliver 3–5 production AI agents supporting business processes.
+Reduce manual effort through AI-driven automation.
+Enable enterprise knowledge search and self-service support.
+Improve employee productivity through Copilot-based experiences.
+Successfully deploy AI solutions meeting governance and security requirements.

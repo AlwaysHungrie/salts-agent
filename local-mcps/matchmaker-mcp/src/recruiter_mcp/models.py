@@ -238,6 +238,8 @@ class AppliedFilters(BaseModel):
     max_resume_age_days: int | None
     must_have_skills: list[str]
     min_must_have_skills: int | None
+    # Candidates who only want remote work pass a city filter only when asked (search_candidates include_remote).
+    include_remote_candidates: bool = False
 
 
 class Funnel(BaseModel):

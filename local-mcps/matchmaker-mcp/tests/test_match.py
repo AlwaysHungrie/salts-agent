@@ -78,7 +78,7 @@ def test_filter_sql_all_clauses():
     ), first_param=3)
     assert where == (
         "(years_exp IS NULL OR years_exp >= $3) AND (years_exp IS NULL OR years_exp <= $4) AND "
-        "(location_key IS NULL OR location_key = 'remote' OR location_key = ANY($5::text[])"
+        "(location_key IS NULL OR location_key = ANY($5::text[])"
         " OR preferred_location_keys && $5::text[] OR (willing_to_relocate AND preferred_location_keys = '{}')) AND "
         "(notice_days IS NULL OR notice_days <= $6) AND updated_at >= now() - make_interval(days => $7) AND "
         "((skills && $8::text[])::int + (skills && $9::text[])::int) >= $10"
@@ -134,7 +134,11 @@ async def test_filters_against_fixture_data(svc):
 
     # Location: metro expansion, 'Remote' candidates pass, other cities drop.
     got = await names_passing(svc, applied(location_keys=matching.expand_job_locations(["Mumbai"]), remote_ok=False))
-    assert {"Neha Kulkarni", "Meera Joshi", "Pooja Nair", "Sara Khan"} <= got  # Mumbai, Thane, Navi Mumbai, Remote
+    assert {"Neha Kulkarni", "Meera Joshi", "Pooja Nair"} <= got  # Mumbai, Thane, Navi Mumbai
+    assert "Sara Khan" not in got  # Remote only: not for an office job...
+    got = await names_passing(svc, applied(location_keys=matching.expand_job_locations(["Mumbai"]), remote_ok=False,
+                                           include_remote_candidates=True))
+    assert "Sara Khan" in got  # ...unless asked for
     assert "Priya Sharma" not in got and "Arjun Mehta" not in got
 
     # Notice period.

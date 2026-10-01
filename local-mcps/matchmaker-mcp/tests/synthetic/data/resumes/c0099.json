@@ -1,0 +1,4 @@
+{
+ "hash": "v1:0bf32a225ced3443",
+ "text": "Deepa Menon | deepa.menon780@example.com | +91 9508851808 | Ahmedabad\nQA Automation Engineer with practical experience in designing and executing automated test frameworks. Notice period: 30 days.\n\nQA Automation Engineer, Cognizant — Apr 2025 - Present\n- Developed and maintained Test Automation suites using Playwright and TestNG to validate core web application workflows, reducing manual regression time by ~60%.\n- Implemented end-to-end API test scenarios in Postman and integrated them into automation pipelines to catch upstream defects early.\n- Created CI/CD pipelines in Jenkins to run Selenium and Playwright test suites on code commits, improving feedback loop to developers.\n- Managed test cases and tracked defects in Jira, while maintaining versioned test scripts and utilities in Git.\n\nSkills: Selenium, Test Automation, TestNG, Postman, Jenkins, Playwright, Jira, Git\n\nEducation: MCA, Symbiosis"
+}
