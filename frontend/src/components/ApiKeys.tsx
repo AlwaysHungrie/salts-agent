@@ -95,15 +95,11 @@ export function ApiKeys({
         const info = keys.find((k) => k.role === role);
         return (
           <div key={role}>
-            <div className="flex items-start justify-between gap-4">
+            <div className="flex items-center justify-between gap-4">
               <div className="min-w-0">
-                <p className="text-sm font-semibold">{LABEL[role].title}</p>
-                <p className="text-muted mt-0.5 text-xs font-light leading-[1.33]">
-                  {LABEL[role].hint}
-                </p>
                 <p className="text-faint tnum mt-1 text-xs">
                   {info
-                    ? `Ends in …${info.hint}, made ${new Date(info.created_at).toLocaleDateString()}`
+                    ? `Generated on ${new Date(info.created_at).toLocaleDateString()} (salt_u...${info.hint})`
                     : "No key yet"}
                 </p>
               </div>
@@ -131,7 +127,7 @@ export function ApiKeys({
       })}
       {error && <p className="text-muted text-xs">{error}</p>}
       {shown && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/30 px-5">
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/30 px-5">
           <div
             role="dialog"
             aria-modal="true"
@@ -141,10 +137,11 @@ export function ApiKeys({
               Your new {LABEL[shown.role].title.toLowerCase()}
             </p>
             <p className="text-muted mt-1 text-xs font-light leading-[1.33]">
-              Copy it now and keep it somewhere safe: it will not be shown
-              again. Anyone with it can use this agent as{" "}
-              {shown.role === "admin" ? "its admin" : "a member"}. Send it as{" "}
-              <code>Authorization: Bearer &lt;key&gt;</code>.
+              This token will not be shown again. Do not share this with anyone.
+              It can be used to access this agent as{" "}
+              {shown.role === "admin" ? "an admin" : "a member"}.
+              <br />
+              <br /> To be used as Authorization: Bearer &lt;key&gt;
             </p>
             <CopyField value={shown.key} />
             <div className="mt-5 flex justify-end">
