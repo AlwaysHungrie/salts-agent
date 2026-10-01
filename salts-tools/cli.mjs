@@ -1210,6 +1210,9 @@ ${RED}✗${OFF} Your agent already has an MCP server called ${BOLD}${failed}${OF
   salts-tools token. salts-tools does not change a server it did not set up, so it
   left that one alone.
 
+  The tunnel is up at ${result.state.url}
+  ("${failed}" will be at ${SERVICES[failed].reached(result.state.url)}).
+
   To fix it, open the agent's settings → ${BOLD}MCP servers${OFF} and either:
     • ${BOLD}delete${OFF} "${failed}": salts-tools adds it again, already connected, or
     • ${BOLD}edit${OFF} "${failed}" and set its ${BOLD}Authorization${OFF} header to your token
