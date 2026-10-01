@@ -1204,6 +1204,31 @@ async function start({ interactive }) {
         continue;
       }
       const failed = result.pushFailed;
+      if (failed && result.state.svc?.[failed]?.pushStatus === 409) {
+        console.log(`
+${RED}✗${OFF} Your agent already has an MCP server called ${BOLD}${failed}${OFF}, set up without your
+  salts-tools token. salts-tools does not change a server it did not set up, so it
+  left that one alone.
+
+  To fix it, open the agent's settings → ${BOLD}MCP servers${OFF} and either:
+    • ${BOLD}delete${OFF} "${failed}": salts-tools adds it again, already connected, or
+    • ${BOLD}edit${OFF} "${failed}" and set its ${BOLD}Authorization${OFF} header to your token
+      (choose [t] below to see the exact value).
+`);
+        for (;;) {
+          const choice = (
+            await rl.question("[r] retry once it is fixed, [t] show the Authorization value, [q] quit: ")
+          ).trim().toLowerCase();
+          if (choice === "t") {
+            console.log(`\n  ${BOLD}Bearer ${readToken()}${OFF}\n`);
+            continue;
+          }
+          if (choice === "r") break;
+          console.log(`salts-tools keeps running and connects "${failed}" as soon as it is fixed.`);
+          return;
+        }
+        continue;
+      }
       console.log(`${RED}✗${OFF} ${(failed && result.state.svc?.[failed]?.error) || result.state.lastError || "the supervisor stopped"}`);
       if (failed) {
         console.log(`The tunnel is up at ${result.state.url}; the supervisor keeps retrying the agent.`);
