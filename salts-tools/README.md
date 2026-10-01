@@ -103,7 +103,7 @@ database URL. Its log is `~/.salts-tools/matchmaker.log`.
 | `salts-tools stop <service>` | Turns one service off and stops it. The others and the tunnel keep running. Stopping the last one stops everything. |
 | `salts-tools stop` | Stops the supervisor, the tunnel and the containers. The next `start` brings back the same services. |
 | `salts-tools restart` | Opens a new tunnel and sends its addresses to the agent. |
-| `salts-tools reset` | Deletes `state.json` and the saved token, so the next `start` is a first run. Stop salts-tools first. |
+| `salts-tools reset` | Back to a first run: deletes the token, `~/.salts-tools` (state and logs), the login item and any salts-web leftovers. Keeps the matchmaker's database. Stop salts-tools first. |
 | `salts-tools setup` | Runs the first-run questions again, for example to switch agents. Starts nothing. |
 | `salts-tools autostart on` / `off` | Adds or removes the login item. See [Where things live](#where-things-live). |
 
