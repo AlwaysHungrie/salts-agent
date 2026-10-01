@@ -1,6 +1,13 @@
 import type { Env } from "../env";
 import { clerkEmail } from "../clerk";
-import { type AccessRow, type AgentRow, emailAllowed, splitEmails } from "../registry";
+import {
+  type AccessRow,
+  type AgentRow,
+  agentIdOf,
+  type ApiKeyRole,
+  emailAllowed,
+  splitEmails,
+} from "../registry";
 import { API_SECRET_HEADER } from "./http";
 import { directory, registry } from "./stores";
 
@@ -91,7 +98,79 @@ export async function mayUseSessionAsGuest(
 
 export async function mayUseAgent(request: Request, env: Env, agentId: string): Promise<boolean> {
   const email = await callerEmail(request, env);
-  if (!email) return false;
+  if (email) {
+    const access = await agentAccess(env, agentId);
+    return !!access && emailAllowed(access.allowed_emails, email);
+  }
+  const key = await apiKeyCaller(request, env);
+  if (!key || key.agentId !== agentId) return false;
   const access = await agentAccess(env, agentId);
-  return !!access && emailAllowed(access.allowed_emails, email);
+  return !!access && keyPowers(access, key.role).isUser;
+}
+
+/**
+ * An agent API key: `salt_<role>_<agentId>_<secret>`. The agent id is in the key so the
+ * Worker knows which registry holds its hash; the secret is what proves it.
+ */
+const API_KEY = /^salt_(admin|user)_([A-Za-z0-9-]+)_([A-Za-z0-9]{32,})$/;
+
+async function sha256(text: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/** A fresh key for the role, its hash (what is stored) and a hint to recognise it by. */
+export async function newApiKey(agentId: string, role: ApiKeyRole) {
+  const bytes = crypto.getRandomValues(new Uint8Array(24));
+  const secret = [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+  const key = `salt_${role}_${agentId}_${secret}`;
+  return { key, hash: await sha256(key), hint: secret.slice(-4) };
+}
+
+export type KeyCaller = { agentId: string; role: ApiKeyRole };
+
+/**
+ * The agent and role a bearer API key was issued for, when it is that agent's current
+ * key of that role; else undefined. A key reaches its own agent and nothing else.
+ */
+export async function apiKeyCaller(request: Request, env: Env): Promise<KeyCaller | undefined> {
+  const offered = (request.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
+  const match = API_KEY.exec(offered);
+  if (!match) return undefined;
+  const role = match[1] as ApiKeyRole;
+  const agentId = match[2];
+  // Checked against the directory first, so a made-up id never seeds a store of its own.
+  if (!(await directory(env).get(agentId))) return undefined;
+  const stored = await registry(env, agentId).apiKeyHash(role);
+  if (!stored) return undefined;
+  const enc = new TextEncoder();
+  const offeredHash = enc.encode(await sha256(offered));
+  const storedHash = enc.encode(stored);
+  if (offeredHash.byteLength !== storedHash.byteLength) return undefined;
+  return crypto.subtle.timingSafeEqual(offeredHash, storedHash) ? { agentId, role } : undefined;
+}
+
+/**
+ * Who a key acts as on its agent. The admin key is the agent's admin — a member too when
+ * the admin is on the access list. The user key is a member with no address of its own.
+ */
+export function keyPowers(
+  access: AccessRow,
+  role: ApiKeyRole
+): { email: string; isUser: boolean; isAdmin: boolean } {
+  if (role === "user") return { email: "", isUser: true, isAdmin: false };
+  const email = access.admin_email;
+  return { email, isUser: emailAllowed(access.allowed_emails, email), isAdmin: !!email };
+}
+
+/** Whether a path is about the key's own agent: its routes, or one of its sessions. */
+export function keyReaches(agentId: string, segments: string[]): boolean {
+  const [first, second, third] = segments;
+  if (!third) return false;
+  const id = decodeURIComponent(third);
+  if (first === "api" && second === "agents") return id === agentId;
+  const sessionRoute =
+    (first === "api" && second === "sessions") ||
+    (first === "agents" && second === "session-agent");
+  return sessionRoute && agentIdOf(id) === agentId;
 }

@@ -203,4 +203,18 @@ export const SESSION_REGISTRY_MIGRATIONS: readonly Migration[] = [
       addColumnIfMissing(sql, "config", `public_notes TEXT NOT NULL DEFAULT ''`);
     },
   },
+  {
+    name: "api keys",
+    up: (sql) => {
+      // Its own table, like `access`: `config` is readable from the browser.
+      sql.exec(
+        `CREATE TABLE IF NOT EXISTS api_keys (
+           role TEXT PRIMARY KEY,
+           hash TEXT NOT NULL,
+           hint TEXT NOT NULL DEFAULT '',
+           created_at INTEGER NOT NULL
+         )`
+      );
+    },
+  },
 ];

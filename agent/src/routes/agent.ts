@@ -3,7 +3,8 @@ import type { AccessRow, AgentRow } from "../registry";
 import { emailAllowed, normalizeEmails, sessionName, splitEmails } from "../registry";
 import { deploymentSettings } from "../settings";
 import { Telegram } from "../telegram";
-import { agentAccess, callerEmail, isGuest } from "../worker/auth";
+import { agentAccess, apiKeyCaller, callerEmail, isGuest, keyPowers } from "../worker/auth";
+import { handleApiKeys } from "./api-keys";
 import { errorMessage, json, jsonError, listEntries, notFound, readJson } from "../worker/http";
 import { agentFor, deleteAgent } from "../worker/provisioning";
 import {
@@ -50,7 +51,18 @@ export async function handleAgent(
   const access = await agentAccess(env, agentId, row);
   if (!access) return notFound();
 
-  const email = await callerEmail(request, env);
+  const signedIn = await callerEmail(request, env);
+  // Without a Clerk session the gate let this through on this agent's API key.
+  const key = signedIn ? undefined : await apiKeyCaller(request, env);
+  const powers =
+    key?.agentId === agentId
+      ? keyPowers(access, key.role)
+      : {
+          email: signedIn,
+          isUser: emailAllowed(access.allowed_emails, signedIn),
+          isAdmin: !!signedIn && access.admin_email === signedIn,
+        };
+  const { email } = powers;
   const call: AgentCall = {
     request,
     env,
@@ -60,8 +72,8 @@ export async function handleAgent(
     access,
     reg: registry(env, agentId),
     email,
-    isUser: emailAllowed(access.allowed_emails, email),
-    isAdmin: !!email && access.admin_email === email,
+    isUser: powers.isUser,
+    isAdmin: powers.isAdmin,
   };
   const section = segments[3];
 
@@ -77,8 +89,12 @@ export async function handleAgent(
 
   // Past here is using the agent, which is the users'. Meta and `?meta=1` MCP check
   // for the admin themselves.
-  if (!call.isUser && section !== "meta" && section !== "mcp") return notFound();
+  if (!call.isUser && section !== "meta" && section !== "mcp" && section !== "api-keys") {
+    return notFound();
+  }
 
+  // Each role manages its own key; the admin manages both.
+  if (section === "api-keys") return await handleApiKeys(call, segments[4]);
   if (section === "config") return await handleConfig(call);
   if (section === "meta") return await handleMeta(call);
   if (section === "mcp") {

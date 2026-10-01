@@ -19,6 +19,7 @@ import type {
 } from "@/lib/agent";
 import { formatUsdShort } from "@/lib/format";
 import { useIdentity } from "@/lib/identity";
+import { ApiKeys } from "@/components/ApiKeys";
 import { cached, keys, remember, revise } from "@/lib/cache";
 
 /**
@@ -668,6 +669,13 @@ export default function Settings({
                   {memberLimit === 1 ? "" : "s"} remaining (set by agent admin)
                 </p>
               )}
+            </Row>
+
+            <Row
+              title="API key"
+              hint="Use this agent from scripts or curl without signing in."
+            >
+              <ApiKeys agentId={agentId} roles={["user"]} />
             </Row>
           </div>
         )}

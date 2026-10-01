@@ -11,7 +11,14 @@ import { handleSession } from "./routes/sessions";
 import { handleWebhook } from "./routes/telegram";
 import { handleWhatsappWebhook } from "./routes/whatsapp";
 import { deploymentSettings, SettingsIncompleteError } from "./settings";
-import { callerEmail, mayUseAgent, mayUseSessionAsGuest, unconfigured } from "./worker/auth";
+import {
+  apiKeyCaller,
+  callerEmail,
+  keyReaches,
+  mayUseAgent,
+  mayUseSessionAsGuest,
+  unconfigured,
+} from "./worker/auth";
 import { CORS, json, jsonError, notFound, withCors } from "./worker/http";
 import { directory, registry } from "./worker/stores";
 
@@ -50,12 +57,15 @@ async function preflight(request: Request, env: Env, segments: string[]) {
 }
 
 /**
- * The identity gate: everything under /api and /agents needs a caller, and a session
- * route needs one allowed on the session's agent (or its guest owner).
+ * The identity gate: everything under /api and /agents needs a caller (a Clerk session,
+ * or an agent API key on that agent's routes), and a session route needs one allowed on
+ * the session's agent (or its guest owner).
  */
 async function gate(request: Request, env: Env, segments: string[]) {
   if ((segments[0] === "api" || segments[0] === "agents") && !(await callerEmail(request, env))) {
-    return jsonError("unauthorized", 401);
+    // No Clerk session: an agent API key, on its own agent's routes only.
+    const key = await apiKeyCaller(request, env);
+    if (!key || !keyReaches(key.agentId, segments)) return jsonError("unauthorized", 401);
   }
   const sessionRoute =
     (segments[0] === "agents" && segments[1] === "session-agent" && segments[2]) ||
