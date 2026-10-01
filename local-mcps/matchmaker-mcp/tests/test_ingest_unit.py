@@ -105,6 +105,7 @@ def test_derive_drops_region_preferences_and_marks_remote_only():
     d = derive(_profile(location="Noida", willing_to_relocate=True,
                         preferred_locations=["Anywhere in India", "India"]), n)
     assert (d.location_key, d.willing_to_relocate, d.preferred_location_keys) == ("noida", True, [])
+    assert d.country_keys == ["india"]
     d = derive(_profile(location="Pune", preferred_locations=["Bangalore", "Pan India"]), n)
     assert d.preferred_location_keys == ["bengaluru"]
     assert derive(_profile(location=None, preferred_locations=["Remote"]), n).location_key == "remote"

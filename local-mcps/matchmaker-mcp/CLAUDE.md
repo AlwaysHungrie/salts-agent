@@ -54,7 +54,7 @@ matches).
 ## DB tables
 
 `candidates` (current profile, embedding, skills[] incl. implied umbrellas, location_key, willing_to_relocate,
-preferred_location_keys[], file_key, content_sha256 unique; derived columns recomputed by `migrate`),
+preferred_location_keys[], country_keys[], file_key, content_sha256 unique; derived columns recomputed by `migrate`),
 `candidate_versions` (previous profiles on re-ingest), `jobs` (parsed requirements, filters, funnel, stats),
 `matches` (every scored candidate per job, score, rank, result JSON, feedback_label), `source_files` (folder ingest
 outcome per absolute path, size, mtime; cascades on candidate delete), `skill_synonyms`, `usage`, `schema_migrations`.

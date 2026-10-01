@@ -1,0 +1,4 @@
+{
+ "hash": "v1:59173b7466cbb2a7",
+ "text": "Pranav Kulkarni\nEmail: pranav.kulkarni229@example.com    Phone: +91 9969763046\n\nTotal Experience: 1 years 1 months\nCurrent Location: Pimpri-Chinchwad\nKey Skills: Java, Spring Boot, Microservices, MySQL, Hibernate, k8s, REST APIs, Agile, Linux\n\nEmployment Details\n\nZentrix Labs\nDesignation: Java Developer\nDuration: Sep 2025 - Present\n- Implemented Spring Boot based microservices for payment reconciliation, developing REST APIs that processed and validated 200k transactions daily; used Java, Spring Boot and Hibernate to model domain and persist to MySQL.\n- Containerized services and managed deployments on k8s clusters, reducing deployment time by 40% and improving availability; performed troubleshooting on Linux nodes and collaborated in Agile sprints to deliver incremental features.\n\nEducation\nB.Com, Narsee Monjee College\n\nPersonal Details\nLanguages: English, Hindi, Marathi"
+}
