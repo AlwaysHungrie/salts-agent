@@ -15,12 +15,17 @@ ALIASES = {
     "cochin": "kochi",
     "trivandrum": "thiruvananthapuram",
     "secunderabad": "hyderabad",
+    "mysore": "mysuru",
+    "mangalore": "mangaluru",
+    "vizag": "visakhapatnam",
+    "baroda": "vadodara",
+    "pimpri": "pimpri chinchwad",
     "work from home": "remote",
     "wfh": "remote",
     "anywhere": "remote",
 }
 
-# A job in the metro accepts candidates anywhere in it.
+# A job anywhere in the metro accepts candidates anywhere in it.
 METROS = {
     "mumbai": {"mumbai", "thane", "navi mumbai"},
     "delhi": {"delhi", "gurugram", "noida", "ghaziabad", "faridabad"},
@@ -31,21 +36,41 @@ METROS = {
     "kolkata": {"kolkata"},
 }
 
+OTHER_CITIES = {
+    "ahmedabad", "jaipur", "chandigarh", "mohali", "indore", "bhopal", "nagpur", "nashik", "surat", "vadodara",
+    "lucknow", "kanpur", "coimbatore", "kochi", "thiruvananthapuram", "mysuru", "mangaluru", "visakhapatnam",
+    "vijayawada", "bhubaneswar", "goa", "patna", "dehradun",
+}
+
+KNOWN_CITIES = set(ALIASES.values()) | set(METROS) | set().union(*METROS.values()) | OTHER_CITIES
+
+
+def _segment_key(seg: str) -> str | None:
+    s = re.sub(r"[^a-z ]", " ", seg)
+    s = re.sub(r"\s+", " ", s).strip()
+    s = re.sub(r" (east|west|north|south|central|city)$", "", s)
+    return ALIASES.get(s, s) or None
+
 
 def location_key(raw: str | None) -> str | None:
-    """'Pune, Maharashtra, India' -> 'pune'; 'Remote (India)' -> 'remote'."""
+    """'Pune, Maharashtra, India' -> 'pune'; 'Andheri East, Mumbai' -> 'mumbai'; 'Remote (India)' -> 'remote'.
+    The first segment that is a known city wins (resumes often lead with the neighbourhood); else the first."""
     if not raw:
         return None
     s = raw.lower()
     if "remote" in s:
         return "remote"
-    s = re.split(r"[,/(|;-]", s)[0]
-    s = re.sub(r"[^a-z ]", " ", s)
-    s = re.sub(r"\s+", " ", s).strip()
-    s = re.sub(r" (east|west|north|south|central|city)$", "", s)
-    if not s:
+    # Plain hyphens join names ("Pimpri-Chinchwad"); spaced ones separate parts ("Mumbai - Andheri").
+    s = re.sub(r"(?<=\w)-(?=\w)", " ", s)
+    keys = [k for k in map(_segment_key, re.split(r"[,/(|;-]", s)) if k]
+    if not keys:
         return None
-    return ALIASES.get(s, s)
+    return next((k for k in keys if k in KNOWN_CITIES), keys[0])
+
+
+def location_keys(raws: list[str]) -> list[str]:
+    """Distinct keys of several location strings, input order kept."""
+    return list(dict.fromkeys(k for k in map(location_key, raws) if k))
 
 
 def expand_job_locations(locations: list[str]) -> list[str]:
@@ -58,5 +83,5 @@ def expand_job_locations(locations: list[str]) -> list[str]:
         keys.add(k)
         for metro, members in METROS.items():
             if k == metro or k in members:
-                keys |= members if k == metro else {k}
+                keys |= members
     return sorted(keys)

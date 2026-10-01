@@ -94,8 +94,10 @@ class FakeLLM:
         years = cand.get("years_exp_computed")
         lo, hi = job["min_years"] or 0, job["max_years"] or 99
         in_range = years is not None and lo <= years <= hi
+        prefs = [p.lower() for p in cand.get("preferred_locations") or []]
         loc_ok = job["remote_ok"] or any(
-            loc.lower() in (cand.get("location") or "").lower() for loc in job["locations"])
+            loc.lower() in (cand.get("location") or "").lower() or loc.lower() in prefs for loc in job["locations"]
+        ) or (cand.get("willing_to_relocate") and not prefs)
         return {
             "must_haves_met": met,
             "must_haves_missing": [s for s in must if s not in met],
@@ -151,6 +153,7 @@ async def svc():
     settings = get_settings()
     pool = await create_pool()
     await pool.execute("TRUNCATE candidates, candidate_versions, jobs, matches, usage, source_files CASCADE")
+    await pool.execute("DELETE FROM skill_synonyms WHERE source = 'learned'")
     storage = LocalStorage(Path(tempfile.mkdtemp(prefix="recruiter-files-")))
     s = Services(settings=settings, pool=pool, storage=storage, normalizer=await load_normalizer(pool))
     s._llm = FakeLLM()

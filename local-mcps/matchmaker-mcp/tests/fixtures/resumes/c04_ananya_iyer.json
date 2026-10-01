@@ -3,6 +3,8 @@
   "email": "ananya.iyer@example.com",
   "phone": "+91 97000 12345",
   "location": "Mumbai",
+  "willing_to_relocate": null,
+  "preferred_locations": [],
   "current_title": "Frontend Engineer",
   "roles": [
     {

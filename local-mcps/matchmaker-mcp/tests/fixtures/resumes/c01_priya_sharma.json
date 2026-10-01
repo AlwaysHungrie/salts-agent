@@ -3,6 +3,8 @@
   "email": "priya.sharma@example.com",
   "phone": "+91 98765 43210",
   "location": "Pune",
+  "willing_to_relocate": null,
+  "preferred_locations": [],
   "current_title": "Senior Backend Engineer",
   "roles": [
     {

@@ -67,7 +67,8 @@ def test_load_original_reads_pdf_path(tmp_path):
 
 def _profile(**kw):
     base = dict(
-        name="X", email=None, phone=None, location=None, current_title="Backend Engineer",
+        name="X", email=None, phone=None, location=None, willing_to_relocate=None, preferred_locations=[],
+        current_title="Backend Engineer",
         roles=[Role(title="Backend Engineer", company="Acme", start="2020-01", end="present",
                     highlights=["Built AWS services in Python"])],
         skills=[], education=[], certifications=[], industries=[], notice_period_days=None,

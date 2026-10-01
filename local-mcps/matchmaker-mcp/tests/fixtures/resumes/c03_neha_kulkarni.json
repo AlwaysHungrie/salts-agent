@@ -3,6 +3,8 @@
   "email": "neha.k@example.com",
   "phone": "9822012345",
   "location": "Mumbai",
+  "willing_to_relocate": null,
+  "preferred_locations": [],
   "current_title": "Backend Developer",
   "roles": [
     {

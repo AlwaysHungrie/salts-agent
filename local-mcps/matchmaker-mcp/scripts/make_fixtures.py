@@ -26,7 +26,8 @@ def person(id, name, email, phone, location, title, roles, skills, *, education=
     return {
         "id": id, "pdf": pdf, "style": style,
         "profile": {
-            "name": name, "email": email, "phone": phone, "location": location, "current_title": title,
+            "name": name, "email": email, "phone": phone, "location": location, "willing_to_relocate": None,
+            "preferred_locations": [], "current_title": title,
             "roles": roles, "skills": skills, "education": list(education), "certifications": list(certs),
             "industries": list(industries), "notice_period_days": notice, "current_ctc": cur_ctc,
             "expected_ctc": exp_ctc, "languages": list(languages), "summary": summary,

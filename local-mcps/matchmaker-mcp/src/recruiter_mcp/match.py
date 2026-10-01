@@ -28,7 +28,7 @@ from .models import (
 )
 from .prompts import render
 from .services import Services
-from .skills import SkillNormalizer
+from .skills import SkillNormalizer, save_learned
 from .usage import current_records
 
 log = logging.getLogger(__name__)
@@ -85,6 +85,13 @@ def alternatives(requirement: str) -> list[str]:
     return [a.strip() for a in re.split(r"\s+or\s+", requirement) if a.strip()]
 
 
+def coverage_sql(must_haves: list[str], first_param: int) -> tuple[str, list]:
+    """SQL for the fraction (0-1) of must-have requirements in `skills`, plus its params."""
+    groups = [alternatives(m) for m in must_haves]
+    terms = [f"(skills && ${first_param + i}::text[])::int" for i in range(len(groups))]
+    return f"(({' + '.join(terms)})::float / {len(groups)})", groups
+
+
 def build_filter_sql(f: AppliedFilters, first_param: int = 1) -> tuple[str, list]:
     """WHERE clause over `candidates` plus its params. Unknown values (NULL) pass every filter."""
     clauses: list[str] = []
@@ -99,8 +106,12 @@ def build_filter_sql(f: AppliedFilters, first_param: int = 1) -> tuple[str, list
     if f.max_years is not None:
         clauses.append(f"(years_exp IS NULL OR years_exp <= {p(f.max_years)})")
     if not f.remote_ok and f.location_keys:
+        # In one of the cities, or willing to move: to a preferred location there, or anywhere if none is listed.
+        keys = p(f.location_keys)
         clauses.append(
-            f"(location_key IS NULL OR location_key = 'remote' OR location_key = ANY({p(f.location_keys)}::text[]))"
+            f"(location_key IS NULL OR location_key = 'remote' OR location_key = ANY({keys}::text[])"
+            f" OR preferred_location_keys && {keys}::text[]"
+            f" OR (willing_to_relocate AND preferred_location_keys = '{{}}'))"
         )
     if f.max_notice_days is not None:
         clauses.append(f"(notice_days IS NULL OR notice_days <= {p(f.max_notice_days)})")
@@ -185,23 +196,34 @@ def _note(funnel: Funnel, returned: int, omitted_low: int, limit: int, min_score
 async def parse_job(svc: Services, jd_text: str) -> JobRequirements:
     system, user = render("parse_job", jd_text=jd_text)
     req = await svc.llm.structured(system, user, JobRequirements, name="job_requirements")
-    return req.model_copy(update={
+    req = req.model_copy(update={
         "must_have_skills": svc.normalizer.normalize_requirements(req.must_have_skills),
         "nice_to_have_skills": svc.normalizer.normalize_all(req.nice_to_have_skills),
     })
+    await save_learned(svc.pool, svc.normalizer)
+    return req
 
 
 async def vector_candidates(
-    conn: asyncpg.Connection, f: AppliedFilters, job_vec: list[float], pool_size: int
+    conn: asyncpg.Connection, f: AppliedFilters, job_vec: list[float], pool_size: int, skill_boost: float = 0.0
 ) -> tuple[int, int, list[asyncpg.Record]]:
-    """Returns (total, after_filters, top rows by cosine similarity). Must run inside a transaction."""
+    """Returns (total, after_filters, top rows). Must run inside a transaction.
+    Rows are ordered by cosine similarity plus `skill_boost` x the fraction of must-haves in their skills, so a
+    candidate with every must-have but a vaguely worded profile still reaches the rerank (exact path only; the
+    HNSW path can only order by distance)."""
     where, params = build_filter_sql(f, first_param=1)
     total = await conn.fetchval("SELECT count(*) FROM candidates")
     after = await conn.fetchval(f"SELECT count(*) FROM candidates WHERE {where}", *params)
     if after == 0:
         return total, 0, []
+    vec_param = f"${len(params) + 1}"
+    order = f"embedding <=> {vec_param}"
+    extra: list = []
     if after <= EXACT_SCAN_MAX_ROWS:
         await conn.execute("SET LOCAL enable_indexscan = off")
+        if skill_boost and f.must_have_skills:
+            cov, extra = coverage_sql(f.must_have_skills, len(params) + 2)
+            order = f"({order}) - {float(skill_boost)} * {cov}"
     else:
         # HNSW applies WHERE after its search, and returns at most ef_search rows (default 40 < pool size).
         # Iterative scan keeps searching until LIMIT rows pass the filter. With it on, the planner tends to
@@ -210,16 +232,16 @@ async def vector_candidates(
         await conn.execute(f"SET LOCAL hnsw.ef_search = {max(100, pool_size * 2)}")
         await conn.execute("SET LOCAL enable_seqscan = off")
         await conn.execute("SET LOCAL enable_bitmapscan = off")
-    vec_param = f"${len(params) + 1}"
     rows = await conn.fetch(
         f"""SELECT id, name, location, years_exp, notice_days, profile,
                    1 - (embedding <=> {vec_param}) AS similarity
             FROM candidates WHERE {where}
-            ORDER BY embedding <=> {vec_param} LIMIT {int(pool_size)}""",
-        *params, job_vec,
+            ORDER BY {order} LIMIT {int(pool_size)}""",
+        *params, job_vec, *extra,
     )
-    # relaxed_order can return slightly out-of-order rows.
-    rows = sorted(rows, key=lambda r: r["similarity"], reverse=True)
+    if after > EXACT_SCAN_MAX_ROWS:
+        # relaxed_order can return slightly out-of-order rows.
+        rows = sorted(rows, key=lambda r: r["similarity"], reverse=True)
     return total, after, rows
 
 
@@ -337,7 +359,7 @@ async def match_job(
     # 2 + 3. Hard filters, then vector recall.
     pool_size = max(s.rerank_pool_size, limit)
     async with svc.pool.acquire() as conn, conn.transaction():
-        total, after, rows = await vector_candidates(conn, applied, job_vec, pool_size)
+        total, after, rows = await vector_candidates(conn, applied, job_vec, pool_size, s.pool_skill_boost)
 
     # 4. Rerank concurrently; one failed call drops one candidate.
     sreq = scoring_requirements(req, filters)
@@ -358,6 +380,7 @@ async def match_job(
     for i, (row, sc) in enumerate(order, start=1):
         bd: ScoreBreakdown = sc.breakdown()
         concerns = list(sc.concerns)
+        profile = json.loads(row["profile"])
         if row["years_exp"] is None and UNKNOWN_YEARS_CONCERN not in concerns:
             concerns.append(UNKNOWN_YEARS_CONCERN)
         ranked.append(MatchCandidate(
@@ -370,6 +393,8 @@ async def match_job(
             must_haves_missing=sc.must_haves_missing,
             concerns=concerns,
             location=row["location"],
+            willing_to_relocate=profile.get("willing_to_relocate"),
+            preferred_locations=profile.get("preferred_locations") or [],
             years_exp=float(row["years_exp"]) if row["years_exp"] is not None else None,
             notice_days=row["notice_days"],
             score_breakdown=bd,

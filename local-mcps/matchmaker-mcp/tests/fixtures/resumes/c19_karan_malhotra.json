@@ -3,6 +3,8 @@
   "email": "karan.m@example.com",
   "phone": "+91 98760 00001",
   "location": "Gurugram",
+  "willing_to_relocate": null,
+  "preferred_locations": [],
   "current_title": "Backend Engineer",
   "roles": [
     {

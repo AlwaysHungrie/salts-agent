@@ -15,7 +15,7 @@ uv sync
 uv run recruiter-mcp-migrate              # applies migrations/*.sql, re-seeds skill_synonyms (server also does this on start)
 uv run recruiter-mcp                      # stdio server
 MCP_TRANSPORT=http uv run recruiter-mcp   # HTTP on :8000/mcp, needs MCP_AUTH_TOKEN
-uv run pytest -q                          # 93 tests, ~20 s; needs Postgres up; uses recruiter_test DB
+uv run pytest -q                          # 107 tests, ~20 s; needs Postgres up; uses recruiter_test DB
 uv run python scripts/smoke.py stdio      # calls ping through a real MCP client
 uv run python scripts/eval.py             # recall@10 on fixtures, real LLM, recruiter_eval DB, ~$0.05
 uv run python scripts/bulk_ingest.py DIR --dry-run
@@ -37,7 +37,7 @@ docker compose exec -T postgres psql -U recruiter   # inspect DB
 | `models.py` | All Pydantic models: `CandidateProfile`, `JobRequirements`, `CandidateScore`, filters, tool results |
 | `llm.py` | OpenRouter structured-output client (JSON schema, 1 validation retry), vision transcriber |
 | `embeddings.py` | OpenRouter embeddings, dim check |
-| `skills.py` | Skill alias normalization (`seeds/skill_synonyms.csv` -> `skill_synonyms` table) |
+| `skills.py` | Skill alias normalization (`seeds/skill_synonyms.csv` -> `skill_synonyms` table; variants; unseen skills saved as `learned`), umbrella expansion (`seeds/skill_parents.csv`) |
 | `locations.py` | City aliases + metro expansion (India-focused: Mumbai incl. Thane, Delhi incl. Gurugram/Noida...) |
 | `experience.py` | `years_exp` from role dates, overlap-merged; computed in code, never by LLM |
 | `storage.py` | Local disk under `DATA_DIR/resumes/{candidate_id}/{Name}_Resume_{sha8}.pdf` (older rows keep `{sha256}.pdf` keys), atomic writes |
@@ -51,7 +51,8 @@ matches).
 
 ## DB tables
 
-`candidates` (current profile, embedding, skills[], location_key, file_key, content_sha256 unique),
+`candidates` (current profile, embedding, skills[] incl. implied umbrellas, location_key, willing_to_relocate,
+preferred_location_keys[], file_key, content_sha256 unique; derived columns recomputed by `migrate`),
 `candidate_versions` (previous profiles on re-ingest), `jobs` (parsed requirements, filters, funnel, stats),
 `matches` (every scored candidate per job, score, rank, result JSON, feedback_label), `source_files` (folder ingest
 outcome per absolute path, size, mtime; cascades on candidate delete), `skill_synonyms`, `usage`, `schema_migrations`.

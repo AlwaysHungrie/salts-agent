@@ -3,6 +3,8 @@
   "email": "aditya.verma@example.com",
   "phone": "+91 97654 32109",
   "location": "Pune",
+  "willing_to_relocate": null,
+  "preferred_locations": [],
   "current_title": "Site Reliability Engineer",
   "roles": [
     {

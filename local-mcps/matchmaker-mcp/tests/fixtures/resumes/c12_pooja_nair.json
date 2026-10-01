@@ -3,6 +3,8 @@
   "email": "pooja.nair@example.com",
   "phone": "+91 90040 50607",
   "location": "Navi Mumbai",
+  "willing_to_relocate": null,
+  "preferred_locations": [],
   "current_title": "Accounts Lead",
   "roles": [
     {
