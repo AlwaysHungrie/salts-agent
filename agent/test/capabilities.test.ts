@@ -7,12 +7,14 @@ import {
   channelLabels,
   enabled,
   runTool,
+  SECRET_MASK,
   toolDefinitions,
   toolsFor,
   type ToolContext,
   type ToolSpec,
 } from "../src/capabilities";
 import { DEFAULT_CONFIG, type Config } from "../src/registry";
+import { validateConfig } from "../src/validation/config";
 import { SHIPPED } from "./shipped";
 
 /**
@@ -310,5 +312,16 @@ describe("channelLabels", () => {
     const channels = CAPABILITIES.filter((c) => c.channel);
     expect(channels.map((c) => c.id).sort()).toEqual(["telegram", "whatsapp"]);
     expect(channels.every((c) => c.tools.length === 0)).toBe(true);
+  });
+});
+
+describe("secret credentials in a config patch", () => {
+  it("keeps a saved key when the mask comes back", () => {
+    expect(validateConfig({ brave_api_key: SECRET_MASK })).not.toHaveProperty("brave_api_key");
+  });
+
+  it("clears a saved key when an empty value is sent", () => {
+    // The Clear button sends "": that has to reach storage, not be mistaken for "keep".
+    expect(validateConfig({ brave_api_key: "" })).toEqual({ brave_api_key: "" });
   });
 });
