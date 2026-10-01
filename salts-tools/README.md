@@ -85,10 +85,16 @@ The agent gets an MCP server named `matchmaker`, with `Authorization: Bearer <to
 already set. The tools that call a model also need these headers, which you add once on
 that server in the agent's settings (they stay when the address changes):
 
-| Header | Value |
-| --- | --- |
-| `X-OpenRouter-Api-Key` | an OpenRouter key |
-| `X-Cost-Approved-Resume-Ingestion`, `X-Cost-Approved-Job-Match`, `X-Cost-Approved-Search`, `X-Cost-Approved-Folder-Ingestion` | the most, in USD, one call may spend (see the matchmaker README) |
+| Header | Suggested value | Covers |
+| --- | --- | --- |
+| `X-OpenRouter-Api-Key` | your OpenRouter key | pays for its model calls |
+| `X-Cost-Approved-Resume-Ingestion` | `0.01` | one resume, ~$0.002 |
+| `X-Cost-Approved-Job-Match` | `0.10` | one job match, ~$0.01–0.04 |
+| `X-Cost-Approved-Search` | `0.001` | one candidate search, ~free |
+| `X-Cost-Approved-Folder-Ingestion` | `5.00` | a whole inbox run, ~$0.004 a file |
+
+Caps are the most one call may spend, in US dollars; `0` blocks that tool. `start`
+prints this list once the matchmaker is connected.
 
 The matchmaker's own `.env` in `local-mcps/matchmaker-mcp` still applies (models,
 `DATA_DIR`, and so on). salts-tools overrides the transport, host, port, token and
