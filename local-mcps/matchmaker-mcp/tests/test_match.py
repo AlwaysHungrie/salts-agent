@@ -86,6 +86,11 @@ def test_filter_sql_all_clauses():
     assert params == [4, 10, ["pune"], 60, 180, ["Python"], ["AWS"], 1]
 
 
+def test_filter_sql_countries_let_unknown_through():
+    where, params = matching.build_filter_sql(applied(country_keys=["india"]))
+    assert where == "(country_keys = '{}' OR country_keys && $1::text[])" and params == [["india"]]
+
+
 def test_filter_sql_all_must_haves_uses_containment_and_remote_skips_location():
     where, params = matching.build_filter_sql(applied(
         location_keys=["pune"], remote_ok=True, must_have_skills=["Python", "AWS"], min_must_have_skills=5,

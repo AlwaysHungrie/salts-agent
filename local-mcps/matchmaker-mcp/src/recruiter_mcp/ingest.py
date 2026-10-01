@@ -13,7 +13,7 @@ import asyncpg
 from .billing import preflight
 from .errors import ToolFailure
 from .experience import years_of_experience
-from .locations import REGIONS, location_key, location_keys
+from .locations import REGIONS, location_countries, location_key, location_keys
 from .models import CandidateProfile, IngestResult
 from .prompts import render
 from .services import Services
@@ -150,6 +150,7 @@ class Derived:
     location_key: str | None
     willing_to_relocate: bool | None
     preferred_location_keys: list[str]
+    country_keys: list[str]
 
 
 def derive(profile: CandidateProfile, normalizer: SkillNormalizer) -> Derived:
@@ -165,6 +166,7 @@ def derive(profile: CandidateProfile, normalizer: SkillNormalizer) -> Derived:
         location_key=loc,
         willing_to_relocate=profile.willing_to_relocate,
         preferred_location_keys=preferred,
+        country_keys=location_countries(profile.location),
     )
 
 
@@ -310,6 +312,7 @@ async def ingest_resume(
             profile.notice_period_days, skills, profile.model_dump_json(), json.dumps(raw_extraction),
             profile.summary, text, vector, sha, file_key, original.mime if original else None,
             source, notes, derived.location_key, derived.willing_to_relocate, derived.preferred_location_keys,
+            derived.country_keys,
         )
         try:
             async with conn.transaction():
@@ -326,8 +329,8 @@ async def ingest_resume(
                            skills=$8, profile=$9, raw_extraction=$10, summary=$11, resume_text=$12,
                            embedding=$13, content_sha256=$14, file_key=$15, file_mime=$16,
                            source=COALESCE($17, source), notes=COALESCE($18, notes), location_key=$19,
-                           willing_to_relocate=$20, preferred_location_keys=$21,
-                           updated_at=now() WHERE id=$22 RETURNING *""",
+                           willing_to_relocate=$20, preferred_location_keys=$21, country_keys=$22,
+                           updated_at=now() WHERE id=$23 RETURNING *""",
                         *values, existing["id"],
                     )
                     status = "updated"
@@ -336,8 +339,8 @@ async def ingest_resume(
                         """INSERT INTO candidates (name, email, phone, phone_key, location, years_exp,
                            notice_days, skills, profile, raw_extraction, summary, resume_text, embedding,
                            content_sha256, file_key, file_mime, source, notes, location_key, willing_to_relocate,
-                           preferred_location_keys, id)
-                           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
+                           preferred_location_keys, country_keys, id)
+                           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
                            RETURNING *""",
                         *values, uuid.UUID(candidate_id),
                     )

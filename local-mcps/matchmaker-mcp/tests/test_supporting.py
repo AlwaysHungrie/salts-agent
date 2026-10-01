@@ -77,6 +77,57 @@ async def test_search_required_skills_and_no_query(svc):
         await search_candidates(svc, "x", None, 0)
 
 
+async def move_abroad(svc, moves: dict[str, str]):
+    """Give some fixtures (all based in India) a location elsewhere, recomputing derived columns as migrate does."""
+    from recruiter_mcp.migrate import refresh_derived
+
+    for name, location in moves.items():
+        await svc.pool.execute(
+            "UPDATE candidates SET profile = jsonb_set(profile, '{location}', to_jsonb($2::text)), location = $2"
+            " WHERE name = $1", name, location)
+    async with svc.pool.acquire() as conn:
+        await refresh_derived(conn)
+
+
+async def test_search_by_country_excludes_people_based_elsewhere(svc):
+    await ingest_all(svc)
+    await move_abroad(svc, {"Priya Sharma": "Berlin, Germany", "Rohan Das": "Remote (US)"})
+    abroad = {"Priya Sharma", "Rohan Das"}
+
+    for f in (SearchFilters(countries=["India"]), SearchFilters(locations=["India"])):
+        res = await search_candidates(svc, "engineers", f, 100)
+        names = {c.name for c in res.candidates}
+        assert res.total_matching == 18 and not names & abroad
+
+    res = await search_candidates(svc, "engineers", SearchFilters(countries=["Germany", "USA"]), 100)
+    # "Remote" names no country, so that candidate passes any country filter.
+    assert {c.name for c in res.candidates} == abroad | {"Sara Khan"}
+
+    # A country and a city together: in Pune (or remote), and in India.
+    res = await search_candidates(svc, None, SearchFilters(locations=["India", "Pune"]), 100)
+    names = {c.name for c in res.candidates}
+    assert "Tanvi Patil" in names and not names & abroad and "Karan Malhotra" not in names
+
+
+async def test_search_pages_through_every_match_once(svc):
+    await ingest_all(svc)
+    for query in ("Python backend developers", None):
+        seen, offset, pages = [], 0, 0
+        while offset is not None:
+            res = await search_candidates(svc, query, None, 6, offset)
+            assert res.offset == offset and res.total_matching == 20
+            seen += [c.candidate_id for c in res.candidates]
+            offset, pages = res.next_offset, pages + 1
+        assert pages == 4 and len(seen) == len(set(seen)) == 20
+        whole = await search_candidates(svc, query, None, 100)
+        assert [c.candidate_id for c in whole.candidates] == seen and whole.next_offset is None
+
+    past_end = await search_candidates(svc, None, None, 10, 50)
+    assert past_end.candidates == [] and past_end.next_offset is None
+    with pytest.raises(ToolFailure):
+        await search_candidates(svc, None, None, 10, -1)
+
+
 # ------------------------------------------------------------------ feedback
 
 

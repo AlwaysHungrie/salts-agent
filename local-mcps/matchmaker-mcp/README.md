@@ -247,9 +247,12 @@ current candidate details and any feedback labels. `list_jobs {"limit": 20}` lis
 
 No JD and no LLM call, so it is fast and nearly free. `query` is embedded and ranked by similarity; skills named in
 it (recognised via `skill_synonyms`, e.g. "k8s") rank first. `filters`: `locations` (metro-expanded),
-`include_remote` (default true), `min_years`, `max_years`, `max_notice_days`, `max_resume_age_days`, `skills`
-(candidate must have all). Without a query, returns the most recently updated matches. Each hit has headline, top
-skills, `matched_skills` and `similarity`; `total_matching` counts everyone passing the filters.
+`include_remote` (default true), `countries` (where the candidate is based, read from their location: "Remote
+(India)", "Pune" and "Maharashtra" all mean India; a location naming no country passes; a country given in
+`locations` counts as one), `min_years`, `max_years`, `max_notice_days`, `max_resume_age_days`, `skills` (candidate
+must have all). Without a query, returns the most recently updated matches. Each hit has headline, top skills,
+`matched_skills` and `similarity`; `total_matching` counts everyone passing the filters. Results come one page at a
+time: `limit` (1-100) per page, and `offset` set to the previous page's `next_offset` (null on the last page).
 
 ### `record_feedback`
 

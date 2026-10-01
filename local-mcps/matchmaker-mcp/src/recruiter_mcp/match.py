@@ -115,6 +115,8 @@ def build_filter_sql(f: AppliedFilters, first_param: int = 1) -> tuple[str, list
             f" OR preferred_location_keys && {keys}::text[]"
             f" OR (willing_to_relocate AND preferred_location_keys = '{{}}'))"
         )
+    if f.country_keys:
+        clauses.append(f"(country_keys = '{{}}' OR country_keys && {p(f.country_keys)}::text[])")
     if f.max_notice_days is not None:
         clauses.append(f"(notice_days IS NULL OR notice_days <= {p(f.max_notice_days)})")
     if f.max_resume_age_days is not None:

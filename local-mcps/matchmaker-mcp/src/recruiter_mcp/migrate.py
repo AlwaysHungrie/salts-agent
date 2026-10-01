@@ -58,18 +58,20 @@ async def refresh_derived(conn: asyncpg.Connection) -> int:
     normalizer = SkillNormalizer({r["alias"]: r["canonical"] for r in rows})
     updates = []
     for r in await conn.fetch(
-        "SELECT id, profile, skills, location_key, willing_to_relocate, preferred_location_keys FROM candidates"
+        "SELECT id, profile, skills, location_key, willing_to_relocate, preferred_location_keys, country_keys"
+        " FROM candidates"
     ):
         d = derive(CandidateProfile.model_validate_json(r["profile"]), normalizer)
-        new = (d.skills, d.location_key, d.willing_to_relocate, d.preferred_location_keys)
-        old = (list(r["skills"]), r["location_key"], r["willing_to_relocate"], list(r["preferred_location_keys"]))
+        new = (d.skills, d.location_key, d.willing_to_relocate, d.preferred_location_keys, d.country_keys)
+        old = (list(r["skills"]), r["location_key"], r["willing_to_relocate"], list(r["preferred_location_keys"]),
+               list(r["country_keys"]))
         if new != old:
             updates.append((r["id"], *new))
     async with conn.transaction():
         if updates:
             await conn.executemany(
                 "UPDATE candidates SET skills = $2, location_key = $3, willing_to_relocate = $4,"
-                " preferred_location_keys = $5 WHERE id = $1",
+                " preferred_location_keys = $5, country_keys = $6 WHERE id = $1",
                 updates,
             )
         await save_learned(conn, normalizer)

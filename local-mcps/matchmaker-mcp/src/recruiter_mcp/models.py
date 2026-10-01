@@ -240,6 +240,8 @@ class AppliedFilters(BaseModel):
     min_must_have_skills: int | None
     # Candidates who only want remote work pass a city filter only when asked (search_candidates include_remote).
     include_remote_candidates: bool = False
+    # Countries the candidate is based in (search_candidates only); candidates with none known pass.
+    country_keys: list[str] = []
 
 
 class Funnel(BaseModel):
@@ -307,6 +309,11 @@ class SearchFilters(BaseModel):
         default=None, description="Cities; metro areas are expanded. Candidates willing to relocate there match too"
     )
     include_remote: bool = Field(default=True, description="With locations set, also include 'Remote' candidates")
+    countries: list[str] | None = Field(
+        default=None,
+        description="Countries the candidate is based in, e.g. ['India']. A country given in locations counts as one. "
+        "Candidates whose location names no country pass",
+    )
     min_years: float | None = None
     max_years: float | None = None
     max_notice_days: int | None = None
@@ -330,6 +337,8 @@ class SearchHit(BaseModel):
 class SearchResult(BaseModel):
     query_skills: list[str] = Field(description="Skills recognised in the query text; used to rank")
     total_matching: int = Field(description="Candidates passing the filters")
+    offset: int = Field(description="Position of the first candidate returned in the full ranked list")
+    next_offset: int | None = Field(description="Pass as offset for the next page; null when this is the last page")
     candidates: list[SearchHit]
 
 
