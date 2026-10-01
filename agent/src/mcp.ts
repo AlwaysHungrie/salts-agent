@@ -257,15 +257,25 @@ export class McpClient {
   async upload(bytes: ArrayBuffer, mime: string): Promise<string> {
     const headers: Record<string, string> = { ...this.extraHeaders, "content-type": mime };
     if (this.bearer) headers.authorization = `Bearer ${this.bearer}`;
-    const res = await fetch(uploadsUrl(this.url), { method: "POST", headers, body: bytes });
-    if (res.status === 401) throw new McpUnauthorized();
-    if (!res.ok) throw new Error(`${res.status} ${(await res.text()).slice(0, 300)}`);
+    const res = await fetch(uploadsUrl(this.url), {
+      method: "POST",
+      headers,
+      body: bytes,
+      signal: AbortSignal.timeout(UPLOAD_TIMEOUT_MS),
+    });
+    // A plain error, not McpUnauthorized: a refusal here is no reason to refresh, or
+    // drop, the token the server's tools work with.
+    if (!res.ok) throw new Error(`upload ${res.status} ${(await res.text()).slice(0, 300)}`);
     const { upload_id } = (await res.json().catch(() => ({}))) as { upload_id?: unknown };
-    if (typeof upload_id !== "string" || !upload_id)
-      throw new Error("upload returned no upload_id");
+    // The id is put in front of the model, so a server gets no say in what else is.
+    if (typeof upload_id !== "string" || !UPLOAD_ID.test(upload_id))
+      throw new Error("upload returned no usable upload_id");
     return upload_id;
   }
 }
+
+const UPLOAD_TIMEOUT_MS = 30_000;
+const UPLOAD_ID = /^[A-Za-z0-9._:-]{1,128}$/;
 
 /** Where a server takes uploads: its URL without the `/mcp`, plus `/uploads`. */
 export function uploadsUrl(url: string): string {
