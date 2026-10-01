@@ -43,6 +43,7 @@ import {
   existsSync,
   mkdirSync,
   openSync,
+  readdirSync,
   readFileSync,
   renameSync,
   rmSync,
@@ -1258,15 +1259,39 @@ async function stop() {
   if (existsSync(AUTOSTART.file)) console.log(`${DIM}autostart is still on; it starts again at next login${OFF}`);
 }
 
-/** Back to a first run: the next `start` asks for the agent and makes a new token. */
+/**
+ * Delete this target's files in `dir`, and `dir` itself once empty. Production's folder
+ * holds staging's in `staging/`, which is left alone.
+ */
+function clearHome(dir) {
+  if (!existsSync(dir)) return false;
+  for (const entry of readdirSync(dir)) {
+    if (!SUFFIX && entry === "staging") continue;
+    rmSync(path.join(dir, entry), { recursive: true, force: true });
+  }
+  if (readdirSync(dir).length === 0) rmSync(dir, { recursive: true, force: true });
+  return true;
+}
+
+/**
+ * Back to a first run, as on a machine that never ran salts-tools (or salts-web): the
+ * token, the state, the logs, the login item and salts-web's leftovers all go. Docker
+ * volumes (the matchmaker's database) are kept.
+ */
 function reset() {
-  if (supervisorPid()) {
+  if (supervisorPid() || pidIn(path.join(homeFor("salts-web"), "supervisor.pid"))) {
     throw new Error(`salts-tools is running — \`salts-tools ${withTarget("stop")}\` first`);
   }
-  rmSync(STATE_FILE, { force: true });
-  console.log(`${GREEN}✓${OFF} deleted ${STATE_FILE}`);
   const where = tokenStoreName();
   console.log(deleteToken() ? `${GREEN}✓${OFF} deleted the token from ${where}` : `${DIM}no saved token${OFF}`);
+  for (const item of [AUTOSTART, autostartFor("salts-web")]) {
+    if (!existsSync(item.file)) continue;
+    autostartOff(item);
+    console.log(`${GREEN}✓${OFF} removed the login item ${item.file}`);
+  }
+  for (const dir of [HOME, homeFor("salts-web")]) {
+    if (clearHome(dir)) console.log(`${GREEN}✓${OFF} deleted ${dir}${SUFFIX ? "" : ` ${DIM}(staging kept)${OFF}`}`);
+  }
 }
 
 async function restart() {
@@ -1289,7 +1314,8 @@ async function restart() {
 const usage = `usage: salts-tools <start [${NAMES.join("|")}…]|stop [${NAMES.join("|")}]|restart|reset|setup|autostart on|off>[:staging]`;
 
 try {
-  if (cmd && cmd !== "_supervise") await migrateFromSaltsWeb();
+  // Not before `reset`: it deletes salts-web's leftovers rather than moving them.
+  if (cmd && cmd !== "_supervise" && cmd !== "reset") await migrateFromSaltsWeb();
   switch (cmd) {
     case "start":
       await start({ interactive: process.stdin.isTTY });
