@@ -15,7 +15,13 @@ import { base64ToBytes } from "../util/bytes";
 import { attachmentsOf, insertAttachment } from "./attachments";
 import { sendVoiceNote } from "./channels";
 import { compactedMessages } from "./compaction";
-import { ensureParsed, fileParts, mcpUploadNotes, parsedDocuments } from "./documents";
+import {
+  ensureParsed,
+  fileParts,
+  mcpUploadNotes,
+  parsedDocuments,
+  uploadAttachment,
+} from "./documents";
 import { uploadPath } from "./files";
 import { inWords, textOf } from "./format";
 import { transcribeAttachment } from "./transcribe";
@@ -101,7 +107,7 @@ export async function modelMessages(host: SessionHost, config: Config): Promise<
     // first turn that needs its words.
     for (const a of attachments) await ensureParsed(host, a);
     const parsed = await parsedDocuments(host, attachments);
-    const uploads = await mcpUploadNotes(host, config, attachments);
+    const uploads = mcpUploadNotes(host, config, attachments);
     // A parsed PDF travels as its text; the file is sent only when there is no parse.
     const parts = await fileParts(host, attachments, new Set(parsed.map((p) => p.id)));
     const content = [
@@ -174,6 +180,7 @@ export function toolContext(host: SessionHost, config: Config): ToolContext {
       return `/agents/session-agent/${encodeURIComponent(host.name())}/files/${id}`;
     },
     transcribeAttachment: (id) => transcribeAttachment(host, id),
+    uploadAttachment: (server, id) => uploadAttachment(host, server, id),
     sendVoiceNote: (bytes) => sendVoiceNote(host, bytes),
     schedule: async (when, prompt) => {
       const task = await host.scheduleTask(when, prompt);

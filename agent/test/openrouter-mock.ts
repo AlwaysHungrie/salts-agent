@@ -589,6 +589,9 @@ export const MCP_UPLOAD_TOOL = {
 /** What was posted to `/files/uploads`, oldest first. Read at `https://mcp.test/__uploads`. */
 const mcpUploads: { upload_id: string; mime: string; bytes: number; authorization: string }[] = [];
 
+/** The arguments of every `tools/call`, oldest first. Read at `https://mcp.test/__calls`. */
+const mcpCalls: { path: string; name: string; arguments: Record<string, unknown> }[] = [];
+
 /**
  * An MCP server, enough of one to be connected to and asked what it can do.
  *
@@ -598,6 +601,9 @@ const mcpUploads: { upload_id: string; mime: string; bytes: number; authorizatio
  */
 async function mcpMock(request: Request, url: URL): Promise<Response> {
   if (url.pathname === "/__uploads") return json(mcpUploads);
+  if (url.pathname === "/__calls") return json(mcpCalls);
+  // A server that advertises an upload tool but turns uploads away.
+  if (url.pathname === "/refuses/uploads") return json({ error: "unauthorized" }, 401);
   if (url.pathname === "/files/uploads") {
     const upload_id = `up-${mcpUploads.length + 1}`;
     mcpUploads.push({
@@ -608,7 +614,11 @@ async function mcpMock(request: Request, url: URL): Promise<Response> {
     });
     return json({ upload_id });
   }
-  const body = (await request.json().catch(() => ({}))) as { id?: number; method?: string };
+  const body = (await request.json().catch(() => ({}))) as {
+    id?: number;
+    method?: string;
+    params?: { name?: string; arguments?: Record<string, unknown> };
+  };
   const reply = (result: unknown) => json({ jsonrpc: "2.0", id: body.id ?? 1, result }, 200);
 
   if (body.method === "initialize") {
@@ -626,10 +636,18 @@ async function mcpMock(request: Request, url: URL): Promise<Response> {
     );
   }
   if (body.method === "tools/list") {
-    if (url.pathname === "/files/mcp") return reply({ tools: [...MCP_TOOLS, MCP_UPLOAD_TOOL] });
+    if (url.pathname === "/files/mcp" || url.pathname === "/refuses/mcp")
+      return reply({ tools: [...MCP_TOOLS, MCP_UPLOAD_TOOL] });
     return reply({ tools: url.pathname === "/empty" ? [] : MCP_TOOLS });
   }
-  if (body.method === "tools/call") return reply({ content: [{ type: "text", text: "done" }] });
+  if (body.method === "tools/call") {
+    mcpCalls.push({
+      path: url.pathname,
+      name: body.params?.name ?? "",
+      arguments: body.params?.arguments ?? {},
+    });
+    return reply({ content: [{ type: "text", text: "done" }] });
+  }
   // A notification, which carries no id and expects no envelope.
   return json({ jsonrpc: "2.0", result: {} });
 }
@@ -748,6 +766,13 @@ export async function openrouterMock(request: Request): Promise<Response> {
   if (message.startsWith("!!draw")) {
     if (carriesToolResult(body)) return streamedText("Drew it.");
     return streamedToolCall("generate_image", { prompt: "a mock drawing" });
+  }
+
+  // `!!ingest <tool>`: hand the attachment the turn names to that tool, as a model would.
+  if (message.startsWith("!!ingest")) {
+    if (carriesToolResult(body)) return streamedText("Stored it.");
+    const ref = JSON.stringify(body.messages).match(/attachment:[\w-]+/)?.[0] ?? "";
+    return streamedToolCall(message.split(/\s+/)[1], { text: "a resume", upload_id: ref });
   }
 
   if (message.startsWith("!!toolcall")) {

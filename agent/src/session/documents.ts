@@ -1,9 +1,9 @@
-import { acceptsUploads, enabled, withMcpAuth } from "../capabilities";
+import { acceptsUploads, ATTACHMENT_REF, enabled, mcpClientFor } from "../capabilities";
 import type { McpServerRow } from "../mcp";
 import { annotationText, type FileAnnotation } from "../openrouter";
 import type { Config } from "../registry";
 import { toArrayBuffer } from "../util/bytes";
-import { readBase64 } from "./attachments";
+import { getAttachment, readBase64 } from "./attachments";
 import { PARSE_CACHE_DIR } from "./files";
 import type { Attachment, SessionHost } from "./types";
 
@@ -14,31 +14,31 @@ import type { Attachment, SessionHost } from "./types";
 export const PDF_PARSE_ENGINE = "mistral-ocr";
 
 /**
- * Upload each PDF to every connected server that takes uploads, and name its id for the
- * model (which cannot copy bytes into a tool call). Once per server; retried on failure.
+ * Tell the model how to hand each PDF to a server that takes uploads (it cannot copy bytes
+ * into a tool call). Nothing is sent here: the file goes only when such a tool is called.
  */
-export async function mcpUploadNotes(
+export function mcpUploadNotes(
   host: SessionHost,
   config: Config,
   attachments: Attachment[]
-): Promise<string[]> {
-  const servers = enabled(config, "mcp") ? host.mcpServers().filter(acceptsUploads) : [];
-  const notes: string[] = [];
-  for (const a of attachments) {
-    if (a.kind !== "pdf") continue;
-    for (const server of servers) {
-      const id = await ensureMcpUpload(host, a, server);
-      if (id) notes.push(`[Attachment ${a.name} uploaded to ${server.name}: upload_id=${id}]`);
-    }
-  }
-  return notes;
+): string[] {
+  if (!enabled(config, "mcp") || !host.mcpServers().some(acceptsUploads)) return [];
+  return attachments
+    .filter((a) => a.kind === "pdf")
+    .map(
+      (a) =>
+        `[Attachment ${a.name.replace(/[\]\r\n]/g, " ")}: to give this file to a tool that takes upload_id, pass upload_id="${ATTACHMENT_REF}${a.id}"]`
+    );
 }
 
-export async function ensureMcpUpload(
+/** Upload a PDF to a server, once per server and URL, and return the server's id for it. */
+export async function uploadAttachment(
   host: SessionHost,
-  attachment: Attachment,
-  server: McpServerRow
+  server: McpServerRow,
+  id: string
 ): Promise<string> {
+  const attachment = getAttachment(host, id);
+  if (attachment?.kind !== "pdf") throw new Error(`no PDF attachment ${id} in this chat`);
   const cached = host.exec<{ upload_id: string }>(
     `SELECT upload_id FROM mcp_uploads WHERE attachment_id = ? AND server_id = ? AND url = ?`,
     attachment.id,
@@ -47,26 +47,18 @@ export async function ensureMcpUpload(
   )[0];
   if (cached) return cached.upload_id;
   const bytes = await host.workspace.readFileBytes(attachment.path);
-  if (!bytes) return "";
-  try {
-    const uploadId = await withMcpAuth(server, host.registry(), (client) =>
-      client.upload(toArrayBuffer(bytes), attachment.mime)
-    );
-    host.exec(
-      `INSERT OR REPLACE INTO mcp_uploads (attachment_id, server_id, url, upload_id, ts) VALUES (?, ?, ?, ?, ?)`,
-      attachment.id,
-      server.id,
-      server.url,
-      uploadId,
-      Date.now()
-    );
-    return uploadId;
-  } catch (err) {
-    console.error(
-      `mcp upload of ${attachment.id} to ${server.name} failed: ${err instanceof Error ? err.message : err}`
-    );
-    return "";
-  }
+  if (!bytes) throw new Error(`attachment ${attachment.name} is no longer stored`);
+  const client = await mcpClientFor(server, host.registry());
+  const uploadId = await client.upload(toArrayBuffer(bytes), attachment.mime);
+  host.exec(
+    `INSERT OR REPLACE INTO mcp_uploads (attachment_id, server_id, url, upload_id, ts) VALUES (?, ?, ?, ?, ?)`,
+    attachment.id,
+    server.id,
+    server.url,
+    uploadId,
+    Date.now()
+  );
+  return uploadId;
 }
 
 /** The text of every parsed attachment. A row whose file is missing is forgotten. */

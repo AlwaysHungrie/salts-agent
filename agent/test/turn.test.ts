@@ -522,7 +522,10 @@ describe("a PDF sent to an MCP server that takes uploads", () => {
     return JSON.stringify(all.filter((b) => b.stream).at(-1)?.messages ?? []);
   }
 
-  it("uploads the bytes and tells the model the upload id", async () => {
+  type Call = { path: string; name: string; arguments: Record<string, unknown> };
+  const calls = async () => (await (await fetch("https://mcp.test/__calls")).json()) as Call[];
+
+  it("sends nothing on a turn, and tells the model how to name the file", async () => {
     const { sessionId, email } = await withServer("https://mcp.test/files/mcp", [
       ...MCP_TOOLS,
       MCP_UPLOAD_TOOL,
@@ -530,7 +533,20 @@ describe("a PDF sent to an MCP server that takes uploads", () => {
     const before = (await uploads()).length;
     await attachPdf(sessionId, email);
     const token = crypto.randomUUID().slice(0, 8);
-    await say(sessionId, email, `store this ${token}`);
+    await say(sessionId, email, `read this ${token}`);
+
+    expect((await uploads()).length).toBe(before);
+    expect(await turnFor(token)).toMatch(
+      /\[Attachment resume\.pdf: to give this file to a tool that takes upload_id, pass upload_id=\\"attachment:[\w-]+\\"\]/
+    );
+  });
+
+  it("uploads the bytes when a tool is handed the file, and passes the server's id", async () => {
+    const { sessionId, email } = await withServer("https://mcp.test/files/mcp", [MCP_UPLOAD_TOOL]);
+    const before = (await uploads()).length;
+    const callsBefore = (await calls()).length;
+    await attachPdf(sessionId, email);
+    await (await say(sessionId, email, "!!ingest mcp_recruiter_ingest_resume")).text();
 
     const sent = (await uploads()).slice(before);
     expect(sent).toHaveLength(1);
@@ -539,33 +555,31 @@ describe("a PDF sent to an MCP server that takes uploads", () => {
       bytes: 17,
       authorization: "Bearer mcp-token",
     });
-    expect(await turnFor(token)).toContain(
-      `[Attachment resume.pdf uploaded to Recruiter: upload_id=${sent[0].upload_id}]`
-    );
+    const made = (await calls()).slice(callsBefore);
+    expect(made).toHaveLength(1);
+    expect(made[0].arguments.upload_id).toBe(sent[0].upload_id);
   });
 
-  it("uploads a file once and names the same id on later turns", async () => {
-    const { sessionId, email } = await withServer("https://mcp.test/files/mcp", [MCP_UPLOAD_TOOL]);
-    const before = (await uploads()).length;
+  it("fails the tool call, without calling the tool, when the server refuses the upload", async () => {
+    const { sessionId, email } = await withServer("https://mcp.test/refuses/mcp", [
+      MCP_UPLOAD_TOOL,
+    ]);
+    const callsBefore = (await calls()).length;
     await attachPdf(sessionId, email);
-    await say(sessionId, email, "store this");
     const token = crypto.randomUUID().slice(0, 8);
-    await say(sessionId, email, `and again ${token}`);
+    await (await say(sessionId, email, `!!ingest mcp_recruiter_ingest_resume ${token}`)).text();
 
-    const sent = (await uploads()).slice(before);
-    expect(sent).toHaveLength(1);
-    expect(await turnFor(token)).toContain(`upload_id=${sent[0].upload_id}`);
+    expect((await calls()).slice(callsBefore)).toHaveLength(0);
+    expect(await turnFor(token)).toContain("upload 401");
   });
 
-  it("uploads nothing to a server whose tools take no upload id", async () => {
+  it("tells the model nothing about uploads when no server takes them", async () => {
     const { sessionId, email } = await withServer("https://mcp.test/", MCP_TOOLS);
-    const before = (await uploads()).length;
     await attachPdf(sessionId, email);
     const token = crypto.randomUUID().slice(0, 8);
-    await say(sessionId, email, `store this ${token}`);
+    await say(sessionId, email, `read this ${token}`);
 
-    expect((await uploads()).length).toBe(before);
-    expect(await turnFor(token)).not.toContain("upload_id=");
+    expect(await turnFor(token)).not.toContain("upload_id");
   });
 });
 

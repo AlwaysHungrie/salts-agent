@@ -102,8 +102,8 @@ Day-to-day use and client setup: [docs/usage-guide.md](docs/usage-guide.md). Mat
 
 The original PDF is optional, max 10 MB, passed one of two ways:
 
-- `upload_id` (chat attachments): the agent *app* (not its model) uploads the attachment with
-  `POST /uploads` and puts the returned `upload_id` in the conversation; the model passes it here.
+- `upload_id` (chat attachments): the model passes the app's `attachment:<id>` reference; when it calls
+  this tool, the agent *app* uploads the attachment with `POST /uploads` and swaps in the returned `upload_id`.
 - `file_path`: absolute path to a `.pdf` on the machine running the server.
 
 There is deliberately no base64 field. A model can read an attached PDF but cannot reproduce its bytes; offered a
