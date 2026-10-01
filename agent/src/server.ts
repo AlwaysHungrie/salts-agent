@@ -1,4 +1,5 @@
 import { routeAgentRequest } from "agents";
+import { api, asJsonRequest, isApiPath } from "./api";
 import type { Env } from "./env";
 import { agentIdOf } from "./registry";
 import { fileBusinessRequest, handleAdmin } from "./routes/admin";
@@ -7,7 +8,6 @@ import { handleFleets } from "./routes/fleets";
 import { ROUTE_INDEX } from "./routes/index-page";
 import { handleOauthCallback } from "./routes/mcp-oauth";
 import { handleSearxngMcp, handleSearxngUrl } from "./routes/searxng";
-import { handleSession } from "./routes/sessions";
 import { handleWebhook } from "./routes/telegram";
 import { handleWhatsappWebhook } from "./routes/whatsapp";
 import { deploymentSettings, SettingsIncompleteError } from "./settings";
@@ -164,19 +164,18 @@ export default {
     const refused = await gate(request, env, segments);
     if (refused) return refused;
 
+    touchOnMessage(env, ctx, segments);
+    if (isApiPath(segments)) return await api.fetch(await asJsonRequest(request), env, ctx);
+
     if (segments[0] === "api") {
       const handled =
         segments[1] === "fleets"
           ? await handleFleets(request, env, url, segments)
           : segments[1] === "agents"
             ? await handleAgents(request, env, url, segments)
-            : segments[1] === "sessions" && segments[2]
-              ? await handleSession(request, env, url, segments)
-              : undefined;
+            : undefined;
       if (handled) return handled;
     }
-
-    touchOnMessage(env, ctx, segments);
 
     const channel = await channelRoute(request, env, ctx, url, segments);
     if (channel) return channel;
