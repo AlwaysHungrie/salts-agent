@@ -1077,10 +1077,24 @@ function report(state, names) {
     console.log(`${GREEN}✓${OFF} ${SERVICES[name].label}: agent ${state.agentId} reaches it at ${SERVICES[name].reached(state.url)}`);
   }
   if (names.includes("matchmaker")) {
-    console.log(
-      `${DIM}  The agent's "matchmaker" MCP server carries the token. Its paid tools also need\n` +
-        `  X-OpenRouter-Api-Key and X-Cost-Approved-* headers: add them on that server in the agent's settings.${OFF}`
-    );
+    // Caps (USD per call) are the matchmaker's own suggestions, from its .env.example.
+    const headers = [
+      ["X-OpenRouter-Api-Key", "<your OpenRouter key>", "pays for its model calls"],
+      ["X-Cost-Approved-Resume-Ingestion", "0.01", "one resume, ~$0.002"],
+      ["X-Cost-Approved-Job-Match", "0.10", "one job match, ~$0.01–0.04"],
+      ["X-Cost-Approved-Search", "0.001", "one candidate search, ~free"],
+      ["X-Cost-Approved-Folder-Ingestion", "5.00", "a whole inbox run, ~$0.004 a file"],
+    ];
+    const width = Math.max(...headers.map(([h]) => h.length));
+    console.log(`
+The agent's ${BOLD}matchmaker${OFF} MCP server already has the ${BOLD}Authorization${OFF} header.
+Its paid tools also need these headers. Add them on that server in the agent's
+settings → ${BOLD}MCP servers${OFF} (they are kept when the address changes):
+`);
+    for (const [header, value, note] of headers) {
+      console.log(`  ${header.padEnd(width)}  ${BOLD}${value}${OFF}  ${DIM}${note}${OFF}`);
+    }
+    console.log(`\n${DIM}Caps are the most one call may spend, in US dollars; 0 blocks that tool.${OFF}`);
   }
 }
 
