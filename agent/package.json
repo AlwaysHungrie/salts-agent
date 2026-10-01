@@ -23,8 +23,10 @@
     "@cloudflare/shell": "^0.4.3",
     "@cloudflare/think": "^0.17.0",
     "@evan/opus": "^1.0.3",
+    "@hono/zod-openapi": "^1.6.3",
     "agents": "^0.22.0",
     "ai": "^7.0.93",
+    "hono": "^4.13.12",
     "jose": "^6.2.12",
     "zod": "^4.5.4"
   },
