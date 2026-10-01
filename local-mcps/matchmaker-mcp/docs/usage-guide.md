@@ -387,6 +387,7 @@ docker compose exec -T postgres psql -U recruiter -c \
 |---|---|---|
 | `LLM_MODEL` | `openai/gpt-5-mini` | Extraction, JD parsing and scoring quality vs cost |
 | `RERANK_POOL_SIZE` | 50 | Candidates scored per match. Lower = cheaper and faster, may miss people |
+| `POOL_SKILL_BOOST` | 0.1 | Weight of must-have skill coverage when picking the pool to score; 0 = similarity only |
 | `RERANK_CONCURRENCY` | 10 | Parallel scoring calls. Higher = faster, may hit rate limits |
 | `MIN_MATCH_SCORE` | 35 | Cutoff below which candidates are hidden |
 | `RERANK_BORDERLINE_MARGIN` | 8 | Points from a cutoff that trigger a second scoring run; 0 disables |
@@ -397,7 +398,10 @@ docker compose exec -T postgres psql -U recruiter -c \
 | `COST_APPROVED_*` | unset | Stdio only: spend caps in USD. Over HTTP, headers are required instead |
 
 Skill aliases (e.g. `k8s` -> `Kubernetes`): add rows to `seeds/skill_synonyms.csv`, then
-`uv run recruiter-mcp-migrate`. City aliases and metro areas live in `src/recruiter_mcp/locations.py`.
+`uv run recruiter-mcp-migrate`. Skills not in the seed are added automatically as `learned` rows in `skill_synonyms`
+(review them with `SELECT * FROM skill_synonyms WHERE source = 'learned'`; promote one to the seed to rename it).
+Umbrella skills (`AWS Lambda` implies `AWS`) live in `seeds/skill_parents.csv`. Migrate recomputes every
+candidate's skills and location columns, so seed changes reach existing candidates. City aliases and metro areas live in `src/recruiter_mcp/locations.py`.
 
 ## Troubleshooting
 

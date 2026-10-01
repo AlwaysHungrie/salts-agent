@@ -3,6 +3,8 @@
   "email": "amit.singh@example.com",
   "phone": "+91 97777 88899",
   "location": "Delhi",
+  "willing_to_relocate": null,
+  "preferred_locations": [],
   "current_title": "Enterprise Sales Manager",
   "roles": [
     {

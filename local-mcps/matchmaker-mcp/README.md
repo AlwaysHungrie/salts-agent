@@ -78,8 +78,11 @@ for a file on the server's machine, its absolute `file_path`. For many files, se
 
 1. Hashes the original file (or the normalized text if no file) and returns `duplicate_file` if it has seen it.
 2. Extracts a `CandidateProfile` with its own prompt (`prompts/extract_resume.md`) and model, validated by Pydantic.
-3. Normalizes skills via `skill_synonyms` (seeded from `seeds/skill_synonyms.csv`), computes `years_exp` from role
-   dates in code, and embeds title + summary + skills + recent roles.
+3. Normalizes skills via `skill_synonyms` (seeded from `seeds/skill_synonyms.csv`; spacing/dot variants and version
+   suffixes match too, so "NodeJS" and "Python 3.11" resolve). A skill seen for the first time is stored as a
+   `learned` alias, so later spellings get the same name. Umbrella skills implied by specific ones
+   (`seeds/skill_parents.csv`: AWS Lambda -> AWS, Django -> Python) are added to the stored skill list. Computes
+   `years_exp` from role dates in code, and embeds title + summary + skills + recent roles.
 4. Matches the person by email, then by the last 10 digits of their phone. A match updates the candidate and keeps
    the previous version in `candidate_versions`.
 5. Copies the PDF to `DATA_DIR/resumes/{candidate_id}/{Name}_Resume_{first 8 of sha256}.pdf` (e.g.
@@ -207,10 +210,13 @@ The funnel:
    ("Python"); alternatives with no umbrella term stay one requirement ("Tally or SAP"), met by either.
 2. Filters are merged: anything in `filters` wins field by field; the rest comes from the JD. Years parsed from the JD
    get slack (`YEARS_SLACK_BELOW`/`ABOVE`, default -1/+2, so "5-8 yrs" admits 4-10); explicit years are exact.
-   Locations expand to metro areas (Mumbai includes Thane and Navi Mumbai). `remote_ok` skips the location filter.
+   Locations expand to metro areas (Mumbai includes Thane and Navi Mumbai). `remote_ok` (fully remote only; hybrid
+   is not remote) skips the location filter. Candidates elsewhere pass if their resume lists a job city as a
+   preferred location, or says they are willing to relocate and lists no preference.
    Unknown values (no dates, no location, no notice period) pass every filter.
-3. SQL hard filters, then cosine similarity against the job embedding picks `RERANK_POOL_SIZE` (50) candidates.
-   Up to 20k filtered rows this is an exact scan; above that HNSW with iterative scan.
+3. SQL hard filters, then cosine similarity against the job embedding picks `RERANK_POOL_SIZE` (50) candidates,
+   with `POOL_SKILL_BOOST` (0.1) x the share of must-haves in the candidate's skills added to the similarity.
+   Up to 20k filtered rows this is an exact scan; above that HNSW with iterative scan (similarity only).
 4. The LLM scores each candidate in parallel (`RERANK_CONCURRENCY`) against the rubric in
    `prompts/score_candidate.md`, with name, email and phone removed. It returns five sub-scores; code sums them
    (40/25/15/10/10) and caps the total at 30 if a dealbreaker is violated. A failed call drops that one candidate.

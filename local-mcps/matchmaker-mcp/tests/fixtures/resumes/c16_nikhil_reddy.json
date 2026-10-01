@@ -3,6 +3,8 @@
   "email": "nikhil.reddy@example.com",
   "phone": "+91 96666 77788",
   "location": "Hyderabad",
+  "willing_to_relocate": null,
+  "preferred_locations": [],
   "current_title": "iOS Developer",
   "roles": [
     {

@@ -3,6 +3,8 @@
   "email": "vikram.rao@example.com",
   "phone": "+91 99001 22334",
   "location": "Hyderabad",
+  "willing_to_relocate": null,
+  "preferred_locations": [],
   "current_title": "Data Scientist",
   "roles": [
     {

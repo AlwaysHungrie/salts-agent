@@ -22,6 +22,8 @@ class CandidateProfile(LLMModel):
     email: str | None
     phone: str | None
     location: str | None
+    willing_to_relocate: bool | None = Field(description="Only if the resume says so; otherwise null")
+    preferred_locations: list[str] = Field(description="Places the candidate says they want to work or move to")
     current_title: str | None
     roles: list[Role]
     skills: list[str]
@@ -256,6 +258,8 @@ class MatchCandidate(BaseModel):
     must_haves_missing: list[str]
     concerns: list[str]
     location: str | None
+    willing_to_relocate: bool | None = None
+    preferred_locations: list[str] = []
     years_exp: float | None
     notice_days: int | None
     score_breakdown: ScoreBreakdown
@@ -297,7 +301,9 @@ class ListJobsResult(BaseModel):
 
 
 class SearchFilters(BaseModel):
-    locations: list[str] | None = Field(default=None, description="Cities; metro areas are expanded")
+    locations: list[str] | None = Field(
+        default=None, description="Cities; metro areas are expanded. Candidates willing to relocate there match too"
+    )
     include_remote: bool = Field(default=True, description="With locations set, also include 'Remote' candidates")
     min_years: float | None = None
     max_years: float | None = None
