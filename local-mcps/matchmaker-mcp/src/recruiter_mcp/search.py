@@ -45,6 +45,7 @@ def to_applied(f: SearchFilters, normalizer: SkillNormalizer) -> AppliedFilters:
         max_resume_age_days=f.max_resume_age_days,
         must_have_skills=skills,
         min_must_have_skills=len(skills) or None,
+        include_remote_candidates=f.include_remote,
     )
 
 
@@ -77,8 +78,6 @@ async def search_candidates(
     f = filters or SearchFilters()
     applied = to_applied(f, svc.normalizer)
     where, params = build_filter_sql(applied)
-    if f.locations and not f.include_remote:
-        where += " AND location_key IS DISTINCT FROM 'remote'"
     query_skills = skills_in_query(query, svc.normalizer) if query else []
 
     async with svc.pool.acquire() as conn, conn.transaction():

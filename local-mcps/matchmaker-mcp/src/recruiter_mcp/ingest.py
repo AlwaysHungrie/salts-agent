@@ -13,7 +13,7 @@ import asyncpg
 from .billing import preflight
 from .errors import ToolFailure
 from .experience import years_of_experience
-from .locations import location_key, location_keys
+from .locations import REGIONS, location_key, location_keys
 from .models import CandidateProfile, IngestResult
 from .prompts import render
 from .services import Services
@@ -153,12 +153,18 @@ class Derived:
 
 
 def derive(profile: CandidateProfile, normalizer: SkillNormalizer) -> Derived:
-    """Skills normalized, plus the umbrella skills they imply (so "AWS Lambda" meets a must-have "AWS")."""
+    """Skills normalized, plus the umbrella skills they imply (so "AWS Lambda" meets a must-have "AWS").
+    A preferred "anywhere in India" names no city, so it is dropped: willing to relocate with no city listed means
+    anywhere. Someone with no location who only wants remote work is a remote candidate."""
+    preferred = [k for k in location_keys(profile.preferred_locations) if k not in REGIONS]
+    loc = location_key(profile.location)
+    if loc is None and preferred == ["remote"]:
+        loc = "remote"
     return Derived(
         skills=normalizer.expand(normalizer.normalize_all(profile.skills)),
-        location_key=location_key(profile.location),
+        location_key=loc,
         willing_to_relocate=profile.willing_to_relocate,
-        preferred_location_keys=location_keys(profile.preferred_locations),
+        preferred_location_keys=preferred,
     )
 
 

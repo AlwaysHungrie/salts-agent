@@ -107,9 +107,11 @@ def build_filter_sql(f: AppliedFilters, first_param: int = 1) -> tuple[str, list
         clauses.append(f"(years_exp IS NULL OR years_exp <= {p(f.max_years)})")
     if not f.remote_ok and f.location_keys:
         # In one of the cities, or willing to move: to a preferred location there, or anywhere if none is listed.
+        # Remote-only candidates do not fit an office job unless the caller includes them.
         keys = p(f.location_keys)
+        remote = " OR location_key = 'remote'" if f.include_remote_candidates else ""
         clauses.append(
-            f"(location_key IS NULL OR location_key = 'remote' OR location_key = ANY({keys}::text[])"
+            f"(location_key IS NULL{remote} OR location_key = ANY({keys}::text[])"
             f" OR preferred_location_keys && {keys}::text[]"
             f" OR (willing_to_relocate AND preferred_location_keys = '{{}}'))"
         )

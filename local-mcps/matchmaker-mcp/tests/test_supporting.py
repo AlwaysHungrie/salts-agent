@@ -50,6 +50,7 @@ async def test_search_ranks_query_skills_first_and_applies_filters(svc):
     assert res.query_skills == ["Python"]
     # Pune-area and Remote only; Python holders before anyone without Python.
     assert set(names) <= {"Priya Sharma", "Rohan Das", "Aditya Verma", "Tanvi Patil", "Sara Khan"}
+    assert "Sara Khan" in names  # include_remote defaults to true
     with_python = [c for c in res.candidates if "Python" in c.matched_skills]
     assert res.candidates[: len(with_python)] == with_python
     assert {"Priya Sharma", "Rohan Das", "Tanvi Patil"} <= {c.name for c in with_python}

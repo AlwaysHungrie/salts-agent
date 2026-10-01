@@ -18,6 +18,8 @@ MCP_TRANSPORT=http uv run recruiter-mcp   # HTTP on :8000/mcp, needs MCP_AUTH_TO
 uv run pytest -q                          # 107 tests, ~20 s; needs Postgres up; uses recruiter_test DB
 uv run python scripts/smoke.py stdio      # calls ping through a real MCP client
 uv run python scripts/eval.py             # recall@10 on fixtures, real LLM, recruiter_eval DB, ~$0.05
+uv run python -m tests.synthetic.run      # scale suite: 1000 synthetic resumes, 50 JDs + sample, recruiter_synth DB
+                                          # paid; generation/ingest cached, a rerun pays only for matching (~$1.5)
 uv run python scripts/bulk_ingest.py DIR --dry-run
 uv run ruff check src tests scripts
 docker compose exec -T postgres psql -U recruiter   # inspect DB
@@ -89,6 +91,9 @@ outcome per absolute path, size, mtime; cascades on candidate delete), `skill_sy
 - Tests use a fake LLM that returns each fixture's expected JSON (`tests/conftest.py`), so they run offline.
   `tests/test_live.py` hits OpenRouter only when `LLM_API_KEY` is set.
 - After changing match/rerank/prompt logic, run `scripts/eval.py` and report recall@10 and cost. Target >= 0.8.
+  For changes that matter at scale (filters, pool selection, JD parsing), also run the synthetic suite
+  (`tests/synthetic/`): specs and ground truth in `specs.py`, texts cached in `tests/synthetic/data/` keyed by spec
+  hash, reports in `tests/synthetic/out/`. `--reingest` after changing extraction or derived columns.
 - ruff line length 120.
 
 ## Gotchas

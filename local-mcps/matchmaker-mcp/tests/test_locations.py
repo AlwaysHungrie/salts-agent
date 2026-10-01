@@ -21,3 +21,8 @@ def test_job_in_a_metro_suburb_accepts_the_whole_metro():
     assert expand_job_locations(["Thane"]) == ["mumbai", "navi mumbai", "thane"]
     assert expand_job_locations(["Gurgaon"]) == ["delhi", "faridabad", "ghaziabad", "gurugram", "noida"]
     assert expand_job_locations(["Remote"]) == []
+
+
+def test_country_or_region_restricts_no_city():
+    assert expand_job_locations(["India"]) == []
+    assert expand_job_locations(["Pan India", "Pune"]) == ["pimpri chinchwad", "pune"]
