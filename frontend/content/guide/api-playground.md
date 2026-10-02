@@ -2,6 +2,7 @@
 title: API playground
 section: API
 order: 1
+wide: true
 summary: Every call an agent API key can make, with a button to try each one.
 ---
 
