@@ -53,7 +53,7 @@
 
 - `agent/` — agent code
 - `frontend/` — Next.js app (pnpm)
-- `app-experiments/socratic-salt/` — Next.js app (pnpm): public challenge agents on the same Worker
+- `app-experiments/devcon-jobs-matchmaker/` — Next.js app (pnpm, local MongoDB): standalone jobs matchmaker on the staging agent via its API key
 - `salts-tools/` — laptop CLI: runs local services behind one ngrok tunnel, pushes their URLs to the agent
 - `local-mcps/` — MCP servers salts-tools runs (`matchmaker-mcp`, Python/uv)
 
