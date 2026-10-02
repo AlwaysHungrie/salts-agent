@@ -1,112 +1,50 @@
-import { createRoute, z } from "@hono/zod-openapi";
-import { type ApiApp, jsonOf, refusals } from "../api/app";
-import { OkSchema, SessionRowSchema } from "../api/schemas";
 import type { Env } from "../env";
 import { agentIdOf, sessionLimitMessage, sessionName } from "../registry";
 import { deploymentSettings } from "../settings";
 import { callerEmail } from "../worker/auth";
-import { ApiError, errorMessage } from "../worker/http";
+import { errorMessage, json, jsonError, readJson } from "../worker/http";
 import { callSession, destroySession, registry, syncSessionCount } from "../worker/stores";
 
 /**
- * The `{sessionId}` path parameter. A session id is `<agentId>~<local>`, so the id alone
- * says which registry it lives in. The gate has already checked the caller may use it.
+ * Everything under `/api/sessions/:id`. A session name is `<agentId>~<local>`, so the
+ * id alone says which registry it lives in.
  */
-export const SessionParams = z.object({
-  sessionId: z
-    .string()
-    .openapi({ param: { name: "sessionId", in: "path" }, example: "ab12cd34~1a2b3c4d" }),
-});
+export async function handleSession(
+  request: Request,
+  env: Env,
+  url: URL,
+  segments: string[]
+): Promise<Response | undefined> {
+  const id = segments[2];
+  const agentId = agentIdOf(id);
+  if (!agentId) return jsonError("not found", 404);
+  const reg = registry(env, agentId);
 
-const tag = ["Sessions"];
+  if (request.method === "POST" && segments[3] === "fork") {
+    return await forkSession(request, env, url, agentId, id);
+  }
 
-/** Everything under `/api/sessions/{sessionId}`: rename, delete, fork, unstick. */
-export function sessionRoutes(app: ApiApp) {
-  app.openapi(
-    createRoute({
-      method: "patch",
-      path: "/api/sessions/{sessionId}",
-      tags: tag,
-      summary: "Rename a session",
-      request: {
-        params: SessionParams,
-        body: { content: { "application/json": { schema: z.object({ title: z.string() }) } } },
-      },
-      responses: { 200: jsonOf(OkSchema), ...refusals(400, 404) },
-    }),
-    async (c) => {
-      const { sessionId } = c.req.valid("param");
-      await registry(c.env, agentIdOf(sessionId)).rename(sessionId, c.req.valid("json").title);
-      return c.json({ ok: true }, 200);
-    }
-  );
+  // A session whose turns stopped completing, freed without losing what it holds.
+  if (request.method === "POST" && segments[3] === "unstick") {
+    const freed = await callSession(env, url.origin, id, "unstick", { method: "POST" });
+    if (!freed?.ok) return jsonError("could not reach that session", 502);
+    return json(await freed.json());
+  }
 
-  app.openapi(
-    createRoute({
-      method: "delete",
-      path: "/api/sessions/{sessionId}",
-      tags: tag,
-      summary: "Delete a session and everything in it",
-      request: { params: SessionParams },
-      responses: { 200: jsonOf(OkSchema), ...refusals(404) },
-    }),
-    async (c) => {
-      const { sessionId } = c.req.valid("param");
-      const agentId = agentIdOf(sessionId);
-      await registry(c.env, agentId).remove(sessionId);
-      await syncSessionCount(c.env, agentId);
-      await destroySession(c.env, new URL(c.req.url).origin, sessionId);
-      return c.json({ ok: true }, 200);
-    }
-  );
+  if (request.method === "PATCH") {
+    const { title } = (await request.json()) as { title: string };
+    await reg.rename(id, title);
+    return json({ ok: true });
+  }
 
-  app.openapi(
-    createRoute({
-      method: "post",
-      path: "/api/sessions/{sessionId}/fork",
-      tags: tag,
-      summary: "Copy the first `count` messages into a new session",
-      request: {
-        params: SessionParams,
-        body: {
-          content: {
-            "application/json": {
-              schema: z.object({ count: z.number().optional(), title: z.string().optional() }),
-            },
-          },
-        },
-      },
-      responses: { 200: jsonOf(SessionRowSchema), ...refusals(404, 409, 413, 502) },
-    }),
-    async (c) => {
-      const { sessionId } = c.req.valid("param");
-      const { count, title } = c.req.valid("json");
-      return c.json(await forkSession(c.req.raw, c.env, sessionId, count ?? 0, title), 200);
-    }
-  );
+  if (request.method === "DELETE") {
+    await reg.remove(id);
+    await syncSessionCount(env, agentId);
+    await destroySession(env, url.origin, id);
+    return json({ ok: true });
+  }
 
-  app.openapi(
-    createRoute({
-      method: "post",
-      path: "/api/sessions/{sessionId}/unstick",
-      tags: tag,
-      summary: "Free a session whose replies stopped finishing",
-      description: "Cancels running turns. Messages, files and memory stay.",
-      request: { params: SessionParams },
-      responses: {
-        200: jsonOf(z.object({ ok: z.boolean(), cancelled: z.boolean() }).loose()),
-        ...refusals(404, 502),
-      },
-    }),
-    async (c) => {
-      const { sessionId } = c.req.valid("param");
-      const freed = await callSession(c.env, new URL(c.req.url).origin, sessionId, "unstick", {
-        method: "POST",
-      });
-      if (!freed?.ok) throw new ApiError(502, "could not reach that session");
-      return c.json((await freed.json()) as { ok: boolean; cancelled: boolean }, 200);
-    }
-  );
+  return undefined;
 }
 
 /**
@@ -116,19 +54,18 @@ export function sessionRoutes(app: ApiApp) {
 async function forkSession(
   request: Request,
   env: Env,
-  id: string,
-  count: number,
-  title: string | undefined
-) {
-  const origin = new URL(request.url).origin;
-  const agentId = agentIdOf(id);
+  url: URL,
+  agentId: string,
+  id: string
+): Promise<Response> {
   const reg = registry(env, agentId);
+  const { count, title } = await readJson<{ count?: number; title?: string }>(request);
   const { max_sessions } = await deploymentSettings(env);
   if ((await reg.countSessions()) >= max_sessions) {
-    throw new ApiError(409, sessionLimitMessage(max_sessions));
+    return jsonError(sessionLimitMessage(max_sessions), 409);
   }
-  const exported = await callSession(env, origin, id, `export?count=${Number(count)}`);
-  if (!exported?.ok) throw new ApiError(502, "could not read the source session");
+  const exported = await callSession(env, url.origin, id, `export?count=${Number(count ?? 0)}`);
+  if (!exported?.ok) return jsonError("could not read the source session", 502);
   const snapshot = await exported.text();
 
   const forkId = sessionName(agentId, crypto.randomUUID().slice(0, 8));
@@ -145,10 +82,10 @@ async function forkSession(
       await callerEmail(request, env)
     );
   } catch (err) {
-    throw new ApiError(409, errorMessage(err));
+    return jsonError(errorMessage(err), 409);
   }
   await syncSessionCount(env, agentId);
-  const imported = await callSession(env, origin, forkId, "import", {
+  const imported = await callSession(env, url.origin, forkId, "import", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: snapshot,
@@ -158,10 +95,10 @@ async function forkSession(
     await syncSessionCount(env, agentId);
     // 413 (no room for the copied files) carries a reason the person can act on.
     const reason = (await imported?.json().catch(() => null)) as { error?: string } | null;
-    throw new ApiError(
-      imported?.status === 413 ? 413 : 502,
-      reason?.error ?? "could not seed the fork"
+    return jsonError(
+      reason?.error ?? "could not seed the fork",
+      imported?.status === 413 ? 413 : 502
     );
   }
-  return row;
+  return json(row);
 }
