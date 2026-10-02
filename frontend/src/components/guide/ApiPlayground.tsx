@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   type Group,
@@ -11,10 +11,22 @@ import {
   requestUrl,
 } from "@/lib/openapi";
 
+import {
+  CopyButton,
+  FieldTable,
+  MethodBadge,
+  PathText,
+  type Result,
+  Responses,
+  ResultView,
+  SnippetView,
+} from "./ApiPlaygroundParts";
+
 /**
- * The agent API, read from the Worker's own `/openapi.json`: one row per route, and a
- * Send button on each that calls the Worker straight from the browser with the key
- * pasted at the top. Nothing here lists a route by hand.
+ * The agent API, read from the Worker's own `/openapi.json`: one row per route, and on
+ * each its inputs, the responses it can give, a request to copy (curl, JavaScript,
+ * Python) and a Send button that calls the Worker straight from the browser with the
+ * key pasted at the top. Nothing here lists a route by hand.
  *
  * Values a route needs in its path (`agentId`, `sessionId`, …) are entered once and
  * shared by every route; the agent comes from the key, and a session, upload or server
@@ -22,67 +34,154 @@ import {
  */
 
 type Vars = Record<string, string>;
-type Result = { status: number; ms: number; body: string } | { error: string };
+
+const SPEC_FILE = "salt-agent-openapi.json";
 
 const input =
-  "bg-field placeholder:text-faint w-full rounded-xl px-3 py-2 font-mono text-[13px] outline-none";
+  "bg-field placeholder:text-faint w-full rounded-lg px-3 py-2 font-mono text-[13px] outline-none focus:ring-2 focus:ring-accent/30";
 
 export function ApiPlayground({ base }: { base: string }) {
-  const [groups, setGroups] = useState<Group[] | null>(null);
+  const [doc, setDoc] = useState<OpenApiDoc | null>(null);
   const [failed, setFailed] = useState("");
   const [key, setKey] = useState("");
+  const [showKey, setShowKey] = useState(false);
   const [vars, setVars] = useState<Vars>({});
+  const [filter, setFilter] = useState("");
   const [open, setOpen] = useState<string | null>(null);
 
   useEffect(() => {
     fetch(`${base}/openapi.json`)
       .then((res) => res.json() as Promise<OpenApiDoc>)
-      .then((doc) => setGroups(groupOperations(doc)))
+      .then(setDoc)
       .catch(() => setFailed("Could not load the API description."));
   }, [base]);
+
+  const groups = useMemo(() => (doc ? groupOperations(doc) : []), [doc]);
+  const shown = useMemo(() => filtered(groups, filter), [groups, filter]);
 
   const setVar = (name: string, value: string) =>
     setVars((v) => ({ ...v, [name]: value }));
 
   if (failed) return <p className="text-muted text-sm">{failed}</p>;
-  if (!groups) return <p className="text-muted text-sm">Loading the API…</p>;
+  if (!doc) return <p className="text-muted text-sm">Loading the API…</p>;
+
+  const count = groups.reduce((n, g) => n + g.operations.length, 0);
+
+  function download() {
+    const blob = new Blob([JSON.stringify(doc, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = SPEC_FILE;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   return (
-    <div className="mt-6">
-      <div className="bg-canvas-soft grid gap-3 rounded-2xl p-4 sm:grid-cols-[1fr_180px]">
-        <label className="block">
-          <span className="text-muted mb-1 block text-xs font-semibold">
-            API key
-          </span>
-          <input
-            type="password"
-            value={key}
-            onChange={(e) => {
-              const next = e.target.value.replace(/^Bearer\s+/i, "").trim();
-              setKey(next);
-              if (agentOfKey(next)) setVar("agentId", agentOfKey(next));
-            }}
-            placeholder="salt_user_…"
-            autoComplete="off"
-            className={input}
-          />
-        </label>
-        <label className="block">
-          <span className="text-muted mb-1 block text-xs font-semibold">
-            Agent id
-          </span>
-          <input
-            value={vars.agentId ?? ""}
-            onChange={(e) => setVar("agentId", e.target.value)}
-            placeholder="from the key"
-            className={input}
-          />
-        </label>
+    <div className="mt-6 space-y-8">
+      <div className="border-hairline overflow-hidden rounded-2xl border">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+          <div className="min-w-0">
+            <p className="text-[15px] font-semibold">
+              {doc.info?.title ?? "API"}
+              {doc.info?.version && (
+                <span className="text-faint ml-2 font-mono text-xs font-normal">
+                  v{doc.info.version}
+                </span>
+              )}
+            </p>
+            <p className="text-muted text-xs">
+              {count} routes · OpenAPI 3 · Bearer auth
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <CopyButton text={`${base}/openapi.json`} label="Copy spec URL" />
+            <button
+              onClick={download}
+              className="bg-ink text-on-primary h-8 rounded-full px-4 text-xs font-semibold transition hover:opacity-85"
+            >
+              Download spec
+            </button>
+          </div>
+        </div>
+
+        <div className="border-hairline-soft bg-canvas-soft space-y-3 border-t px-4 py-4">
+          <div>
+            <Label>Base URL</Label>
+            <div className="bg-canvas border-hairline flex items-center gap-2 rounded-lg border py-1 pr-1 pl-3">
+              <code className="min-w-0 flex-1 truncate font-mono text-[13px]">
+                {base}
+              </code>
+              <CopyButton text={base} />
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-[1fr_180px]">
+            <label className="block">
+              <Label>API key</Label>
+              <div className="relative">
+                <input
+                  type={showKey ? "text" : "password"}
+                  value={key}
+                  onChange={(e) => {
+                    const next = e.target.value
+                      .replace(/^Bearer\s+/i, "")
+                      .trim();
+                    setKey(next);
+                    if (agentOfKey(next)) setVar("agentId", agentOfKey(next));
+                  }}
+                  placeholder="salt_user_… or salt_admin_…"
+                  autoComplete="off"
+                  className={`${input} pr-14`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowKey((s) => !s)}
+                  className="text-muted hover:text-ink absolute top-1/2 right-2 -translate-y-1/2 text-xs font-semibold"
+                >
+                  {showKey ? "Hide" : "Show"}
+                </button>
+              </div>
+            </label>
+            <label className="block">
+              <Label>Agent id</Label>
+              <input
+                value={vars.agentId ?? ""}
+                onChange={(e) => setVar("agentId", e.target.value)}
+                placeholder="from the key"
+                className={input}
+              />
+            </label>
+          </div>
+          <p className="text-faint text-xs">
+            Sent as{" "}
+            <code className="font-mono">Authorization: Bearer &lt;key&gt;</code>
+            . The key stays in this tab; copied snippets read it from{" "}
+            <code className="font-mono">$SALT_API_KEY</code>.
+          </p>
+        </div>
       </div>
 
-      {groups.map((group) => (
-        <section key={group.tag} className="mt-8">
-          <h2 className="mb-2 text-base font-semibold">{group.tag}</h2>
+      <input
+        value={filter}
+        onChange={(e) => setFilter(e.target.value)}
+        placeholder="Filter routes by path, method or name"
+        className={input}
+      />
+
+      {shown.length === 0 && (
+        <p className="text-muted text-sm">No route matches.</p>
+      )}
+
+      {shown.map((group) => (
+        <section key={group.tag}>
+          <h3 className="mb-2 flex items-baseline gap-2 text-[15px] font-semibold">
+            {group.tag}
+            <span className="text-faint text-xs font-normal">
+              {group.operations.length}
+            </span>
+          </h3>
           <div className="border-hairline overflow-hidden rounded-2xl border">
             {group.operations.map((op) => (
               <OperationRow
@@ -101,6 +200,21 @@ export function ApiPlayground({ base }: { base: string }) {
       ))}
     </div>
   );
+}
+
+function filtered(groups: Group[], filter: string): Group[] {
+  const q = filter.trim().toLowerCase();
+  if (!q) return groups;
+  return groups
+    .map((g) => ({
+      tag: g.tag,
+      operations: g.operations.filter((op) =>
+        `${g.tag} ${op.method} ${op.path} ${op.summary}`
+          .toLowerCase()
+          .includes(q),
+      ),
+    }))
+    .filter((g) => g.operations.length > 0);
 }
 
 function OperationRow({
@@ -122,16 +236,24 @@ function OperationRow({
       <button
         onClick={onToggle}
         aria-expanded={open}
-        className="hover:bg-canvas-soft flex w-full items-baseline gap-3 px-4 py-2.5 text-left transition-colors"
+        className={`hover:bg-canvas-soft flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${
+          open ? "bg-canvas-soft" : ""
+        }`}
       >
-        <span className="w-14 shrink-0 font-mono text-[11px] font-semibold">
-          {op.method}
-        </span>
+        <MethodBadge method={op.method} />
         <span className="min-w-0 flex-1">
           <span className="block truncate font-mono text-[13px]">
-            {op.path}
+            <PathText path={op.path} />
           </span>
-          <span className="text-muted block text-xs">{op.summary}</span>
+          <span className="text-muted block truncate text-xs">
+            {op.summary}
+          </span>
+        </span>
+        <span
+          aria-hidden
+          className={`text-faint text-[10px] transition-transform ${open ? "rotate-90" : ""}`}
+        >
+          ▶
         </span>
       </button>
       {open && <OperationPanel op={op} {...panel} />}
@@ -174,6 +296,8 @@ function OperationPanel({
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
+
+  const ids = op.pathParams.filter((name) => name !== "agentId");
 
   async function send() {
     let payload: BodyInit | undefined;
@@ -227,81 +351,124 @@ function OperationPanel({
   }
 
   return (
-    <div className="bg-canvas-soft space-y-3 px-4 pt-1 pb-4">
-      {op.description && <p className="text-muted text-sm">{op.description}</p>}
+    <div className="border-hairline-soft space-y-6 border-t px-4 pt-4 pb-5">
+      {op.description && (
+        <p className="text-muted text-sm leading-relaxed">{op.description}</p>
+      )}
 
-      {[
-        ...op.pathParams.filter((p) => p !== "agentId"),
-        ...op.query.map((q) => q.name),
-      ].length > 0 && (
-        <div className="grid gap-2 sm:grid-cols-2">
-          {op.pathParams
-            .filter((name) => name !== "agentId")
-            .map((name) => (
-              <Field key={name} label={name} hint="Shared by every route.">
-                <input
-                  value={vars[name] ?? ""}
-                  onChange={(e) => setVar(name, e.target.value)}
-                  className={input}
-                />
-              </Field>
-            ))}
-          {op.query.map((q) => (
-            <Field key={q.name} label={`?${q.name}`} hint={q.description}>
-              <input
-                value={query[q.name] ?? ""}
-                onChange={(e) =>
-                  setQuery((v) => ({ ...v, [q.name]: e.target.value }))
-                }
-                className={input}
+      {op.fields.length > 0 && (
+        <PanelSection title="Parameters">
+          <FieldTable fields={op.fields} />
+        </PanelSection>
+      )}
+
+      <PanelSection title="Try it">
+        <div className="space-y-3">
+          {ids.length + op.query.length > 0 && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {ids.map((name) => (
+                <Input key={name} label={name} hint="Shared by every route.">
+                  <input
+                    value={vars[name] ?? ""}
+                    onChange={(e) => setVar(name, e.target.value)}
+                    className={input}
+                  />
+                </Input>
+              ))}
+              {op.query.map((q) => (
+                <Input key={q.name} label={`?${q.name}`} hint={q.description}>
+                  <input
+                    value={query[q.name] ?? ""}
+                    onChange={(e) =>
+                      setQuery((v) => ({ ...v, [q.name]: e.target.value }))
+                    }
+                    className={input}
+                  />
+                </Input>
+              ))}
+            </div>
+          )}
+          {op.body === "json" && (
+            <Input label="Body (JSON)">
+              <textarea
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                rows={Math.min(12, Math.max(3, body.split("\n").length))}
+                spellCheck={false}
+                className={`${input} resize-y leading-relaxed`}
               />
-            </Field>
-          ))}
+            </Input>
+          )}
+          {op.body === "file" && (
+            <Input label="file">
+              <input
+                type="file"
+                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                className="text-sm"
+              />
+            </Input>
+          )}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => void send()}
+              disabled={busy || !apiKey}
+              className="bg-ink text-on-primary h-9 rounded-full px-5 text-sm font-semibold transition hover:opacity-85 disabled:opacity-40"
+            >
+              {busy ? "Sending…" : "Send request"}
+            </button>
+            {!apiKey && (
+              <span className="text-faint text-xs">
+                Paste an API key above first.
+              </span>
+            )}
+          </div>
+          {result && <ResultView result={result} />}
         </div>
-      )}
+      </PanelSection>
 
-      {op.body === "json" && (
-        <Field label="Body (JSON)">
-          <textarea
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            rows={Math.min(12, Math.max(3, body.split("\n").length))}
-            spellCheck={false}
-            className={`${input} resize-y`}
-          />
-        </Field>
-      )}
-      {op.body === "file" && (
-        <Field label="File">
-          <input
-            type="file"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            className="text-sm"
-          />
-        </Field>
-      )}
+      <PanelSection title="Request">
+        <SnippetView
+          url={requestUrl(base, op, vars, query, true)}
+          op={op}
+          body={body}
+        />
+      </PanelSection>
 
-      <div className="flex items-center gap-3">
-        <button
-          onClick={() => void send()}
-          disabled={busy || !apiKey}
-          className="bg-ink text-on-primary h-9 rounded-full px-5 text-sm font-semibold transition hover:opacity-85 disabled:opacity-40"
-        >
-          {busy ? "Sending…" : "Send"}
-        </button>
-        {!apiKey && (
-          <span className="text-faint text-xs">
-            Paste an API key above first.
-          </span>
-        )}
-      </div>
-
-      {result && <ResultView result={result} />}
+      {op.responses.length > 0 && (
+        <PanelSection title="Responses">
+          <Responses replies={op.responses} />
+        </PanelSection>
+      )}
     </div>
   );
 }
 
-function Field({
+function PanelSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <p className="text-faint mb-2 text-[11px] font-semibold tracking-[0.08em] uppercase">
+        {title}
+      </p>
+      {children}
+    </div>
+  );
+}
+
+function Label({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="text-muted mb-1 block text-xs font-semibold">
+      {children}
+    </span>
+  );
+}
+
+function Input({
   label,
   hint,
   children,
@@ -318,23 +485,5 @@ function Field({
       {children}
       {hint && <span className="text-faint mt-1 block text-xs">{hint}</span>}
     </label>
-  );
-}
-
-function ResultView({ result }: { result: Result }) {
-  if ("error" in result) return <p className="text-sm">{result.error}</p>;
-  const ok = result.status >= 200 && result.status < 300;
-  return (
-    <div>
-      <p className="text-xs font-semibold">
-        <span className={ok ? "text-ink" : "text-red-600"}>
-          {result.status}
-        </span>
-        <span className="text-faint"> · {result.ms} ms</span>
-      </p>
-      <pre className="bg-canvas border-hairline mt-1 max-h-96 overflow-auto rounded-xl border p-3 font-mono text-[12px] leading-relaxed">
-        {result.body}
-      </pre>
-    </div>
   );
 }
