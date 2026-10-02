@@ -7,6 +7,7 @@ from openai import AsyncOpenAI
 from .billing import ensure_budget
 from .config import Settings
 from .errors import ToolFailure
+from .llm import MAX_RETRIES, deadline, within
 from .usage import UsageRecord, record
 
 
@@ -24,11 +25,12 @@ class OpenRouterEmbedder:
             )
         self.model = settings.embed_model
         self.dim = settings.embed_dim
+        self.deadline = deadline(settings.embed_timeout_seconds)
         self.client = AsyncOpenAI(
             base_url=settings.embed_base_url,
             api_key=settings.embed_api_key,
             timeout=settings.embed_timeout_seconds,
-            max_retries=2,
+            max_retries=MAX_RETRIES,
         )
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
@@ -37,7 +39,8 @@ class OpenRouterEmbedder:
         if "text-embedding-3" in self.model:
             kwargs["dimensions"] = self.dim
         ensure_budget()
-        resp = await self.client.embeddings.create(model=self.model, input=texts, **kwargs)
+        resp = await within(self.client.embeddings.create(model=self.model, input=texts, **kwargs),
+                            self.deadline, "the embedding model")
         vectors = [d.embedding for d in sorted(resp.data, key=lambda d: d.index)]
         if any(len(v) != self.dim for v in vectors):
             raise ToolFailure(

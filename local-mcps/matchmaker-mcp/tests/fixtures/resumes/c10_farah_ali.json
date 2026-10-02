@@ -3,6 +3,8 @@
   "email": "farah.ali@example.com",
   "phone": "+91 98989 12121",
   "location": "Bengaluru",
+  "willing_to_relocate": null,
+  "preferred_locations": [],
   "current_title": "DevOps Engineer",
   "roles": [
     {

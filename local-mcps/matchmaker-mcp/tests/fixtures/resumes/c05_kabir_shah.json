@@ -3,6 +3,8 @@
   "email": "kabir.shah@example.com",
   "phone": "+91 98200 55443",
   "location": "Mumbai",
+  "willing_to_relocate": null,
+  "preferred_locations": [],
   "current_title": "Senior UI Engineer",
   "roles": [
     {

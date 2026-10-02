@@ -78,11 +78,17 @@ def test_filter_sql_all_clauses():
     ), first_param=3)
     assert where == (
         "(years_exp IS NULL OR years_exp >= $3) AND (years_exp IS NULL OR years_exp <= $4) AND "
-        "(location_key IS NULL OR location_key = 'remote' OR location_key = ANY($5::text[])) AND "
+        "(location_key IS NULL OR location_key = ANY($5::text[])"
+        " OR preferred_location_keys && $5::text[] OR (willing_to_relocate AND preferred_location_keys = '{}')) AND "
         "(notice_days IS NULL OR notice_days <= $6) AND updated_at >= now() - make_interval(days => $7) AND "
         "((skills && $8::text[])::int + (skills && $9::text[])::int) >= $10"
     )
     assert params == [4, 10, ["pune"], 60, 180, ["Python"], ["AWS"], 1]
+
+
+def test_filter_sql_countries_let_unknown_through():
+    where, params = matching.build_filter_sql(applied(country_keys=["india"]))
+    assert where == "(country_keys = '{}' OR country_keys && $1::text[])" and params == [["india"]]
 
 
 def test_filter_sql_all_must_haves_uses_containment_and_remote_skips_location():
@@ -133,7 +139,11 @@ async def test_filters_against_fixture_data(svc):
 
     # Location: metro expansion, 'Remote' candidates pass, other cities drop.
     got = await names_passing(svc, applied(location_keys=matching.expand_job_locations(["Mumbai"]), remote_ok=False))
-    assert {"Neha Kulkarni", "Meera Joshi", "Pooja Nair", "Sara Khan"} <= got  # Mumbai, Thane, Navi Mumbai, Remote
+    assert {"Neha Kulkarni", "Meera Joshi", "Pooja Nair"} <= got  # Mumbai, Thane, Navi Mumbai
+    assert "Sara Khan" not in got  # Remote only: not for an office job...
+    got = await names_passing(svc, applied(location_keys=matching.expand_job_locations(["Mumbai"]), remote_ok=False,
+                                           include_remote_candidates=True))
+    assert "Sara Khan" in got  # ...unless asked for
     assert "Priya Sharma" not in got and "Arjun Mehta" not in got
 
     # Notice period.
@@ -399,3 +409,79 @@ async def test_alternative_must_have_filter_on_rows(svc):
     await ingest_all(svc)
     got = await names_passing(svc, applied(must_have_skills=["Tally or SAP FICO", "GST"], min_must_have_skills=2))
     assert got == {"Rajesh Gupta", "Pooja Nair"}  # Pooja has Tally only, Rajesh has both
+
+
+async def test_location_filter_admits_candidates_willing_to_relocate(svc):
+    await ingest_all(svc)
+    pune = applied(location_keys=matching.expand_job_locations(["Pune"]), remote_ok=False)
+    assert "Amit Singh" not in await names_passing(svc, pune)  # Delhi, nothing said about moving
+
+    # Willing to relocate, no preference: anywhere.
+    await svc.pool.execute("UPDATE candidates SET willing_to_relocate = true WHERE name = 'Amit Singh'")
+    assert "Amit Singh" in await names_passing(svc, pune)
+    # Willing, but only to listed places: those only.
+    await svc.pool.execute(
+        "UPDATE candidates SET preferred_location_keys = '{bengaluru}' WHERE name = 'Amit Singh'")
+    assert "Amit Singh" not in await names_passing(svc, pune)
+    blr = applied(location_keys=matching.expand_job_locations(["Bangalore"]), remote_ok=False)
+    assert "Amit Singh" in await names_passing(svc, blr)
+    # A preferred location counts even without an explicit "willing to relocate".
+    await svc.pool.execute(
+        "UPDATE candidates SET preferred_location_keys = '{pune}' WHERE name = 'Lata Pillai'")
+    assert "Lata Pillai" in await names_passing(svc, pune)
+    # Explicitly not willing: stays out.
+    await svc.pool.execute("UPDATE candidates SET willing_to_relocate = false WHERE name = 'Divya Menon'")
+    assert "Divya Menon" not in await names_passing(svc, pune)
+
+
+async def test_pool_boost_pulls_in_candidates_with_the_must_haves(svc):
+    await ingest_all(svc)
+    [vec] = await svc.embedder.embed(["content writing seo copywriting"])
+    f = applied(must_have_skills=["Terraform", "Kubernetes"])
+
+    async def pool(boost):
+        async with svc.pool.acquire() as conn, conn.transaction():
+            _, _, rows = await matching.vector_candidates(conn, f, vec, 2, boost)
+        return {r["name"] for r in rows}
+
+    assert await pool(0.0) != {"Aditya Verma", "Farah Ali"}
+    assert await pool(10.0) == {"Aditya Verma", "Farah Ali"}
+
+
+async def test_implied_skills_meet_umbrella_must_haves(svc):
+    await ingest_all(svc)
+    # Priya lists Django/FastAPI/Lambda; Karan lists Spring Boot. Umbrellas are stored alongside.
+    skills = {r["name"]: list(r["skills"]) for r in await svc.pool.fetch("SELECT name, skills FROM candidates")}
+    assert {"Python", "AWS", "AWS Lambda"} <= set(skills["Priya Sharma"])
+    assert {"Spring", "Java"} <= set(skills["Karan Malhotra"])
+    got = await names_passing(svc, applied(must_have_skills=["Java"], min_must_have_skills=1))
+    assert got == {"Karan Malhotra"}
+
+
+async def test_refresh_derived_recomputes_columns_from_profiles(svc):
+    from recruiter_mcp.migrate import refresh_derived
+
+    await ingest_all(svc)
+    before = {r["name"]: (list(r["skills"]), r["location_key"])
+              for r in await svc.pool.fetch("SELECT name, skills, location_key FROM candidates")}
+    await svc.pool.execute("UPDATE candidates SET skills = '{Stale}', location_key = NULL WHERE name = 'Neha Kulkarni'")
+    await svc.pool.execute(
+        """UPDATE candidates SET profile = profile || '{"location": "Kothrud, Pune", "willing_to_relocate": true,
+           "preferred_locations": ["Bangalore"]}'::jsonb WHERE name = 'Rohan Das'""")
+    async with svc.pool.acquire() as conn:
+        assert await refresh_derived(conn) == 2
+        assert await refresh_derived(conn) == 0  # nothing left to change
+    after = {r["name"]: r for r in await svc.pool.fetch("SELECT * FROM candidates")}
+    assert (list(after["Neha Kulkarni"]["skills"]), after["Neha Kulkarni"]["location_key"]) == before["Neha Kulkarni"]
+    rohan = after["Rohan Das"]
+    assert (rohan["location_key"], rohan["willing_to_relocate"], list(rohan["preferred_location_keys"])) == (
+        "pune", True, ["bengaluru"])
+
+
+async def test_ingest_and_jd_parse_grow_the_skill_vocabulary(svc):
+    await ingest_all(svc)
+    await matching.parse_job(svc, job_fixture("j2_frontend_react")["jd_text"])
+    learned = {r["alias"]: r["canonical"] for r in
+               await svc.pool.fetch("SELECT alias, canonical FROM skill_synonyms WHERE source = 'learned'")}
+    assert {"celery", "storybook", "vite", "xcode"} <= learned.keys()
+    assert "python" not in learned

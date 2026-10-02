@@ -16,7 +16,6 @@ import { errorMessage, json, jsonError, listEntries, readJson } from "../worker/
 import { checkOpenrouterKey } from "../worker/integrations";
 import { agentFor, deleteAgent, provisionAgent } from "../worker/provisioning";
 import { AGENT_ID, directory } from "../worker/stores";
-import { handleAgent } from "./agent";
 
 /** A listing's metadata filter, from `?with=key:value` and `?without=key`. */
 export function metadataFilter(url: URL): MetadataFilter | undefined {
@@ -50,7 +49,10 @@ export function fleetMembers(input: string | string[] | undefined): string[] {
     .filter(Boolean);
 }
 
-/** Everything under `/api/agents`. Undefined when the path is not one of these. */
+/**
+ * `/api/agents` itself and its catalogue. One agent's routes are the typed API's (`src/api`).
+ * Undefined when the path is not one of these.
+ */
 export async function handleAgents(
   request: Request,
   env: Env,
@@ -76,7 +78,7 @@ export async function handleAgents(
     });
   }
 
-  return await handleAgent(request, env, url, agentId, segments);
+  return undefined;
 }
 
 /**

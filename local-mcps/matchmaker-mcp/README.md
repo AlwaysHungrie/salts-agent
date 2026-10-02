@@ -78,8 +78,11 @@ for a file on the server's machine, its absolute `file_path`. For many files, se
 
 1. Hashes the original file (or the normalized text if no file) and returns `duplicate_file` if it has seen it.
 2. Extracts a `CandidateProfile` with its own prompt (`prompts/extract_resume.md`) and model, validated by Pydantic.
-3. Normalizes skills via `skill_synonyms` (seeded from `seeds/skill_synonyms.csv`), computes `years_exp` from role
-   dates in code, and embeds title + summary + skills + recent roles.
+3. Normalizes skills via `skill_synonyms` (seeded from `seeds/skill_synonyms.csv`; spacing/dot variants and version
+   suffixes match too, so "NodeJS" and "Python 3.11" resolve). A skill seen for the first time is stored as a
+   `learned` alias, so later spellings get the same name. Umbrella skills implied by specific ones
+   (`seeds/skill_parents.csv`: AWS Lambda -> AWS, Django -> Python) are added to the stored skill list. Computes
+   `years_exp` from role dates in code, and embeds title + summary + skills + recent roles.
 4. Matches the person by email, then by the last 10 digits of their phone. A match updates the candidate and keeps
    the previous version in `candidate_versions`.
 5. Copies the PDF to `DATA_DIR/resumes/{candidate_id}/{Name}_Resume_{first 8 of sha256}.pdf` (e.g.
@@ -102,8 +105,8 @@ Day-to-day use and client setup: [docs/usage-guide.md](docs/usage-guide.md). Mat
 
 The original PDF is optional, max 10 MB, passed one of two ways:
 
-- `upload_id` (chat attachments): the agent *app* (not its model) uploads the attachment with
-  `POST /uploads` and puts the returned `upload_id` in the conversation; the model passes it here.
+- `upload_id` (chat attachments): the model passes the app's `attachment:<id>` reference; when it calls
+  this tool, the agent *app* uploads the attachment with `POST /uploads` and swaps in the returned `upload_id`.
 - `file_path`: absolute path to a `.pdf` on the machine running the server.
 
 There is deliberately no base64 field. A model can read an attached PDF but cannot reproduce its bytes; offered a
@@ -207,10 +210,13 @@ The funnel:
    ("Python"); alternatives with no umbrella term stay one requirement ("Tally or SAP"), met by either.
 2. Filters are merged: anything in `filters` wins field by field; the rest comes from the JD. Years parsed from the JD
    get slack (`YEARS_SLACK_BELOW`/`ABOVE`, default -1/+2, so "5-8 yrs" admits 4-10); explicit years are exact.
-   Locations expand to metro areas (Mumbai includes Thane and Navi Mumbai). `remote_ok` skips the location filter.
+   Locations expand to metro areas (Mumbai includes Thane and Navi Mumbai). `remote_ok` (fully remote only; hybrid
+   is not remote) skips the location filter. Candidates elsewhere pass if their resume lists a job city as a
+   preferred location, or says they are willing to relocate and lists no preference.
    Unknown values (no dates, no location, no notice period) pass every filter.
-3. SQL hard filters, then cosine similarity against the job embedding picks `RERANK_POOL_SIZE` (50) candidates.
-   Up to 20k filtered rows this is an exact scan; above that HNSW with iterative scan.
+3. SQL hard filters, then cosine similarity against the job embedding picks `RERANK_POOL_SIZE` (50) candidates,
+   with `POOL_SKILL_BOOST` (0.1) x the share of must-haves in the candidate's skills added to the similarity.
+   Up to 20k filtered rows this is an exact scan; above that HNSW with iterative scan (similarity only).
 4. The LLM scores each candidate in parallel (`RERANK_CONCURRENCY`) against the rubric in
    `prompts/score_candidate.md`, with name, email and phone removed. It returns five sub-scores; code sums them
    (40/25/15/10/10) and caps the total at 30 if a dealbreaker is violated. A failed call drops that one candidate.
@@ -241,9 +247,12 @@ current candidate details and any feedback labels. `list_jobs {"limit": 20}` lis
 
 No JD and no LLM call, so it is fast and nearly free. `query` is embedded and ranked by similarity; skills named in
 it (recognised via `skill_synonyms`, e.g. "k8s") rank first. `filters`: `locations` (metro-expanded),
-`include_remote` (default true), `min_years`, `max_years`, `max_notice_days`, `max_resume_age_days`, `skills`
-(candidate must have all). Without a query, returns the most recently updated matches. Each hit has headline, top
-skills, `matched_skills` and `similarity`; `total_matching` counts everyone passing the filters.
+`include_remote` (default true), `countries` (where the candidate is based, read from their location: "Remote
+(India)", "Pune" and "Maharashtra" all mean India; a location naming no country passes; a country given in
+`locations` counts as one), `min_years`, `max_years`, `max_notice_days`, `max_resume_age_days`, `skills` (candidate
+must have all). Without a query, returns the most recently updated matches. Each hit has headline, top skills,
+`matched_skills` and `similarity`; `total_matching` counts everyone passing the filters. Results come one page at a
+time: `limit` (1-100) per page, and `offset` set to the previous page's `next_offset` (null on the last page).
 
 ### `record_feedback`
 

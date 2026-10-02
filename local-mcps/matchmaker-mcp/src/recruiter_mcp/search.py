@@ -5,7 +5,7 @@ import asyncpg
 
 from .errors import ToolFailure
 from .ingest import build_headline, rank_skills
-from .locations import expand_job_locations
+from .locations import country_key, expand_job_locations, is_country
 from .match import EXACT_SCAN_MAX_ROWS, build_filter_sql
 from .models import AppliedFilters, CandidateProfile, SearchFilters, SearchHit, SearchResult
 from .services import Services
@@ -34,8 +34,11 @@ def skills_in_query(query: str, normalizer: SkillNormalizer) -> list[str]:
 
 
 def to_applied(f: SearchFilters, normalizer: SkillNormalizer) -> AppliedFilters:
+    """A country in `locations` ("India") filters by country; it would restrict no city there."""
     skills = normalizer.normalize_all(f.skills or [])
-    keys = expand_job_locations(f.locations or [])
+    locations = f.locations or []
+    countries = [*(f.countries or []), *(loc for loc in locations if is_country(loc))]
+    keys = expand_job_locations([loc for loc in locations if not is_country(loc)])
     return AppliedFilters(
         location_keys=keys,
         remote_ok=not keys,
@@ -45,6 +48,8 @@ def to_applied(f: SearchFilters, normalizer: SkillNormalizer) -> AppliedFilters:
         max_resume_age_days=f.max_resume_age_days,
         must_have_skills=skills,
         min_must_have_skills=len(skills) or None,
+        include_remote_candidates=f.include_remote,
+        country_keys=list(dict.fromkeys(country_key(c) for c in countries if c.strip())),
     )
 
 
@@ -69,16 +74,17 @@ def _hit(row: asyncpg.Record, query_skills: list[str]) -> SearchHit:
 
 
 async def search_candidates(
-    svc: Services, query: str | None, filters: SearchFilters | None, limit: int = 20
+    svc: Services, query: str | None, filters: SearchFilters | None, limit: int = 20, offset: int = 0
 ) -> SearchResult:
+    """One page of the ranked list; `offset` skips the candidates on earlier pages."""
     if not 1 <= limit <= MAX_LIMIT:
         raise ToolFailure("invalid_input", f"limit must be between 1 and {MAX_LIMIT}")
+    if offset < 0:
+        raise ToolFailure("invalid_input", "offset must be 0 or more")
     query = (query or "").strip()
     f = filters or SearchFilters()
     applied = to_applied(f, svc.normalizer)
     where, params = build_filter_sql(applied)
-    if f.locations and not f.include_remote:
-        where += " AND location_key IS DISTINCT FROM 'remote'"
     query_skills = skills_in_query(query, svc.normalizer) if query else []
 
     async with svc.pool.acquire() as conn, conn.transaction():
@@ -89,23 +95,25 @@ async def search_candidates(
             skills_p = f"${len(params) + 2}"
             if total > EXACT_SCAN_MAX_ROWS and not query_skills:
                 await conn.execute("SET LOCAL hnsw.iterative_scan = relaxed_order")
-                await conn.execute(f"SET LOCAL hnsw.ef_search = {max(100, limit * 2)}")
+                await conn.execute(f"SET LOCAL hnsw.ef_search = {min(1000, max(100, (offset + limit) * 2))}")
             rows = await conn.fetch(
                 f"""SELECT *, 1 - (embedding <=> {vec_p}) AS similarity,
                            cardinality(ARRAY(SELECT unnest(skills) INTERSECT
                                              SELECT unnest({skills_p}::text[]))) AS skill_hits
                     FROM candidates WHERE {where}
-                    ORDER BY skill_hits DESC, embedding <=> {vec_p} LIMIT {int(limit)}""",
+                    ORDER BY skill_hits DESC, embedding <=> {vec_p}, id LIMIT {int(limit)} OFFSET {int(offset)}""",
                 *params, vec, query_skills,
             )
         else:
             rows = await conn.fetch(
                 f"SELECT *, NULL::float AS similarity FROM candidates WHERE {where} "
-                f"ORDER BY updated_at DESC LIMIT {int(limit)}",
+                f"ORDER BY updated_at DESC, id LIMIT {int(limit)} OFFSET {int(offset)}",
                 *params,
             )
     return SearchResult(
         query_skills=query_skills,
         total_matching=total,
+        offset=offset,
+        next_offset=offset + len(rows) if offset + len(rows) < total else None,
         candidates=[_hit(r, query_skills) for r in rows],
     )

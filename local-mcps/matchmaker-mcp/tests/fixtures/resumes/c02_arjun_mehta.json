@@ -3,6 +3,8 @@
   "email": "arjun.mehta@example.com",
   "phone": "+91 99887 76655",
   "location": "Bengaluru",
+  "willing_to_relocate": null,
+  "preferred_locations": [],
   "current_title": "Staff Software Engineer",
   "roles": [
     {

@@ -54,6 +54,7 @@ const SECTION_ORDER = [
   "MCP servers",
   "Advanced use",
   "Fleets",
+  "API",
 ];
 
 const DIR = path.join(process.cwd(), "content", "guide");

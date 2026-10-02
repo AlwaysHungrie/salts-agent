@@ -19,6 +19,7 @@ import type {
 } from "@/lib/agent";
 import { formatUsdShort } from "@/lib/format";
 import { useIdentity } from "@/lib/identity";
+import { ApiKeys } from "@/components/ApiKeys";
 import { cached, keys, remember, revise } from "@/lib/cache";
 
 /**
@@ -207,7 +208,9 @@ export default function Settings({
       const res = await fetch(
         `/api/agents/${encodeURIComponent(agentId)}/config`,
       );
-      const payload = (await res.json().catch(() => null)) as ConfigPayload | null;
+      const payload = (await res
+        .json()
+        .catch(() => null)) as ConfigPayload | null;
       if (!res.ok || !payload) {
         setError(
           payload?.error ??
@@ -219,13 +222,17 @@ export default function Settings({
       setModels(payload.models);
       // What was drawn from the cache is replaced only where it has not been edited
       // since: a late read must not undo a change already made on this page.
-      setConfig((current) => (current === (held?.config ?? null) ? payload.config : current));
+      setConfig((current) =>
+        current === (held?.config ?? null) ? payload.config : current,
+      );
       setLocked(new Set(payload.locked ?? []));
       setSpend(payload.spend ?? null);
       setMemberLimit(payload.member_limit ?? 0);
       setAgent(payload.agent ?? null);
       setName((current) =>
-        current === (held?.agent?.name ?? "") ? (payload.agent?.name ?? "") : current,
+        current === (held?.agent?.name ?? "")
+          ? (payload.agent?.name ?? "")
+          : current,
       );
       setEmails((current) =>
         current === (held?.agent?.allowed_emails ?? "")
@@ -668,6 +675,13 @@ export default function Settings({
                   {memberLimit === 1 ? "" : "s"} remaining (set by agent admin)
                 </p>
               )}
+            </Row>
+
+            <Row
+              title="API key"
+              hint="Use this to get programatic access to your agent."
+            >
+              <ApiKeys agentId={agentId} roles={["user"]} />
             </Row>
           </div>
         )}

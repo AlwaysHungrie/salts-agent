@@ -3,6 +3,8 @@
   "email": null,
   "phone": "+91 91234 56780",
   "location": "Thane",
+  "willing_to_relocate": null,
+  "preferred_locations": [],
   "current_title": "React Developer",
   "roles": [
     {

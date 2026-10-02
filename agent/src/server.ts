@@ -1,4 +1,5 @@
 import { routeAgentRequest } from "agents";
+import { api, asJsonRequest, isApiPath } from "./api";
 import type { Env } from "./env";
 import { agentIdOf } from "./registry";
 import { fileBusinessRequest, handleAdmin } from "./routes/admin";
@@ -7,11 +8,17 @@ import { handleFleets } from "./routes/fleets";
 import { ROUTE_INDEX } from "./routes/index-page";
 import { handleOauthCallback } from "./routes/mcp-oauth";
 import { handleSearxngMcp, handleSearxngUrl } from "./routes/searxng";
-import { handleSession } from "./routes/sessions";
 import { handleWebhook } from "./routes/telegram";
 import { handleWhatsappWebhook } from "./routes/whatsapp";
 import { deploymentSettings, SettingsIncompleteError } from "./settings";
-import { callerEmail, mayUseAgent, mayUseSessionAsGuest, unconfigured } from "./worker/auth";
+import {
+  apiKeyCaller,
+  callerEmail,
+  keyReaches,
+  mayUseAgent,
+  mayUseSessionAsGuest,
+  unconfigured,
+} from "./worker/auth";
 import { CORS, json, jsonError, notFound, withCors } from "./worker/http";
 import { directory, registry } from "./worker/stores";
 
@@ -50,12 +57,15 @@ async function preflight(request: Request, env: Env, segments: string[]) {
 }
 
 /**
- * The identity gate: everything under /api and /agents needs a caller, and a session
- * route needs one allowed on the session's agent (or its guest owner).
+ * The identity gate: everything under /api and /agents needs a caller (a Clerk session,
+ * or an agent API key on that agent's routes), and a session route needs one allowed on
+ * the session's agent (or its guest owner).
  */
 async function gate(request: Request, env: Env, segments: string[]) {
   if ((segments[0] === "api" || segments[0] === "agents") && !(await callerEmail(request, env))) {
-    return jsonError("unauthorized", 401);
+    // No Clerk session: an agent API key, on its own agent's routes only.
+    const key = await apiKeyCaller(request, env);
+    if (!key || !keyReaches(key.agentId, segments)) return jsonError("unauthorized", 401);
   }
   const sessionRoute =
     (segments[0] === "agents" && segments[1] === "session-agent" && segments[2]) ||
@@ -154,19 +164,18 @@ export default {
     const refused = await gate(request, env, segments);
     if (refused) return refused;
 
+    touchOnMessage(env, ctx, segments);
+    if (isApiPath(segments)) return await api.fetch(await asJsonRequest(request), env, ctx);
+
     if (segments[0] === "api") {
       const handled =
         segments[1] === "fleets"
           ? await handleFleets(request, env, url, segments)
           : segments[1] === "agents"
             ? await handleAgents(request, env, url, segments)
-            : segments[1] === "sessions" && segments[2]
-              ? await handleSession(request, env, url, segments)
-              : undefined;
+            : undefined;
       if (handled) return handled;
     }
-
-    touchOnMessage(env, ctx, segments);
 
     const channel = await channelRoute(request, env, ctx, url, segments);
     if (channel) return channel;

@@ -257,41 +257,57 @@ export function Field({
           ))}
         </select>
       ) : (
-        <input
-          type={field.secret && !masked ? "password" : "text"}
-          value={draft}
-          placeholder={field.placeholder}
-          onChange={(e) => {
-            setEdited(true);
-            setDraft(e.target.value);
-          }}
-          onFocus={() => {
-            setFocused(true);
-            setEdited(false);
-            if (masked) setDraft("");
-          }}
-          onBlur={() => {
-            setFocused(false);
-            // An untouched secret is left alone: the mask means "keep the key".
-            // One the user emptied on purpose is cleared.
-            if (field.secret && draft === "" && !edited) {
-              setDraft(value);
-              return;
-            }
-            commit(draft.trim());
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") e.currentTarget.blur();
-            if (e.key === "Escape") {
+        <div className="mt-2 flex gap-2">
+          <input
+            type={field.secret && !masked ? "password" : "text"}
+            value={draft}
+            placeholder={field.placeholder}
+            onChange={(e) => {
+              setEdited(true);
+              setDraft(e.target.value);
+            }}
+            onFocus={() => {
+              setFocused(true);
               setEdited(false);
-              setDraft(value);
-              e.currentTarget.blur();
-            }
-          }}
-          className={`placeholder:text-faint mt-2 w-full rounded-2xl px-4 py-3 text-sm outline-none ${
-            bordered ? "bg-canvas border-hairline border" : "bg-field"
-          }`}
-        />
+              if (masked) setDraft("");
+            }}
+            onBlur={() => {
+              setFocused(false);
+              // An untouched secret is left alone: the mask means "keep the key".
+              // One the user emptied on purpose is cleared.
+              if (field.secret && draft === "" && !edited) {
+                setDraft(value);
+                return;
+              }
+              commit(draft.trim());
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.currentTarget.blur();
+              if (e.key === "Escape") {
+                setEdited(false);
+                setDraft(value);
+                e.currentTarget.blur();
+              }
+            }}
+            className={`placeholder:text-faint min-w-0 flex-1 rounded-2xl px-4 py-3 text-sm outline-none ${
+              bordered ? "bg-canvas border-hairline border" : "bg-field"
+            }`}
+          />
+          {/* Focusing a saved secret empties the box, so there is nothing to delete:
+            clearing the stored key needs its own control. */}
+          {field.secret && value === SECRET_MASK && !focused && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                commit("");
+              }}
+              className="bg-canvas border-hairline text-ink hover:bg-canvas-soft shrink-0 rounded-2xl border px-5 text-sm font-semibold transition"
+            >
+              Clear
+            </button>
+          )}
+        </div>
       )}
     </label>
   );

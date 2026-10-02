@@ -1,0 +1,4 @@
+{
+ "hash": "v1:c42e0d16f929fa41",
+ "text": "Anil Saxena\nEmail: anil.saxena817@example.com    Phone: +91 9773945883\n\nTotal Experience: 1 years 5 months\nCurrent Location: Hyderabad\nNotice Period: 60 days\nKey Skills: Java, SpringBoot, MySQL, AWS, Hibernate, Confluence\n\nEmployment Details\n\nMedisure\nDesignation: Java Developer\nDuration: Nov 2024 - Mar 2026\n- Developed RESTful microservices using SpringBoot to expose patient data APIs, integrating with MySQL for transactional storage and achieving 98% API availability.\n- Implemented Hibernate-based data access layers and optimized complex queries on MySQL, reducing average response time by 35% for critical reports.\n- Deployed application components on AWS EC2 and S3, maintained CI/CD pipelines, and documented design decisions and runbooks in Confluence.\n\nEducation\nB.E., Information Technology, Pune University\n\nPersonal Details\nLanguages: English, Hindi, Telugu\n\nOpen to relocating to Chennai."
+}

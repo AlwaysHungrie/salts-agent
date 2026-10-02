@@ -3,6 +3,8 @@
   "email": "sara.khan@example.com",
   "phone": "+91 98111 22233",
   "location": "Remote",
+  "willing_to_relocate": null,
+  "preferred_locations": [],
   "current_title": "Machine Learning Engineer",
   "roles": [
     {

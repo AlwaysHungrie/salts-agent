@@ -3,6 +3,8 @@
   "email": "ishaan.bose@example.com",
   "phone": "+91 93333 44455",
   "location": "Kolkata",
+  "willing_to_relocate": null,
+  "preferred_locations": [],
   "current_title": "Digital Marketing Manager",
   "roles": [
     {

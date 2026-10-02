@@ -1,3 +1,6 @@
+import { createRoute, z } from "@hono/zod-openapi";
+import { type ApiApp, jsonOf, refusals } from "../api/app";
+import { McpCatalogEntrySchema, McpServerSchema, OkSchema, checkedByHandler } from "../api/schemas";
 import type { Env } from "../env";
 import { SECRET_MASK } from "../capabilities";
 import {
@@ -10,9 +13,10 @@ import {
 import { EMPTY_MCP_SERVER } from "../registry";
 import { deploymentSettings } from "../settings";
 import { assertNameFree, mergeHeaders, validateMcpBody } from "../validation/mcp";
-import { errorMessage, json, jsonError, readJson } from "../worker/http";
+import { ApiError, errorMessage } from "../worker/http";
 import { syncMcpTools } from "../worker/integrations";
-import { readConfig, registry } from "../worker/stores";
+import { readConfig } from "../worker/stores";
+import { type AgentCall, AgentParams, agentRoute } from "./agent";
 import { redirectUri, startMcpOauth } from "./mcp-oauth";
 import { recommendMcpTools } from "./mcp-recommend";
 
@@ -53,11 +57,10 @@ const LIST_FIELDS = ["name", "url", "auth", "headers"] as const;
 const REREAD_FIELDS = ["url", "auth", "headers", "enabled"] as const;
 
 type McpCall = {
-  request: Request;
   env: Env;
   url: URL;
   agentId: string;
-  reg: ReturnType<typeof registry>;
+  reg: AgentCall["reg"];
   /**
    * Whether this call may change which servers exist: the `user_servers` meta setting,
    * or `?meta=1` from the admin dialog. Using existing servers is never refused.
@@ -65,23 +68,15 @@ type McpCall = {
   manages: () => Promise<boolean>;
 };
 
-const refused = () => jsonError("This agent's MCP servers are managed for you.", 403);
-const noSuchServer = () => jsonError("no such server", 404);
+const refused = () => new ApiError(403, "This agent's MCP servers are managed for you.");
+const noSuchServer = () => new ApiError(404, "no such server");
 
-/**
- * Everything under `/api/agents/:agentId/mcp`. `rest[0]` is a server id and `rest[1]`
- * an action on it. Servers live in the agent's own registry.
- */
-export async function handleMcp(
-  request: Request,
-  env: Env,
-  url: URL,
-  agentId: string,
-  rest: string[]
-): Promise<Response | undefined> {
-  const reg = registry(env, agentId);
-  const call: McpCall = {
-    request,
+/** Members use the servers; the admin reaches them from the meta dialog, with `?meta=1`. */
+const mayUseMcp = (call: AgentCall) =>
+  call.isUser || (call.isAdmin && call.url.searchParams.get("meta") === "1");
+
+function mcpCall({ env, url, agentId, reg }: AgentCall): McpCall {
+  return {
     env,
     url,
     agentId,
@@ -89,33 +84,187 @@ export async function handleMcp(
     manages: async () =>
       url.searchParams.get("meta") === "1" || (await reg.meta()).mcp.user_servers,
   };
-  const [id, action] = rest;
-  const method = request.method;
-
-  if (!id) {
-    if (method === "GET") return await listServers(call);
-    if (method === "POST") return await addServer(call);
-    return undefined;
-  }
-  if (method === "POST" && action === "connect") return await connectServer(call, id);
-  if (method === "POST" && action === "disconnect") return await disconnectServer(call, id);
-  if (method === "POST" && action === "refresh") return await refreshServer(call, id);
-  if (method === "POST" && action === "recommend") return await recommendTools(call, id);
-  if (method === "PATCH") return await patchServer(call, id);
-  if (method === "DELETE") {
-    if (!(await call.manages())) return refused();
-    await reg.removeMcpServer(id);
-    return json({ ok: true });
-  }
-  return undefined;
 }
 
-async function listServers({ env, url, reg, manages }: McpCall): Promise<Response> {
+const MetaQuery = z.object({
+  meta: z.literal("1").optional().openapi({
+    description: "From the admin's meta dialog: may manage servers, sees header values.",
+  }),
+});
+
+const ServerParams = AgentParams.extend({
+  serverId: z.string().openapi({ param: { name: "serverId", in: "path" }, example: "1a2b3c4d" }),
+});
+
+const McpBodyShape = z.object({
+  name: z.string().optional(),
+  url: z.string().optional(),
+  auth: z.enum(["none", "headers", "oauth"]).optional(),
+  headers: z
+    .union([z.string(), z.record(z.string(), z.string())])
+    .optional()
+    .openapi({ description: "Header values sent to a `headers` server." }),
+  enabled: z.union([z.number(), z.boolean()]).optional(),
+  disabled_tools: z.array(z.string()).optional(),
+});
+const McpBodySchema = checkedByHandler(McpBodyShape, "McpServerBody");
+
+const middleware = [agentRoute(mayUseMcp)];
+
+const ServerAnswer = jsonOf(z.object({ server: McpServerSchema }).openapi("McpServerAnswer"));
+const tag = ["MCP servers"];
+
+/** Everything under `/api/agents/{agentId}/mcp`. Servers live in the agent's own registry. */
+const listServersRoute = createRoute({
+  method: "get",
+  path: "/api/agents/{agentId}/mcp",
+  tags: tag,
+  summary: "List the agent's MCP servers and templates",
+  middleware,
+  request: { params: AgentParams, query: MetaQuery },
+  responses: {
+    200: jsonOf(
+      z
+        .object({
+          servers: z.array(McpServerSchema),
+          redirect_uri: z.string(),
+          templates: z.array(z.string()),
+          catalog: z.array(McpCatalogEntrySchema),
+          user_servers: z.boolean(),
+        })
+        .openapi("McpServerList")
+    ),
+    ...refusals(404),
+  },
+});
+
+const addServerRoute = createRoute({
+  method: "post",
+  path: "/api/agents/{agentId}/mcp",
+  tags: tag,
+  summary: "Add an MCP server",
+  middleware,
+  request: {
+    params: AgentParams,
+    query: MetaQuery,
+    body: { content: { "application/json": { schema: McpBodySchema } } },
+  },
+  responses: { 200: ServerAnswer, ...refusals(400, 403, 404, 409) },
+});
+
+const patchServerRoute = createRoute({
+  method: "patch",
+  path: "/api/agents/{agentId}/mcp/{serverId}",
+  tags: tag,
+  summary: "Change an MCP server",
+  middleware,
+  request: {
+    params: ServerParams,
+    query: MetaQuery,
+    body: { content: { "application/json": { schema: McpBodySchema } } },
+  },
+  responses: { 200: ServerAnswer, ...refusals(400, 403, 404, 409) },
+});
+
+const deleteServerRoute = createRoute({
+  method: "delete",
+  path: "/api/agents/{agentId}/mcp/{serverId}",
+  tags: tag,
+  summary: "Remove an MCP server",
+  middleware,
+  request: { params: ServerParams, query: MetaQuery },
+  responses: { 200: jsonOf(OkSchema), ...refusals(403, 404) },
+});
+
+const connectServerRoute = createRoute({
+  method: "post",
+  path: "/api/agents/{agentId}/mcp/{serverId}/connect",
+  tags: tag,
+  summary: "Start OAuth for a server",
+  description: "Open `authorize_url` in a browser; the provider sends it back here.",
+  middleware,
+  request: {
+    params: ServerParams,
+    query: MetaQuery,
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            return_to: z.string().optional().openapi({ description: "Where to land after." }),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: jsonOf(z.object({ authorize_url: z.string() })),
+    ...refusals(404, 502),
+  },
+});
+
+export function mcpRoutes(app: ApiApp) {
+  app.openapi(listServersRoute, async (c) => c.json(await listServers(mcpCall(c.var.call)), 200));
+
+  app.openapi(addServerRoute, async (c) =>
+    c.json(await addServer(mcpCall(c.var.call), c.req.valid("json")), 200)
+  );
+
+  app.openapi(patchServerRoute, async (c) =>
+    c.json(
+      await patchServer(mcpCall(c.var.call), c.req.valid("param").serverId, c.req.valid("json")),
+      200
+    )
+  );
+
+  app.openapi(deleteServerRoute, async (c) => {
+    const call = mcpCall(c.var.call);
+    if (!(await call.manages())) throw refused();
+    await call.reg.removeMcpServer(c.req.valid("param").serverId);
+    return c.json({ ok: true }, 200);
+  });
+
+  app.openapi(connectServerRoute, async (c) =>
+    c.json(
+      await connectServer(
+        mcpCall(c.var.call),
+        c.req.valid("param").serverId,
+        c.req.valid("json").return_to ?? ""
+      ),
+      200
+    )
+  );
+
+  const action = (
+    name: string,
+    summary: string,
+    run: (call: McpCall, id: string) => Promise<{ server: McpServerView }>
+  ) => ({ name, summary, run }) as const;
+  for (const { name, summary, run } of [
+    action("disconnect", "Forget a server's OAuth tokens", disconnectServer),
+    action("refresh", "Re-read a server's tools", refreshServer),
+    action("recommend", "Let the agent's model choose which tools to keep on", recommendTools),
+  ]) {
+    app.openapi(
+      createRoute({
+        method: "post",
+        path: `/api/agents/{agentId}/mcp/{serverId}/${name}`,
+        tags: tag,
+        summary,
+        middleware,
+        request: { params: ServerParams, query: MetaQuery },
+        responses: { 200: ServerAnswer, ...refusals(400, 404, 409, 502) },
+      }),
+      async (c) => c.json(await run(mcpCall(c.var.call), c.req.valid("param").serverId), 200)
+    );
+  }
+}
+
+async function listServers({ env, url, reg, manages }: McpCall) {
   const servers = await reg.mcpServers();
   const reveal = await manages();
   const { mcp } = await reg.meta();
   const settings = await deploymentSettings(env);
-  return json({
+  return {
     servers: servers.map((row) => mcpView(row, reveal)),
     // Shown on the page: a provider may ask for it when registering by hand.
     redirect_uri: redirectUri(url.origin),
@@ -124,23 +273,22 @@ async function listServers({ env, url, reg, manages }: McpCall): Promise<Respons
     templates: mcp.templates,
     catalog: mcp.catalog.length ? mcp.catalog : settings.mcp_catalog,
     user_servers: mcp.user_servers,
-  });
+  };
 }
 
-async function addServer({ request, reg, manages }: McpCall): Promise<Response> {
-  if (!(await manages())) return refused();
-  const body = await readJson<Record<string, unknown>>(request);
+async function addServer({ reg, manages }: McpCall, body: Record<string, unknown>) {
+  if (!(await manages())) throw refused();
   let patch: Partial<McpServerRow>;
   try {
     patch = validateMcpBody(body);
   } catch (err) {
-    return jsonError(errorMessage(err), 400);
+    throw new ApiError(400, errorMessage(err));
   }
-  if (!patch.name || !patch.url) return jsonError("name and url are required", 400);
+  if (!patch.name || !patch.url) throw new ApiError(400, "name and url are required");
   try {
     await assertNameFree(reg, patch.name);
   } catch (err) {
-    return jsonError(errorMessage(err), 409);
+    throw new ApiError(409, errorMessage(err));
   }
   const row: McpServerRow = {
     ...EMPTY_MCP_SERVER,
@@ -155,25 +303,24 @@ async function addServer({ request, reg, manages }: McpCall): Promise<Response> 
   await reg.addMcpServer(row);
   // OAuth has nothing to list until the user approves it.
   const synced = row.auth === "oauth" ? row : await syncMcpTools(reg, row);
-  return json({ server: mcpView(synced, true) });
+  return { server: mcpView(synced, true) };
 }
 
-async function connectServer({ request, url, agentId, reg }: McpCall, id: string) {
+async function connectServer({ url, agentId, reg }: McpCall, id: string, returnTo: string) {
   const row = await reg.mcpServer(id);
-  if (!row) return noSuchServer();
-  const { return_to } = await readJson<{ return_to?: string }>(request);
+  if (!row) throw noSuchServer();
   try {
-    const authorizeUrl = await startMcpOauth(reg, agentId, row, url.origin, return_to ?? "");
-    return json({ authorize_url: authorizeUrl });
+    const authorizeUrl = await startMcpOauth(reg, agentId, row, url.origin, returnTo);
+    return { authorize_url: authorizeUrl };
   } catch (err) {
     const message = errorMessage(err);
     await reg.updateMcpServer(id, { last_error: message });
-    return jsonError(message, 502);
+    throw new ApiError(502, message);
   }
 }
 
 /** Forget the tokens but keep the server, so reconnecting is one click. */
-async function disconnectServer({ reg, manages }: McpCall, id: string): Promise<Response> {
+async function disconnectServer({ reg, manages }: McpCall, id: string) {
   const row = await reg.updateMcpServer(id, {
     oauth_access_token: "",
     oauth_refresh_token: "",
@@ -183,15 +330,15 @@ async function disconnectServer({ reg, manages }: McpCall, id: string): Promise<
     tools_json: "",
     last_error: "",
   });
-  if (!row) return noSuchServer();
-  return json({ server: mcpView(row, await manages()) });
+  if (!row) throw noSuchServer();
+  return { server: mcpView(row, await manages()) };
 }
 
-async function refreshServer({ reg, manages }: McpCall, id: string): Promise<Response> {
+async function refreshServer({ reg, manages }: McpCall, id: string) {
   const row = await reg.mcpServer(id);
-  if (!row) return noSuchServer();
+  if (!row) throw noSuchServer();
   const synced = await syncMcpTools(reg, row);
-  return json({ server: mcpView(synced, await manages()) });
+  return { server: mcpView(synced, await manages()) };
 }
 
 /**
@@ -200,14 +347,14 @@ async function refreshServer({ reg, manages }: McpCall, id: string): Promise<Res
  */
 async function recommendTools({ env, agentId, reg, manages }: McpCall, id: string) {
   const row = await reg.mcpServer(id);
-  if (!row) return noSuchServer();
+  if (!row) throw noSuchServer();
   const tools = parseTools(row.tools_json);
   if (tools.length === 0) {
-    return jsonError("This server hasn't listed any tools yet. Refresh it first.", 409);
+    throw new ApiError(409, "This server hasn't listed any tools yet. Refresh it first.");
   }
   const config = await readConfig(env, reg);
   if (!config.openrouter_api_key) {
-    return jsonError("OpenRouter API key is missing. Add it in Settings.", 400);
+    throw new ApiError(400, "OpenRouter API key is missing. Add it in Settings.");
   }
   let keep: string[];
   try {
@@ -215,7 +362,7 @@ async function recommendTools({ env, agentId, reg, manages }: McpCall, id: strin
   } catch (err) {
     const message = errorMessage(err);
     console.error(`mcp recommend failed for ${row.name} on agent ${agentId}: ${message}`);
-    return jsonError(message, 502);
+    throw new ApiError(502, message);
   }
   const kept = new Set(keep);
   const updated = await reg.updateMcpServer(id, {
@@ -224,28 +371,27 @@ async function recommendTools({ env, agentId, reg, manages }: McpCall, id: strin
       tools.filter((tool) => !kept.has(tool.name)).map((tool) => tool.name)
     ),
   });
-  if (!updated) return noSuchServer();
-  return json({ server: mcpView(updated, await manages()) });
+  if (!updated) throw noSuchServer();
+  return { server: mcpView(updated, await manages()) };
 }
 
-async function patchServer({ request, reg, manages }: McpCall, id: string): Promise<Response> {
+async function patchServer({ reg, manages }: McpCall, id: string, body: Record<string, unknown>) {
   const existing = await reg.mcpServer(id);
-  if (!existing) return noSuchServer();
-  const body = await readJson<Record<string, unknown>>(request);
+  if (!existing) throw noSuchServer();
   let patch: Partial<McpServerRow>;
   try {
     patch = validateMcpBody(body);
   } catch (err) {
-    return jsonError(errorMessage(err), 400);
+    throw new ApiError(400, errorMessage(err));
   }
   if (LIST_FIELDS.some((key) => patch[key] !== undefined) && !(await manages())) {
-    return refused();
+    throw refused();
   }
   if (patch.name && patch.name !== existing.name) {
     try {
       await assertNameFree(reg, patch.name, id);
     } catch (err) {
-      return jsonError(errorMessage(err), 409);
+      throw new ApiError(409, errorMessage(err));
     }
   }
   if (patch.headers !== undefined) patch.headers = mergeHeaders(existing.headers, patch.headers);
@@ -259,9 +405,9 @@ async function patchServer({ request, reg, manages }: McpCall, id: string): Prom
     });
   }
   const updated = await reg.updateMcpServer(id, patch);
-  if (!updated) return noSuchServer();
+  if (!updated) throw noSuchServer();
   const changed = REREAD_FIELDS.some((key) => patch[key] !== undefined);
-  return json({
+  return {
     server: mcpView(changed ? await syncMcpTools(reg, updated) : updated, await manages()),
-  });
+  };
 }

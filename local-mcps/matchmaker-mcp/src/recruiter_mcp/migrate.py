@@ -7,7 +7,9 @@ from pathlib import Path
 import asyncpg
 
 from .config import get_settings
-from .skills import load_seed
+from .ingest import derive
+from .models import CandidateProfile
+from .skills import SkillNormalizer, load_seed, save_learned
 
 log = logging.getLogger(__name__)
 
@@ -36,14 +38,44 @@ async def migrate(database_url: str | None = None) -> list[str]:
         # Seed file is the source of truth for built-in aliases; re-running updates them.
         seed = load_seed()
         await conn.executemany(
-            "INSERT INTO skill_synonyms (alias, canonical) VALUES ($1, $2)"
-            " ON CONFLICT (alias) DO UPDATE SET canonical = EXCLUDED.canonical",
+            "INSERT INTO skill_synonyms (alias, canonical, source) VALUES ($1, $2, 'seed')"
+            " ON CONFLICT (alias) DO UPDATE SET canonical = EXCLUDED.canonical, source = 'seed'",
             list(seed.items()),
         )
         log.info("seeded %d skill synonyms", len(seed))
+        changed = await refresh_derived(conn)
+        if changed:
+            log.info("recomputed derived columns for %d candidates", changed)
     finally:
         await conn.close()
     return applied
+
+
+async def refresh_derived(conn: asyncpg.Connection) -> int:
+    """Recompute skills and location columns from each stored profile, so seed or rule changes reach candidates
+    ingested earlier. Only rows whose values change are written."""
+    rows = await conn.fetch("SELECT alias, canonical FROM skill_synonyms")
+    normalizer = SkillNormalizer({r["alias"]: r["canonical"] for r in rows})
+    updates = []
+    for r in await conn.fetch(
+        "SELECT id, profile, skills, location_key, willing_to_relocate, preferred_location_keys, country_keys"
+        " FROM candidates"
+    ):
+        d = derive(CandidateProfile.model_validate_json(r["profile"]), normalizer)
+        new = (d.skills, d.location_key, d.willing_to_relocate, d.preferred_location_keys, d.country_keys)
+        old = (list(r["skills"]), r["location_key"], r["willing_to_relocate"], list(r["preferred_location_keys"]),
+               list(r["country_keys"]))
+        if new != old:
+            updates.append((r["id"], *new))
+    async with conn.transaction():
+        if updates:
+            await conn.executemany(
+                "UPDATE candidates SET skills = $2, location_key = $3, willing_to_relocate = $4,"
+                " preferred_location_keys = $5, country_keys = $6 WHERE id = $1",
+                updates,
+            )
+        await save_learned(conn, normalizer)
+    return len(updates)
 
 
 def main() -> None:

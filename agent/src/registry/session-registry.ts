@@ -3,6 +3,14 @@ import type { McpServerRow } from "../mcp";
 import { applyMigrations } from "../schema";
 import type { SettableConfigKey } from "../settings";
 import { readAccess, seedAccess, setAccess, setGuestAccess } from "./access";
+import {
+  type ApiKeyInfo,
+  type ApiKeyRole,
+  apiKeyHash,
+  listApiKeys,
+  removeApiKey,
+  setApiKey,
+} from "./api-keys";
 import { loadConfigRow, patchConfigRow, readMeta, writeMeta } from "./agent-config";
 import {
   addMcpServer,
@@ -141,6 +149,28 @@ export class SessionRegistry extends DurableObject {
   setGuests(patch: { guests?: number; guest_emails?: string }): AccessRow {
     this.ensureSchema();
     return setGuestAccess(this.ctx.storage, patch);
+  }
+
+  /** Which API keys exist, without the keys. */
+  apiKeys(): ApiKeyInfo[] {
+    this.ensureSchema();
+    return listApiKeys(this.ctx.storage);
+  }
+
+  /** The stored hash of the role's key, or "" when it has none. Only the Worker calls this. */
+  apiKeyHash(role: ApiKeyRole): string {
+    this.ensureSchema();
+    return apiKeyHash(this.ctx.storage, role);
+  }
+
+  setApiKey(role: ApiKeyRole, hash: string, hint: string): ApiKeyInfo {
+    this.ensureSchema();
+    return setApiKey(this.ctx.storage, role, hash, hint);
+  }
+
+  removeApiKey(role: ApiKeyRole): void {
+    this.ensureSchema();
+    return removeApiKey(this.ctx.storage, role);
   }
 
   /**

@@ -1,0 +1,4 @@
+{
+ "hash": "v1:ef958698712b6676",
+ "text": "Lakshmi Fernandes | lakshmi.fernandes811@example.com | +91 9614979396\nBangalore. Immediate joiner.\n\nData Scientist, Saffron Bank — Nov 2025 - Present\nBuilt and deployed a credit risk scoring prototype that reduced manual review workload by 28% using Python3 and sklearn pipelines; processed 500k+ transaction records with pandas for feature engineering and missing-value strategies. Implemented end-to-end model training with PyTorch and TensorFlow experiments for alternative architectures, comparing AUC and precision-recall curves. Optimized batch feature computation using Apache Spark and SQL, cutting nightly pipeline runtime from 4 hours to 90 minutes. Versioned code and models with Git and collaborated with engineering to productionize models via containerized APIs.\n\nSkills: Python3, ML, sklearn, pandas, SQL, PyTorch, TensorFlow, Computer Vision, Apache Spark, Git\n\nEducation: CA, ICAI"
+}

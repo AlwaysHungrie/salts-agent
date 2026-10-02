@@ -56,6 +56,7 @@ import path from "node:path";
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import { startGateway } from "./gateway.mjs";
+import { orphanNgroks, parseProcessList, supervisorsOf } from "./procs.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const CLI = fileURLToPath(import.meta.url);
@@ -602,6 +603,36 @@ function pidIn(file) {
 const supervisorPid = () => pidIn(PID_FILE);
 const isNgrok = (pid) => isProcess(pid, /ngrok/i);
 
+function processList() {
+  const res = IS_WIN
+    ? powershell(
+        'Get-CimInstance Win32_Process | ForEach-Object { "$($_.ProcessId) $($_.ParentProcessId) $($_.CommandLine)" }'
+      )
+    : run("ps", ["-axo", "pid=,ppid=,command="]);
+  return parseProcessList(res.stdout);
+}
+
+/**
+ * End every supervisor of this target except `except`, then every tunnel left without its
+ * supervisor. supervisor.pid names only the newest supervisor, so one started beside it
+ * (a second `start`, the login item) used to keep running with its own ngrok until the
+ * free plan's 3 sessions were used up and no new tunnel could open.
+ */
+async function endStrays(except = 0) {
+  const kill = (pid, sig) => {
+    try {
+      process.kill(pid, sig);
+    } catch {}
+  };
+  const others = supervisorsOf(processList(), withTarget("_supervise"), except);
+  for (const pid of others) kill(pid, "SIGTERM"); // each stops its own ngrok on the way out
+  for (let i = 0; i < 20 && others.some(alive); i++) await sleep(250);
+  for (const pid of others.filter(alive)) kill(pid, "SIGKILL");
+  const orphans = orphanNgroks(processList());
+  for (const pid of orphans) kill(pid, "SIGTERM");
+  return others.length + orphans.length;
+}
+
 /**
  * The long-running half: keeps Docker, the services, the gateway and the tunnel up, and
  * the agent pointed at the tunnel.
@@ -619,9 +650,11 @@ async function supervise() {
   } catch {}
   writeFileSync(PID_FILE, String(process.pid));
 
-  // A supervisor killed hard leaves its ngrok behind, and a free account allows one.
+  // One supervisor and one tunnel per target: end any other, and any ngrok left behind.
   const stale = readState().ngrokPid;
   if (isNgrok(stale)) process.kill(stale, "SIGTERM");
+  const ended = await endStrays(process.pid);
+  if (ended) log(`ended ${ended} stray supervisor/ngrok process(es)`);
 
   let token = readToken();
   const { agentId, worker } = readState();
@@ -897,14 +930,16 @@ function spawnSupervisor() {
 
 async function stopSupervisor() {
   const pid = supervisorPid();
-  if (!pid) return false;
-  process.kill(pid, "SIGTERM");
-  for (let i = 0; i < 20 && alive(pid); i++) await sleep(250);
-  if (alive(pid)) process.kill(pid, "SIGKILL");
+  if (pid) {
+    process.kill(pid, "SIGTERM");
+    for (let i = 0; i < 20 && alive(pid); i++) await sleep(250);
+    if (alive(pid)) process.kill(pid, "SIGKILL");
+  }
+  const strays = await endStrays();
   const { ngrokPid, svc } = readState();
   if (isNgrok(ngrokPid)) process.kill(ngrokPid, "SIGTERM");
   if (isProcess(svc?.matchmaker?.pid, /recruiter-mcp/i)) process.kill(svc.matchmaker.pid, "SIGTERM");
-  return true;
+  return Boolean(pid || strays);
 }
 
 /** Wait for the supervisor to get the agent pointed at a live tunnel for `names`, or to fail. */
@@ -1178,6 +1213,7 @@ async function start({ interactive }) {
 
     // Running already: the new services join the same tunnel, so its address stays.
     let pid = supervisorPid();
+    if (pid) await endStrays(pid);
     const wanted = pid && readState().url ? named : services;
     for (;;) {
       const since = new Date().toISOString();
@@ -1342,6 +1378,7 @@ async function restart() {
     console.log("supervisor not running; starting it");
     return await start({ interactive: process.stdin.isTTY });
   }
+  await endStrays(pid); // a stray's session would stop the new tunnel from opening
   const since = new Date().toISOString();
   const services = readState().services ?? [];
   for (const name of services) writeSvc(name, { pushStatus: 0, error: "" });

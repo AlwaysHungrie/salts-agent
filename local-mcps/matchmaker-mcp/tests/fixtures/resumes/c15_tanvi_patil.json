@@ -3,6 +3,8 @@
   "email": "tanvi.patil@example.com",
   "phone": "+91 94444 55566",
   "location": "Pune",
+  "willing_to_relocate": null,
+  "preferred_locations": [],
   "current_title": "QA Automation Engineer",
   "roles": [
     {

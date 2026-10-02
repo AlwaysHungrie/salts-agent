@@ -1,7 +1,9 @@
 import { type AgentRow, type Capability, type Config, EMPTY_META, type McpCatalogEntry, type MetaSettings, type ModelOption, type SpendState } from "@/lib/agent";
 import { X } from "lucide-react";
 import { useEffect, useState } from "react";
+import { ApiKeys } from "@/components/ApiKeys";
 import { MetaSettingsForm } from "./MetaSettingsForm";
+import { Section } from "./pieces";
 
 export function MetaSettingsDialog({
   agent,
@@ -141,6 +143,13 @@ export function MetaSettingsDialog({
               agentId={agent.id}
               spend={spend}
             />
+
+            <Section
+              title="Admin API key"
+              hint="Manage this agent from scripts or curl without signing in. The user key is on the agent's settings page."
+            >
+              <ApiKeys agentId={agent.id} roles={["admin"]} />
+            </Section>
 
             <div className="border-hairline-soft flex items-center justify-between gap-3 border-t pt-5">
               <span />
