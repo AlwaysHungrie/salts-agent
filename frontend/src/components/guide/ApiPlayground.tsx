@@ -25,11 +25,14 @@ export function ApiPlayground({ base }: { base: string }) {
       <Reference
         configuration={{
           url: `${base}/openapi.json`,
-          layout: "classic",
+          layout: "modern",
           showSidebar: false,
           hideDarkModeToggle: true,
           withDefaultFonts: false,
           authentication: { preferredSecurityScheme: "apiKey" },
+          // Scalar's own tooling and AI chat: nothing a reader of this guide needs.
+          showDeveloperTools: "never",
+          agent: { disabled: true },
         }}
       />
     </div>
