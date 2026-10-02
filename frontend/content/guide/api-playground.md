@@ -2,9 +2,11 @@
 title: API playground
 section: API
 order: 1
-summary: Every call an agent API key can make, with a button to try each one.
+summary: You can get full programatic access to your agents via API keys.
 ---
 
-Generate a key first: the **user key** is under **API key** on your agent's settings page, and the **admin key** is in the agent's meta settings. Paste it below; the agent id fills itself in. On any route, press **Test Request**, then **Send**.
+There are two types of API keys: **admin key** and **user key**, generate and store them carefully. Do not share them with anyone. It can be used to gain complete access to your agent.
+
+Use the playground below to test the API.
 
 {{api-playground}}
