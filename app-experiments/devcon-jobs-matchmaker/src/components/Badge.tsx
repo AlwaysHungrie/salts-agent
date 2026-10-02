@@ -22,7 +22,7 @@ export function Badge({
       <div className={`overflow-hidden rounded-[22px] bg-card shadow-badge ${strap ? "-mt-3" : ""}`}>
         <div className="flex flex-col items-center gap-3 bg-violet px-6 pt-4 pb-5 text-white">
           <div className="badge-slot" aria-hidden />
-          <span className="font-display text-sm font-semibold tracking-wide opacity-90">Devcon Jobs</span>
+          <span className="font-display text-sm font-semibold tracking-wide opacity-90">Devcon 8 Matchmaker</span>
         </div>
         <div className="relative px-6 pt-6 pb-7">{children}</div>
       </div>

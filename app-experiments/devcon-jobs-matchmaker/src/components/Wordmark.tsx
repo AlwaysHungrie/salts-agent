@@ -7,7 +7,7 @@ export function Wordmark({ className = "" }: { className?: string }) {
         <rect x="7" y="7.5" width="8" height="2.5" rx="1.25" fill="#eef1f7" />
         <rect x="8.5" y="0" width="5" height="6" rx="1.5" fill="#ffb020" />
       </svg>
-      Devcon Jobs
+      Devcon 8 Matchmaker
     </span>
   );
 }

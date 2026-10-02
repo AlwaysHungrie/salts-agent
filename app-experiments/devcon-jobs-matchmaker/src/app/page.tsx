@@ -7,11 +7,11 @@ export default function Home() {
       <section className="pt-10 lg:pt-24">
         <Wordmark className="text-violet" />
         <h1 className="mt-12 max-w-[14ch] font-display text-5xl leading-[0.98] font-bold tracking-[-0.03em] text-balance sm:text-6xl lg:text-7xl">
-          Find your next role, or your next hire, at Devcon.
+          Find your next role, or your next hire, at Devcon 8.
         </h1>
         <p className="mt-6 max-w-[46ch] text-lg text-ink-2">
-          Add your resume to your badge so teams can find you. Then chat with the matchmaker to post a job or ask
-          who&rsquo;s worth meeting.
+          This is an unofficial app and not associated with Devcon. Upload your resume to get found. Or chat with our
+          Matchmaker to find someone.
         </p>
       </section>
       <div className="pb-16">
