@@ -59,14 +59,13 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
   const guide = getGuide(slug);
   if (!guide) notFound();
 
-  // A wide article has no contents column: it is one widget, not sections to jump between.
-  const headings = guide.wide ? [] : headingsOf(guide.body).filter((h) => h.depth === 2);
+  const headings = headingsOf(guide.body).filter((h) => h.depth === 2);
   const { previous, next } = neighbours(slug);
 
   return (
     <GuideLayout current={slug}>
       <div className="flex gap-10">
-        <article className={`min-w-0 flex-1 ${guide.wide ? "" : "max-w-[720px]"}`}>
+        <article className="max-w-[720px] min-w-0 flex-1">
           <p className="text-faint text-xs font-semibold tracking-[0.08em] uppercase">
             {guide.section}
           </p>
