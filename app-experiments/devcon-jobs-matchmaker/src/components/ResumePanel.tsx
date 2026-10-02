@@ -15,7 +15,7 @@ async function fetchResumes(base: string): Promise<Resume[] | null> {
 const dateFormat = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
 
 /** The user's badge, and the resumes pinned to it. */
-export function ResumePanel({ userId }: { userId: string }) {
+export function ResumePanel({ userId, name }: { userId: string; name: string }) {
   const base = `/api/users/${encodeURIComponent(userId)}/resume`;
   const input = useRef<HTMLInputElement>(null);
   const [resumes, setResumes] = useState<Resume[] | null>(null);
@@ -60,7 +60,7 @@ export function ResumePanel({ userId }: { userId: string }) {
     <aside className="flex flex-col gap-6 lg:min-h-0 lg:overflow-y-auto lg:pb-2">
       <Badge strap="h-6" className="mx-auto w-full max-w-[340px]">
         <p className="text-sm text-ink-2">Hello, I&rsquo;m</p>
-        <p className="mt-1 font-display text-3xl font-bold tracking-tight break-all text-violet">{userId}</p>
+        <p className="mt-1 font-display text-3xl font-bold tracking-tight break-words text-violet">{name}</p>
         <p className="mt-4 text-sm text-ink-2">
           {resumes === null
             ? " "
@@ -79,6 +79,7 @@ export function ResumePanel({ userId }: { userId: string }) {
         <h2 id="resume-heading" className="font-display text-lg font-semibold tracking-tight">
           {candidate ? "Update your resume" : "Add your resume"}
         </h2>
+        {candidate && <p className="mt-1 text-sm text-ink-2">A new upload replaces the one below.</p>}
         <input
           ref={input}
           type="file"
