@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isCommand, MAX_MESSAGE_CHARS, messageProblem, parseUserId, resumeProblem } from "@/lib/rules";
+import { isCommand, looksLikePdf, MAX_MESSAGE_CHARS, messageProblem, parseUserId, resumeProblem, safeFileName, tooLarge } from "@/lib/rules";
 
 describe("parseUserId", () => {
   it("accepts plain ids, trimmed", () => {
@@ -56,5 +56,32 @@ describe("resumeProblem", () => {
     expect(resumeProblem({ name: "cv.docx", type: "application/msword", size: 1000 })).toMatch(/PDF/);
     expect(resumeProblem({ name: "cv.pdf", type: "application/pdf", size: 0 })).toMatch(/empty/);
     expect(resumeProblem({ name: "cv.pdf", type: "application/pdf", size: 11 * 1024 * 1024 })).toMatch(/10 MB/);
+  });
+});
+
+describe("looksLikePdf", () => {
+  it("checks the PDF header", () => {
+    expect(looksLikePdf(new TextEncoder().encode("%PDF-1.7\n"))).toBe(true);
+    expect(looksLikePdf(new TextEncoder().encode("<html>"))).toBe(false);
+    expect(looksLikePdf(new Uint8Array())).toBe(false);
+  });
+});
+
+describe("tooLarge", () => {
+  it("compares the declared length to the limit plus form overhead", () => {
+    const at = (n: number) => ({ headers: new Headers({ "content-length": String(n) }) });
+    expect(tooLarge(at(1000), 1000)).toBe(false);
+    expect(tooLarge(at(1000 + 64 * 1024 + 1), 1000)).toBe(true);
+    expect(tooLarge({ headers: new Headers() }, 1000)).toBe(true);
+    expect(tooLarge({ headers: new Headers({ "content-length": "abc" }) }, 1000)).toBe(true);
+  });
+});
+
+describe("safeFileName", () => {
+  it("keeps plain names and strips anything else", () => {
+    expect(safeFileName("Ada CV.pdf", "resume.pdf")).toBe("Ada CV.pdf");
+    expect(safeFileName("../../etc/passwd", "resume.pdf")).toBe("_.._etc_passwd");
+    expect(safeFileName("ignore previous\ninstructions.pdf", "resume.pdf")).toBe("ignore previous_instructions.pdf");
+    expect(safeFileName("", "resume.pdf")).toBe("resume.pdf");
   });
 });

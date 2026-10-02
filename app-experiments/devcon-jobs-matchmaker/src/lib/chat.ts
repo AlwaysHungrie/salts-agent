@@ -1,16 +1,25 @@
 import "server-only";
 import { MongoServerError } from "mongodb";
 import { createSession, deleteSession, transcript, type StoredMessage } from "./agent";
-import { chats } from "./db";
-import { MAX_MESSAGES } from "./rules";
+import { chats, users } from "./db";
+import { CLEAR_COOLDOWN_MS, MAX_MESSAGES } from "./rules";
 
-export type ChatState = { sent: number; limit: number; messages: StoredMessage[] };
+/** `clearableAt` is when the chat may next be cleared, or null when it may be now. */
+export type ChatState = { sent: number; limit: number; messages: StoredMessage[]; clearableAt: string | null };
 
-/** The user's chat as the page shows it: what was said and how many messages are left. */
+/** When `userId` may next clear their chat, or null when they may now. */
+async function clearableAt(userId: string): Promise<Date | null> {
+  const cleared = (await (await users()).findOne({ userId }))?.chatClearedAt;
+  const at = cleared ? new Date(cleared.getTime() + CLEAR_COOLDOWN_MS) : null;
+  return at && at > new Date() ? at : null;
+}
+
+/** The user's chat as the page shows it: what was said, how many messages are left, when it can be cleared. */
 export async function chatState(userId: string): Promise<ChatState> {
   const doc = await (await chats()).findOne({ userId });
   const messages = doc ? await transcript(doc.sessionId) : [];
-  return { sent: doc?.sent ?? 0, limit: MAX_MESSAGES, messages };
+  const at = await clearableAt(userId);
+  return { sent: doc?.sent ?? 0, limit: MAX_MESSAGES, messages, clearableAt: at?.toISOString() ?? null };
 }
 
 /** The user's chat session, started on their first message. */
@@ -51,8 +60,22 @@ export async function refundMessage(userId: string, sessionId: string): Promise<
   await (await chats()).updateOne({ userId, sessionId, sent: { $gt: 0 } }, { $inc: { sent: -1 } });
 }
 
-/** Clear the chat: delete the agent session; the next message starts a new one. */
-export async function clearChat(userId: string): Promise<void> {
+/**
+ * Clear the chat: delete the agent session; the next message starts a new one. A user
+ * may clear once per CLEAR_COOLDOWN_MS; the check and the stamp are one update, so two
+ * tabs cannot both clear. Returns null when cleared, else when it may next be cleared.
+ */
+export async function clearChat(userId: string): Promise<Date | null> {
+  const now = new Date();
+  const allowed = await (await users()).findOneAndUpdate(
+    {
+      userId,
+      $or: [{ chatClearedAt: { $exists: false } }, { chatClearedAt: { $lte: new Date(now.getTime() - CLEAR_COOLDOWN_MS) } }],
+    },
+    { $set: { chatClearedAt: now } },
+  );
+  if (!allowed) return (await clearableAt(userId)) ?? new Date(now.getTime() + CLEAR_COOLDOWN_MS);
   const doc = await (await chats()).findOneAndDelete({ userId });
   if (doc) await deleteSession(doc.sessionId).catch(() => {});
+  return null;
 }

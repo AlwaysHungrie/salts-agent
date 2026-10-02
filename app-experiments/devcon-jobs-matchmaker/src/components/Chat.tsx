@@ -2,18 +2,25 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Markdown } from "./Markdown";
-import { MAX_MESSAGES, messageProblem } from "@/lib/rules";
+import { CLEAR_COOLDOWN_MS, MAX_MESSAGES, messageProblem } from "@/lib/rules";
 import { readFrames } from "@/lib/sse";
 
 type Message = { id: string; role: "user" | "assistant"; content: string };
-type ChatState = { sent: number; limit: number; messages: Message[] };
+type ChatState = { sent: number; limit: number; messages: Message[]; clearableAt: string | null };
 
 async function fetchChat(base: string): Promise<ChatState> {
   const res = await fetch(base, { cache: "no-store" });
   const body = (await res.json().catch(() => ({}))) as Partial<ChatState> & { error?: string };
   if (!res.ok) throw new Error(body.error || "Your chat didn’t load. Refresh the page to try again.");
-  return { sent: body.sent ?? 0, limit: body.limit ?? MAX_MESSAGES, messages: body.messages ?? [] };
+  return {
+    sent: body.sent ?? 0,
+    limit: body.limit ?? MAX_MESSAGES,
+    messages: body.messages ?? [],
+    clearableAt: body.clearableAt ?? null,
+  };
 }
+
+const timeFormat = new Intl.DateTimeFormat(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" });
 
 /** Ways to open a conversation; each fills the box for the user to finish. */
 const STARTERS = [
@@ -59,6 +66,8 @@ export function Chat({ userId }: { userId: string }) {
   const [tool, setTool] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [clearableAt, setClearableAt] = useState<string | null>(null);
+  const cooldown = useRef<HTMLDialogElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLTextAreaElement>(null);
 
@@ -70,6 +79,7 @@ export function Chat({ userId }: { userId: string }) {
         setMessages(state.messages);
         setSent(state.sent);
         setLimit(state.limit);
+        setClearableAt(state.clearableAt);
       })
       .catch((err: Error) => live && setError(err.message))
       .finally(() => live && setLoading(false));
@@ -109,8 +119,9 @@ export function Chat({ userId }: { userId: string }) {
         body: JSON.stringify({ message: text }),
       });
       if (!res.ok || !res.body) {
-        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        const body = (await res.json().catch(() => ({}))) as { error?: string; counted?: boolean };
         if (res.status === 409) setSent(limit);
+        if (body.counted) setSent((n) => n + 1);
         setMessages((m) => m.slice(0, -2));
         setDraft(text);
         throw new Error(body.error ?? "Your message wasn’t sent. Try again.");
@@ -141,14 +152,24 @@ export function Chat({ userId }: { userId: string }) {
   }
 
   async function clear() {
-    if (busy || !confirm("Clear this chat? The conversation will be deleted and your 25 messages reset.")) return;
+    if (busy) return;
+    if (clearableAt && new Date(clearableAt) > new Date()) return cooldown.current?.showModal();
+    if (!confirm("Clear this chat? The conversation will be deleted and your 25 messages reset. You can clear it once every 12 hours."))
+      return;
     setBusy(true);
     setError("");
     try {
       const res = await fetch(base, { method: "DELETE" });
-      if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error);
+      const body = (await res.json().catch(() => ({}))) as { error?: string; clearableAt?: string };
+      if (res.status === 429 && body.clearableAt) {
+        setClearableAt(body.clearableAt);
+        cooldown.current?.showModal();
+        return;
+      }
+      if (!res.ok) throw new Error(body.error);
       setMessages([]);
       setSent(0);
+      setClearableAt(new Date(Date.now() + CLEAR_COOLDOWN_MS).toISOString());
     } catch (err) {
       setError(err instanceof Error && err.message ? err.message : "The chat wasn’t cleared. Try again.");
     } finally {
@@ -173,6 +194,27 @@ export function Chat({ userId }: { userId: string }) {
       aria-label="Matchmaker chat"
       className="flex min-h-[75vh] flex-col overflow-hidden rounded-[28px] bg-card shadow-panel lg:min-h-0"
     >
+      <dialog
+        ref={cooldown}
+        aria-labelledby="cooldown-title"
+        className="m-auto w-[calc(100%-2rem)] max-w-md rounded-[22px] bg-card p-6 text-ink shadow-badge backdrop:bg-ink/40"
+      >
+        <h2 id="cooldown-title" className="font-display text-2xl font-semibold tracking-tight">
+          Clear chat is unavailable
+        </h2>
+        <p className="mt-3 text-sm text-ink-2">
+          You can clear your chat once every 12 hours.
+          {clearableAt && <> You can clear it again {timeFormat.format(new Date(clearableAt))}.</>}
+        </p>
+        <form method="dialog" className="mt-6">
+          <button
+            type="submit"
+            className="w-full rounded-full bg-ink px-5 py-3 font-semibold text-white transition-colors hover:bg-violet-deep"
+          >
+            OK
+          </button>
+        </form>
+      </dialog>
       <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-line px-5 py-4 sm:px-7">
         <div>
           <h2 className="font-display text-xl font-semibold tracking-tight">Matchmaker</h2>

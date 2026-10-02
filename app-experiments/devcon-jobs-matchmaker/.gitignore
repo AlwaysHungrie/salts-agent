@@ -44,3 +44,6 @@ next-env.d.ts
 next-env.d.ts
 
 !.env.example
+
+# Real tickets used by tests: never commit
+/test/fixtures/*.pkpass

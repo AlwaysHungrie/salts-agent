@@ -5,6 +5,9 @@
 /** Messages a user may send in one chat before they must clear it. */
 export const MAX_MESSAGES = 25;
 
+/** How often a user may clear their chat. */
+export const CLEAR_COOLDOWN_MS = 12 * 60 * 60 * 1000;
+
 /** Longest message a user may send in one turn. */
 export const MAX_MESSAGE_CHARS = 4000;
 
@@ -14,6 +17,18 @@ export const MAX_RESUME_BYTES = 10 * 1024 * 1024;
 /** The message a resume is sent to the agent with. */
 export const ADD_CANDIDATE = "Add candidate";
 
+/**
+ * The message a user's previous candidate is deleted with when they upload a new
+ * resume. Only ever built from an id this app stored, never from anything the user sent.
+ */
+export function deleteCandidateMessage(candidateId: string): string {
+  return (
+    `Permanently delete candidate ${candidateId} with delete_candidate. The candidate asked for this ` +
+    `themselves because they are replacing their resume, so it is already confirmed: do not ask again. ` +
+    `Say whether it was deleted.`
+  );
+}
+
 const USER_ID = /^[A-Za-z0-9._@-]{1,64}$/;
 
 /** A user id, trimmed, or null when it is not one. Auth replaces this later. */
@@ -21,6 +36,26 @@ export function parseUserId(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
   const id = raw.trim();
   return USER_ID.test(id) ? id : null;
+}
+
+/**
+ * Whether a request's body may exceed `limit` plus room for form encoding. A body that
+ * does not declare its length counts as too large, since it is read before it is checked.
+ */
+export function tooLarge(request: { headers: Headers }, limit: number): boolean {
+  const length = Number(request.headers.get("content-length") ?? NaN);
+  return !Number.isFinite(length) || length > limit + 64 * 1024;
+}
+
+/** A file name safe to hand on: letters, digits, dot, dash, underscore and space only. */
+export function safeFileName(name: string, fallback: string): string {
+  const clean = name.replace(/[^A-Za-z0-9._ -]/g, "_").replace(/^[.\s]+/, "").slice(0, 100).trim();
+  return clean || fallback;
+}
+
+/** Whether bytes start like a PDF. */
+export function looksLikePdf(head: Uint8Array): boolean {
+  return new TextDecoder().decode(head.subarray(0, 5)) === "%PDF-";
 }
 
 /**
