@@ -404,8 +404,10 @@ async def list_jobs(
     description=(
         "Search candidates without a job description, e.g. 'Python devs in Pune with under 30 days notice'. "
         "Put the descriptive part in query (ranked by meaning; skills named in it rank first) and hard "
-        "constraints in filters (locations, years, notice, required skills). Fast, no LLM. With no query, "
-        "returns the most recently updated candidates matching the filters."
+        "constraints in filters (locations, countries, years, notice, required skills). Fast, no LLM. With no query, "
+        "returns the most recently updated candidates matching the filters. Returns one page: total_matching says "
+        "how many match; pass next_offset as offset for the next page. When total_matching is large and the query "
+        "is vague, show the top results and suggest narrowing rather than paging through everyone."
     ),
     annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False),
 )
@@ -414,9 +416,11 @@ async def search_candidates(
     query: Annotated[str | None, Field(description="Free text: role, skills, domain")] = None,
     filters: Annotated[SearchFilters | None, Field(description="Hard filters")] = None,
     limit: Annotated[int, Field(description="Max results (1-100)", ge=1, le=100)] = 20,
+    offset: Annotated[int, Field(description="Skip this many ranked results (next_offset of the previous page)",
+                                 ge=0)] = 0,
     ctx: Context | None = None,
 ) -> SearchResult:
-    return await run_search(services(), query, filters, limit)
+    return await run_search(services(), query, filters, limit, offset)
 
 
 @mcp.tool(

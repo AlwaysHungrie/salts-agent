@@ -67,7 +67,8 @@ def test_load_original_reads_pdf_path(tmp_path):
 
 def _profile(**kw):
     base = dict(
-        name="X", email=None, phone=None, location=None, current_title="Backend Engineer",
+        name="X", email=None, phone=None, location=None, willing_to_relocate=None, preferred_locations=[],
+        current_title="Backend Engineer",
         roles=[Role(title="Backend Engineer", company="Acme", start="2020-01", end="present",
                     highlights=["Built AWS services in Python"])],
         skills=[], education=[], certifications=[], industries=[], notice_period_days=None,
@@ -94,3 +95,18 @@ def test_normalize_name():
     assert normalize_name("priya sharma") == "Priya Sharma"
     assert normalize_name("Ronan McDonald") == "Ronan McDonald"
     assert normalize_name("") is None and normalize_name(None) is None
+
+
+def test_derive_drops_region_preferences_and_marks_remote_only():
+    from recruiter_mcp.ingest import derive
+    from recruiter_mcp.skills import SkillNormalizer, load_seed
+
+    n = SkillNormalizer(load_seed())
+    d = derive(_profile(location="Noida", willing_to_relocate=True,
+                        preferred_locations=["Anywhere in India", "India"]), n)
+    assert (d.location_key, d.willing_to_relocate, d.preferred_location_keys) == ("noida", True, [])
+    assert d.country_keys == ["india"]
+    d = derive(_profile(location="Pune", preferred_locations=["Bangalore", "Pan India"]), n)
+    assert d.preferred_location_keys == ["bengaluru"]
+    assert derive(_profile(location=None, preferred_locations=["Remote"]), n).location_key == "remote"
+    assert derive(_profile(location=None, preferred_locations=["Remote", "Pune"]), n).location_key is None

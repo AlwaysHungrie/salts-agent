@@ -48,6 +48,9 @@ class Settings(BaseSettings):
     # Scores vary a few points between runs. Candidates within this many points of a cutoff (min_match_score, or
     # the gap between rank `limit` and the next) are scored once more and averaged. 0 disables.
     rerank_borderline_margin: int = 8
+    # Pool selection adds this x (fraction of must-haves in the candidate's skills) to cosine similarity, so
+    # candidates with the required skills but a thin profile still get reranked. 0 = similarity only.
+    pool_skill_boost: float = 0.1
     # Slack applied to years parsed from the JD (explicit filters are exact): "5-8 yrs" admits 4-10.
     years_slack_below: float = 1.0
     years_slack_above: float = 2.0

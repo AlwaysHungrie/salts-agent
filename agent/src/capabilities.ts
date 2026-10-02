@@ -372,6 +372,8 @@ export type ToolContext = {
   saveImage: (dataUrl: string, prompt: string) => Promise<string>;
   /** Transcribes a stored audio attachment by id, caching the words on its row. */
   transcribeAttachment: (id: string) => Promise<string>;
+  /** Uploads a stored PDF attachment to an MCP server and returns the server's upload id. */
+  uploadAttachment: (server: McpServerRow, id: string) => Promise<string>;
   /**
    * Send an Ogg Opus voice note to this session's chat. Throws a reason the model can act
    * on when the channel cannot carry one.
@@ -817,6 +819,9 @@ export function mcpServerReady(server: McpServerRow): boolean {
   return true;
 }
 
+/** How the model names an attachment in `upload_id`; swapped for the server's id on call. */
+export const ATTACHMENT_REF = "attachment:";
+
 /**
  * Whether a server takes uploads at `<base>/uploads`, inferred from a callable tool that
  * asks for an `upload_id`.
@@ -849,6 +854,12 @@ export function mcpToolSpecs(servers: McpServerRow[]): ToolSpec[] {
         parameters: tool.inputSchema ?? { type: "object", properties: {} },
         async run(args, ctx) {
           try {
+            // A file goes to a server only when the model hands it to one of its tools.
+            const ref = typeof args.upload_id === "string" ? args.upload_id : "";
+            if (ref.startsWith(ATTACHMENT_REF)) {
+              const id = await ctx.uploadAttachment(server, ref.slice(ATTACHMENT_REF.length));
+              args = { ...args, upload_id: id };
+            }
             return await withMcpAuth(server, ctx.registry, (client) =>
               client.callTool(tool.name, args)
             );

@@ -3,6 +3,8 @@
   "email": "rajesh.gupta@example.com",
   "phone": "+91 98200 98200",
   "location": "Mumbai",
+  "willing_to_relocate": null,
+  "preferred_locations": [],
   "current_title": "Finance Manager",
   "roles": [
     {

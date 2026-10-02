@@ -1,0 +1,75 @@
+skill,implies
+AWS EC2,AWS
+AWS S3,AWS
+AWS Lambda,AWS
+AWS RDS,AWS
+AWS ECS,AWS
+AWS CloudFormation,AWS
+Amazon EKS,AWS
+Amazon EKS,Kubernetes
+Amazon Redshift,AWS
+DynamoDB,AWS
+Google Kubernetes Engine,Google Cloud
+Google Kubernetes Engine,Kubernetes
+BigQuery,Google Cloud
+Azure Kubernetes Service,Microsoft Azure
+Azure Kubernetes Service,Kubernetes
+Helm,Kubernetes
+Django,Python
+Django REST Framework,Django
+Flask,Python
+FastAPI,Python
+pandas,Python
+NumPy,Python
+PySpark,Python
+PySpark,Apache Spark
+pytest,Python
+scikit-learn,Python
+scikit-learn,Machine Learning
+PyTorch,Deep Learning
+TensorFlow,Deep Learning
+Keras,Deep Learning
+Deep Learning,Machine Learning
+Large Language Models,Generative AI
+LangChain,Large Language Models
+React,JavaScript
+Redux,React
+Next.js,React
+React Native,React
+Vue.js,JavaScript
+Nuxt.js,Vue.js
+Angular,TypeScript
+AngularJS,JavaScript
+Svelte,JavaScript
+jQuery,JavaScript
+TypeScript,JavaScript
+Node.js,JavaScript
+Express.js,Node.js
+NestJS,Node.js
+NestJS,TypeScript
+Spring Boot,Spring
+Spring,Java
+Hibernate,Java
+Java EE,Java
+JUnit,Java
+Jetpack Compose,Kotlin
+Jetpack Compose,Android
+SwiftUI,Swift
+SwiftUI,iOS
+Objective-C,iOS
+Ruby on Rails,Ruby
+Laravel,PHP
+ASP.NET,.NET
+C#,.NET
+PostgreSQL,SQL
+MySQL,SQL
+MariaDB,SQL
+SQL Server,SQL
+SQLite,SQL
+Oracle Database,SQL
+T-SQL,SQL Server
+PL/SQL,Oracle Database
+SAP FICO,SAP
+SAP MM,SAP
+SAP SD,SAP
+US GAAP,GAAP

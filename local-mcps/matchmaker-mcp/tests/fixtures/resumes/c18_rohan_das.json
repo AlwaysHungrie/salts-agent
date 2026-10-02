@@ -3,6 +3,8 @@
   "email": "rohan.das@example.com",
   "phone": "+91 90000 11122",
   "location": "Pune",
+  "willing_to_relocate": null,
+  "preferred_locations": [],
   "current_title": "Junior Python Developer",
   "roles": [
     {

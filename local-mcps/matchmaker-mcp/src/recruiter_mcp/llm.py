@@ -1,5 +1,6 @@
 """LLM provider interface. Structured output via JSON schema, Pydantic validation, one retry on bad output."""
 
+import asyncio
 import base64
 import json
 import logging
@@ -19,6 +20,21 @@ log = logging.getLogger(__name__)
 T = TypeVar("T", bound=BaseModel)
 
 NO_KEY = "no OpenRouter API key: send the X-OpenRouter-Api-Key header or set LLM_API_KEY"
+MAX_RETRIES = 2
+
+
+def deadline(timeout: float) -> float:
+    """Whole-request limit: every attempt the client may make (first try + MAX_RETRIES) at its own timeout."""
+    return timeout * (MAX_RETRIES + 1)
+
+
+async def within(coro, seconds: float, what: str):
+    """Hard deadline over a request, retries included. The client's timeout is per read, and OpenRouter keeps a
+    stalled request alive with keep-alive bytes, so without this a call can hang indefinitely (seen: 25+ min)."""
+    try:
+        return await asyncio.wait_for(coro, seconds)
+    except TimeoutError:
+        raise ToolFailure("llm_unavailable", f"{what} did not finish within {seconds:.0f}s") from None
 
 
 class LLM(Protocol):
@@ -36,12 +52,13 @@ class OpenRouterLLM:
             raise ToolFailure("config_error", NO_KEY)
         self.model = settings.llm_model
         self.reasoning_effort = settings.llm_reasoning_effort
+        self.deadline = deadline(settings.llm_timeout_seconds)
         # max_retries gives 2 retries with exponential backoff on 429/5xx/timeouts.
         self.client = AsyncOpenAI(
             base_url=settings.llm_base_url,
             api_key=settings.llm_api_key,
             timeout=settings.llm_timeout_seconds,
-            max_retries=2,
+            max_retries=MAX_RETRIES,
         )
 
     async def structured(
@@ -72,7 +89,7 @@ class OpenRouterLLM:
         if effort:
             extra["reasoning"] = {"effort": effort}
         ensure_budget()
-        resp = await self.client.chat.completions.create(
+        resp = await within(self.client.chat.completions.create(
             model=self.model,
             messages=messages,
             response_format={
@@ -80,7 +97,7 @@ class OpenRouterLLM:
                 "json_schema": {"name": name, "strict": True, "schema": schema.model_json_schema()},
             },
             extra_body=extra,
-        )
+        ), self.deadline, "the model")
         u = resp.usage
         if u is not None:
             details = getattr(u, "prompt_tokens_details", None)
@@ -106,11 +123,12 @@ class OpenRouterVision:
         if not settings.llm_api_key:
             raise ToolFailure("config_error", NO_KEY)
         self.model = settings.vision_model
+        self.deadline = deadline(settings.vision_timeout_seconds)
         self.client = AsyncOpenAI(
             base_url=settings.llm_base_url,
             api_key=settings.llm_api_key,
             timeout=settings.vision_timeout_seconds,
-            max_retries=2,
+            max_retries=MAX_RETRIES,
         )
 
     async def transcribe(self, data: bytes, mime: str, filename: str) -> str:
@@ -125,14 +143,14 @@ class OpenRouterVision:
         else:
             raise ToolFailure("unsupported_file_type", f"vision transcription does not accept {mime}")
         ensure_budget()
-        resp = await self.client.chat.completions.create(
+        resp = await within(self.client.chat.completions.create(
             model=self.model,
             messages=[
                 {"role": "system", "content": system},
                 {"role": "user", "content": [{"type": "text", "text": user}, part]},
             ],
             extra_body={"usage": {"include": True}},
-        )
+        ), self.deadline, "the vision model")
         if resp.usage is not None:
             record(UsageRecord(kind="vision", model=self.model, input_tokens=resp.usage.prompt_tokens or 0,
                                output_tokens=resp.usage.completion_tokens or 0,

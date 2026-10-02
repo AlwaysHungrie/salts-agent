@@ -3,6 +3,8 @@
   "email": "lata.pillai@example.com",
   "phone": null,
   "location": "Kochi",
+  "willing_to_relocate": null,
+  "preferred_locations": [],
   "current_title": "Content Writer",
   "roles": [
     {

@@ -42,6 +42,13 @@
 - Merging to `main` deploys production on Vercel. Pushing to `staging` deploys the
   staging web app (`git push origin <branch>:staging`); `staging` is not protected.
 
+# Agent API (OpenAPI)
+
+- Every route an agent API key can reach is a typed `createRoute` (`@hono/zod-openapi`) in
+  `agent/src/routes/*`, registered in `agent/src/api/index.ts`. The spec at `/openapi.json`
+  is generated from those schemas and drives the user guide's API playground — never
+  hand-write it. Schemas mirroring a TS type are pinned to it in `agent/src/api/schemas.ts`.
+
 # Layout
 
 - `agent/` — agent code

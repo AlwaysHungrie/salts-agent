@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
 import { VerifyTokenField } from "@/components/GuideFields";
+import { ApiPlayground } from "@/components/guide/ApiPlayground";
 import { GuideLayout } from "@/components/guide/GuideLayout";
 import { Field, WhatsappCallback } from "@/components/guide/WhatsappCallback";
 import { AGENT_URL } from "@/lib/agent";
@@ -50,6 +51,7 @@ const WIDGETS = {
     </Suspense>
   ),
   "verify-token": <VerifyTokenField />,
+  "api-playground": <ApiPlayground base={AGENT_URL} />,
 };
 
 export default async function Page({ params }: { params: Promise<{ slug: string }> }) {

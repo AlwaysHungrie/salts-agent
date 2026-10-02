@@ -3,6 +3,8 @@
   "email": "divya.menon@example.com",
   "phone": "+91 95555 12345",
   "location": "Chennai",
+  "willing_to_relocate": null,
+  "preferred_locations": [],
   "current_title": "Talent Acquisition Specialist",
   "roles": [
     {

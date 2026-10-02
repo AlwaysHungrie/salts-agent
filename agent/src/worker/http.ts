@@ -40,3 +40,21 @@ export function errorMessage(err: unknown): string {
 
 /** 404, not 403: an agent you were not given is one that does not exist. */
 export const notFound = () => jsonError("Agent not found.", 404);
+
+/**
+ * A refusal thrown from inside a route handler; the API app turns it into `{ error }`
+ * with this status. Lets handlers return data, which Hono checks against the route's schema.
+ */
+export class ApiError extends Error {
+  constructor(
+    readonly status: 400 | 401 | 403 | 404 | 409 | 413 | 502,
+    message: string
+  ) {
+    super(message);
+  }
+}
+
+/** Throw the 404 every refusal on an agent route is. */
+export function refuseNotFound(): never {
+  throw new ApiError(404, "Agent not found.");
+}

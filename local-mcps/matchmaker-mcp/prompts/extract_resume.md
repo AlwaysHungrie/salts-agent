@@ -1,4 +1,4 @@
-<!-- version: extract_resume v2 (year-only dates kept as YYYY) -->
+<!-- version: extract_resume v3 (relocation, preferred locations) -->
 You extract structured data from a resume. Output only JSON matching the schema.
 
 Rules:
@@ -8,6 +8,11 @@ Rules:
 - roles: most recent first. One entry per distinct role; a promotion at the same company is a separate role.
 - skills: concrete skills/tools/technologies only, as written. No soft skills.
 - highlights: ≤5 per role, ≤20 words each, keep numbers/metrics.
+- location: where the candidate lives now, as written.
+- willing_to_relocate: true or false only if the resume states it ("open to relocation", "not willing to relocate");
+  otherwise null.
+- preferred_locations: cities/regions the candidate says they want to work in or move to, as written ("Remote" if
+  they ask for remote work). [] if none stated.
 - notice_period_days: convert ("1 month" → 30, "immediate" → 0, "2 weeks" → 14).
 - current_ctc / expected_ctc: copy as written, including currency and units.
 - summary: 2–3 neutral factual sentences. No adjectives like "excellent".
