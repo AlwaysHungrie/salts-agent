@@ -21,8 +21,7 @@ import path from "node:path";
  *   ---
  *
  * `featured` is optional; only featured articles are listed on the guide's front page.
- * Every article is still in the sidebar and in search. `wide: true` drops the reading
- * width and the "On this page" column, for an article that is mostly one wide widget.
+ * Every article is still in the sidebar and in search.
  *
  * Ported from `landing-page/lib/docs.ts`, which does the same for the public docs.
  */
@@ -36,8 +35,6 @@ export type Guide = {
   summary: string;
   /** Listed on the guide's front page. */
   featured: boolean;
-  /** Spans the whole content column instead of the reading width. */
-  wide: boolean;
   /** The markdown, frontmatter removed. */
   body: string;
 };
@@ -95,7 +92,6 @@ export function allGuides(): Guide[] {
         order: Number(meta.order ?? 999),
         summary: meta.summary ?? "",
         featured: meta.featured === "true",
-        wide: meta.wide === "true",
         body,
       };
     });
