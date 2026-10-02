@@ -6,8 +6,8 @@ const bricolage = Bricolage_Grotesque({ variable: "--font-bricolage", subsets: [
 const schibsted = Schibsted_Grotesk({ variable: "--font-schibsted", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Devcon Jobs",
-  description: "Find your next role, or your next hire, at Devcon.",
+  title: "Devcon 8 Matchmaker",
+  description: "Find your next role, or your next hire, at Devcon 8.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

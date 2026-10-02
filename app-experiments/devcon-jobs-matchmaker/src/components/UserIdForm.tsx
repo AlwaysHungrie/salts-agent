@@ -16,7 +16,8 @@ export function UserIdForm() {
   useEffect(() => {
     try {
       const last = localStorage.getItem(LAST_USER);
-      if (last && input.current && !input.current.value) input.current.value = last;
+      if (last && input.current && !input.current.value)
+        input.current.value = last;
     } catch {}
   }, []);
 
@@ -24,7 +25,9 @@ export function UserIdForm() {
     e.preventDefault();
     const id = parseUserId(input.current?.value);
     if (!id) {
-      setError("Use up to 64 letters, numbers, dots, dashes, underscores or @.");
+      setError(
+        "Use up to 64 letters, numbers, dots, dashes, underscores or @.",
+      );
       input.current?.focus();
       return;
     }
@@ -35,9 +38,15 @@ export function UserIdForm() {
   }
 
   return (
-    <Badge strap="h-24 lg:h-40" className="badge-swing mx-auto w-full max-w-[360px]">
+    <Badge
+      strap="h-24 lg:h-40"
+      className="badge-swing mx-auto w-full max-w-[360px]"
+    >
       <form onSubmit={submit} noValidate>
-        <label htmlFor="user-id" className="font-display text-2xl font-semibold tracking-tight">
+        <label
+          htmlFor="user-id"
+          className="font-display text-2xl font-semibold tracking-tight"
+        >
           Hello, I&rsquo;m
         </label>
         <input
@@ -52,8 +61,12 @@ export function UserIdForm() {
           aria-invalid={!!error}
           className="mt-2 w-full border-b-2 border-line bg-transparent pb-2 font-display text-4xl font-bold tracking-tight text-violet outline-none placeholder:text-line focus:border-violet focus-visible:outline-none"
         />
-        <p id="user-id-hint" className={`mt-3 text-sm ${error ? "text-raspberry" : "text-ink-2"}`}>
-          {error || "Any id you’ll remember. Sign-in is coming later."}
+        <p
+          id="user-id-hint"
+          className={`mt-3 text-sm ${error ? "text-raspberry" : "text-ink-2"}`}
+        >
+          {error ||
+            "Devcon Ticket Required. Inorder to identify you, it will never be stored anywhere."}
         </p>
         <button
           type="submit"
