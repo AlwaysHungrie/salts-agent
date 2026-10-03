@@ -88,5 +88,6 @@ describe("ADD_CANDIDATE", () => {
     expect(ADD_CANDIDATE).toMatch(/^Add candidate\./);
     expect(ADD_CANDIDATE).toMatch(/candidate id/);
     expect(ADD_CANDIDATE).toMatch(/duplicate/);
+    expect(ADD_CANDIDATE).toMatch(/Markdown table/);
   });
 });

@@ -5,7 +5,12 @@ import { Badge } from "./Badge";
 import { Markdown } from "./Markdown";
 import { resumeProblem } from "@/lib/rules";
 
-type Resume = { fileName: string; bytes: number; reply: string; createdAt: string };
+type Resume = {
+  fileName: string;
+  bytes: number;
+  reply: string;
+  createdAt: string;
+};
 type Listing = { resumes: Resume[]; updatableAt: string | null };
 
 async function fetchResumes(base: string): Promise<Listing | null> {
@@ -13,11 +18,26 @@ async function fetchResumes(base: string): Promise<Listing | null> {
   return res?.ok ? ((await res.json()) as Listing) : null;
 }
 
-const dateFormat = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
-const timeFormat = new Intl.DateTimeFormat(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" });
+const dateFormat = new Intl.DateTimeFormat(undefined, {
+  day: "numeric",
+  month: "short",
+  hour: "numeric",
+  minute: "2-digit",
+});
+const timeFormat = new Intl.DateTimeFormat(undefined, {
+  weekday: "short",
+  hour: "numeric",
+  minute: "2-digit",
+});
 
 /** The user's badge, and the resumes pinned to it. */
-export function ResumePanel({ userId, name }: { userId: string; name: string }) {
+export function ResumePanel({
+  userId,
+  name,
+}: {
+  userId: string;
+  name: string;
+}) {
   const base = `/api/users/${encodeURIComponent(userId)}/resume`;
   const input = useRef<HTMLInputElement>(null);
   const details = useRef<HTMLDialogElement>(null);
@@ -46,7 +66,10 @@ export function ResumePanel({ userId, name }: { userId: string; name: string }) 
   // Unlock the upload once the cooldown has passed, without a reload.
   useEffect(() => {
     if (!updatableAt) return;
-    const timer = setTimeout(() => setUpdatableAt(null), Math.max(0, new Date(updatableAt).getTime() - Date.now()));
+    const timer = setTimeout(
+      () => setUpdatableAt(null),
+      Math.max(0, new Date(updatableAt).getTime() - Date.now()),
+    );
     return () => clearTimeout(timer);
   }, [updatableAt]);
 
@@ -61,10 +84,13 @@ export function ResumePanel({ userId, name }: { userId: string; name: string }) 
     try {
       const res = await fetch(base, { method: "POST", body: form });
       const body = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) setError(body.error ?? "Your resume wasn’t added. Try again.");
+      if (!res.ok)
+        setError(body.error ?? "Your resume wasn’t added. Try again.");
       if (res.ok || res.status === 429) apply(await fetchResumes(base));
     } catch {
-      setError("Your resume wasn’t added. Check your connection and try again.");
+      setError(
+        "Your resume wasn’t added. Check your connection and try again.",
+      );
     } finally {
       setBusy("");
       if (input.current) input.current.value = "";
@@ -83,12 +109,14 @@ export function ResumePanel({ userId, name }: { userId: string; name: string }) 
     <aside className="flex flex-col gap-6 lg:min-h-0 lg:overflow-y-auto lg:pb-2">
       <Badge strap="h-6" className="mx-auto w-full max-w-[340px]">
         <p className="text-sm text-ink-2">Hello, I&rsquo;m</p>
-        <p className="mt-1 font-display text-3xl font-bold tracking-tight break-words text-violet">{name}</p>
+        <p className="mt-1 font-display text-3xl font-bold tracking-tight break-words text-violet">
+          {name}
+        </p>
         <p className="mt-4 text-sm text-ink-2">
           {resumes === null
             ? " "
             : candidate
-              ? "Attendees will be able to find you here."
+              ? "Other attendees will be able to find you."
               : "Add your resume so teams can find you."}
         </p>
         {candidate && (
@@ -98,11 +126,21 @@ export function ResumePanel({ userId, name }: { userId: string; name: string }) 
         )}
       </Badge>
 
-      <section aria-labelledby="resume-heading" className="rounded-[22px] bg-card p-5 shadow-panel">
-        <h2 id="resume-heading" className="font-display text-lg font-semibold tracking-tight">
+      <section
+        aria-labelledby="resume-heading"
+        className="rounded-[22px] bg-card p-5 shadow-panel"
+      >
+        <h2
+          id="resume-heading"
+          className="font-display text-lg font-semibold tracking-tight"
+        >
           {candidate ? "Update your resume" : "Add your resume"}
         </h2>
-        {candidate && <p className="mt-1 text-sm text-ink-2">You can update it once every 6 hours.</p>}
+        {candidate && (
+          <p className="mt-1 text-sm text-ink-2">
+            You can update it once every 6 hours.
+          </p>
+        )}
         <input
           ref={input}
           type="file"
@@ -130,24 +168,34 @@ export function ResumePanel({ userId, name }: { userId: string; name: string }) 
             if (file) void upload(file);
           }}
           className={`mt-3 flex w-full flex-col items-center gap-1 rounded-2xl border-2 border-dashed px-4 py-6 text-center transition-colors ${
-            over ? "border-violet bg-violet-soft" : "border-line hover:border-violet hover:bg-violet-soft/50"
+            over
+              ? "border-violet bg-violet-soft"
+              : "border-line hover:border-violet hover:bg-violet-soft/50"
           } disabled:hover:border-line disabled:hover:bg-transparent ${busy ? "disabled:cursor-wait" : "disabled:cursor-not-allowed"}`}
         >
           {busy ? (
             <>
               <span className="max-w-full truncate font-medium">{busy}</span>
-              <span className="text-sm text-ink-2">Reading your resume. This can take a minute.</span>
+              <span className="text-sm text-ink-2">
+                Reading your resume. This can take a minute.
+              </span>
               <span className="progress relative mt-3 h-1.5 w-full max-w-48 overflow-hidden rounded-full bg-violet-soft" />
             </>
           ) : locked ? (
             <>
               <span className="font-medium text-ink-2">Uploads are paused</span>
-              <span className="text-sm text-ink-2">You can upload a new resume {timeFormat.format(new Date(updatableAt!))}.</span>
+              <span className="text-sm text-ink-2">
+                You can upload a new resume{" "}
+                {timeFormat.format(new Date(updatableAt!))}.
+              </span>
             </>
           ) : (
             <>
               <span className="font-medium">
-                Drop a PDF here or <span className="text-violet underline underline-offset-4">choose a file</span>
+                Drop a PDF here or{" "}
+                <span className="text-violet underline underline-offset-4">
+                  choose a file
+                </span>
               </span>
               <span className="text-sm text-ink-2">Up to 10 MB</span>
             </>
@@ -170,12 +218,29 @@ export function ResumePanel({ userId, name }: { userId: string; name: string }) 
                   className="group flex w-full items-center justify-between gap-3 text-left"
                 >
                   <span className="flex min-w-0 items-center gap-2">
-                    <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden className="shrink-0 text-violet">
-                      <path d="M3 1.5 6.5 5 3 8.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                    <svg
+                      width="10"
+                      height="10"
+                      viewBox="0 0 10 10"
+                      aria-hidden
+                      className="shrink-0 text-violet"
+                    >
+                      <path
+                        d="M3 1.5 6.5 5 3 8.5"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
                     </svg>
-                    <span className="truncate font-medium group-hover:text-violet-deep">{r.fileName}</span>
+                    <span className="truncate font-medium group-hover:text-violet-deep">
+                      {r.fileName}
+                    </span>
                   </span>
-                  <span className="tnum shrink-0 text-sm text-ink-2">{dateFormat.format(new Date(r.createdAt))}</span>
+                  <span className="tnum shrink-0 text-sm text-ink-2">
+                    {dateFormat.format(new Date(r.createdAt))}
+                  </span>
                 </button>
               </li>
             ))}
@@ -191,12 +256,16 @@ export function ResumePanel({ userId, name }: { userId: string; name: string }) 
       >
         <div className="flex items-start justify-between gap-4 border-b border-line px-6 py-5">
           <div className="min-w-0">
-            <h2 id="resume-details-title" className="font-display text-xl font-semibold tracking-tight">
+            <h2
+              id="resume-details-title"
+              className="font-display text-xl font-semibold tracking-tight"
+            >
               Your resume details
             </h2>
             {shown && (
               <p className="mt-1 truncate text-sm text-ink-2">
-                {shown.fileName} · {dateFormat.format(new Date(shown.createdAt))}
+                {shown.fileName} ·{" "}
+                {dateFormat.format(new Date(shown.createdAt))}
               </p>
             )}
           </div>
@@ -207,12 +276,19 @@ export function ResumePanel({ userId, name }: { userId: string; name: string }) 
               className="-mt-1 -mr-2 grid size-9 place-items-center rounded-full text-ink-2 hover:bg-paper hover:text-ink"
             >
               <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
-                <path d="M2 2l10 10M12 2 2 12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                <path
+                  d="M2 2l10 10M12 2 2 12"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                />
               </svg>
             </button>
           </form>
         </div>
-        <div className="overflow-y-auto px-6 py-5 text-sm">{shown && <Markdown>{shown.reply}</Markdown>}</div>
+        <div className="overflow-y-auto px-6 py-5 text-sm">
+          {shown && <Markdown breaks>{shown.reply}</Markdown>}
+        </div>
       </dialog>
     </aside>
   );

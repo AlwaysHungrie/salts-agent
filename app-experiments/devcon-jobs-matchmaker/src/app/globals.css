@@ -130,4 +130,5 @@ body {
 .md table { display: block; overflow-x: auto; border-collapse: collapse; font-size: 14px; }
 .md th, .md td { padding: 0.5em 0.75em; text-align: left; vertical-align: top; border-bottom: 1px solid var(--color-line); }
 .md th { font-weight: 650; color: var(--color-ink-2); }
+.md th, .md td:first-child { overflow-wrap: normal; white-space: nowrap; }
 .md blockquote { border-left: 3px solid var(--color-marigold); padding-left: 0.85em; color: var(--color-ink-2); }
