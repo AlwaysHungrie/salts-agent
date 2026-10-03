@@ -69,8 +69,10 @@ resource "vercel_project" "matchmaker" {
   root_directory  = "app-experiments/devcon-jobs-matchmaker"
   install_command = "pnpm install"
 
-  # Exit 0 skips the build: only pushes to var.branch deploy.
-  ignore_command = "[ \"$VERCEL_GIT_COMMIT_REF\" != \"${var.branch}\" ]"
+  # Exit 0 skips the build: only pushes to var.branch deploy. The command reads
+  # VERCEL_GIT_COMMIT_REF, a system env var, so those must be exposed.
+  automatically_expose_system_environment_variables = true
+  ignore_command                                    = "[ \"$VERCEL_GIT_COMMIT_REF\" != \"${var.branch}\" ]"
 
   git_repository = {
     type              = "github"
