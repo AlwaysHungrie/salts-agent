@@ -7,8 +7,8 @@ import { APPLE_ROOT_CA, APPLE_WWDR_G4 } from "./apple-certs";
 pkijs.setEngine("node", new pkijs.CryptoEngine({ name: "node", crypto: webcrypto as unknown as Crypto }));
 
 /** Largest .pkpass accepted, in bytes, and the most any one file inside may unpack to. */
-export const MAX_PKPASS_BYTES = 5 * 1024 * 1024;
-const MAX_ENTRY_BYTES = 10 * 1024 * 1024;
+export const MAX_PKPASS_BYTES = 1024 * 1024;
+const MAX_ENTRY_BYTES = 2 * 1024 * 1024;
 
 /** Marks an Apple-issued Pass Type ID certificate. */
 const PASS_TYPE_ID_EXTENSION = "1.2.840.113635.100.6.1.16";

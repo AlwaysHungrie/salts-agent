@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Badge } from "./Badge";
 import { Markdown } from "./Markdown";
-import { resumeProblem } from "@/lib/rules";
+import { RESUME_PART_BYTES, resumeParts, resumeProblem } from "@/lib/rules";
 
 type Resume = {
   fileName: string;
@@ -16,6 +16,29 @@ type Listing = { resumes: Resume[]; updatableAt: string | null };
 async function fetchResumes(base: string): Promise<Listing | null> {
   const res = await fetch(base, { cache: "no-store" }).catch(() => null);
   return res?.ok ? ((await res.json()) as Listing) : null;
+}
+
+/**
+ * Send `file` in parts of RESUME_PART_BYTES, one after another. Answers the last
+ * part's response, or the first one that failed.
+ */
+async function sendParts(base: string, file: File): Promise<Response> {
+  const uploadId = crypto.randomUUID();
+  const parts = resumeParts(file.size);
+  let res!: Response;
+  for (let part = 0; part < parts; part++) {
+    const start = part * RESUME_PART_BYTES;
+    const form = new FormData();
+    form.append("uploadId", uploadId);
+    form.append("part", String(part));
+    form.append("parts", String(parts));
+    form.append("size", String(file.size));
+    form.append("name", file.name);
+    form.append("file", file.slice(start, start + RESUME_PART_BYTES, "application/pdf"));
+    res = await fetch(base, { method: "POST", body: form });
+    if (!res.ok) break;
+  }
+  return res;
 }
 
 const dateFormat = new Intl.DateTimeFormat(undefined, {
@@ -79,10 +102,8 @@ export function ResumePanel({
     if (problem) return setError(problem);
     setBusy(file.name);
     setError("");
-    const form = new FormData();
-    form.append("file", file);
     try {
-      const res = await fetch(base, { method: "POST", body: form });
+      const res = await sendParts(base, file);
       const body = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok)
         setError(body.error ?? "Your resume wasn’t added. Try again.");

@@ -1,0 +1,7 @@
+# Copy to terraform.tfvars (gitignored) and fill in.
+# vercel_team = "your-team-slug"
+
+atlas_org_id       = "0123456789abcdef01234567"
+agent_id           = "..."
+agent_api_key      = "salt_user_..."
+openrouter_api_key = "sk-or-..."

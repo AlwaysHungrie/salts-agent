@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { unzipSync, zipSync } from "fflate";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { passUserId, ticketEmail, verifyPkpass } from "@/lib/pkpass";
+import { MAX_PKPASS_BYTES, passUserId, ticketEmail, verifyPkpass } from "@/lib/pkpass";
 
 const PASS_TYPE = "pass.org.devcon.test";
 const TEAM = "TEAM123456";
@@ -163,6 +163,10 @@ describe("verifyPkpass", () => {
   it("refuses a file that is not a pass", async () => {
     await expect(verifyPkpass(new Uint8Array([1, 2, 3]), opts())).rejects.toThrow(/not a .pkpass/);
     await expect(verifyPkpass(zipSync({ "a.txt": enc("hi") }), opts())).rejects.toThrow(/not a .pkpass/);
+  });
+
+  it("refuses a file over MAX_PKPASS_BYTES", async () => {
+    await expect(verifyPkpass(new Uint8Array(MAX_PKPASS_BYTES + 1), opts())).rejects.toThrow(/too large/);
   });
 
   it("refuses a ticket with no email on it", async () => {

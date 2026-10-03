@@ -23,6 +23,37 @@ export const MAX_MESSAGE_CHARS = 4000;
 /** Largest resume accepted, in bytes. */
 export const MAX_RESUME_BYTES = 10 * 1024 * 1024;
 
+/**
+ * Largest part a resume is sent in. Vercel refuses request bodies over 4.5 MB, so a
+ * resume goes up in parts of this size (a 10 MB one in 3) and the server joins them.
+ */
+export const RESUME_PART_BYTES = 4 * 1024 * 1024;
+
+/** How many parts a resume of `size` bytes is sent in. */
+export function resumeParts(size: number): number {
+  return Math.ceil(size / RESUME_PART_BYTES);
+}
+
+/** How many bytes part `part` of a `size`-byte resume holds. */
+export function partBytes(part: number, size: number): number {
+  return Math.min(RESUME_PART_BYTES, size - part * RESUME_PART_BYTES);
+}
+
+const UPLOAD_ID = /^[A-Za-z0-9-]{8,64}$/;
+
+/** One part of a resume upload, as the browser describes it. */
+export type ResumePart = { uploadId: string; part: number; parts: number; size: number; name: string };
+
+/** Why a part's description or bytes do not add up, or null when they do. */
+export function partProblem({ uploadId, part, parts, size }: ResumePart, bytes: number): string | null {
+  if (!UPLOAD_ID.test(uploadId)) return "That upload is not valid. Try again.";
+  if (!Number.isInteger(size) || size < 1 || size > MAX_RESUME_BYTES) return "Keep your resume under 10 MB.";
+  if (parts !== resumeParts(size) || !Number.isInteger(part) || part < 0 || part >= parts)
+    return "That upload is not valid. Try again.";
+  if (bytes !== partBytes(part, size)) return "Part of your resume went missing. Try again.";
+  return null;
+}
+
 /** The message a resume is sent to the agent with. */
 export const ADD_CANDIDATE =
   "Add candidate. In your reply, always state the candidate id the tool returned, also when the resume was a " +
