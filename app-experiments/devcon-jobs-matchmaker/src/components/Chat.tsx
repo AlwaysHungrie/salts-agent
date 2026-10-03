@@ -24,9 +24,9 @@ const timeFormat = new Intl.DateTimeFormat(undefined, { weekday: "short", hour: 
 
 /** Ways to open a conversation; each fills the box for the user to finish. */
 const STARTERS = [
-  { label: "I’m hiring", text: "I’m hiring for a " },
-  { label: "I’m looking for a role", text: "I’m looking for a role as a " },
-  { label: "Who should I meet?", text: "Which candidates have experience with " },
+  { label: "I’m hiring for a role", text: "I’m hiring for a " },
+  { label: "Find candidates with a skill", text: "Which candidates have experience with " },
+  { label: "See who’s hiring", text: "Which roles are people hiring for?" },
 ];
 
 /** Messages used, one tick each, like holes punched in a wristband, stretched across the row. */
@@ -217,7 +217,7 @@ export function Chat({ userId }: { userId: string }) {
       </dialog>
       <header className="border-b border-line px-4 py-3.5 sm:px-7 sm:py-4">
         <h2 className="font-display text-xl font-semibold tracking-tight">Matchmaker</h2>
-        <p className="text-sm text-ink-2">Post a job, or ask who&rsquo;s worth meeting.</p>
+        <p className="text-sm text-ink-2">Post a job to get recommendations, or just let us know what you&rsquo;re looking for.</p>
         <div className="mt-3 flex items-center gap-4">
           <Meter sent={sent} limit={limit} />
           <button
@@ -241,7 +241,7 @@ export function Chat({ userId }: { userId: string }) {
         ) : empty ? (
           <div className="flex h-full flex-col justify-end gap-5 pb-2">
             <p className="max-w-[20ch] font-display text-3xl leading-tight font-semibold tracking-tight text-balance sm:text-4xl">
-              What brings you to the job board?
+              Who are you looking for?
             </p>
             <div className="flex flex-wrap gap-2">
               {STARTERS.map((s) => (

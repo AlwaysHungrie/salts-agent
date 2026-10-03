@@ -138,7 +138,7 @@ export function ResumePanel({
             ? " "
             : candidate
               ? "Other attendees will be able to find you."
-              : "Add your resume so teams can find you."}
+              : "Add your resume so others can find you."}
         </p>
         {candidate && (
           <span className="stamp absolute top-4 right-4 rounded-md border-2 border-teal px-2 py-0.5 font-display text-sm font-bold text-teal">
