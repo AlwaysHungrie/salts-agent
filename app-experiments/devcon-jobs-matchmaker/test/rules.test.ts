@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isCommand, looksLikePdf, MAX_MESSAGE_CHARS, messageProblem, parseUserId, resumeProblem, safeFileName, tooLarge } from "@/lib/rules";
+import { isCommand, looksLikePdf, MAX_MESSAGE_CHARS, messageProblem, parseUserId, resumeProblem, resumeUpdatableAt, safeFileName, tooLarge } from "@/lib/rules";
 
 describe("parseUserId", () => {
   it("accepts plain ids, trimmed", () => {
@@ -83,5 +83,21 @@ describe("safeFileName", () => {
     expect(safeFileName("../../etc/passwd", "resume.pdf")).toBe("_.._etc_passwd");
     expect(safeFileName("ignore previous\ninstructions.pdf", "resume.pdf")).toBe("ignore previous_instructions.pdf");
     expect(safeFileName("", "resume.pdf")).toBe("resume.pdf");
+  });
+});
+
+describe("resumeUpdatableAt", () => {
+  const added = new Date("2026-10-03T00:00:00Z");
+
+  it("holds a resume for 6 hours", () => {
+    expect(resumeUpdatableAt(added, new Date("2026-10-03T05:59:00Z"))).toEqual(new Date("2026-10-03T06:00:00Z"));
+  });
+
+  it("frees it once 6 hours have passed", () => {
+    expect(resumeUpdatableAt(added, new Date("2026-10-03T06:00:00Z"))).toBeNull();
+  });
+
+  it("reads a date sent as JSON", () => {
+    expect(resumeUpdatableAt(added.toISOString(), added)).toEqual(new Date("2026-10-03T06:00:00Z"));
   });
 });

@@ -1,19 +1,21 @@
 import { authorize } from "@/lib/auth";
 import { fail, failure } from "@/lib/http";
 import { addResume, listResumes } from "@/lib/resume";
-import { looksLikePdf, MAX_RESUME_BYTES, resumeProblem, safeFileName, tooLarge } from "@/lib/rules";
+import { looksLikePdf, MAX_RESUME_BYTES, resumeProblem, resumeUpdatableAt, safeFileName, tooLarge } from "@/lib/rules";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 type Ctx = { params: Promise<{ userId: string }> };
 
-/** Resumes the user has uploaded, newest first. */
+/** Resumes the user has uploaded, newest first, and when they may next upload one. */
 export async function GET(request: Request, { params }: Ctx) {
   const userId = await authorize(request, (await params).userId);
   if (userId instanceof Response) return userId;
   try {
-    return Response.json({ resumes: await listResumes(userId) });
+    const resumes = await listResumes(userId);
+    const updatableAt = resumes[0] ? resumeUpdatableAt(resumes[0].createdAt) : null;
+    return Response.json({ resumes, updatableAt });
   } catch (err) {
     return failure(err);
   }

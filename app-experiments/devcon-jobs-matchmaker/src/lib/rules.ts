@@ -8,6 +8,15 @@ export const MAX_MESSAGES = 25;
 /** How often a user may clear their chat. */
 export const CLEAR_COOLDOWN_MS = 12 * 60 * 60 * 1000;
 
+/** How often a user may replace their resume. */
+export const RESUME_COOLDOWN_MS = 6 * 60 * 60 * 1000;
+
+/** When a resume added at `addedAt` may next be replaced, or null when it may be now. */
+export function resumeUpdatableAt(addedAt: Date | string, now: Date = new Date()): Date | null {
+  const at = new Date(new Date(addedAt).getTime() + RESUME_COOLDOWN_MS);
+  return at > now ? at : null;
+}
+
 /** Longest message a user may send in one turn. */
 export const MAX_MESSAGE_CHARS = 4000;
 
@@ -15,7 +24,9 @@ export const MAX_MESSAGE_CHARS = 4000;
 export const MAX_RESUME_BYTES = 10 * 1024 * 1024;
 
 /** The message a resume is sent to the agent with. */
-export const ADD_CANDIDATE = "Add candidate";
+export const ADD_CANDIDATE =
+  "Add candidate. In your reply, always state the candidate id the tool returned, also when the resume was a " +
+  "duplicate or updated an existing candidate.";
 
 /**
  * The message a user's previous candidate is deleted with when they upload a new
