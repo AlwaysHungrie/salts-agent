@@ -29,27 +29,27 @@ const STARTERS = [
   { label: "Who should I meet?", text: "Which candidates have experience with " },
 ];
 
-/** Messages used, one tick each, like holes punched in a wristband. */
+/** Messages used, one tick each, like holes punched in a wristband, stretched across the row. */
 function Meter({ sent, limit }: { sent: number; limit: number }) {
   const left = Math.max(0, limit - sent);
   return (
-    <div className="flex flex-col items-end gap-1.5">
+    <div className="flex min-w-0 flex-1 items-center gap-3">
       <div
         role="meter"
         aria-label="Messages used"
         aria-valuemin={0}
         aria-valuemax={limit}
         aria-valuenow={sent}
-        className="flex gap-[3px]"
+        className="flex flex-1 gap-[2px] sm:gap-[3px]"
       >
         {Array.from({ length: limit }, (_, i) => (
           <span
             key={i}
-            className={`h-3.5 w-1.5 rounded-full transition-colors ${i < sent ? "bg-marigold" : "bg-line"}`}
+            className={`h-2 flex-1 rounded-full transition-colors ${i < sent ? "bg-marigold" : "bg-line"}`}
           />
         ))}
       </div>
-      <span className="tnum text-xs text-ink-2">
+      <span className="tnum shrink-0 text-xs text-ink-2">
         {left === 1 ? "1 message left" : `${left} messages left`}
       </span>
     </div>
@@ -192,7 +192,7 @@ export function Chat({ userId }: { userId: string }) {
   return (
     <section
       aria-label="Matchmaker chat"
-      className="flex min-h-[75vh] flex-col overflow-hidden rounded-[28px] bg-card shadow-panel lg:min-h-0"
+      className="flex h-[calc(100dvh-2rem)] min-h-[28rem] flex-col overflow-hidden rounded-[28px] bg-card shadow-panel lg:h-auto lg:min-h-0"
     >
       <dialog
         ref={cooldown}
@@ -215,25 +215,23 @@ export function Chat({ userId }: { userId: string }) {
           </button>
         </form>
       </dialog>
-      <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-line px-5 py-4 sm:px-7">
-        <div>
-          <h2 className="font-display text-xl font-semibold tracking-tight">Matchmaker</h2>
-          <p className="text-sm text-ink-2">Post a job, or ask who&rsquo;s worth meeting.</p>
-        </div>
-        <div className="flex items-center gap-5">
+      <header className="border-b border-line px-4 py-3.5 sm:px-7 sm:py-4">
+        <h2 className="font-display text-xl font-semibold tracking-tight">Matchmaker</h2>
+        <p className="text-sm text-ink-2">Post a job, or ask who&rsquo;s worth meeting.</p>
+        <div className="mt-3 flex items-center gap-4">
           <Meter sent={sent} limit={limit} />
           <button
             type="button"
             onClick={clear}
             disabled={busy || (messages.length === 0 && sent === 0)}
-            className="rounded-full border border-line px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors hover:border-raspberry hover:text-raspberry disabled:pointer-events-none disabled:opacity-40"
+            className="shrink-0 rounded-full border border-line px-4 py-1.5 text-sm font-medium transition-colors hover:border-raspberry hover:text-raspberry disabled:pointer-events-none disabled:opacity-40"
           >
-            Clear chat
+            Clear
           </button>
         </div>
       </header>
 
-      <div ref={scroller} className="flex-1 overflow-y-auto px-5 py-6 sm:px-7" aria-live="polite">
+      <div ref={scroller} className="flex-1 overflow-y-auto overscroll-contain px-4 py-6 sm:px-7" aria-live="polite">
         {loading ? (
           <div className="dots flex gap-1.5 text-violet" aria-label="Loading your chat">
             <span className="size-2 rounded-full bg-current" />
@@ -269,10 +267,10 @@ export function Chat({ userId }: { userId: string }) {
                   {m.content}
                 </li>
               ) : (
-                <li key={m.id} className="flex max-w-[92%] gap-3 self-start">
+                <li key={m.id} className="flex max-w-full gap-3 self-start sm:max-w-[92%]">
                   <span
                     aria-hidden
-                    className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-full bg-marigold font-display text-sm font-bold text-ink"
+                    className="mt-0.5 hidden size-7 shrink-0 place-items-center rounded-full bg-marigold sm:grid font-display text-sm font-bold text-ink"
                   >
                     M
                   </span>
@@ -298,7 +296,7 @@ export function Chat({ userId }: { userId: string }) {
         )}
       </div>
 
-      <div className="border-t border-line px-5 py-4 sm:px-7">
+      <div className="border-t border-line px-4 py-4 sm:px-7">
         {error && (
           <p role="alert" className="mx-auto mb-3 max-w-3xl text-sm text-raspberry">
             {error}
@@ -336,6 +334,7 @@ export function Chat({ userId }: { userId: string }) {
                   }
                 }}
                 rows={2}
+                enterKeyHint="send"
                 placeholder="Describe a role, or who you’re looking for"
                 aria-invalid={!!problem}
                 className="max-h-48 flex-1 resize-none bg-transparent py-2 outline-none placeholder:text-ink-2/70 focus-visible:outline-none"
@@ -351,7 +350,7 @@ export function Chat({ userId }: { userId: string }) {
                 </svg>
               </button>
             </div>
-            <p className={`mt-2 px-1 text-xs ${problem ? "text-raspberry" : "text-ink-2"}`}>
+            <p className={`mt-2 px-1 text-xs ${problem ? "text-raspberry" : "hidden text-ink-2 sm:block"}`}>
               {problem ?? "Enter to send, Shift + Enter for a new line"}
             </p>
           </form>

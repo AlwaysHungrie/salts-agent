@@ -1,11 +1,15 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { Badge } from "./Badge";
 
-/** The user picks up their badge by proving they hold a Devcon ticket with its .pkpass. */
-export function UserIdForm() {
+/**
+ * The user picks up their badge by proving they hold a Devcon ticket with its .pkpass.
+ * Someone already signed in sees their badge, with a way back to their chat.
+ */
+export function UserIdForm({ session }: { session: { userId: string; name: string } | null }) {
   const router = useRouter();
   const dialog = useRef<HTMLDialogElement>(null);
   const input = useRef<HTMLInputElement>(null);
@@ -54,6 +58,23 @@ export function UserIdForm() {
       setBusy(false);
     }
   }
+
+  if (session)
+    return (
+      <Badge strap="h-24 lg:h-40" className="badge-swing mx-auto w-full max-w-[420px]">
+        <p className="font-display text-2xl font-semibold tracking-tight">Hello, I&rsquo;m</p>
+        <p className="mt-2 border-b-2 border-line pb-2 font-display text-4xl font-bold tracking-tight break-words text-violet">
+          {session.name}
+        </p>
+        <p className="mt-3 text-sm text-ink-2">You&rsquo;re wearing your badge.</p>
+        <Link
+          href={`/u/${encodeURIComponent(session.userId)}`}
+          className="mt-6 block w-full rounded-full bg-ink px-5 py-3.5 text-center font-semibold text-white transition-colors hover:bg-violet-deep"
+        >
+          Go to my chat
+        </Link>
+      </Badge>
+    );
 
   return (
     <Badge strap="h-24 lg:h-40" className="badge-swing mx-auto w-full max-w-[420px]">

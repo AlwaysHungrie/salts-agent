@@ -26,7 +26,8 @@ export const MAX_RESUME_BYTES = 10 * 1024 * 1024;
 /** The message a resume is sent to the agent with. */
 export const ADD_CANDIDATE =
   "Add candidate. In your reply, always state the candidate id the tool returned, also when the resume was a " +
-  "duplicate or updated an existing candidate.";
+  "duplicate or updated an existing candidate. Reply with one short sentence, then a Markdown table with the " +
+  "columns Field | Value, one row per detail, the candidate id in its own row.";
 
 /**
  * The message a user's previous candidate is deleted with when they upload a new

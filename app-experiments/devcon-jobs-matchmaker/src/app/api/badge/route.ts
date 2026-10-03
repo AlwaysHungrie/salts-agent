@@ -46,3 +46,16 @@ export async function POST(request: Request) {
     return failure(err);
   }
 }
+
+/** Put the badge back: clear the session cookie, so the next visit asks for a ticket again. */
+export async function DELETE(request: Request) {
+  if (!sameOrigin(request)) return fail("Not allowed.", 403);
+  (await cookies()).set(SESSION_COOKIE, "", {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    maxAge: 0,
+    path: "/",
+  });
+  return new Response(null, { status: 204 });
+}

@@ -64,10 +64,18 @@ export async function addResume(userId: string, file: File): Promise<ResumeView>
   }
 }
 
-/** A resume as the page sees it, with the candidate id taken out of the agent's reply too. */
+/** A resume as the page sees it, with the line naming the candidate id taken out of the agent's reply. */
 function view({ candidateId, userId, fileName, bytes, reply, createdAt }: ResumeDoc): ResumeView {
-  const shown = candidateId ? reply.split(candidateId).join("(on file)") : reply;
-  return { userId, fileName, bytes, reply: shown, createdAt };
+  return { userId, fileName, bytes, reply: candidateId ? withoutId(reply, candidateId) : reply, createdAt };
+}
+
+/** The reply without any line (a field or a table row) that mentions the id. */
+export function withoutId(reply: string, id: string): string {
+  const lower = id.toLowerCase();
+  return reply
+    .split("\n")
+    .filter((line) => !line.toLowerCase().includes(lower))
+    .join("\n");
 }
 
 /** The user's resume, as a list of at most one. */
