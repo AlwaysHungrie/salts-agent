@@ -81,3 +81,12 @@ describe("llm", () => {
     await expect(screenMessage("hi")).rejects.toBeInstanceOf(LlmError);
   });
 });
+
+describe("ADD_CANDIDATE", () => {
+  it("asks the agent to state the candidate id, also for a duplicate", async () => {
+    const { ADD_CANDIDATE } = await import("@/lib/rules");
+    expect(ADD_CANDIDATE).toMatch(/^Add candidate\./);
+    expect(ADD_CANDIDATE).toMatch(/candidate id/);
+    expect(ADD_CANDIDATE).toMatch(/duplicate/);
+  });
+});

@@ -3,7 +3,7 @@ import { chat, createSession, deleteSession, uploadFile } from "./agent";
 import { resumes, users, type ResumeDoc } from "./db";
 import { Refusal } from "./http";
 import { candidateIdFrom, deletedFrom } from "./llm";
-import { ADD_CANDIDATE, deleteCandidateMessage } from "./rules";
+import { ADD_CANDIDATE, deleteCandidateMessage, resumeUpdatableAt } from "./rules";
 
 /** What the page sees of a resume: never the candidate id. */
 export type ResumeView = Omit<ResumeDoc, "candidateId">;
@@ -26,7 +26,8 @@ async function ask(title: string, message: string, file?: File): Promise<string>
  * Make `file` the user's one resume. Their current candidate is deleted from the
  * agent's database first (a resume from the same person would otherwise update that
  * candidate rather than make a new one), then the new resume is added. The agent must
- * report the new candidate's id, or the upload has failed.
+ * report the new candidate's id, or the upload has failed. A resume may be replaced
+ * once every 6 hours.
  */
 export async function addResume(userId: string, file: File): Promise<ResumeView> {
   const now = new Date();
@@ -39,6 +40,8 @@ export async function addResume(userId: string, file: File): Promise<ResumeView>
   try {
     const col = await resumes();
     const current = await col.findOne({ userId }, { sort: { createdAt: -1 } });
+    if (current && resumeUpdatableAt(current.createdAt, now))
+      throw new Refusal("You can update your resume once every 6 hours.", 429);
     const oldId = current ? (current.candidateId ?? (await candidateIdFrom(current.reply))) : null;
     if (oldId) {
       const reply = await ask(`Replace resume · ${userId}`, deleteCandidateMessage(oldId));
@@ -55,17 +58,20 @@ export async function addResume(userId: string, file: File): Promise<ResumeView>
     }
     const doc: ResumeDoc = { userId, candidateId, fileName: file.name, bytes: file.size, reply, createdAt: new Date() };
     await col.insertOne({ ...doc });
-    return { userId, fileName: doc.fileName, bytes: doc.bytes, reply, createdAt: doc.createdAt };
+    return view(doc);
   } finally {
     await (await users()).updateOne({ userId }, { $unset: { resumeBusyUntil: "" } }).catch(() => {});
   }
 }
 
+/** A resume as the page sees it, with the candidate id taken out of the agent's reply too. */
+function view({ candidateId, userId, fileName, bytes, reply, createdAt }: ResumeDoc): ResumeView {
+  const shown = candidateId ? reply.split(candidateId).join("(on file)") : reply;
+  return { userId, fileName, bytes, reply: shown, createdAt };
+}
+
 /** The user's resume, as a list of at most one. */
 export async function listResumes(userId: string): Promise<ResumeView[]> {
-  return (await resumes())
-    .find({ userId }, { projection: { _id: 0, candidateId: 0 } })
-    .sort({ createdAt: -1 })
-    .limit(1)
-    .toArray();
+  const docs = await (await resumes()).find({ userId }).sort({ createdAt: -1 }).limit(1).toArray();
+  return docs.map(view);
 }
