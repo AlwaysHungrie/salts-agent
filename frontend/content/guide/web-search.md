@@ -12,27 +12,25 @@ This guide will help you run your own free search engine, called SearXNG, on you
 > What to expect:
 >
 > - Your agent can only search while your computer is on, awake and connected to the internet.
-> - You will install three free tools: Docker, Node.js and ngrok. You will also need a free ngrok account.
+> - You will install three free tools: Docker, Node.js and cloudflared. You do not need an account for any of them.
 
 ## 1. Install the tools
 
 1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/). If you already use OrbStack or Colima, those work too. On Linux you can use Docker Engine instead; we recommend starting it with `sudo systemctl enable --now docker` and adding yourself to the `docker` group, so salts-tools can use it without asking for your password.
 2. Install [Node.js](https://nodejs.org), version 20 or later.
-3. Install ngrok. On a Mac with Homebrew, run this in Terminal:
+3. Install cloudflared. On a Mac with Homebrew, run this in Terminal:
 
    ```
-   brew install ngrok
+   brew install cloudflared
    ```
 
    On Windows, run this in PowerShell:
 
    ```
-   winget install ngrok.ngrok
+   winget install --id Cloudflare.cloudflared
    ```
 
-   Otherwise, download it from [ngrok.com/download](https://ngrok.com/download).
-
-4. Create a free account on [ngrok.com](https://ngrok.com) and open [your authtoken page](https://dashboard.ngrok.com/get-started/your-authtoken). Keep this tab open, since you will need the authtoken in step 3.
+   Otherwise, download it from [Cloudflare's downloads page](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/).
 
 ## 2. Download salts-tools
 
@@ -60,9 +58,8 @@ salts-tools start
 
 salts-tools will ask you a few questions:
 
-1. **ngrok authtoken**: paste the authtoken from step 1. You only need to do this once.
-2. **Agent ID**: paste your agent ID.
-3. salts-tools will then show you a **token**. Copy it, and leave your terminal open while you do the next step.
+1. **Agent ID**: paste your agent ID.
+2. salts-tools will then show you a **token**. Copy it, and leave your terminal open while you do the next step.
 
 ## 4. Add the token to your agent
 

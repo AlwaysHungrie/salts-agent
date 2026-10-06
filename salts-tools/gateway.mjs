@@ -1,4 +1,4 @@
-// The one door the tunnel opens onto. Every service shares the ngrok address and is told
+// The one door the tunnel opens onto. Every service shares the tunnel address and is told
 // apart by the first path segment: `/web/search` reaches SearXNG as `/search`,
 // `/matchmaker/mcp` reaches the matchmaker as `/mcp`.
 //
