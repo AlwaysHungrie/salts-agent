@@ -87,7 +87,7 @@ salts-tools runs it on your laptop behind the shared tunnel and connects it to t
 salts-tools start analyst        # or start:staging analyst
 ```
 
-That needs [uv](https://docs.astral.sh/uv/) and ngrok, but not Docker. The agent gets an MCP server named
+That needs [uv](https://docs.astral.sh/uv/) and cloudflared, but not Docker. The agent gets an MCP server named
 `analyst` with the token already set. Turn on **File ingest** and **MCP** in the agent's
 capabilities so users can attach workbooks.
 

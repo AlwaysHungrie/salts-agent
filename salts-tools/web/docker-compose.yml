@@ -65,7 +65,7 @@ services:
 
   # The token gate, and the only way in. The agent sends
   # `Authorization: Bearer <token>`; only requests carrying it reach SearXNG.
-  # Bound to loopback: ngrok is what takes it off the machine.
+  # Bound to loopback: cloudflared is what takes it off the machine.
   caddy:
     image: docker.io/library/caddy:2-alpine
     container_name: ${SALTS_PROJECT:-searxng}-caddy

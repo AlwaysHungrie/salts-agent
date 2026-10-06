@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 // salts-tools: local services for a salt-agent, from this laptop, behind one tunnel.
 //
-// Runs the services below, puts them on the internet through a single ngrok tunnel, and
+// Runs the services below, puts them on the internet through a single cloudflared quick
+// tunnel (no account needed), and
 // tells the agent where each one is. Every service shares the tunnel's address and is
 // told apart by path (see gateway.mjs): `<tunnel>/web` is SearXNG, `<tunnel>/matchmaker`
 // the matchmaker MCP server, `<tunnel>/analyst` the spreadsheet analyst MCP server. The
-// address changes whenever ngrok restarts, so a supervisor process watches it and pushes
-// every new address to the agent.
+// address changes whenever cloudflared restarts, so a supervisor process watches it and
+// pushes every new address to the agent.
 //
 //   salts-tools start [service…]
 //                         check the machine, set up on first run, start the named services
@@ -39,6 +40,7 @@
 
 import { spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
+import { Resolver } from "node:dns/promises";
 import {
   appendFileSync,
   copyFileSync,
@@ -58,7 +60,7 @@ import path from "node:path";
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import { startGateway } from "./gateway.mjs";
-import { orphanNgroks, parseProcessList, supervisorsOf } from "./procs.mjs";
+import { caffeinateArgs, orphanTunnels, parseProcessList, supervisorsOf } from "./procs.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const CLI = fileURLToPath(import.meta.url);
@@ -122,6 +124,8 @@ const AUTOSTART = autostartFor("salts-tools");
 const HEARTBEAT_MS = 30_000;
 /** Public checks that may fail in a row before the tunnel is torn down and rebuilt. */
 const PUBLIC_FAILURES_BEFORE_RESTART = 3;
+/** How long a new tunnel may take to connect and resolve before it is rebuilt. */
+const TUNNEL_READY_MS = 120_000;
 const DOCKER_WAIT_MS = 180_000;
 /** Where each free-port scan starts, far enough apart not to race each other. */
 const GATEWAY_PORT = 8080;
@@ -138,6 +142,23 @@ const YELLOW = "\x1b[33m";
 const OFF = "\x1b[0m";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Wait until `host` has a DNS record, asking 1.1.1.1 directly. A quick tunnel's name is
+ * published a few seconds after cloudflared prints it, and asking the system resolver
+ * too early leaves it caching "no such host" long after the name exists.
+ */
+async function resolvable(host, seconds = 60) {
+  const resolver = new Resolver({ timeout: 3000, tries: 1 });
+  resolver.setServers(["1.1.1.1", "1.0.0.1"]);
+  for (let i = 0; i < seconds; i++) {
+    try {
+      if ((await resolver.resolve4(host)).length) return true;
+    } catch {}
+    await sleep(1000);
+  }
+  return false;
+}
 
 // ─── state ──────────────────────────────────────────────────────────────────────
 
@@ -326,23 +347,6 @@ async function ensureDocker(say = () => {}) {
   throw new Error(`Docker did not come up within ${DOCKER_WAIT_MS / 1000}s`);
 }
 
-/** Where ngrok's config file is, if it has a valid one. */
-function ngrokConfigPath() {
-  const res = run("ngrok", ["config", "check"]);
-  const m = `${res.stdout}${res.stderr}`.match(/Valid configuration file at (.+)/);
-  return res.status === 0 && m ? m[1].trim() : "";
-}
-
-function ngrokHasAuthtoken() {
-  const file = ngrokConfigPath();
-  if (!file) return false;
-  try {
-    return /^\s*authtoken:\s*\S+/m.test(readFileSync(file, "utf8"));
-  } catch {
-    return false;
-  }
-}
-
 /** The problems that stop these services running at all, none of which it can fix itself. */
 function missingTools(names) {
   const out = [];
@@ -357,13 +361,13 @@ function missingTools(names) {
           : "docker is not installed — install Docker Engine with the compose plugin (https://docs.docker.com/engine/install/)"
     );
   } else if (run("docker", ["compose", "version"]).status !== 0) out.push("`docker compose` is not available — update Docker");
-  if (!have("ngrok")) {
+  if (!have("cloudflared")) {
     out.push(
       IS_MAC
-        ? "ngrok is not installed — `brew install ngrok`"
+        ? "cloudflared is not installed — `brew install cloudflared`"
         : IS_WIN
-          ? "ngrok is not installed — `winget install ngrok.ngrok`"
-          : "ngrok is not installed — see https://ngrok.com/download/linux"
+          ? "cloudflared is not installed — `winget install --id Cloudflare.cloudflared`"
+          : "cloudflared is not installed — see https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/"
     );
   }
   for (const name of names.filter((n) => SERVICES[n]?.uv)) {
@@ -416,9 +420,7 @@ function publishedPort(dir, project, service, containerPort, env = {}) {
 async function ok(url, token) {
   try {
     const res = await fetch(url, {
-      headers: token
-        ? { authorization: `Bearer ${token}`, "ngrok-skip-browser-warning": "1" }
-        : {},
+      headers: token ? { authorization: `Bearer ${token}` } : {},
       signal: AbortSignal.timeout(10_000),
     });
     return res.ok;
@@ -682,7 +684,7 @@ function pidIn(file) {
 }
 
 const supervisorPid = () => pidIn(PID_FILE);
-const isNgrok = (pid) => isProcess(pid, /ngrok/i);
+const isTunnel = (pid) => isProcess(pid, /cloudflared/i);
 
 function processList() {
   const res = IS_WIN
@@ -696,8 +698,7 @@ function processList() {
 /**
  * End every supervisor of this target except `except`, then every tunnel left without its
  * supervisor. supervisor.pid names only the newest supervisor, so one started beside it
- * (a second `start`, the login item) used to keep running with its own ngrok until the
- * free plan's 3 sessions were used up and no new tunnel could open.
+ * (a second `start`, the login item) used to keep running with its own tunnel.
  */
 async function endStrays(except = 0) {
   const kill = (pid, sig) => {
@@ -706,10 +707,10 @@ async function endStrays(except = 0) {
     } catch {}
   };
   const others = supervisorsOf(processList(), withTarget("_supervise"), except);
-  for (const pid of others) kill(pid, "SIGTERM"); // each stops its own ngrok on the way out
+  for (const pid of others) kill(pid, "SIGTERM"); // each stops its own tunnel on the way out
   for (let i = 0; i < 20 && others.some(alive); i++) await sleep(250);
   for (const pid of others.filter(alive)) kill(pid, "SIGKILL");
-  const orphans = orphanNgroks(processList());
+  const orphans = orphanTunnels(processList());
   for (const pid of orphans) kill(pid, "SIGTERM");
   return others.length + orphans.length;
 }
@@ -719,9 +720,9 @@ async function endStrays(except = 0) {
  * the agent pointed at the tunnel.
  *
  * Every heartbeat walks the same list — Docker reachable, each service that is on
- * answering locally (and each that was turned off taken down), ngrok alive, tunnel
+ * answering locally (and each that was turned off taken down), cloudflared alive, tunnel
  * answering from outside, agent holding the current address of each — and repairs what
- * is wrong. A laptop waking up on a new network, a killed ngrok and a Docker that was
+ * is wrong. A laptop waking up on a new network, a killed cloudflared and a Docker that was
  * never started all end up at the same place.
  */
 async function supervise() {
@@ -731,11 +732,19 @@ async function supervise() {
   } catch {}
   writeFileSync(PID_FILE, String(process.pid));
 
-  // One supervisor and one tunnel per target: end any other, and any ngrok left behind.
-  const stale = readState().ngrokPid;
-  if (isNgrok(stale)) process.kill(stale, "SIGTERM");
+  // A sleeping Mac drops the tunnel and every service; stay awake while this runs.
+  // `-w` ends caffeinate with this process, however it exits.
+  if (IS_MAC) {
+    spawn("caffeinate", caffeinateArgs(process.pid), { stdio: "ignore" })
+      .on("error", (err) => log(`caffeinate: ${err.message}`))
+      .unref();
+  }
+
+  // One supervisor and one tunnel per target: end any other, and any cloudflared left behind.
+  const stale = readState().tunnelPid;
+  if (isTunnel(stale)) process.kill(stale, "SIGTERM");
   const ended = await endStrays(process.pid);
-  if (ended) log(`ended ${ended} stray supervisor/ngrok process(es)`);
+  if (ended) log(`ended ${ended} stray supervisor/cloudflared process(es)`);
 
   let token = readToken();
   const { agentId, worker } = readState();
@@ -753,74 +762,78 @@ async function supervise() {
   writeState({ gatewayPort });
   log(`supervisor up (pid ${process.pid}) for agent ${agentId}; gateway on 127.0.0.1:${gatewayPort}`);
 
-  let ngrok = null;
+  let tunnel = null;
   let url = "";
   let publicFailures = 0;
+  let tunnelStartedAt = 0;
   let busy = false;
   // A tick asked for while one runs (a new tunnel address, a manual restart) runs
   // straight after it rather than waiting out the heartbeat.
   let again = false;
 
-  const startNgrok = () => {
+  const startTunnel = () => {
     url = "";
     publicFailures = 0;
+    tunnelStartedAt = Date.now();
     const child = spawn(
-      "ngrok",
-      ["http", `127.0.0.1:${gatewayPort}`, "--log", "stdout", "--log-format", "json"],
-      { stdio: ["ignore", "pipe", "pipe"], windowsHide: true }
+      "cloudflared",
+      ["tunnel", "--no-autoupdate", "--url", `http://127.0.0.1:${gatewayPort}`],
+      { stdio: ["ignore", "ignore", "pipe"], windowsHide: true }
     );
-    ngrok = child;
-    writeState({ ngrokPid: child.pid, url: "" });
-    log(`ngrok started (pid ${child.pid}) -> 127.0.0.1:${gatewayPort}`);
+    tunnel = child;
+    writeState({ tunnelPid: child.pid, url: "" });
+    log(`cloudflared started (pid ${child.pid}) -> 127.0.0.1:${gatewayPort}`);
+    // cloudflared logs to stderr; a quick tunnel's address appears once, in a banner,
+    // before the tunnel is connected. It is only used once connected and resolvable.
+    let pending = "";
     let buf = "";
-    child.stdout.on("data", (chunk) => {
+    const announce = async () => {
+      const host = new URL(pending).host;
+      pending = "";
+      if (!(await resolvable(host))) log(`${host} still does not resolve; using it anyway`);
+      if (tunnel !== child) return;
+      url = `https://${host}`;
+      writeState({ url, lastError: "" });
+      log(`tunnel at ${url}`);
+      tick();
+    };
+    child.stderr.on("data", (chunk) => {
       buf += chunk;
       let nl;
       while ((nl = buf.indexOf("\n")) >= 0) {
         const line = buf.slice(0, nl);
         buf = buf.slice(nl + 1);
-        let entry;
-        try {
-          entry = JSON.parse(line);
-        } catch {
-          continue;
-        }
-        // ngrok logs this again whenever its session is re-established, sometimes on
-        // a new address; either way the newest one is the one to push.
-        if (entry.msg === "started tunnel" && entry.url) {
-          url = String(entry.url).replace(/\/+$/, "");
-          writeState({ url, lastError: "" });
-          log(`tunnel at ${url}`);
-          tick();
-        } else if (entry.lvl === "eror" || entry.lvl === "crit") {
-          const err = entry.err || entry.msg;
-          log(`ngrok: ${err}`);
-          writeState({ lastError: `ngrok: ${err}` });
+        const m = line.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/);
+        if (m && !url) pending = m[0];
+        else if (pending && /Registered tunnel connection/.test(line)) announce();
+        else if (/\s(ERR|FTL)\s/.test(line)) {
+          const err = line.replace(/^\S+\s+(ERR|FTL)\s+/, "").trim();
+          log(`cloudflared: ${err}`);
+          writeState({ lastError: `cloudflared: ${err}` });
         }
       }
     });
-    child.stderr.on("data", (chunk) => log(`ngrok: ${String(chunk).trim()}`));
     child.on("exit", (code, signal) => {
-      if (ngrok === child) {
-        ngrok = null;
+      if (tunnel === child) {
+        tunnel = null;
         url = "";
-        log(`ngrok exited (${signal ?? code})`);
+        log(`cloudflared exited (${signal ?? code})`);
       }
     });
   };
 
-  const stopNgrok = () => {
-    const child = ngrok;
-    ngrok = null;
+  const stopTunnel = () => {
+    const child = tunnel;
+    tunnel = null;
     url = "";
     if (child) child.kill("SIGTERM");
   };
 
-  const restartNgrok = async (why) => {
+  const restartTunnel = async (why) => {
     log(`restarting the tunnel: ${why}`);
-    stopNgrok();
+    stopTunnel();
     await sleep(1500);
-    startNgrok();
+    startTunnel();
   };
 
   /** Bring each service that is on up, and take down each this supervisor ran that is now off. */
@@ -894,13 +907,18 @@ async function supervise() {
 
       await services();
 
-      if (!ngrok) return startNgrok();
-      if (!url) return;
+      if (!tunnel) return startTunnel();
+      if (!url) {
+        if (Date.now() - tunnelStartedAt > TUNNEL_READY_MS) {
+          return await restartTunnel(`no reachable address after ${TUNNEL_READY_MS / 1000}s`);
+        }
+        return;
+      }
 
       if (await ok(`${url}/healthz`, token)) {
         publicFailures = 0;
       } else if (++publicFailures >= PUBLIC_FAILURES_BEFORE_RESTART) {
-        return await restartNgrok(`${url} unreachable ${publicFailures} times in a row`);
+        return await restartTunnel(`${url} unreachable ${publicFailures} times in a row`);
       } else {
         log(`${url} unreachable (${publicFailures}/${PUBLIC_FAILURES_BEFORE_RESTART})`);
       }
@@ -920,12 +938,12 @@ async function supervise() {
 
   const shutdown = () => {
     log("supervisor stopping");
-    stopNgrok();
+    stopTunnel();
     stopChildren();
     try {
       rmSync(PID_FILE);
     } catch {}
-    writeState({ url: "", ngrokPid: 0 });
+    writeState({ url: "", tunnelPid: 0 });
     setTimeout(() => process.exit(0), 500);
   };
   process.on("SIGTERM", shutdown);
@@ -936,7 +954,7 @@ async function supervise() {
     // `salts-tools restart`: a new tunnel, pushed again everywhere.
     if (existsSync(RESTART_FILE)) {
       rmSync(RESTART_FILE, { force: true });
-      stopNgrok();
+      stopTunnel();
       const svc = readState().svc ?? {};
       for (const name of NAMES) svc[name] = { ...svc[name], pushedTo: "" };
       writeState({ svc });
@@ -957,7 +975,7 @@ async function supervise() {
 
 /**
  * salts-tools was salts-web, which ran SearXNG alone. Its state moves here once: the
- * old supervisor is stopped (a free ngrok account allows one tunnel), the agent and web
+ * old supervisor and its ngrok are stopped, the agent and web
  * port carry over, and a salts-web login item is replaced by this one. The token stays
  * where it was, under the same Keychain entry.
  */
@@ -973,7 +991,7 @@ async function migrateFromSaltsWeb() {
     if (alive(pid)) process.kill(pid, "SIGKILL");
   }
   const prev = JSON.parse(readFileSync(oldState, "utf8"));
-  if (isNgrok(prev.ngrokPid)) process.kill(prev.ngrokPid, "SIGTERM");
+  if (isProcess(prev.ngrokPid, /ngrok/i)) process.kill(prev.ngrokPid, "SIGTERM");
 
   mkdirSync(HOME, { recursive: true });
   for (const file of ["token", "token.dpapi"]) {
@@ -1017,8 +1035,8 @@ async function stopSupervisor() {
     if (alive(pid)) process.kill(pid, "SIGKILL");
   }
   const strays = await endStrays();
-  const { ngrokPid, svc } = readState();
-  if (isNgrok(ngrokPid)) process.kill(ngrokPid, "SIGTERM");
+  const { tunnelPid, svc } = readState();
+  if (isTunnel(tunnelPid)) process.kill(tunnelPid, "SIGTERM");
   if (isProcess(svc?.matchmaker?.pid, /recruiter-mcp/i)) process.kill(svc.matchmaker.pid, "SIGTERM");
   if (isProcess(svc?.analyst?.pid, /analyst-mcp/i)) process.kill(svc.analyst.pid, "SIGTERM");
   return Boolean(pid || strays);
@@ -1093,7 +1111,7 @@ WantedBy=default.target
     return;
   }
   const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  // launchd starts with a bare PATH; docker, ngrok and uv live wherever this shell found them.
+  // launchd starts with a bare PATH; docker, cloudflared and uv live wherever this shell found them.
   writeFileSync(
     file,
     `<?xml version="1.0" encoding="UTF-8"?>
@@ -1268,21 +1286,7 @@ async function start({ interactive }) {
 
   const rl = interactive ? createInterface({ input: process.stdin, output: process.stdout }) : null;
   try {
-    // ngrok with no authtoken cannot open a tunnel at all.
-    if (!ngrokHasAuthtoken()) {
-      if (!rl) {
-        console.error(`${RED}✗${OFF} ngrok has no authtoken — run \`salts-tools ${withTarget("start")}\` in a terminal`);
-        process.exit(1);
-      }
-      console.log("ngrok needs an authtoken: https://dashboard.ngrok.com/get-started/your-authtoken");
-      const authtoken = (await rl.question("ngrok authtoken: ")).trim();
-      const res = run("ngrok", ["config", "add-authtoken", authtoken]);
-      if (res.status !== 0 || !ngrokHasAuthtoken()) {
-        console.error(`${RED}✗${OFF} ngrok did not accept it: ${(res.stderr || res.stdout).trim()}`);
-        process.exit(1);
-      }
-    }
-    console.log(`${GREEN}✓${OFF} ngrok installed and configured`);
+    console.log(`${GREEN}✓${OFF} cloudflared installed`);
 
     // At login this runs unattended and Docker may be minutes away; the supervisor
     // waits for it there, so only a person at the terminal waits for it here.

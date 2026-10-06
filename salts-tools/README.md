@@ -1,7 +1,7 @@
 # salts-tools — local services for a salt-agent, behind one tunnel
 
 salts-tools runs services for an agent on your own laptop and puts all of them on the
-internet through a single ngrok tunnel:
+internet through a single cloudflared quick tunnel (free, no account):
 
 | Service | What it is | The agent reaches it at |
 | --- | --- | --- |
@@ -14,7 +14,7 @@ The CLI:
 - runs each service bound to `127.0.0.1` only
 - runs a gateway on loopback that routes by the first path segment and refuses anything
   without the token
-- opens one ngrok tunnel to the gateway, so every service shares its address
+- opens one cloudflared tunnel to the gateway, so every service shares its address
 - writes each service's address into the agent
 - rebuilds the tunnel and updates the agent whenever the tunnel drops or moves
 - optionally starts at login
@@ -32,9 +32,9 @@ It runs on macOS, Linux and Windows. It was called salts-web; see
     Colima itself. Docker Engine runs as a system service, so start it with
     `sudo systemctl enable --now docker`, and add your user to the `docker` group so
     `docker info` works without `sudo`.
-- ngrok: `brew install ngrok` (macOS), `winget install ngrok.ngrok` (Windows), or
-  [ngrok.com/download](https://ngrok.com/download) (Linux). salts-tools asks for your
-  authtoken if ngrok has none.
+- cloudflared: `brew install cloudflared` (macOS), `winget install --id Cloudflare.cloudflared`
+  (Windows), or [the Cloudflare downloads page](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/)
+  (Linux). No Cloudflare account is needed.
 - Node 20 or later.
 - For `matchmaker` and `analyst`: [uv](https://docs.astral.sh/uv/). salts-tools runs
   `uv sync` the first time.
@@ -57,8 +57,8 @@ You can also run it without linking: `node salts-tools/cli.mjs <command>`.
 salts-tools start web
 ```
 
-1. Checks that Docker and ngrok are installed (and uv, for `matchmaker`), that ngrok has
-   an authtoken, and that Docker is running. Starts Docker if it is not.
+1. Checks that Docker and cloudflared are installed (and uv, for `matchmaker`), and that
+   Docker is running. Starts Docker if it is not.
 2. Generates a token if the OS secret store does not already hold one.
 3. Asks for the agent ID.
 4. Shows the token **once**. Paste it into the agent's settings under Capabilities →
@@ -153,8 +153,8 @@ Staging runs as a separate instance, with its own token, state, containers, port
 tunnel and login item, so it can run alongside production. `stop:staging` does not
 affect production. Staging uses the token account `searxng-token-staging`, state and
 logs in `~/.salts-tools/staging/`, the Docker projects `searxng-staging` and
-`matchmaker-mcp-staging`, and a login item with a `-staging` suffix. A free ngrok
-account allows one tunnel at a time, so running both needs a paid one.
+`matchmaker-mcp-staging`, and a login item with a `-staging` suffix. Each runs its own
+tunnel.
 
 ## How it stays up
 
@@ -163,7 +163,7 @@ the following every 30 seconds:
 
 - Each service that is on answers on loopback. If not, it starts Docker if needed and
   brings the service up. A service turned off with `stop <service>` is taken down.
-- ngrok is running. If not, it restarts ngrok.
+- cloudflared is running. If not, it restarts cloudflared.
 - The tunnel answers from outside. After three failures in a row it opens a new tunnel.
 - The agent has each service's current address. If not, it sends it, and retries until
   the Worker accepts it. This covers a laptop that wakes up offline.
@@ -185,7 +185,7 @@ the Docker wait and leaves it to the supervisor, so login is never held up.
 
 ## Security
 
-- Every service listens on `127.0.0.1` only. ngrok reaches only the gateway.
+- Every service listens on `127.0.0.1` only. cloudflared reaches only the gateway.
 - The gateway refuses any request without `Authorization: Bearer <token>` (compared in
   constant time) and passes the header on, so SearXNG's Caddy gate and the matchmaker
   check the same token again.
