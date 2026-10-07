@@ -25,6 +25,7 @@ import {
   removeAttachment,
   serveAttachment,
   serveThumbnail,
+  showMadeFiles,
   storedBytes,
   sweepBucket,
   upload,
@@ -80,7 +81,7 @@ export class SessionAgent extends Think<Env> {
   private turnUsage: TurnUsage = emptyUsage();
 
   /** What the running turns have done that later code reads; see `TurnState`. */
-  private turn: TurnState = { running: 0, stoppedOnPurpose: false, scheduled: false };
+  private turn: TurnState = { running: 0, stoppedOnPurpose: false, scheduled: false, made: [] };
 
   /** The streaming turn, kept so a browser that reloads mid-reply can catch up. */
   private live = new LiveTurns();
@@ -300,6 +301,7 @@ export class SessionAgent extends Think<Env> {
     const config = this.config();
     this.turnUsage = { ...emptyUsage(), started: Date.now() };
     this.turn.scheduled = false;
+    this.turn.made = [];
     this.turn.running++;
     await maybeCompact(this.host, config);
 
@@ -356,6 +358,10 @@ export class SessionAgent extends Think<Env> {
       Date.now(),
       this.turnUsage.peak
     );
+
+    // What tools made for the user reaches them even when the reply never links it: a
+    // turn cut off at its tool-round limit has no reply text at all.
+    showMadeFiles(this.host, result.message.id, textOf(result.message));
 
     // Also banked in the registry, where the monthly ceiling is measured across sessions.
     const spent = turnCost(this.turnUsage);
