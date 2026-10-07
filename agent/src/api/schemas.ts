@@ -247,7 +247,7 @@ pin<Same<z.infer<typeof McpServerSchema>, McpServerView>>();
 export const AttachmentSchema = z
   .object({
     id: z.string(),
-    kind: z.enum(["text", "image", "pdf"]),
+    kind: z.enum(["text", "image", "pdf", "sheet"]),
     name: z.string(),
     mime: z.string(),
     bytes: z.number(),

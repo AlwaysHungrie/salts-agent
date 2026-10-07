@@ -1,6 +1,13 @@
 import { SELF, env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
-import { COST_PER_TURN, MCP_TOOLS, MCP_UPLOAD_TOOL, replyTo } from "./openrouter-mock";
+import {
+  COST_PER_TURN,
+  MCP_MEDIA_TOOL,
+  MCP_TOOLS,
+  MCP_UPLOAD_TOOL,
+  MOCK_XLSX_TEXT,
+  replyTo,
+} from "./openrouter-mock";
 import { EMPTY_MCP_SERVER, agentIdOf } from "../src/registry";
 import { signedIn } from "./clerk";
 
@@ -580,6 +587,63 @@ describe("a PDF sent to an MCP server that takes uploads", () => {
     await say(sessionId, email, `read this ${token}`);
 
     expect(await turnFor(token)).not.toContain("upload_id");
+  });
+
+  const XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+  async function attachSheet(sessionId: string, email: string, name = "model.xlsx") {
+    const form = new FormData();
+    form.set("file", new File(["PK a workbook"], name, { type: XLSX }));
+    return SELF.fetch(`${BASE}/agents/session-agent/${sessionId}/files`, {
+      method: "POST",
+      headers: signedIn(email),
+      body: form,
+    });
+  }
+
+  it("takes an Excel workbook only when a server can read it, and forwards it as a sheet", async () => {
+    const plain = await withServer("https://mcp.test/", MCP_TOOLS);
+    const refused = await attachSheet(plain.sessionId, plain.email);
+    expect(refused.status).toBe(415);
+    expect(((await refused.json()) as { error: string }).error).toContain("MCP server");
+
+    const { sessionId, email } = await withServer("https://mcp.test/files/mcp", [MCP_UPLOAD_TOOL]);
+    const res = await attachSheet(sessionId, email);
+    expect(res.status).toBe(200);
+    const { attachment } = (await res.json()) as { attachment: { kind: string } };
+    expect(attachment.kind).toBe("sheet");
+
+    const token = crypto.randomUUID().slice(0, 8);
+    const before = (await uploads()).length;
+    await (await say(sessionId, email, `!!ingest mcp_recruiter_ingest_resume ${token}`)).text();
+    expect(await turnFor(token)).toMatch(/\[Attachment model\.xlsx: to give this file to a tool/);
+    const sent = (await uploads()).slice(before);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({ mime: XLSX, bytes: 13 });
+  });
+
+  it("keeps the pictures and files a tool makes, and hands the model links to them", async () => {
+    const { sessionId, email } = await withServer("https://mcp.test/media/mcp", [MCP_MEDIA_TOOL]);
+    const token = crypto.randomUUID().slice(0, 8);
+    await (await say(sessionId, email, `!!ingest mcp_recruiter_build_report ${token}`)).text();
+
+    const sentBack = await turnFor(token);
+    expect(sentBack).toContain("Report built.");
+    expect(sentBack).not.toContain("iVBORw0KGgo"); // the bytes never reach the model
+    const image = sentBack.match(/!\[Image 1\]\((\/agents\/session-agent\/[^)]+)\)/)?.[1];
+    const file = sentBack.match(/\[Client report\.xlsx\]\((\/agents\/session-agent\/[^)]+)\)/)?.[1];
+    expect(image).toBeTruthy();
+    expect(file).toBeTruthy();
+
+    const png = await SELF.fetch(`${BASE}${image}`, { headers: signedIn(email) });
+    expect(png.headers.get("content-type")).toBe("image/png");
+    await png.arrayBuffer();
+    const xlsx = await SELF.fetch(`${BASE}${file}`, { headers: signedIn(email) });
+    expect(xlsx.headers.get("content-type")).toBe(XLSX);
+    expect(xlsx.headers.get("content-disposition")).toBe(
+      "attachment; filename*=UTF-8''Client%20report.xlsx"
+    );
+    expect(new TextDecoder().decode(await xlsx.arrayBuffer())).toBe(MOCK_XLSX_TEXT);
   });
 });
 

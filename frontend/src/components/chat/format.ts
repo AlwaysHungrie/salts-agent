@@ -53,6 +53,9 @@ export function acceptFor(ready: Set<string>): string {
       ".ts",
       ".tsx",
       ".py",
+      // Workbooks go to an MCP server that reads them; the Worker refuses them without one.
+      ".xlsx",
+      ".xlsm",
     );
   if (ready.has("vision")) accept.push("image/*");
   // OpenRouter takes WAV and MP3 audio; other containers are rejected on upload.

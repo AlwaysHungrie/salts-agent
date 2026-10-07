@@ -28,6 +28,8 @@ export function userText(host: SessionHost, message: string, attachments: Attach
     // file is not sent: the model opens it from the workspace when it needs to.
     if (a.kind === "image") return `--- attached image: ${a.name} ---`;
     if (a.kind === "pdf") return `--- attached PDF: ${a.name} ---`;
+    // A workbook is not readable here; an MCP server opens it (see the upload note).
+    if (a.kind === "sheet") return `--- attached Excel workbook: ${a.name} ---`;
     return `--- attached file: ${a.name}, in the workspace at ${a.path} ---`;
   });
   return [message, ...notes].filter((part) => part.trim() !== "").join("\n\n");

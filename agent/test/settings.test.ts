@@ -72,6 +72,7 @@ describe("a complete document", () => {
     expect(missingSettings(partial)).toEqual([
       "max_sessions",
       "max_upload_bytes.audio",
+      "max_upload_bytes.sheet",
       "config_defaults.cap_mcp",
     ]);
   });

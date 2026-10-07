@@ -4,8 +4,9 @@
 // Runs the services below, puts them on the internet through a single ngrok tunnel, and
 // tells the agent where each one is. Every service shares the tunnel's address and is
 // told apart by path (see gateway.mjs): `<tunnel>/web` is SearXNG, `<tunnel>/matchmaker`
-// the matchmaker MCP server. The address changes whenever ngrok restarts, so a
-// supervisor process watches it and pushes every new address to the agent.
+// the matchmaker MCP server, `<tunnel>/analyst` the spreadsheet analyst MCP server. The
+// address changes whenever ngrok restarts, so a supervisor process watches it and pushes
+// every new address to the agent.
 //
 //   salts-tools start [service…]
 //                         check the machine, set up on first run, start the named services
@@ -20,7 +21,8 @@
 //                         start at login, or stop doing so (a LaunchAgent on macOS, a
 //                         systemd user unit on Linux, a Startup-folder script on Windows)
 //
-// Services: web (SearXNG), matchmaker (local-mcps/matchmaker-mcp).
+// Services: web (SearXNG), matchmaker (local-mcps/matchmaker-mcp), analyst
+// (local-mcps/analyst-mcp).
 //
 // Every command takes a `:staging` suffix (`start:staging`, `stop:staging`, …) to run
 // against the staging Worker instead of production. The two are separate instances —
@@ -83,6 +85,7 @@ const STATE_FILE = path.join(HOME, "state.json");
 const PID_FILE = path.join(HOME, "supervisor.pid");
 const LOG_FILE = path.join(HOME, "supervisor.log");
 const MATCHMAKER_LOG = path.join(HOME, "matchmaker.log");
+const ANALYST_LOG = path.join(HOME, "analyst.log");
 /** `salts-tools restart` drops this file; the supervisor picks it up (no SIGUSR1 on Windows). */
 const RESTART_FILE = path.join(HOME, "restart.request");
 /** `start`/`stop` of one service drop this file: the supervisor re-reads which are on. */
@@ -125,6 +128,7 @@ const GATEWAY_PORT = 8080;
 const WEB_PORT = 8180;
 const MATCHMAKER_PORT = 8280;
 const MATCHMAKER_PG_PORT = 5432;
+const ANALYST_PORT = 8380;
 
 const BOLD = "\x1b[1m";
 const DIM = "\x1b[2m";
@@ -342,7 +346,9 @@ function ngrokHasAuthtoken() {
 /** The problems that stop these services running at all, none of which it can fix itself. */
 function missingTools(names) {
   const out = [];
-  if (!have("docker")) {
+  if (!usesDocker(names)) {
+    // Nothing to check: the services named run without containers.
+  } else if (!have("docker")) {
     out.push(
       IS_MAC
         ? "docker is not installed — install Docker Desktop (or OrbStack / Colima)"
@@ -360,8 +366,11 @@ function missingTools(names) {
           : "ngrok is not installed — see https://ngrok.com/download/linux"
     );
   }
-  if (names.includes("matchmaker") && !have("uv")) {
-    out.push("uv is not installed (the matchmaker needs it) — see https://docs.astral.sh/uv/");
+  for (const name of names.filter((n) => SERVICES[n]?.uv)) {
+    if (!have("uv")) {
+      out.push(`uv is not installed (the ${name} needs it) — see https://docs.astral.sh/uv/`);
+      break;
+    }
   }
   return out;
 }
@@ -452,6 +461,11 @@ const webPort = () => publishedPort(WEB_DIR, WEB_PROJECT, "caddy", 8081, webEnv(
 const MATCHMAKER_DIR = path.join(here, "..", "local-mcps", "matchmaker-mcp");
 // The folder's own name, so a database made by running it by hand is the one used.
 const MATCHMAKER_PROJECT = `matchmaker-mcp${SUFFIX}`;
+const ANALYST_DIR = path.join(here, "..", "local-mcps", "analyst-mcp");
+const ANALYST_BIN = IS_WIN
+  ? path.join(ANALYST_DIR, ".venv", "Scripts", "analyst-mcp.exe")
+  : path.join(ANALYST_DIR, ".venv", "bin", "analyst-mcp");
+
 const MATCHMAKER_BIN = IS_WIN
   ? path.join(MATCHMAKER_DIR, ".venv", "Scripts", "recruiter-mcp.exe")
   : path.join(MATCHMAKER_DIR, ".venv", "bin", "recruiter-mcp");
@@ -464,6 +478,7 @@ const MATCHMAKER_BIN = IS_WIN
 const SERVICES = {
   web: {
     label: "SearXNG",
+    docker: true,
     healthy: (port, token) => ok(`http://127.0.0.1:${port}/healthz`, token),
     async up(token) {
       let port = webPort();
@@ -486,6 +501,8 @@ const SERVICES = {
 
   matchmaker: {
     label: "matchmaker MCP",
+    docker: true,
+    uv: true,
     child: null,
     healthy: (port) => ok(`http://127.0.0.1:${port}/healthz`),
     async up(token) {
@@ -552,7 +569,71 @@ const SERVICES = {
     push: (tunnel) => ({ route: "mcp", body: { name: "matchmaker", url: `${tunnel}/matchmaker/mcp` } }),
     reached: (tunnel) => `${tunnel}/matchmaker/mcp`,
   },
+
+  analyst: {
+    label: "analyst MCP",
+    docker: false,
+    uv: true,
+    child: null,
+    healthy: (port) => ok(`http://127.0.0.1:${port}/healthz`),
+    async up(token) {
+      if (!existsSync(ANALYST_BIN)) {
+        log("analyst: uv sync");
+        const res = run("uv", ["sync", "--frozen"], { cwd: ANALYST_DIR, timeout: 600_000 });
+        if (res.status !== 0) throw new Error(`analyst: uv sync failed: ${(res.stderr || res.stdout).trim()}`);
+      }
+      this.stop();
+      const port = await portFrom(readState().svc?.analyst?.port, ANALYST_PORT);
+      const out = openSync(ANALYST_LOG, "a");
+      // Its own .env still applies (DATA_DIR, INBOX_DIR, ALLOW_PYTHON, …); these win over it.
+      const child = spawn(ANALYST_BIN, [], {
+        cwd: ANALYST_DIR,
+        stdio: ["ignore", out, out],
+        windowsHide: true,
+        env: {
+          ...process.env,
+          MCP_TRANSPORT: "http",
+          MCP_HOST: "127.0.0.1",
+          MCP_PORT: String(port),
+          MCP_AUTH_TOKEN: token,
+        },
+      });
+      this.child = child;
+      child.on("exit", (code, signal) => {
+        if (this.child === child) this.child = null;
+        log(`analyst exited (${signal ?? code})`);
+      });
+      writeSvc("analyst", { pid: child.pid });
+      log(`analyst started (pid ${child.pid}) on port ${port}; log at ${ANALYST_LOG}`);
+      if (!(await waitUntil(() => this.healthy(port), 60))) {
+        throw new Error(`analyst did not answer on port ${port} — see ${ANALYST_LOG}`);
+      }
+      return port;
+    },
+    stop() {
+      if (this.child) this.child.kill("SIGTERM");
+      this.child = null;
+      const stale = readState().svc?.analyst?.pid;
+      if (isProcess(stale, /analyst-mcp/i)) process.kill(stale, "SIGTERM");
+    },
+    down() {
+      this.stop();
+      return { status: 0, stdout: "", stderr: "" };
+    },
+    push: (tunnel) => ({ route: "mcp", body: { name: "analyst", url: `${tunnel}/analyst/mcp` } }),
+    reached: (tunnel) => `${tunnel}/analyst/mcp`,
+  },
 };
+
+/** Whether any of these services runs in Docker. */
+function usesDocker(names) {
+  return names.some((name) => SERVICES[name]?.docker);
+}
+
+/** Stop every service that runs as a child process of the supervisor (not containers). */
+function stopChildren() {
+  for (const svc of Object.values(SERVICES)) svc.stop?.();
+}
 const NAMES = Object.keys(SERVICES);
 
 /** Tell the agent where a service is now. Returns the Worker's status, or 0 offline. */
@@ -760,7 +841,7 @@ async function supervise() {
       delete ports[name];
       writeSvc(name, { up: false });
       try {
-        await ensureDocker(log);
+        if (svc.docker) await ensureDocker(log);
         const port = await svc.up(token);
         ports[name] = port;
         writeSvc(name, { up: true, port, error: "" });
@@ -808,7 +889,7 @@ async function supervise() {
         token = current;
         log("token changed; recreating the services");
         for (const name of Object.keys(ports)) delete ports[name];
-        SERVICES.matchmaker.stop();
+        stopChildren();
       }
 
       await services();
@@ -840,7 +921,7 @@ async function supervise() {
   const shutdown = () => {
     log("supervisor stopping");
     stopNgrok();
-    SERVICES.matchmaker.stop();
+    stopChildren();
     try {
       rmSync(PID_FILE);
     } catch {}
@@ -939,6 +1020,7 @@ async function stopSupervisor() {
   const { ngrokPid, svc } = readState();
   if (isNgrok(ngrokPid)) process.kill(ngrokPid, "SIGTERM");
   if (isProcess(svc?.matchmaker?.pid, /recruiter-mcp/i)) process.kill(svc.matchmaker.pid, "SIGTERM");
+  if (isProcess(svc?.analyst?.pid, /analyst-mcp/i)) process.kill(svc.analyst.pid, "SIGTERM");
   return Boolean(pid || strays);
 }
 
@@ -1111,6 +1193,13 @@ function report(state, names) {
   for (const name of names) {
     console.log(`${GREEN}✓${OFF} ${SERVICES[name].label}: agent ${state.agentId} reaches it at ${SERVICES[name].reached(state.url)}`);
   }
+  if (names.includes("analyst")) {
+    console.log(`
+The agent's ${BOLD}analyst${OFF} MCP server reads Excel and CSV files sent in the chat. Files can
+also go in its inbox folder: ${BOLD}${path.join(ANALYST_DIR, "data", "inbox")}${OFF}
+${DIM}(DATA_DIR / INBOX_DIR in local-mcps/analyst-mcp/.env move it). run_python is off unless
+ALLOW_PYTHON=true there.${OFF}`);
+  }
   if (names.includes("matchmaker")) {
     // Caps (USD per call) are the matchmaker's own suggestions, from its .env.example.
     const headers = [
@@ -1197,7 +1286,7 @@ async function start({ interactive }) {
 
     // At login this runs unattended and Docker may be minutes away; the supervisor
     // waits for it there, so only a person at the terminal waits for it here.
-    if (rl) {
+    if (rl && usesDocker(services)) {
       await ensureDocker((m) => console.log(`${DIM}  … ${m}${OFF}`));
       console.log(`${GREEN}✓${OFF} Docker running`);
     }

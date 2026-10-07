@@ -7,6 +7,7 @@ internet through a single ngrok tunnel:
 | --- | --- | --- |
 | `web` | [SearXNG](https://github.com/searxng/searxng), a self-hosted metasearch engine (Google, Bing, DuckDuckGo, Brave, Wikipedia and about 70 others, merged, over a JSON API). No account, no API key, no per-query bill. | **SearXNG URL** setting: `<tunnel>/web` |
 | `matchmaker` | [local-mcps/matchmaker-mcp](../local-mcps/matchmaker-mcp/README.md): resume ingestion and job matching as an MCP server, with Postgres in Docker. | MCP server named `matchmaker`: `<tunnel>/matchmaker/mcp` |
+| `analyst` | [local-mcps/analyst-mcp](../local-mcps/analyst-mcp/README.md): Excel and CSV analysis as an MCP server. It reads workbooks sent in the chat, answers questions about them, previews tables and charts, and returns built workbooks. It needs no Docker. | MCP server named `analyst`: `<tunnel>/analyst/mcp` |
 
 The CLI:
 
@@ -23,7 +24,8 @@ It runs on macOS, Linux and Windows. It was called salts-web; see
 
 ## Requirements
 
-- Docker with the compose plugin. It does not need to start at login.
+- Docker with the compose plugin, for `web` and `matchmaker`. `analyst` alone does
+  not need Docker. Docker does not need to start at login.
   - macOS: Docker Desktop, OrbStack or Colima. salts-tools starts it when it is not running.
   - Windows: Docker Desktop. salts-tools starts it when it is not running.
   - Linux: Docker Engine, Docker Desktop or Colima. salts-tools starts Docker Desktop and
@@ -34,8 +36,8 @@ It runs on macOS, Linux and Windows. It was called salts-web; see
   [ngrok.com/download](https://ngrok.com/download) (Linux). salts-tools asks for your
   authtoken if ngrok has none.
 - Node 20 or later.
-- For `matchmaker` only: [uv](https://docs.astral.sh/uv/). salts-tools runs `uv sync` the
-  first time.
+- For `matchmaker` and `analyst`: [uv](https://docs.astral.sh/uv/). salts-tools runs
+  `uv sync` the first time.
 - Linux only, optional: `secret-tool` (package `libsecret-tools` on Debian/Ubuntu,
   `libsecret` on Fedora/Arch) to keep the token in the desktop keyring. See
   [Where things live](#where-things-live).
@@ -100,6 +102,24 @@ The matchmaker's own `.env` in `local-mcps/matchmaker-mcp` still applies (models
 `DATA_DIR`, and so on). salts-tools overrides the transport, host, port, token and
 database URL. Its log is `~/.salts-tools/matchmaker.log`.
 
+## Adding the analyst
+
+```bash
+salts-tools start analyst
+```
+
+This joins the same tunnel, runs `uv sync` in `local-mcps/analyst-mcp` the first time,
+starts the server on loopback with the token as its `MCP_AUTH_TOKEN`, and tells the agent.
+
+The agent gets an MCP server named `analyst`, with `Authorization: Bearer <token>`
+already set. Turn on **File ingest** and **MCP** in the agent's capabilities. Users can
+then attach .xlsx and .csv files in the chat. The agent shows previews of the tables
+and charts it builds, and sends the finished workbook as a download.
+
+The analyst's own `.env` in `local-mcps/analyst-mcp` still applies (`DATA_DIR`,
+`INBOX_DIR`, `ALLOW_PYTHON`, and so on). salts-tools overrides the transport, host, port
+and token. Its log is `~/.salts-tools/analyst.log`.
+
 ## Commands
 
 | Command | What it does |
@@ -113,7 +133,7 @@ database URL. Its log is `~/.salts-tools/matchmaker.log`.
 | `salts-tools setup` | Runs the first-run questions again, for example to switch agents. Starts nothing. |
 | `salts-tools autostart on` / `off` | Adds or removes the login item. See [Where things live](#where-things-live). |
 
-Services: `web`, `matchmaker`.
+Services: `web`, `matchmaker`, `analyst`.
 
 ## Staging
 
@@ -190,7 +210,8 @@ the Docker wait and leaves it to the supervisor, so login is never held up.
 
 - **State**: `~/.salts-tools/state.json` holds the agent ID, Worker URL, which services
   are on, their ports, and the tunnel address. It contains no secrets.
-- **Logs**: `~/.salts-tools/supervisor.log`, `~/.salts-tools/matchmaker.log`.
+- **Logs**: `~/.salts-tools/supervisor.log`, `~/.salts-tools/matchmaker.log`,
+  `~/.salts-tools/analyst.log`.
 - **Login item**:
 
   | Platform | Login item |

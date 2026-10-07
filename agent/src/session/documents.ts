@@ -4,7 +4,7 @@ import { annotationText, type FileAnnotation } from "../openrouter";
 import type { Config } from "../registry";
 import { toArrayBuffer } from "../util/bytes";
 import { getAttachment, readBase64 } from "./attachments";
-import { PARSE_CACHE_DIR } from "./files";
+import { isForwardable, PARSE_CACHE_DIR } from "./files";
 import type { Attachment, SessionHost } from "./types";
 
 /**
@@ -14,8 +14,9 @@ import type { Attachment, SessionHost } from "./types";
 export const PDF_PARSE_ENGINE = "mistral-ocr";
 
 /**
- * Tell the model how to hand each PDF to a server that takes uploads (it cannot copy bytes
- * into a tool call). Nothing is sent here: the file goes only when such a tool is called.
+ * Tell the model how to hand each PDF, workbook or CSV to a server that takes uploads (it
+ * cannot copy bytes into a tool call). Nothing is sent here: the file goes only when such a
+ * tool is called.
  */
 export function mcpUploadNotes(
   host: SessionHost,
@@ -24,21 +25,23 @@ export function mcpUploadNotes(
 ): string[] {
   if (!enabled(config, "mcp") || !host.mcpServers().some(acceptsUploads)) return [];
   return attachments
-    .filter((a) => a.kind === "pdf")
+    .filter(isForwardable)
     .map(
       (a) =>
         `[Attachment ${a.name.replace(/[\]\r\n]/g, " ")}: to give this file to a tool that takes upload_id, pass upload_id="${ATTACHMENT_REF}${a.id}"]`
     );
 }
 
-/** Upload a PDF to a server, once per server and URL, and return the server's id for it. */
+/** Upload a file to a server, once per server and URL, and return the server's id for it. */
 export async function uploadAttachment(
   host: SessionHost,
   server: McpServerRow,
   id: string
 ): Promise<string> {
   const attachment = getAttachment(host, id);
-  if (attachment?.kind !== "pdf") throw new Error(`no PDF attachment ${id} in this chat`);
+  if (!attachment || !isForwardable(attachment)) {
+    throw new Error(`no PDF, workbook or CSV attachment ${id} in this chat`);
+  }
   const cached = host.exec<{ upload_id: string }>(
     `SELECT upload_id FROM mcp_uploads WHERE attachment_id = ? AND server_id = ? AND url = ?`,
     attachment.id,

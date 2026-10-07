@@ -460,7 +460,7 @@ export const EMPTY_META: MetaSettings = {
  */
 export type ClientLimits = {
   max_files_per_message: number;
-  max_upload_bytes: { text: number; pdf: number; image: number; audio: number };
+  max_upload_bytes: { text: number; pdf: number; image: number; audio: number; sheet: number };
 };
 
 /**
@@ -488,7 +488,7 @@ export type SpendState = { usd: number; limit: number; month: string };
 /** A file the user attached, or an image the agent drew, minus the bytes. */
 export type Attachment = {
   id: string;
-  kind: "text" | "image" | "pdf";
+  kind: "text" | "image" | "pdf" | "sheet";
   name: string;
   mime: string;
   bytes: number;

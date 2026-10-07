@@ -8,8 +8,10 @@ import {
   parseTools,
   qualifiedName,
   type McpServerRow,
+  type McpToolResult,
 } from "./mcp";
 import { VOICE_SAMPLE_RATE, pcm16ToOggOpus } from "./opus";
+import { base64ToBytes } from "./util/bytes";
 
 /**
  * Something the agent can do beyond writing. Tool capabilities give the model functions;
@@ -370,9 +372,14 @@ export type ToolContext = {
   registry: DurableObjectStub<SessionRegistry>;
   /** Stores an image and returns a URL this session can serve it from. */
   saveImage: (dataUrl: string, prompt: string) => Promise<string>;
+  /**
+   * Stores a file a tool made for the user (a workbook, a PDF, a CSV) and returns the
+   * URL it downloads from. Throws a reason the model can pass on when it cannot be kept.
+   */
+  saveFile: (bytes: ArrayBuffer, name: string, mime: string) => Promise<string>;
   /** Transcribes a stored audio attachment by id, caching the words on its row. */
   transcribeAttachment: (id: string) => Promise<string>;
-  /** Uploads a stored PDF attachment to an MCP server and returns the server's upload id. */
+  /** Uploads a stored PDF, workbook or CSV attachment to an MCP server; returns its upload id. */
   uploadAttachment: (server: McpServerRow, id: string) => Promise<string>;
   /**
    * Send an Ogg Opus voice note to this session's chat. Throws a reason the model can act
@@ -860,9 +867,10 @@ export function mcpToolSpecs(servers: McpServerRow[]): ToolSpec[] {
               const id = await ctx.uploadAttachment(server, ref.slice(ATTACHMENT_REF.length));
               args = { ...args, upload_id: id };
             }
-            return await withMcpAuth(server, ctx.registry, (client) =>
+            const result = await withMcpAuth(server, ctx.registry, (client) =>
               client.callTool(tool.name, args)
             );
+            return await deliverMcpOutput(result, ctx);
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             // Without this the card would keep advertising a server whose every call
@@ -875,6 +883,63 @@ export function mcpToolSpecs(servers: McpServerRow[]): ToolSpec[] {
     }
   }
   return specs;
+}
+
+/** Images one tool result may put in front of the user; the rest are left out. */
+const MAX_MCP_IMAGES = 10;
+
+/**
+ * Keep what a tool made for the user (images, files) as this session's attachments, and
+ * tell the model how to show them. The bytes never reach the model: only links do.
+ */
+export async function deliverMcpOutput(result: McpToolResult, ctx: ToolContext): Promise<string> {
+  const lines: string[] = [];
+  const limits = ctx.settings.max_upload_bytes;
+  for (const [i, image] of result.images.slice(0, MAX_MCP_IMAGES).entries()) {
+    const label = `Image ${i + 1}`;
+    if (base64Size(image.data) > limits.image) {
+      lines.push(`(${label} was too large to show.)`);
+      continue;
+    }
+    try {
+      lines.push(
+        `![${label}](${await ctx.saveImage(`data:${image.mime};base64,${image.data}`, label)})`
+      );
+    } catch (err) {
+      lines.push(
+        `(${label} could not be kept: ${err instanceof Error ? err.message : String(err)})`
+      );
+    }
+  }
+  if (result.images.length > MAX_MCP_IMAGES) {
+    lines.push(`(${result.images.length - MAX_MCP_IMAGES} more images were left out.)`);
+  }
+  for (const file of result.files) {
+    try {
+      const bytes = base64ToBytes(file.data);
+      lines.push(
+        `[${file.name.replace(/[[\]]/g, "")}](${await ctx.saveFile(bytes, file.name, file.mime)})`
+      );
+    } catch (err) {
+      lines.push(
+        `(${file.name} could not be kept: ${err instanceof Error ? err.message : String(err)})`
+      );
+    }
+  }
+  if (lines.length === 0) return result.text;
+  return [
+    result.text,
+    "For the user (they see these only if your reply includes them; copy each line exactly):",
+    ...lines,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+/** Decoded size of base64 text, without decoding it. */
+function base64Size(encoded: string): number {
+  const padding = encoded.endsWith("==") ? 2 : encoded.endsWith("=") ? 1 : 0;
+  return Math.floor((encoded.length * 3) / 4) - padding;
 }
 
 /** OpenRouter's `tools` array for those tools. */

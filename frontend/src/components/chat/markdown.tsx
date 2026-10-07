@@ -1,5 +1,3 @@
-
-
 /**
  * Markdown, rendered with an explicit component map rather than a prose plugin, so
  * every element lands on the same monochrome scale as the rest of the app.
@@ -26,14 +24,29 @@ export const MARKDOWN_COMPONENTS = (sessionId: string) => ({
   h3: (props: React.ComponentProps<"h3">) => (
     <h3 className="mt-3 mb-1 text-base" {...props} />
   ),
-  a: (props: React.ComponentProps<"a">) => (
-    <a
-      className="underline underline-offset-2"
-      target="_blank"
-      rel="noreferrer"
-      {...props}
-    />
-  ),
+  a: ({ href, ...props }: React.ComponentProps<"a">) => {
+    // A file the agent made lives behind the Worker; fetch it through this app's route.
+    const own = /^\/agents\/session-agent\/[^/]+\/files\//.test(
+      String(href ?? ""),
+    );
+    return (
+      <a
+        className="underline underline-offset-2"
+        target="_blank"
+        rel="noreferrer"
+        href={
+          own
+            ? String(href).replace(
+                /^\/agents\/session-agent\/[^/]+\/files\//,
+                `/api/sessions/${encodeURIComponent(sessionId)}/files/`,
+              )
+            : href
+        }
+        {...(own ? { download: "" } : {})}
+        {...props}
+      />
+    );
+  },
   strong: (props: React.ComponentProps<"strong">) => (
     <strong className="font-semibold" {...props} />
   ),
