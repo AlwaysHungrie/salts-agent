@@ -153,6 +153,7 @@ async function bridge(
         const event = JSON.parse(frame.slice(6)) as
           | { type: "delta"; text: string }
           | ({ type: "usage" } & UsageData)
+          | { type: "files"; attachments: Attachment[] }
           | { type: "tool"; name: string }
           | { type: "tool_done"; name: string; ok: boolean }
           | { type: "error"; error: string }
@@ -164,6 +165,9 @@ async function bridge(
             id: openText(),
             delta: event.text,
           });
+        } else if (event.type === "files") {
+          // What tools made for the user, hung on the reply when the turn ended.
+          writer.write({ type: "data-files", data: { attachments: event.attachments } });
         } else if (event.type === "usage") {
           writer.write({
             type: "data-usage",

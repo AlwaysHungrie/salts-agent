@@ -645,6 +645,23 @@ describe("a PDF sent to an MCP server that takes uploads", () => {
     );
     expect(new TextDecoder().decode(await xlsx.arrayBuffer())).toBe(MOCK_XLSX_TEXT);
   });
+
+  it("hangs what a tool made on the reply when the reply does not show it", async () => {
+    // The mock answers "Stored it." without the links, as a turn cut off at its tool-round
+    // limit (or a model that forgot them) would.
+    const { sessionId, email } = await withServer("https://mcp.test/media/mcp", [MCP_MEDIA_TOOL]);
+    await (await say(sessionId, email, "!!ingest mcp_recruiter_build_report")).text();
+
+    const { messages } = (await (
+      await SELF.fetch(`${BASE}/agents/session-agent/${sessionId}/messages`, as(email))
+    ).json()) as {
+      messages: { role: string; content: string; attachments: { kind: string; name: string }[] }[];
+    };
+    const reply = messages.filter((m) => m.role === "assistant").at(-1)!;
+    expect(reply.content).toBe("Stored it.");
+    expect(reply.attachments.map((a) => a.kind).sort()).toEqual(["image", "sheet"]);
+    expect(reply.attachments.find((a) => a.kind === "sheet")?.name).toBe("Client report.xlsx");
+  });
 });
 
 describe("what the agent is told it can reach", () => {

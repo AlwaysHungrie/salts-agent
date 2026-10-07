@@ -262,6 +262,22 @@ export async function readBase64(host: SessionHost, path: string): Promise<strin
   return bytes ? bytesToBase64(toArrayBuffer(bytes)) : "";
 }
 
+/**
+ * Hang the files tools made this turn on the reply, unless its text already shows them
+ * (a Markdown link to `/files/<id>`), so they are shown once either way.
+ */
+export function showMadeFiles(host: SessionHost, replyId: string, replyText: string): void {
+  for (const id of host.turn.made) {
+    if (replyText.includes(`/files/${id}`)) continue;
+    host.exec(
+      `INSERT OR REPLACE INTO message_files (message_id, attachment_id) VALUES (?, ?)`,
+      replyId,
+      id
+    );
+  }
+  host.turn.made = [];
+}
+
 export function attachmentsOf(host: SessionHost, messageId: string): Attachment[] {
   return host
     .exec<{ attachment_id: string }>(

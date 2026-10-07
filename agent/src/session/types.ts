@@ -110,7 +110,13 @@ export function emptyUsage(): TurnUsage {
  * (approximate; `!stop`/`!unstick` zero it). `stoppedOnPurpose` marks a requested stop
  * until the next question. `scheduled`: WhatsApp owes a 24-hour-window note.
  */
-export type TurnState = { running: number; stoppedOnPurpose: boolean; scheduled: boolean };
+export type TurnState = {
+  running: number;
+  stoppedOnPurpose: boolean;
+  scheduled: boolean;
+  /** Attachments tools saved for the user this turn (drawn images, MCP previews, files). */
+  made: string[];
+};
 
 /**
  * What the `session/*` modules may use of a `SessionAgent`. The object builds this from

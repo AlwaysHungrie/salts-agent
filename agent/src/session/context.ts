@@ -177,6 +177,7 @@ export function toolContext(host: SessionHost, config: Config): ToolContext {
       });
       // Marked used straight away: it belongs to the reply, not to the next turn.
       host.exec(`UPDATE attachments SET used = 1 WHERE id = ?`, id);
+      host.turn.made.push(id);
       return `/agents/session-agent/${encodeURIComponent(host.name())}/files/${id}`;
     },
     saveFile: async (bytes, name, mime) => {
@@ -206,6 +207,7 @@ export function toolContext(host: SessionHost, config: Config): ToolContext {
       });
       // Like a drawn image: it belongs to the reply, not to the next turn.
       host.exec(`UPDATE attachments SET used = 1 WHERE id = ?`, id);
+      host.turn.made.push(id);
       return `/agents/session-agent/${encodeURIComponent(host.name())}/files/${id}`;
     },
     transcribeAttachment: (id) => transcribeAttachment(host, id),

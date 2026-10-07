@@ -3,7 +3,7 @@ import { type Command, parseCommand } from "../commands";
 import { turnCost } from "../openrouter";
 import { attachmentsOf, claimed } from "./attachments";
 import { runCommand } from "./commands";
-import { isAudioAttachment } from "./files";
+import { isAudioAttachment, publicAttachment } from "./files";
 import { reportable, textOf } from "./format";
 import { streamSentence } from "./live";
 import type { Attachment, SessionHost } from "./types";
@@ -29,7 +29,9 @@ export function userText(host: SessionHost, message: string, attachments: Attach
     if (a.kind === "image") return `--- attached image: ${a.name} ---`;
     if (a.kind === "pdf") return `--- attached PDF: ${a.name} ---`;
     // A workbook is not readable here; an MCP server opens it (see the upload note).
-    if (a.kind === "sheet") return `--- attached Excel workbook: ${a.name} ---`;
+    if (a.kind === "sheet") {
+      return `--- attached Excel workbook: ${a.name}. It cannot be read here; open it with an MCP tool that takes upload_id ---`;
+    }
     return `--- attached file: ${a.name}, in the workspace at ${a.path} ---`;
   });
   return [message, ...notes].filter((part) => part.trim() !== "").join("\n\n");
@@ -154,6 +156,7 @@ export async function streamChat(
   // The turn runs on the object and banks every event; this response is one listener, and
   // a reloaded browser can attach another.
   host.live.start();
+  const previousReply = host.live.lastReplyId;
   const turn = (async () => {
     try {
       await host.runTurn({
@@ -194,6 +197,12 @@ export async function streamChat(
         },
       });
 
+      // Files hung on the reply at its end (see showMadeFiles), for the browser to draw now.
+      const reply = host.live.lastReplyId;
+      const files = reply && reply !== previousReply ? attachmentsOf(host, reply) : [];
+      if (files.length > 0) {
+        host.live.emit({ type: "files", attachments: files.map(publicAttachment) });
+      }
       host.live.emit({
         type: "usage",
         prompt_tokens: host.usage().prompt,
