@@ -24,6 +24,21 @@ export function isAudioAttachment(a: Attachment): boolean {
   return a.mime.startsWith("audio/") || a.mime.startsWith("video/");
 }
 
+export const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const SHEET_MIMES = new Set([XLSX_MIME, "application/vnd.ms-excel.sheet.macroEnabled.12"]);
+
+/** An Excel workbook (.xlsx/.xlsm) by mime or name. Read by an MCP server, never by the model. */
+export function isSheet(mime: string, name: string): boolean {
+  return SHEET_MIMES.has(mime) || /\.(xlsx|xlsm)$/i.test(name);
+}
+
+/** A file an MCP server that takes uploads may be handed: a PDF, a workbook, or a CSV. */
+export function isForwardable(a: Attachment): boolean {
+  return (
+    a.kind === "pdf" || a.kind === "sheet" || (a.kind === "text" && /\.(csv|tsv)$/i.test(a.name))
+  );
+}
+
 /** A PDF by mime, or by name when the browser sends no type at all. */
 export function isPdf(mime: string, name: string): boolean {
   return mime === "application/pdf" || /\.pdf$/i.test(name);

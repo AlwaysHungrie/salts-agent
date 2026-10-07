@@ -586,6 +586,21 @@ export const MCP_UPLOAD_TOOL = {
   },
 };
 
+/**
+ * A tool whose answer carries a picture and a workbook besides its words, the way a
+ * spreadsheet server answers. Served at `/media/mcp`, which also takes uploads.
+ */
+export const MCP_MEDIA_TOOL = {
+  name: "build_report",
+  description: "Build a report.",
+  inputSchema: { type: "object", properties: { upload_id: { type: "string" } } },
+};
+
+/** A 1x1 PNG, and the bytes of the workbook `build_report` returns. */
+export const MOCK_PNG =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+export const MOCK_XLSX_TEXT = "PK workbook bytes";
+
 /** What was posted to `/files/uploads`, oldest first. Read at `https://mcp.test/__uploads`. */
 const mcpUploads: { upload_id: string; mime: string; bytes: number; authorization: string }[] = [];
 
@@ -604,7 +619,7 @@ async function mcpMock(request: Request, url: URL): Promise<Response> {
   if (url.pathname === "/__calls") return json(mcpCalls);
   // A server that advertises an upload tool but turns uploads away.
   if (url.pathname === "/refuses/uploads") return json({ error: "unauthorized" }, 401);
-  if (url.pathname === "/files/uploads") {
+  if (url.pathname === "/files/uploads" || url.pathname === "/media/uploads") {
     const upload_id = `up-${mcpUploads.length + 1}`;
     mcpUploads.push({
       upload_id,
@@ -638,6 +653,7 @@ async function mcpMock(request: Request, url: URL): Promise<Response> {
   if (body.method === "tools/list") {
     if (url.pathname === "/files/mcp" || url.pathname === "/refuses/mcp")
       return reply({ tools: [...MCP_TOOLS, MCP_UPLOAD_TOOL] });
+    if (url.pathname === "/media/mcp") return reply({ tools: [MCP_MEDIA_TOOL] });
     return reply({ tools: url.pathname === "/empty" ? [] : MCP_TOOLS });
   }
   if (body.method === "tools/call") {
@@ -646,6 +662,22 @@ async function mcpMock(request: Request, url: URL): Promise<Response> {
       name: body.params?.name ?? "",
       arguments: body.params?.arguments ?? {},
     });
+    if (url.pathname === "/media/mcp") {
+      return reply({
+        content: [
+          { type: "text", text: "Report built." },
+          { type: "image", data: MOCK_PNG, mimeType: "image/png" },
+          {
+            type: "resource",
+            resource: {
+              uri: "file:///Client%20report.xlsx",
+              mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+              blob: btoa(MOCK_XLSX_TEXT),
+            },
+          },
+        ],
+      });
+    }
     return reply({ content: [{ type: "text", text: "done" }] });
   }
   // A notification, which carries no id and expects no envelope.

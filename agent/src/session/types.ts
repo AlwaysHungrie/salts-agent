@@ -16,7 +16,7 @@ import { LiveTurns } from "./live";
  */
 export type Attachment = {
   id: string;
-  kind: "text" | "image" | "pdf";
+  kind: "text" | "image" | "pdf" | "sheet";
   name: string;
   mime: string;
   /** Extracted text for a text file, a transcript for audio, a prompt for an image. */

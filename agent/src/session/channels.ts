@@ -11,7 +11,7 @@ import { parseCommand } from "../commands";
 import { toArrayBuffer } from "../util/bytes";
 import { drawnIds, insertAttachment } from "./attachments";
 import { runCommand } from "./commands";
-import { isPdf, uploadPath } from "./files";
+import { isPdf, isSheet, uploadPath } from "./files";
 import { reportable, textOf, turnFailure } from "./format";
 import { openTurn, spendBlocked } from "./turns";
 import type { Attachment, SessionHost } from "./types";
@@ -203,10 +203,11 @@ export async function ingestFiles(host: SessionHost, files: ChannelFile[]): Prom
     const path = uploadPath(id, file.name);
     await host.workspace.writeFileBytes(path, bytes, file.mime);
     const pdf = isPdf(file.mime, file.name);
-    const textual = !isImage && !isAudio && !pdf;
+    const sheet = isSheet(file.mime, file.name);
+    const textual = !isImage && !isAudio && !pdf && !sheet;
     insertAttachment(host, {
       id,
-      kind: isImage ? "image" : pdf ? "pdf" : "text",
+      kind: isImage ? "image" : pdf ? "pdf" : sheet ? "sheet" : "text",
       name: file.name,
       mime: file.mime,
       text: textual

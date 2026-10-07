@@ -22,7 +22,7 @@ import {
   parsedDocuments,
   uploadAttachment,
 } from "./documents";
-import { uploadPath } from "./files";
+import { isPdf, isSheet, isTextLike, safeName, uploadPath } from "./files";
 import { inWords, textOf } from "./format";
 import { transcribeAttachment } from "./transcribe";
 import type { SessionHost } from "./types";
@@ -176,6 +176,35 @@ export function toolContext(host: SessionHost, config: Config): ToolContext {
         bytes: bytes.byteLength,
       });
       // Marked used straight away: it belongs to the reply, not to the next turn.
+      host.exec(`UPDATE attachments SET used = 1 WHERE id = ?`, id);
+      return `/agents/session-agent/${encodeURIComponent(host.name())}/files/${id}`;
+    },
+    saveFile: async (bytes, name, mime) => {
+      const fileName = safeName(name);
+      const settings = host.settings();
+      const sheet = isSheet(mime, fileName);
+      const pdf = !sheet && isPdf(mime, fileName);
+      const text = !sheet && !pdf && (mime.startsWith("text/") || isTextLike(mime, fileName));
+      if (!sheet && !pdf && !text) throw new Error(`${mime} files cannot be kept in the chat`);
+      const limit = settings.max_upload_bytes[sheet ? "sheet" : pdf ? "pdf" : "text"];
+      if (bytes.byteLength > limit) throw new Error(`it is larger than the ${limit} byte limit`);
+      if (bytes.byteLength > (await host.registry().storageRoom(settings.max_agent_bytes))) {
+        throw new Error("the agent's file storage is full");
+      }
+      const id = crypto.randomUUID().slice(0, 12);
+      const path = uploadPath(id, fileName);
+      await host.workspace.writeFileBytes(path, bytes, mime);
+      insertAttachment(host, {
+        id,
+        kind: sheet ? "sheet" : pdf ? "pdf" : "text",
+        name: fileName,
+        mime,
+        text: text ? new TextDecoder().decode(bytes).slice(0, settings.max_upload_bytes.text) : "",
+        path,
+        thumb_path: "",
+        bytes: bytes.byteLength,
+      });
+      // Like a drawn image: it belongs to the reply, not to the next turn.
       host.exec(`UPDATE attachments SET used = 1 WHERE id = ?`, id);
       return `/agents/session-agent/${encodeURIComponent(host.name())}/files/${id}`;
     },

@@ -55,7 +55,7 @@
 - `frontend/` — Next.js app (pnpm)
 - `app-experiments/devcon-jobs-matchmaker/` — Next.js app (pnpm, local MongoDB): standalone jobs matchmaker on the staging agent via its API key
 - `salts-tools/` — laptop CLI: runs local services behind one ngrok tunnel, pushes their URLs to the agent
-- `local-mcps/` — MCP servers salts-tools runs (`matchmaker-mcp`, Python/uv)
+- `local-mcps/` — MCP servers salts-tools runs (`matchmaker-mcp`, `analyst-mcp` for Excel/CSV analysis; Python/uv)
 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence

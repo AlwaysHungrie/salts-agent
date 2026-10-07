@@ -25,7 +25,8 @@ export function notedCapabilities(list: Capability[], settings: DeploymentSettin
           ...capability,
           note:
             `Markdown, CSV, JSON and code up to ${mb(settings.max_upload_bytes.text)}; ` +
-            `PDFs up to ${mb(settings.max_upload_bytes.pdf)}.`,
+            `PDFs up to ${mb(settings.max_upload_bytes.pdf)}; Excel workbooks up to ` +
+            `${mb(settings.max_upload_bytes.sheet)} for an MCP server that reads them.`,
         }
       : capability
   );
