@@ -284,15 +284,36 @@ async def test_sections_build_a_draft_that_exports(wid):
     assert "Heads add up to Total cost" in [row[0].value for row in book["Checks"].iter_rows(max_col=1)]
 
 
+async def test_unit_slips_are_corrected_and_references_keep_their_meaning(wid):
+    revenue = 1000 * 2 * 10.764 * 0.9 * 30000
+    section = {
+        "title": "1. Profit", "columns": ["Item", "Amount", "Share"], "formats": [None, "inr_cr", "pct"],
+        "rows": [["Revenue", "='Model Sheet'!B2", ""], ["Profit", "='Model Sheet'!B6", "=[r2c2]/[r1c2]*100"],
+                 {"cells": ["Total", "=SUM_ABOVE()", ""], "style": "total"}],
+    }  # fmt: skip
+    checks = [{"label": "Revenue matches", "left": "=[r1c2]", "right": "='Model Sheet'!B2", "tolerance": 1}]
+    (res,) = await build_draft(wid, {"title": "T", "sections": [section], "checks": checks})
+    body = text(res)
+    assert not res.is_error, body
+    assert "Units corrected in this section" in body and "row 1 column 2 was in rupees" in body
+    assert "row 2 column 3 was a whole-number percent" in body
+    assert f"₹ {revenue / 1e7:,.2f} Cr" in body
+    assert f"{PROFIT / revenue:.1%}" in body
+    assert "OK: Revenue matches" in body  # the check still compares rupees with rupees
+    exported = await server.export_sheet(wid)
+    assert not exported.is_error, text(exported)
+    (data,) = blobs(exported, "resource")
+    ws = openpyxl.load_workbook(io.BytesIO(data))["Dashboard"]
+    assert any("/10^7" in str(c.value) for row in ws.iter_rows() for c in row)
+
+
 async def test_preview_refuses_numbers_that_read_wrong(wid):
     def spec(fmt, value, chart=None):
         return {"title": "T", "sections": [{"title": "1. S", "columns": ["Item", "Value"], "formats": [None, fmt],
                                             "rows": [["Revenue", value]], "chart": chart}]}  # fmt: skip
 
-    crore = error((await build_draft(wid, spec("inr_cr", "='Model Sheet'!B2")))[-1])
-    assert crore["code"] == "spec_problems" and "use inr for rupees" in crore["message"]
     assert not (await build_draft(wid, spec("inr_cr", "='Model Sheet'!B2/10^7")))[-1].is_error
-    pct = error((await build_draft(wid, spec("pct", "=57.7")))[-1])
+    pct = error((await build_draft(wid, spec("pct", "=326.58")))[-1])
     assert "percents are fractions" in pct["message"]
     typed = error((await build_draft(wid, spec("int", "₹100")))[-1])
     assert "typed text '₹100'" in typed["message"]
@@ -322,6 +343,19 @@ def test_big_numbers_get_words():
     assert approx(19375, "sq ft") == ""
 
 
-async def test_unknown_workbook_id_names_the_open_ones(wid):
+async def test_unknown_workbook_id_means_the_only_open_one(wid):
+    # What a model that lost the id between turns sends: a chat attachment's id, or the file name.
+    for guess in ("863bdbbd-794", "abcdefabcdef", "model.xlsx", ""):
+        res = await server.read_sheet(guess, "Inputs", "A1:B1")
+        assert not res.is_error, text(res)
+        assert "Plot Area" in text(res)
+
+
+async def test_unknown_workbook_id_names_the_open_ones_when_there_are_several(settings, wid):
+    other = openpyxl.Workbook()
+    other.active["A1"] = "another project"
+    other.save(settings.inbox() / "other.xlsx")
+    assert not (await server.open_workbook(inbox_file="other.xlsx")).is_error
     lost = error(await server.breakdown("abcdefabcdef", "'Model Sheet'!B5"))
     assert lost["code"] == "workbook_not_found" and f"{wid} (model.xlsx)" in lost["message"]
+    assert error(await server.find("863bdbbd-794", "profit"))["code"] == "bad_workbook_id"

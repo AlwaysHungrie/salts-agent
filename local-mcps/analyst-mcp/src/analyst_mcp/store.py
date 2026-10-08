@@ -139,11 +139,19 @@ def open_files(settings: Settings, *, upload_id: str | None, inbox_file: str | N
 
 
 def get_files(settings: Settings, workbook_id: str) -> WorkbookFiles:
-    if not WORKBOOK_ID.match(workbook_id or ""):
-        raise ToolFailure("bad_workbook_id", "workbook_id is the 12-character id open_workbook gave" + _known(settings))
-    folder = settings.data_dir / "workbooks" / workbook_id
-    if not (folder / "original.xlsx").exists():
-        raise ToolFailure("workbook_not_found", "no open workbook with that id" + _known(settings))
+    """The workbook with that id. An id this server never gave (the agent forgets tool results between turns, so a
+    model guesses: a chat attachment's id, the file name) means the only open workbook when there is just one."""
+    folder = settings.data_dir / "workbooks" / (workbook_id or "")
+    if not WORKBOOK_ID.match(workbook_id or "") or not (folder / "original.xlsx").exists():
+        books = list_workbooks(settings)
+        if len(books) != 1:
+            if not WORKBOOK_ID.match(workbook_id or ""):
+                raise ToolFailure(
+                    "bad_workbook_id", "workbook_id is the 12-character id open_workbook gave" + _known(settings)
+                )
+            raise ToolFailure("workbook_not_found", "no open workbook with that id" + _known(settings))
+        workbook_id = books[0]["workbook_id"]
+        folder = settings.data_dir / "workbooks" / workbook_id
     return WorkbookFiles(id=workbook_id, dir=folder, name=_read_meta(folder).get("name", workbook_id))
 
 
