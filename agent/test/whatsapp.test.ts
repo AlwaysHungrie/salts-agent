@@ -1,6 +1,7 @@
-import { SELF } from "cloudflare:test";
+import { SELF, env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import {
+  MCP_MEDIA_TOOL,
   SCHEDULED_PROMPT,
   SPOKEN_TEXT,
   UNSUBSCRIBABLE_WABA_ID,
@@ -8,6 +9,7 @@ import {
   replyTo,
 } from "./openrouter-mock";
 import { isVoiceNote } from "../src/channel";
+import { EMPTY_MCP_SERVER } from "../src/registry";
 import { inboundOf, isOwnNumber, verifySignature } from "../src/whatsapp";
 import { signedIn } from "./clerk";
 
@@ -222,6 +224,8 @@ async function sentTo(to: string) {
     audio?: string;
     image?: string;
     caption?: string;
+    document?: string;
+    filename?: string;
   }[];
 }
 
@@ -705,5 +709,29 @@ describe("an image the agent drew", () => {
     const upload = (await uploads()).find((u) => u.id === picture?.image);
     expect(upload?.mime).toBe("image/png");
     expect(upload?.bytes).toBeGreaterThan(0);
+  });
+});
+
+describe("a file the reply links", () => {
+  it("is uploaded and sent as a document, and the dead link is dropped", async () => {
+    const { hook, number, agentId } = await agentFixture();
+    await env.SessionRegistry.get(env.SessionRegistry.idFromName(agentId)).addMcpServer({
+      ...EMPTY_MCP_SERVER,
+      id: crypto.randomUUID(),
+      name: "Reports",
+      url: "https://mcp.test/media/mcp",
+      tools_json: JSON.stringify([MCP_MEDIA_TOOL]),
+      created_at: Date.now(),
+    });
+    expect((await post(hook, delivery(number, "!!export mcp_reports_build_report"))).status).toBe(
+      200
+    );
+
+    const sent = await waitForReply(number, 3);
+    const doc = sent.find((s) => s.document);
+    expect(doc?.filename).toBe("Client report.xlsx");
+    const upload = (await uploads()).find((u) => u.id === doc?.document);
+    expect(upload?.mime).toBe("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    expect(sent.some((s) => s.body === "Your dashboard is ready: Client report.xlsx")).toBe(true);
   });
 });

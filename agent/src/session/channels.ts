@@ -9,7 +9,7 @@ import {
 } from "../channel";
 import { parseCommand } from "../commands";
 import { toArrayBuffer } from "../util/bytes";
-import { drawnIds, insertAttachment } from "./attachments";
+import { drawnIds, getAttachment, insertAttachment } from "./attachments";
 import { runCommand } from "./commands";
 import { isPdf, isSheet, uploadPath } from "./files";
 import { reportable, textOf, turnFailure } from "./format";
@@ -46,9 +46,11 @@ export async function deliverToChat(
   }
 
   try {
-    await channel.sendText(target, textOf(message) || "(no reply)");
+    const text = textOf(message);
+    await channel.sendText(target, chatText(text) || "(no reply)");
     console.log(`${channel.id} delivered for session ${host.name()} to ${target.to}`);
     await sendDrawn(host, channel, target, drawnBefore);
+    await sendLinked(host, channel, target, text, drawnBefore);
     if (host.turn.scheduled && channel.scheduledNotice) {
       await channel.sendText(target, channel.scheduledNotice);
     }
@@ -144,9 +146,11 @@ export async function channelTurn(
         ? textOf(result.message as unknown as UIMessage)
         : turnFailure(result.status, result.error);
 
-    await channel.sendText(target, reply || "(no reply)");
+    await channel.sendText(target, chatText(reply) || "(no reply)");
     // An image the agent drew during the turn is a file in a chat, not a link.
     await sendDrawn(host, channel, target, drawnBefore);
+    // So is a file the reply links: the link only opens in the browser app.
+    await sendLinked(host, channel, target, reply, drawnBefore);
     // Its own message, so the model cannot paraphrase away what the user must do.
     if (host.turn.scheduled && channel.scheduledNotice) {
       await channel.sendText(target, channel.scheduledNotice);
@@ -236,5 +240,41 @@ export async function sendDrawn(
     const bytes = await host.workspace.readFileBytes(image.path);
     if (!bytes) continue;
     await channel.sendImage(target, toArrayBuffer(bytes), image.name, image.text);
+  }
+}
+
+/** A Markdown link (or image) to a session file: `[label](/agents/.../files/<id>)`. */
+const FILE_LINK = /!?\[([^\]]*)\]\([^)\s]*\/files\/([\w-]+)\)/g;
+
+/**
+ * The reply as a chat shows it: a link to a session file is a relative path no chat app
+ * can open, so only its label stays; the file itself follows as its own message.
+ */
+export function chatText(reply: string): string {
+  return reply.replace(FILE_LINK, (_, label: string) => label);
+}
+
+/**
+ * Send each session file the reply links, once, as a file. Images drawn this turn are
+ * skipped: `sendDrawn` has already sent them. A channel without the send sends nothing.
+ */
+export async function sendLinked(
+  host: SessionHost,
+  channel: Channel,
+  target: ChannelTarget,
+  reply: string,
+  drawnBefore: Set<string>
+): Promise<void> {
+  const ids = new Set([...reply.matchAll(FILE_LINK)].map((m) => m[2]));
+  for (const id of ids) {
+    const file = getAttachment(host, id);
+    if (!file || (file.kind === "image" && !drawnBefore.has(id))) continue;
+    const { sendImage, sendFile } = channel;
+    if (file.kind === "image" ? !sendImage : !sendFile) continue;
+    const bytes = await host.workspace.readFileBytes(file.path);
+    if (!bytes) continue;
+    if (file.kind === "image")
+      await sendImage?.(target, toArrayBuffer(bytes), file.name, file.text);
+    else await sendFile?.(target, toArrayBuffer(bytes), file.name, file.mime);
   }
 }

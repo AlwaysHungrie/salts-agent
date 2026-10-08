@@ -29,6 +29,8 @@
  *   answered here too, with a token Ogg Opus file.
  * - `!!draw` — the model draws an image, then confirms it. The drawing call is
  *   answered here too, with a one-pixel PNG.
+ * - `!!export <tool>` — the model calls that tool, then answers with a link to the
+ *   workbook its result carried, as a model handing over an export does.
  * - anything else — the model replies `You said: <message>`.
  *
  * A compaction's summary call is recognised by Think's summary prompt and answered
@@ -60,6 +62,9 @@ const tgSent: {
   photo?: string;
   /** Set on a voice note: how many bytes were uploaded. */
   voice?: number;
+  /** Set on a document: the file's name and type. */
+  document?: string;
+  mime?: string;
   caption?: string;
 }[] = [];
 
@@ -106,6 +111,19 @@ async function telegramMock(request: Request, url: URL): Promise<Response> {
       ...(method === "sendPhoto"
         ? { photo: file instanceof File ? file.name : "" }
         : { voice: file instanceof File ? file.size : 0 }),
+    });
+    return json({ ok: true, result: { message_id: tgSent.length } });
+  }
+
+  if (method === "sendDocument") {
+    const form = await request.formData();
+    const file = form.get("document");
+    tgSent.push({
+      chatId: String(form.get("chat_id") ?? ""),
+      text: "",
+      threadId: Number(form.get("message_thread_id")) || undefined,
+      document: file instanceof File ? file.name : "",
+      mime: file instanceof File ? file.type : "",
     });
     return json({ ok: true, result: { message_id: tgSent.length } });
   }
@@ -166,6 +184,9 @@ const graphSent: {
   /** The media id a picture named, and what was written under it. */
   image?: string;
   caption?: string;
+  /** The media id a document named, and the name it was sent under. */
+  document?: string;
+  filename?: string;
 }[] = [];
 
 /** What the Worker has uploaded to Graph's media store, oldest first. */
@@ -264,6 +285,7 @@ async function graphMock(request: Request, url: URL): Promise<Response> {
     text?: { body?: string };
     audio?: { id?: string };
     image?: { id?: string; caption?: string };
+    document?: { id?: string; filename?: string };
     context?: { message_id?: string };
   };
   // A read receipt names no recipient and sends nothing.
@@ -288,6 +310,8 @@ async function graphMock(request: Request, url: URL): Promise<Response> {
     audio: body.audio?.id,
     image: body.image?.id,
     caption: body.image?.caption,
+    document: body.document?.id,
+    filename: body.document?.filename,
   });
   return json({
     messaging_product: "whatsapp",
@@ -809,6 +833,15 @@ export async function openrouterMock(request: Request): Promise<Response> {
     if (carriesToolResult(body)) return streamedText("Stored it.");
     const ref = JSON.stringify(body.messages).match(/attachment:[\w-]+/)?.[0] ?? "";
     return streamedToolCall(message.split(/\s+/)[1], { text: "a resume", upload_id: ref });
+  }
+
+  // `!!export <tool>`: call that tool, then link the workbook its result carried.
+  if (message.startsWith("!!export")) {
+    if (carriesToolResult(body)) {
+      const link = JSON.stringify(body.messages).match(/\[[^\]]+\.xlsx\]\([^)]+\)/)?.[0];
+      return streamedText(`Your dashboard is ready: ${link ?? "(no link)"}`);
+    }
+    return streamedToolCall(message.split(/\s+/)[1], {});
   }
 
   // `!!failloop <tool>`: a model that repeats one failing call for as long as it is let.

@@ -1,7 +1,9 @@
-import { SELF } from "cloudflare:test";
+import { SELF, env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
+import { EMPTY_MCP_SERVER } from "../src/registry";
 import { signedIn } from "./clerk";
 import {
+  MCP_MEDIA_TOOL,
   PLATFORM_RESET,
   RESET_FILE_ID,
   SLOW_REPLY_MS,
@@ -147,6 +149,8 @@ async function sentTo(chat: number) {
     replyTo?: number;
     photo?: string;
     voice?: number;
+    document?: string;
+    mime?: string;
     caption?: string;
   }[];
 }
@@ -278,6 +282,26 @@ describe("what the channel seam buys", () => {
     expect(photo).toBeTruthy();
     // The prompt rides along as the caption.
     expect(photo?.caption).toContain("mock drawing");
+  });
+
+  it("sends a file the reply links as a document, and drops the dead link", async () => {
+    const { hook, chat, agentId } = await agentFixture();
+    await env.SessionRegistry.get(env.SessionRegistry.idFromName(agentId)).addMcpServer({
+      ...EMPTY_MCP_SERVER,
+      id: crypto.randomUUID(),
+      name: "Reports",
+      url: "https://mcp.test/media/mcp",
+      tools_json: JSON.stringify([MCP_MEDIA_TOOL]),
+      created_at: Date.now(),
+    });
+    await post(hook, update(chat, "!!export mcp_reports_build_report"));
+
+    const sent = await waitForReply(chat, 3);
+    const doc = sent.find((s) => s.document !== undefined);
+    expect(doc?.document).toBe("Client report.xlsx");
+    expect(doc?.mime).toBe("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    const text = sent.find((s) => s.text.startsWith("Your dashboard is ready"));
+    expect(text?.text).toBe("Your dashboard is ready: Client report.xlsx");
   });
 
   it("ingests a file the message carried", async () => {
