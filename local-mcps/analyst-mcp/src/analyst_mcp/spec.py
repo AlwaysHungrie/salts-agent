@@ -140,6 +140,24 @@ class SheetSpec(BaseModel):
         return v
 
 
+def inline_schema(model: type[BaseModel]) -> dict:
+    """The model's JSON schema with every $ref replaced by its definition, so it can sit inside another schema (a
+    tool argument) where "#/$defs/..." would point at the wrong document."""
+    schema = model.model_json_schema()
+    defs = schema.pop("$defs", {})
+
+    def resolve(node):
+        if isinstance(node, dict):
+            if "$ref" in node:
+                return resolve(defs[node["$ref"].rsplit("/", 1)[-1]])
+            return {k: resolve(v) for k, v in node.items()}
+        if isinstance(node, list):
+            return [resolve(v) for v in node]
+        return node
+
+    return resolve(schema)
+
+
 # ---------------------------------------------------------------------- layout + evaluation
 
 FIRST_COL = 2  # tables start in column B

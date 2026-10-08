@@ -21,7 +21,7 @@ from mcp_types import (
     TextContent,
     ToolAnnotations,
 )
-from pydantic import Field, ValidationError
+from pydantic import Field, ValidationError, WithJsonSchema
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
@@ -33,7 +33,7 @@ from .config import get_settings
 from .errors import ToolFailure
 from .expr import quote_sheet
 from .fmt import RUPEE, approx, display
-from .spec import Built, Chart, Row, Section, SectionLayout, SheetSpec, build, problems
+from .spec import Built, Chart, Check, Row, Section, SectionLayout, SheetSpec, build, inline_schema, problems
 from .workbook import Workbook, bounds_of, in_range, load, show
 
 log = logging.getLogger("analyst_mcp")
@@ -601,13 +601,19 @@ def _remove_section(files: store.WorkbookFiles, draft: dict, number: int | None)
 def add_section(
     workbook_id: WorkbookId,
     section: Annotated[
-        dict[str, Any] | None, Field(description="{title, columns, rows, formats, chart, note}; not with remove")
+        dict[str, Any] | None,
+        # Validated as a dict (the draft keeps what was sent; a bad spec is logged), advertised with every field:
+        # models that fill arguments from the schema send {} for an object whose fields it does not list.
+        WithJsonSchema({"anyOf": [inline_schema(Section), {"type": "null"}]}),
+        Field(description="The section: title, columns, rows, formats, chart, note; not with remove"),
     ] = None,
     number: Annotated[
         int | None, Field(ge=1, description="Replace this section (1-based); leave out to add at the end")
     ] = None,
     checks: Annotated[
-        list[dict[str, Any]] | None, Field(description="Checks tying this section to the workbook's own totals")
+        list[dict[str, Any]] | None,
+        WithJsonSchema({"anyOf": [{"type": "array", "items": inline_schema(Check)}, {"type": "null"}]}),
+        Field(description="Checks tying this section to the workbook's own totals"),
     ] = None,
     title: Annotated[str | None, Field(description="Title of the whole sheet")] = None,
     sheet_name: Annotated[str | None, Field(description="Name of the new sheet (default Dashboard)")] = None,

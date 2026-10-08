@@ -97,6 +97,20 @@ async def test_spec_errors_are_specific(wid, change, code):
     assert error((await build_draft(wid, spec))[-1])["code"] == code
 
 
+async def test_add_section_advertises_every_field_of_a_section(wid):
+    # A model that fills arguments from the schema sent {} while `section` was a bare object.
+    (tool,) = [t for t in await server.mcp.list_tools() if t.name == "add_section"]
+    props = tool.input_schema["properties"]
+    assert "$ref" not in json.dumps(tool.input_schema)
+    section = props["section"]["anyOf"][0]
+    assert set(section["required"]) == {"title", "columns", "rows"}
+    assert {"formats", "chart", "note"} <= set(section["properties"])
+    assert props["section"]["description"].startswith("The section")
+    check = props["checks"]["anyOf"][0]["items"]
+    assert set(check["required"]) == {"label", "left", "right"}
+    assert error(await server.add_section(wid, section={}))["code"] == "invalid_spec"
+
+
 async def test_refused_call_is_logged_with_its_arguments(wid, caplog):
     caplog.set_level("INFO", logger="analyst_mcp")
     res = await server.add_section(wid, section={"title": "Bad", "columns": ["A"], "rows": "not a list"})
