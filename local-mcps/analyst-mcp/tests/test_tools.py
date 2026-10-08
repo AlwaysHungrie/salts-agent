@@ -97,6 +97,42 @@ async def test_spec_errors_are_specific(wid, change, code):
     assert error((await build_draft(wid, spec))[-1])["code"] == code
 
 
+async def test_refused_call_is_logged_with_its_arguments(wid, caplog):
+    caplog.set_level("INFO", logger="analyst_mcp")
+    res = await server.add_section(wid, section={"title": "Bad", "columns": ["A"], "rows": "not a list"})
+    assert error(res)["code"] == "invalid_spec"
+    (line,) = [r.getMessage() for r in caplog.records if "add_section failed" in r.getMessage()]
+    assert "invalid_spec" in line and "rows" in line
+    assert '"not a list"' in line and wid in line
+
+
+async def test_clear_draft_starts_over_on_the_same_file(wid):
+    await build_draft(wid, SAMPLE_SPEC)
+    assert not (await server.clear_draft(wid)).is_error
+    assert error(await server.export_sheet(wid))["code"] == "no_draft"
+    assert "Draft sheet" not in text(await server.list_workbooks())
+    res = await server.add_section(wid, SAMPLE_SPEC["sections"][0])
+    assert "Draft sections now: " + SAMPLE_SPEC["sections"][0]["title"] + "." in text(res)
+
+
+async def test_forget_workbook_deletes_its_files_but_not_the_inbox(settings, wid, model_file):
+    from analyst_mcp import store
+
+    upload_id, _ = store.save_upload(settings, model_file.read_bytes())
+    assert f"workbook_id={wid}" in text(await server.open_workbook(upload_id=upload_id))
+    await build_draft(wid, SAMPLE_SPEC)
+    assert not (await server.forget_workbook(wid)).is_error
+    assert not (settings.data_dir / "workbooks" / wid).exists()
+    assert not list((settings.data_dir / "uploads").iterdir())
+    assert model_file.exists()
+    assert error(await server.read_sheet(wid, "Inputs"))["code"] == "workbook_not_found"
+    assert error(await server.open_workbook(upload_id=upload_id))["code"] == "upload_not_found"
+    # Opening it again from the inbox gives a fresh workbook with no draft.
+    again = await server.open_workbook(inbox_file=model_file.name)
+    assert f"workbook_id={wid}" in text(again)
+    assert error(await server.export_sheet(wid))["code"] == "no_draft"
+
+
 async def test_export_is_a_copy_with_live_formulas(wid, model_file):
     before = model_file.read_bytes()
     await build_draft(wid, SAMPLE_SPEC)

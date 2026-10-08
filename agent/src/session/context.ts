@@ -144,11 +144,51 @@ export function capabilityTools(host: SessionHost, config: Config): ToolSet {
       inputSchema: jsonSchema(spec.parameters as never),
       // A failure is returned rather than thrown, so the model reads what went
       // wrong and can correct itself on the next round.
-      execute: async (args) =>
-        (await runTool(spec.name, args as Record<string, unknown>, context, spec)).content,
+      execute: async (args, { toolCallId }) => {
+        const result = await runTool(spec.name, args as Record<string, unknown>, context, spec);
+        // Returned, so the SDK records a result; `failedInARow` needs to know it failed.
+        if (!result.ok) host.turn.failedCalls.push(toolCallId);
+        return result.content;
+      },
     });
   }
   return tools;
+}
+
+/** Tool calls that may fail in a row before the turn is made to stop and say so. */
+export const MAX_FAILED_TOOL_CALLS = 3;
+
+/** The parts of an AI SDK step this reads. */
+type StepParts = { content: readonly { type: string; toolCallId?: string }[] };
+
+/**
+ * How many of the turn's latest tool calls failed one after another: an error the SDK
+ * recorded (an unknown tool, bad input) or a failure one of our tools returned.
+ */
+export function failedInARow(host: SessionHost, steps: readonly StepParts[]): number {
+  let run = 0;
+  for (const part of steps.flatMap((s) => s.content)) {
+    if (part.type === "tool-error") run++;
+    else if (part.type === "tool-result")
+      run = host.turn.failedCalls.includes(part.toolCallId ?? "") ? run + 1 : 0;
+  }
+  return run;
+}
+
+/**
+ * Once tools have failed `MAX_FAILED_TOOL_CALLS` times running, the next step may not call
+ * any: a model repeating one mistake otherwise spends every tool round and answers nothing.
+ */
+export function stopAfterFailures(
+  host: SessionHost,
+  steps: readonly StepParts[]
+): { toolChoice: "none"; instructions: string } | undefined {
+  const failed = failedInARow(host, steps);
+  if (failed < MAX_FAILED_TOOL_CALLS) return undefined;
+  return {
+    toolChoice: "none",
+    instructions: `${systemPrompt(host)}\n\n${failed} tool calls in a row have failed. Do not call any more tools this turn. Tell the user, briefly and in plain words, what you were trying to do and what went wrong (the errors the tools returned), and ask how they want to proceed.`,
+  };
 }
 
 export function toolContext(host: SessionHost, config: Config): ToolContext {

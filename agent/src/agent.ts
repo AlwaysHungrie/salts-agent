@@ -1,6 +1,12 @@
 import { createOpenAI } from "@ai-sdk/openai";
 import { Workspace } from "@cloudflare/shell";
-import { type StepContext, Think, type TurnConfig, type TurnContext } from "@cloudflare/think";
+import {
+  type PrepareStepContext,
+  type StepContext,
+  Think,
+  type TurnConfig,
+  type TurnContext,
+} from "@cloudflare/think";
 import type { Schedule } from "agents";
 import type { UIMessage } from "ai";
 import { enabled, type ScheduledTask } from "./capabilities";
@@ -32,7 +38,7 @@ import {
 } from "./session/attachments";
 import { channelTurn, deliverToChat } from "./session/channels";
 import { maybeCompact } from "./session/compaction";
-import { capabilityTools, modelMessages, systemPrompt } from "./session/context";
+import { capabilityTools, modelMessages, stopAfterFailures, systemPrompt } from "./session/context";
 import { cacheFileAnnotations } from "./session/documents";
 import { PARSE_CACHE_DIR, publicAttachment } from "./session/files";
 import { describeSchedule, textOf } from "./session/format";
@@ -81,7 +87,13 @@ export class SessionAgent extends Think<Env> {
   private turnUsage: TurnUsage = emptyUsage();
 
   /** What the running turns have done that later code reads; see `TurnState`. */
-  private turn: TurnState = { running: 0, stoppedOnPurpose: false, scheduled: false, made: [] };
+  private turn: TurnState = {
+    running: 0,
+    stoppedOnPurpose: false,
+    scheduled: false,
+    made: [],
+    failedCalls: [],
+  };
 
   /** The streaming turn, kept so a browser that reloads mid-reply can catch up. */
   private live = new LiveTurns();
@@ -302,6 +314,7 @@ export class SessionAgent extends Think<Env> {
     this.turnUsage = { ...emptyUsage(), started: Date.now() };
     this.turn.scheduled = false;
     this.turn.made = [];
+    this.turn.failedCalls = [];
     this.turn.running++;
     await maybeCompact(this.host, config);
 
@@ -317,6 +330,11 @@ export class SessionAgent extends Think<Env> {
         : {}),
       messages: await modelMessages(this.host, config),
     };
+  }
+
+  /** Tools that keep failing end the turn with the model explaining, not more calls. */
+  override beforeStep(ctx: PrepareStepContext) {
+    return stopAfterFailures(this.host, ctx.steps);
   }
 
   /** Token counts arrive per step; a turn's cost is their sum. */
