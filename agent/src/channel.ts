@@ -86,6 +86,13 @@ export type Channel = {
     name: string,
     caption: string
   ) => Promise<void>;
+  /** Send a file the reply links (a workbook, a PDF) as a download. */
+  sendFile?: (
+    target: ChannelTarget,
+    bytes: ArrayBuffer,
+    name: string,
+    mime: string
+  ) => Promise<void>;
   /** Send a voice note. The bytes are Ogg Opus; see `VOICE_MIME`. */
   sendVoice?: (target: ChannelTarget, bytes: ArrayBuffer) => Promise<void>;
   /** A line this channel owes the user whenever a task is scheduled. */
@@ -139,6 +146,9 @@ function telegramChannel(config: Config, env: ChannelEnv): Channel {
     },
     sendImage: async (target, bytes, name, caption) => {
       await bot.sendPhoto(target.to, bytes, name, caption, target.threadId);
+    },
+    sendFile: async (target, bytes, name, mime) => {
+      await bot.sendDocument(target.to, bytes, name, mime, target.threadId);
     },
     sendVoice: async (target, bytes) => {
       if (!isVoiceNote(bytes)) throw new Error(NOT_A_VOICE_NOTE);
@@ -206,11 +216,14 @@ function whatsappChannel(config: Config, env: ChannelEnv): Channel {
     sendText: async (target, text) => {
       await chat.send(target.to, text, target.replyTo);
     },
-    // Both of these are an upload followed by a send: Meta takes no bytes on the
+    // Each of these is an upload followed by a send: Meta takes no bytes on the
     // message itself, only an id of something already in its media store.
     sendImage: async (target, bytes, name, caption) => {
       const mime = name.toLowerCase().endsWith(".jpg") ? "image/jpeg" : "image/png";
       await chat.sendImage(target.to, await chat.upload(bytes, mime, name), caption);
+    },
+    sendFile: async (target, bytes, name, mime) => {
+      await chat.sendDocument(target.to, await chat.upload(bytes, mime, name), name);
     },
     sendVoice: async (target, bytes) => {
       if (!isVoiceNote(bytes)) throw new Error(NOT_A_VOICE_NOTE);
