@@ -49,6 +49,10 @@ class Chart(BaseModel):
 class Row(BaseModel):
     cells: list[Value]
     style: Literal["normal", "total", "highlight"] = "normal"
+    format: str | None = Field(
+        None, description="One number format for this row's numbers, overriding the column formats"
+    )
+    formats: list[str | None] | None = Field(None, description="Per-cell formats for this row (null = column's)")
 
 
 class Section(BaseModel):
@@ -72,6 +76,15 @@ class Section(BaseModel):
     chart: Chart | None = None
     note: str | None = Field(None, description="One short line under the table")
 
+    def cell_format(self, row: int, col: int) -> str | None:
+        """The format of a cell (0-based): the row's own, else the column's."""
+        r = self.rows[row]
+        if r.formats is not None and col < len(r.formats) and r.formats[col] is not None:
+            return r.formats[col]
+        if r.format is not None and col > 0:
+            return r.format
+        return self.formats[col] if self.formats and col < len(self.formats) else None
+
     @field_validator("rows")
     @classmethod
     def _rows(cls, rows):
@@ -86,6 +99,9 @@ class Section(BaseModel):
             row.cells = row.cells + [None] * (width - len(row.cells))
         if self.formats is not None and len(self.formats) > width:
             raise ValueError(f"section {self.title!r} has more formats than columns")
+        for i, row in enumerate(self.rows, 1):
+            if row.formats is not None and len(row.formats) > width:
+                raise ValueError(f"section {self.title!r} row {i} has more formats than columns")
         if self.chart:
             for c in [self.chart.label_column, *self.chart.value_columns]:
                 if c > width:
