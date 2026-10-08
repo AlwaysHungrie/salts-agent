@@ -21,6 +21,28 @@ def indian(n: float) -> str:
     return sign + ",".join(groups) + "," + tail
 
 
+RUPEE = re.compile(r"(?:^|[^a-z])(?:rs|inr)(?:[^a-z]|$)|₹", re.IGNORECASE)
+
+
+def approx(value: object, unit: str = "") -> str:
+    """A big number in words people read it in: '≈ ₹ 64.38 Cr' for rupees, '≈ 643.8 million' otherwise; '' if small.
+    Models misplace digits in 643,834,212; they do not misread this."""
+    if not isinstance(value, int | float) or isinstance(value, bool):
+        return ""
+    v = float(value)
+    if RUPEE.search(unit or ""):
+        if abs(v) >= 1e7:
+            return f"≈ ₹ {v / 1e7:,.2f} Cr"
+        if abs(v) >= 1e5:
+            return f"≈ ₹ {v / 1e5:,.2f} lakh"
+        return ""
+    if abs(v) >= 1e9:
+        return f"≈ {v / 1e9:,.2f} billion"
+    if abs(v) >= 1e6:
+        return f"≈ {v / 1e6:,.2f} million"
+    return ""
+
+
 def display(value: object, fmt: str | None) -> str:
     if value is None:
         return ""

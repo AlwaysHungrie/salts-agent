@@ -3,6 +3,7 @@ import base64
 import functools
 import json
 import logging
+import re
 import sys
 import threading
 import traceback
@@ -23,13 +24,15 @@ from pydantic import Field, ValidationError
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from . import breakdown as bd
 from . import export, pyrun, render, store
 from . import sql as sqldb
 from .auth import BearerAuthMiddleware
 from .config import get_settings
 from .errors import ToolFailure
-from .fmt import display
-from .spec import Built, Chart, Row, Section, SectionLayout, SheetSpec, build
+from .expr import quote_sheet
+from .fmt import RUPEE, approx, display
+from .spec import Built, Chart, Row, Section, SectionLayout, SheetSpec, build, problems
 from .workbook import Workbook, bounds_of, in_range, load, show
 
 log = logging.getLogger("analyst_mcp")
@@ -43,14 +46,22 @@ runs what-if scenarios, and builds new sheets (tables + charts) into a copy of t
 
 How to work:
 1. Open the file: open_workbook with the attachment's upload_id (or inbox_file for a file in the inbox folder).
-   It returns a map of every number with the words around it (label, column header, unit) and its cell.
+   It returns a map of every number with the words around it (label, column header, unit) and its cell. Keep the
+   workbook_id: later calls reuse it; there is no need to open the file again.
 2. Find numbers with the map, find, read_sheet or query. Never guess a cell address; look it up.
 3. Answer plain questions directly from the values. Use what_if for "what if X changes" questions.
-4. For a new sheet, dashboard or report: write a spec with one section per thing the user asked for, numbered in
+4. "Where does the money go", a cost split, any breakdown of a total: use breakdown on the total cell. It lists the
+   items that add up to it exactly; you name a few heads and assign every item; it hands back the table rows.
+5. For a new sheet, dashboard or report: write a spec with one section per thing the user asked for, numbered in
    their order. Every number in it must be a formula over workbook cells (=Feasibility!C4*10.764), never a typed
-   result. Add checks that tie your totals back to the workbook's own totals. Call preview_sheet: its images are
-   shown to the user. Ask if they want changes; edit the spec and preview again.
-5. Only when the user is happy, export_sheet. It returns the .xlsx to the user. The original file is never changed.
+   result. A column holds one kind of quantity (do not put built-up area beside carpet area). Add a total row only
+   when the rows are parts of one whole. Add checks that tie your totals back to the workbook's own totals. Build
+   it with add_section, one call per section: each is shown to the user as an image. The server keeps the draft,
+   so you never repeat earlier sections; add_section with `number` replaces one the user wants changed.
+6. Only when the user is happy, export_sheet. It returns the .xlsx to the user. The original file is never changed.
+When the user asks for something the workbook does not have (a blank cell, no such figure), say so in your reply
+and in the section ("Not given in the workbook"); never leave it out silently or make a number up.
+Images reach the user only through add_section or query results; never write an image link yourself.
 Keep replies short and in plain words; the user does not need cell addresses unless they ask.
 """
 
@@ -137,6 +148,16 @@ def _table(head: list[str], rows: list[list[str]]) -> str:
 WorkbookId = Annotated[str, Field(description="The 12-character id open_workbook returned")]
 
 
+def _drafts(settings, books: list[dict]) -> list[str]:
+    out = []
+    for b in books:
+        draft = store.load_draft(store.get_files(settings, b["workbook_id"]))
+        if draft and draft.get("sections"):
+            titles = " | ".join(s.get("title", "") for s in draft["sections"])
+            out.append(f"Draft sheet for {b['workbook_id']}: {titles}")
+    return out
+
+
 @mcp.tool(
     description="List workbooks already opened on this server, and files waiting in the inbox folder.",
     annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False),
@@ -150,6 +171,7 @@ def list_workbooks() -> CallToolResult:
         _table(["workbook_id", "name", "opened"], [[b["workbook_id"], b["name"], b["opened_at"] or ""] for b in books])
         if books
         else "No workbooks opened yet.",
+        *_drafts(settings, books),
         f"Inbox folder on this computer: {settings.inbox().resolve()}",
         ("Files in the inbox: " + ", ".join(inbox)) if inbox else "The inbox is empty.",
     ]
@@ -158,6 +180,11 @@ def list_workbooks() -> CallToolResult:
 
 MAP_ROWS_PER_SHEET = 120
 MAP_CHARS = 20000
+
+
+def _with_approx(value: object, unit: str) -> str:
+    words = approx(value, unit)
+    return f"{show(value)} ({words})" if words else show(value)
 
 
 def _map(book: Workbook) -> str:
@@ -181,7 +208,7 @@ def _map(book: Workbook) -> str:
         columns = {k: v for k, v in runs.items() if len(v) >= 5}
         in_column = {id(f) for v in columns.values() for f in v}
         rows = [
-            [f.cell.coord, f.label, f.header, show(f.cell.value), f.unit, f.cell.formula or ""]
+            [f.cell.coord, f.label, f.header, _with_approx(f.cell.value, f.unit), f.unit, f.cell.formula or ""]
             for f in facts
             if id(f) not in in_column
         ]
@@ -243,7 +270,8 @@ def open_workbook(
     if book.has_drawings:
         head.append("Note: this workbook has charts or images; exported copies do not keep them.")
     tables = sqldb.describe(book)
-    return _result("\n".join(head) + "\n\n" + _map(book) + "\n\n## SQL tables (for query)\n" + tables)
+    guide = INSTRUCTIONS[INSTRUCTIONS.index("How to work:") :]
+    return _result("\n".join(head) + "\n\n" + _map(book) + "\n\n## SQL tables (for query)\n" + tables + "\n\n" + guide)
 
 
 @mcp.tool(
@@ -421,93 +449,220 @@ def what_if(
     return _result(_table(["Cell", "Label", "Now", "What-if", "Change"], rows))
 
 
-SPEC_DOC = """\
-The sheet to build, as JSON:
-{"sheet_name": "Dashboard", "title": "…", "subtitle": "optional line",
- "sections": [
-   {"title": "1. Plot Area", "columns": ["Item", "Sq. mt.", "Sq. ft."],
-    "rows": [["Plot area", "=Feasibility!C4", "=Feasibility!C4*10.764"],
-             {"cells": ["Total", "=SUM_ABOVE()", "=SUM_ABOVE()"], "style": "total"}],
-    "formats": [null, "num2", "int"],   # per column; a row can override: {"cells": [...], "format": "inr"}
-    "chart": {"type": "column", "label_column": 1, "value_columns": [3]},
-    "note": "optional one line under the table"}],
- "checks": [{"label": "Total matches the model", "left": "=[s1r2c2]", "right": "=Feasibility!C21", "tolerance": 0.01}]}
-Cells: text, numbers, or formulas starting with '='. Formulas use Excel syntax with sheet-qualified references
-(Feasibility!C4, 'C A Details'!F29, SUM('C A Details'!C10:C28)); [r2c3] is row 2 column 3 of the same table,
-[s1r2c3] the same in section 1 (checks must use this form); SUM_ABOVE() sums the rows above (skipping total rows).
-Functions: SUM AVERAGE MIN MAX COUNT COUNTA PRODUCT SUMPRODUCT ROUND ROUNDUP ROUNDDOWN ABS SQRT INT POWER MOD IF
-IFERROR ISNUMBER ISBLANK AND OR NOT. Formats: int num1 num2 pct pct2 inr (₹ 1,23,456) inr_cr usd usd2 text, or an
-Excel format string. A row's "format" (one for its numbers) or "formats" (per cell) overrides the column's, for
-Item | Value | Unit tables that mix ₹, sq ft and %. Percent values are fractions (0.25 shows as 25.0%). Charts: bar
-(horizontal, long labels), column, pie, line; they plot consecutive rows (default: the rows before the first total row).
-Write the whole sheet in one spec. Every preview is shown to the user, so never preview to test a format or a formula:
-read the text summary of a full preview, fix the spec, preview again only if something was wrong."""
-
-
-def _built(workbook_id: str, spec: dict[str, Any]) -> tuple[store.WorkbookFiles, Built]:
-    files, book = workbook(workbook_id)
-    return files, build(SheetSpec.model_validate(spec), book)
-
-
-def _summary(built: Built) -> str:
-    parts = []
-    for lay in built.sections:
-        sec = lay.section
-        rows = [[display(v, sec.cell_format(i, c)) for c, v in enumerate(r)] for i, r in enumerate(lay.values)]
-        parts.append(f"### {sec.title}\n" + _table(sec.columns, rows))
-        errors = [str(v) for r in lay.values for v in r if isinstance(v, str) and v.startswith("#")]
-        if errors:
-            parts.append(f"Errors in this section: {', '.join(sorted(set(errors)))}. Fix the formulas.")
-    if built.checks:
-        lines = [
-            f"- {'OK' if c.ok else 'CHECK'}: {c.check.label} ({display(c.left, 'num2')} vs {display(c.right, 'num2')})"
-            for c in built.checks
-        ]
-        parts.append("### Checks\n" + "\n".join(lines))
-    return "\n\n".join(parts)
-
-
 @mcp.tool(
     description=(
-        "Preview a new sheet before building it: renders each section (table + chart) as an image the user sees, and "
-        "returns the computed numbers and check results as text. Nothing is written to the workbook. Edit the spec "
-        "and preview again until the user is happy, then call export_sheet with the same spec. " + SPEC_DOC
+        "What a total is made of: opens a total cell (e.g. total investment, total cost) into the items that add up "
+        "to it exactly, each with its label and value. Use it for 'where does the money go', 'cost split', or any "
+        "breakdown of a total; never pick the parts by reading the sheet yourself. "
+        "Step 1: call with only `cell` to see the items. Step 2: call again with `groups`, a few heads the user will "
+        "understand, each listing its item cells (every item in exactly one head). It checks the heads and returns "
+        "the table rows and the check to paste into a sheet spec."
     ),
     annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False, idempotent_hint=True),
 )
-@tool_handler("preview_sheet")
-def preview_sheet(
+@tool_handler("breakdown")
+def breakdown(
     workbook_id: WorkbookId,
-    spec: Annotated[dict[str, Any], Field(description="The sheet spec (see the tool description)")],
+    cell: Annotated[str, Field(description="The total, e.g. Feasibility!C93")],
+    groups: Annotated[
+        dict[str, list[str]] | None,
+        Field(description="Head → item cells or ranges, e.g. {'Construction': ['C33', 'C34'], 'Fees': ['C38:C39']}"),
+    ] = None,
 ) -> CallToolResult:
-    files, built = _built(workbook_id, spec)
-    images = [render.section_png(lay) for lay in built.sections]
-    if (checks := render.checks_png(built)) is not None:
-        images.append(checks)
-    for i, png in enumerate(images, 1):
-        store.export_path(files, f"preview {i}", ".png").write_bytes(png)
-    status = "All checks pass." if built.all_ok else "Some checks FAIL: fix the spec before exporting."
-    text = (
-        f"Preview of sheet {built.spec.sheet_name!r}: {len(built.sections)} sections, shown to the user as "
-        f"{len(images)} images. {status if built.checks else 'No checks in the spec.'}\n\n" + _summary(built)
+    _, book = workbook(workbook_id)
+    sheet, coord = book.parse_ref(cell)
+    items, total = bd.components(book, sheet, coord)
+    label = book.fact(book.cell(sheet, coord)).label or f"{sheet}!{coord}"
+    unit = book.fact(book.cell(sheet, coord)).unit
+    fmt = "inr" if RUPEE.search(unit or "") else "num2"
+    ref = f"{quote_sheet(sheet)}!{coord}"
+    if not groups:
+        rows = [
+            [it.coord if it.sheet == sheet else f"{it.sheet}!{it.coord}", it.label[:70],
+             ("" if it.sign > 0 else "minus ") + _with_approx(it.value, unit or "")]
+            for it in items
+        ]  # fmt: skip
+        return _result(
+            f'{ref} "{label}" = {_with_approx(total, unit)} is the sum of these {len(items)} items:\n\n'
+            + _table(["Cell", "Item", "Value"], rows)
+            + "\n\nGroup them into a few heads (4 to 8) the reader will understand, and call breakdown again with "
+            "`groups`. Every item goes in exactly one head."
+        )
+    heads = bd.assign(book, items, groups, sheet)
+    n = len(heads)
+    summary = [
+        [name, _with_approx(sum(i.sign * i.value for i in its), unit), str(len(its))] for name, its in heads.items()
+    ]
+    section = {
+        "title": f"N. {label}",
+        "columns": ["Head", "Amount", "Share"],
+        "formats": [None, fmt, "pct"],
+        "rows": [[name, bd.formula(its), f"=[r{i}c2]/[r{n + 1}c2]"] for i, (name, its) in enumerate(heads.items(), 1)]
+        + [{"cells": ["Total", "=SUM_ABOVE()", "=SUM_ABOVE()"], "style": "total"}],
+        "chart": {"type": "pie", "label_column": 1, "value_columns": [2]},
+    }
+    check = {"label": f"Heads add up to {label}", "left": f"=[sNr{n + 1}c2]", "right": f"={ref}", "tolerance": 1}
+    return _result(
+        "The heads cover every item exactly once:\n\n"
+        + _table(["Head", "Amount", "Items"], summary)
+        + f"\n\nTotal {_with_approx(total, unit)}.\n\nThe section (number its title and rename it as the user asked):\n"
+        + json.dumps(section, ensure_ascii=False)
+        + "\n\nIts check:\n"
+        + json.dumps(check, ensure_ascii=False)
+        + "\n\nPass both to add_section as they are."
     )
-    return _result(text, images)
+
+
+SPEC_DOC = """\
+A section, as JSON (the sheet and cell names here are placeholders; use the workbook's own):
+{"title": "2. Revenue by region", "columns": ["Region", "Revenue", "Share"],
+ "rows": [["North", "=SheetName!C4", "=[r1c2]/[r3c2]"], ["South", "=SheetName!C5", "=[r2c2]/[r3c2]"],
+          {"cells": ["Total", "=SUM_ABOVE()", "=SUM_ABOVE()"], "style": "total"}],
+ "formats": [null, "inr", "pct"],   # per column; a row can override: {"cells": [...], "format": "num1"}
+ "chart": {"type": "pie", "label_column": 1, "value_columns": [2]},
+ "note": "optional one line under the table"}
+A check: {"label": "Total matches the model", "left": "=[r3c2]", "right": "=SheetName!C9", "tolerance": 1}.
+Cells: text, numbers, or formulas starting with '='. Formulas use Excel syntax with sheet-qualified references
+(Feasibility!C4, 'C A Details'!F29, SUM('C A Details'!C10:C28)); [r2c3] is row 2 column 3 of this table, [s1r2c3]
+the same in section 1; SUM_ABOVE() sums the rows above (skipping total rows).
+Functions: SUM AVERAGE MIN MAX COUNT COUNTA PRODUCT SUMPRODUCT ROUND ROUNDUP ROUNDDOWN ABS SQRT INT POWER MOD IF
+IFERROR ISNUMBER ISBLANK AND OR NOT. Formats: int num1 num2 pct pct2 inr (rupees: ₹ 1,23,456) inr_cr (only for a
+formula already divided by 10^7: =Feasibility!C30/10^7 shows ₹ 64.38 Cr) usd usd2 text, or an Excel format string.
+A row's "format" (one for its numbers) or "formats" (per cell) overrides the column's, for Item | Value | Unit tables
+that mix ₹, sq ft and %. Percent values are fractions (0.25 shows as 25.0%). Charts: bar (horizontal, long labels),
+column, pie, line; they plot consecutive rows (default: the rows before the first total row).
+Every call is shown to the user, so never call it to test a format or a formula."""
+
+
+def _built(workbook_id: str, spec: dict[str, Any], only: int | None = None) -> tuple[store.WorkbookFiles, Built]:
+    files, book = workbook(workbook_id)
+    built = build(SheetSpec.model_validate(spec), book)
+    if found := problems(built, only):
+        found_text = " | ".join(found)
+        raise ToolFailure("spec_problems", f"nothing was shown to the user; fix these and call again: {found_text}")
+    return files, built
+
+
+def _numbered(formula: str, n: int) -> str:
+    """Checks name this section's cells as [r2c3] (or [sNr2c3]); the draft needs [s2r2c3]."""
+    formula = re.sub(r"\[sN(r\d+c\d+)\]", rf"[s{n}\1]", formula)
+    return re.sub(r"\[(r\d+c\d+)\]", rf"[s{n}\1]", formula)
+
+
+def _remove_section(files: store.WorkbookFiles, draft: dict, number: int | None) -> CallToolResult:
+    sections = draft["sections"]
+    if number is None or not 1 <= number <= len(sections):
+        raise ToolFailure("bad_number", f"remove needs `number`, 1 to {len(sections)}")
+    gone = sections.pop(number - 1)
+    checks = []
+    for c in draft["checks"]:
+        if c.get("section") == number:
+            continue
+        # Later sections move up one; their own references follow them.
+        def shift(f: str) -> str:
+            return re.sub(r"\[s(\d+)(r\d+c\d+)\]", lambda m: f"[s{int(m[1]) - (int(m[1]) > number)}{m[2]}]", f)
+
+        sec = c.get("section")
+        checks.append({**c, "left": shift(c["left"]), "right": shift(c["right"]),
+                       "section": sec - 1 if sec and sec > number else sec})  # fmt: skip
+    store.save_draft(files, {**draft, "sections": sections, "checks": checks})
+    left = " | ".join(s.get("title", "") for s in sections) or "none"
+    return _result(f"Removed section {number} ({gone.get('title', '')!r}). Draft sections now: {left}.")
 
 
 @mcp.tool(
     description=(
-        "Build the sheet into a copy of the workbook and send the .xlsx to the user. Call only after the user approved "
-        "the preview. Every number in the new sheet is a live formula over the workbook's own cells; checks go on a "
-        "Checks sheet. Takes the same spec as preview_sheet."
+        "Build a new sheet (dashboard, report, summary) one section at a time. Adds the section to this workbook's "
+        "draft sheet, or replaces section `number` when the user wants it changed, and shows that section to the user "
+        "as an image (with its checks). The draft stays on this server: earlier sections never need repeating, and "
+        "export_sheet builds the whole draft. For a whole sheet at once, call it once per section. remove=true with "
+        "`number` takes a section out. " + SPEC_DOC
+    ),
+    annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=False),
+)
+@tool_handler("add_section")
+def add_section(
+    workbook_id: WorkbookId,
+    section: Annotated[
+        dict[str, Any] | None, Field(description="{title, columns, rows, formats, chart, note}; not with remove")
+    ] = None,
+    number: Annotated[
+        int | None, Field(ge=1, description="Replace this section (1-based); leave out to add at the end")
+    ] = None,
+    checks: Annotated[
+        list[dict[str, Any]] | None, Field(description="Checks tying this section to the workbook's own totals")
+    ] = None,
+    title: Annotated[str | None, Field(description="Title of the whole sheet")] = None,
+    sheet_name: Annotated[str | None, Field(description="Name of the new sheet (default Dashboard)")] = None,
+    remove: Annotated[bool, Field(description="Take section `number` out of the draft")] = False,
+) -> CallToolResult:
+    files = store.get_files(get_settings(), workbook_id)
+    draft = store.load_draft(files)
+    draft = draft or {"sheet_name": "Dashboard", "title": Path(files.name).stem, "sections": [], "checks": []}
+    if remove:
+        return _remove_section(files, draft, number)
+    if section is None:
+        raise ToolFailure("invalid_spec", "section is required unless remove=true")
+    if title:
+        draft["title"] = title
+    if sheet_name:
+        draft["sheet_name"] = sheet_name
+    sections, kept = list(draft["sections"]), list(draft["checks"])
+    if number is None or number == len(sections) + 1:
+        sections.append(section)
+        n = len(sections)
+    elif number <= len(sections):
+        n = number
+        sections[n - 1] = section
+        kept = [c for c in kept if c.get("section") != n]
+    else:
+        raise ToolFailure("bad_number", f"the draft has {len(sections)} sections; the next one is {len(sections) + 1}")
+    for c in checks or []:
+        if not isinstance(c, dict) or "left" not in c or "right" not in c:
+            raise ToolFailure("invalid_spec", "each check needs label, left and right")
+        kept.append({**c, "left": _numbered(c["left"], n), "right": _numbered(c["right"], n), "section": n})
+    spec = {**draft, "sections": sections, "checks": kept}
+    _, built = _built(workbook_id, spec, only=n)
+    store.save_draft(files, spec)
+
+    lay = built.sections[n - 1]
+    mine = [r for r, c in zip(built.checks, kept, strict=True) if c.get("section") == n]
+    images = [render.section_png(lay)]
+    if mine:
+        images.append(render.checks_png(Built(built.spec, built.sections, mine, built.last_row)))
+    store.export_path(files, f"section {n}", ".png").write_bytes(images[0])
+    sec = lay.section
+    rows = [[display(v, sec.cell_format(i, c)) for c, v in enumerate(r)] for i, r in enumerate(lay.values)]
+    parts = [f"Section {n} is in the draft and was shown to the user as {len(images)} image(s).",
+             f"### {sec.title}\n" + _table(sec.columns, rows)]  # fmt: skip
+    errors = sorted({str(v) for r in lay.values for v in r if isinstance(v, str) and v.startswith("#")})
+    if errors:
+        parts.append(f"Errors in this section: {', '.join(errors)}. Fix the formulas.")
+    if mine:
+        parts.append("Checks:\n" + "\n".join(
+            f"- {'OK' if c.ok else 'CHECK'}: {c.check.label} ({display(c.left, 'num2')} vs {display(c.right, 'num2')})"
+            for c in mine
+        ))  # fmt: skip
+    parts.append("Draft sections now: " + " | ".join(s.get("title", "") for s in sections) + ".")
+    return _result("\n\n".join(parts), images)
+
+
+@mcp.tool(
+    description=(
+        "Build the draft sheet (every section from add_section) into a copy of the workbook and send the .xlsx to the "
+        "user. Call only after the user approved the sections. Every number in the new sheet is a live formula over "
+        "the workbook's own cells; checks go on a Checks sheet."
     ),
     annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=False),
 )
 @tool_handler("export_sheet")
 def export_sheet(
     workbook_id: WorkbookId,
-    spec: Annotated[dict[str, Any], Field(description="The approved sheet spec")],
     file_name: Annotated[str | None, Field(description="Name for the file, without extension")] = None,
 ) -> CallToolResult:
+    spec = store.load_draft(store.get_files(get_settings(), workbook_id))
+    if not spec or not spec.get("sections"):
+        raise ToolFailure("no_draft", "the draft has no sections yet: add them with add_section")
     files, built = _built(workbook_id, spec)
     if not built.all_ok:
         failing = ", ".join(c.check.label for c in built.checks if not c.ok)
@@ -515,10 +670,12 @@ def export_sheet(
     stem = file_name or f"{Path(files.name).stem} - {built.spec.sheet_name}"
     path = export.write(built, files.original, store.export_path(files, stem, ".xlsx"))
     mime = XLSX if path.suffix == ".xlsx" else "application/vnd.ms-excel.sheet.macroEnabled.12"
+    contents = "\n".join(f"- {lay.section.title} ({len(lay.section.rows)} rows)" for lay in built.sections)
     text = (
         f"Built {path.name}: sheet {built.spec.sheet_name!r} added"
         + (f" with {len(built.checks)} checks on a Checks sheet" if built.checks else "")
-        + f". The file was sent to the user and is also saved on this computer at {path}."
+        + f". The file was sent to the user and is also saved on this computer at {path}.\n\n"
+        f"It contains exactly these sections; tell the user these, no others:\n{contents}"
     )
     return _result(text, files=[(path.name, mime, path.read_bytes())])
 
@@ -529,7 +686,7 @@ def _register_python() -> None:
             "Run Python on a copy of the workbook for analysis the other tools cannot do. The script starts with "
             "pandas imported, INPUT = 'input.xlsx' (the copy) and OUT = 'out'. print() what the user should know; "
             "save charts as PNG and tables as .xlsx/.csv into OUT to send them to the user. No network. "
-            "Prefer query, what_if and preview_sheet when they can do the job."
+            "Prefer query, what_if and add_section when they can do the job."
         ),
         annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False, open_world_hint=False),
     )
