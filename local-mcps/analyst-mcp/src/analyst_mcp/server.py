@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import copy
 import functools
 import inspect
 import json
@@ -76,12 +77,12 @@ def workbook(workbook_id: str) -> tuple[store.WorkbookFiles, Workbook]:
     files = store.get_files(get_settings(), workbook_id)
     mtime = files.original.stat().st_mtime
     with _books_lock:
-        cached = _books.get(workbook_id)
+        cached = _books.get(files.id)
         if cached and cached[0] == mtime:
             return files, cached[1]
     book = load(files.id, files.name, files.original)
     with _books_lock:
-        _books[workbook_id] = (mtime, book)
+        _books[files.id] = (mtime, book)
     return files, book
 
 
@@ -543,10 +544,11 @@ Cells: text, numbers, or formulas starting with '='. Formulas use Excel syntax w
 (Feasibility!C4, 'C A Details'!F29, SUM('C A Details'!C10:C28)); [r2c3] is row 2 column 3 of this table, [s1r2c3]
 the same in section 1; SUM_ABOVE() sums the rows above (skipping total rows).
 Functions: SUM AVERAGE MIN MAX COUNT COUNTA PRODUCT SUMPRODUCT ROUND ROUNDUP ROUNDDOWN ABS SQRT INT POWER MOD IF
-IFERROR ISNUMBER ISBLANK AND OR NOT. Formats: int num1 num2 pct pct2 inr (rupees: ₹ 1,23,456) inr_cr (only for a
-formula already divided by 10^7: =Feasibility!C30/10^7 shows ₹ 64.38 Cr) usd usd2 text, or an Excel format string.
+IFERROR ISNUMBER ISBLANK AND OR NOT. Formats: int num1 num2 pct pct2 inr (rupees: ₹ 1,23,456) inr_cr (crores: a
+rupee amount is divided by 10^7 for you, so =Feasibility!C30 shows ₹ 64.38 Cr) usd usd2 text, or an Excel format string.
 A row's "format" (one for its numbers) or "formats" (per cell) overrides the column's, for Item | Value | Unit tables
-that mix ₹, sq ft and %. Percent values are fractions (0.25 shows as 25.0%). Charts: bar (horizontal, long labels),
+that mix ₹, sq ft and %. Percent values are fractions (0.25 shows as 25.0%);
+a whole-number percent above 10 (36.6) is divided by 100 for you. Charts: bar (horizontal, long labels),
 column, pie, line; they plot consecutive rows (default: the rows before the first total row).
 Every call is shown to the user, so never call it to test a format or a formula."""
 
@@ -558,6 +560,66 @@ def _built(workbook_id: str, spec: dict[str, Any], only: int | None = None) -> t
         found_text = " | ".join(found)
         raise ToolFailure("spec_problems", f"nothing was shown to the user; fix these and call again: {found_text}")
     return files, built
+
+
+CELL_REF = re.compile(r"\[(?:s(\d+))?r(\d+)c(\d+)\]")
+CRORE, HUNDRED = "10^7", "100"
+
+
+def _fix_units(workbook_id: str, spec: dict[str, Any], n: int) -> tuple[dict[str, Any], list[str]]:
+    """Section n with its unit slips corrected instead of refused: rupees under inr_cr are divided by 10^7, a percent
+    written as 36.6 under pct by 100. Every reference to a corrected cell is multiplied back, so the formulas and checks
+    that use it keep their meaning. A SUM_ABOVE() total is left alone: it adds the corrected cells."""
+    _, book = workbook(workbook_id)
+    lay = build(SheetSpec.model_validate(spec), book).sections[n - 1]
+    sec = lay.section
+    scale: dict[tuple[int, int], str] = {}
+    for ri, row in enumerate(lay.values):
+        for ci, v in enumerate(row):
+            raw = sec.rows[ri].cells[ci]
+            if not isinstance(v, int | float) or isinstance(v, bool):
+                continue
+            if isinstance(raw, str) and "SUM_ABOVE" in raw.upper():
+                continue
+            fmt = sec.cell_format(ri, ci)
+            if fmt == "inr_cr" and abs(v) >= 1e5:
+                scale[(ri + 1, ci + 1)] = CRORE
+            elif fmt in ("pct", "pct2") and 10 < abs(v) <= 100:
+                scale[(ri + 1, ci + 1)] = HUNDRED
+    if not scale:
+        return spec, []
+
+    def restore(formula: str, plain: bool) -> str:
+        """`plain`: an unnumbered [r2c3] is section n's own, as inside the section."""
+
+        def sub(m: re.Match) -> str:
+            mine = int(m[1]) == n if m[1] else plain
+            factor = scale.get((int(m[2]), int(m[3]))) if mine else None
+            return f"({m[0]}*{factor})" if factor else m[0]
+
+        return CELL_REF.sub(sub, formula)
+
+    section = copy.deepcopy(spec["sections"][n - 1])
+    for ri, row in enumerate(section["rows"]):
+        cells = row["cells"] if isinstance(row, dict) else row
+        for ci, cell in enumerate(cells):
+            if isinstance(cell, str) and cell.startswith("="):
+                cell = cells[ci] = restore(cell, True)
+            factor = scale.get((ri + 1, ci + 1))
+            if factor and isinstance(cell, str):
+                cells[ci] = f"=({cell[1:]})/{factor}"
+            elif factor and isinstance(cell, int | float):
+                cells[ci] = cell / (1e7 if factor == CRORE else 100)
+    checks = [{**c, "left": restore(c["left"], False), "right": restore(c["right"], False)} for c in spec["checks"]]
+    sections = list(spec["sections"])
+    sections[n - 1] = section
+    notes = [
+        f"row {r} column {c} "
+        + ("was in rupees, so it is divided by 10^7 to show crores" if f == CRORE else "was a whole-number percent, "
+           "so it is divided by 100")
+        for (r, c), f in sorted(scale.items())
+    ]  # fmt: skip
+    return {**spec, "sections": sections, "checks": checks}, notes
 
 
 def _numbered(formula: str, n: int) -> str:
@@ -644,12 +706,12 @@ def add_section(
         if not isinstance(c, dict) or "left" not in c or "right" not in c:
             raise ToolFailure("invalid_spec", "each check needs label, left and right")
         kept.append({**c, "left": _numbered(c["left"], n), "right": _numbered(c["right"], n), "section": n})
-    spec = {**draft, "sections": sections, "checks": kept}
+    spec, fixed = _fix_units(workbook_id, {**draft, "sections": sections, "checks": kept}, n)
     _, built = _built(workbook_id, spec, only=n)
     store.save_draft(files, spec)
 
     lay = built.sections[n - 1]
-    mine = [r for r, c in zip(built.checks, kept, strict=True) if c.get("section") == n]
+    mine = [r for r, c in zip(built.checks, spec["checks"], strict=True) if c.get("section") == n]
     images = [render.section_png(lay)]
     if mine:
         images.append(render.checks_png(Built(built.spec, built.sections, mine, built.last_row)))
@@ -658,6 +720,8 @@ def add_section(
     rows = [[display(v, sec.cell_format(i, c)) for c, v in enumerate(r)] for i, r in enumerate(lay.values)]
     parts = [f"Section {n} is in the draft and was shown to the user as {len(images)} image(s).",
              f"### {sec.title}\n" + _table(sec.columns, rows)]  # fmt: skip
+    if fixed:
+        parts.append("Units corrected in this section: " + "; ".join(fixed) + ".")
     errors = sorted({str(v) for r in lay.values for v in r if isinstance(v, str) and v.startswith("#")})
     if errors:
         parts.append(f"Errors in this section: {', '.join(errors)}. Fix the formulas.")
@@ -714,7 +778,7 @@ def export_sheet(
 def clear_draft(workbook_id: WorkbookId) -> CallToolResult:
     files = store.get_files(get_settings(), workbook_id)
     store.clear_draft(files)
-    return _result(f"The draft for {files.name!r} is empty. The workbook stays open as {workbook_id}.")
+    return _result(f"The draft for {files.name!r} is empty. The workbook stays open as {files.id}.")
 
 
 @mcp.tool(
@@ -730,10 +794,10 @@ def forget_workbook(workbook_id: WorkbookId) -> CallToolResult:
     settings = get_settings()
     files = store.get_files(settings, workbook_id)
     with _books_lock:
-        _books.pop(workbook_id, None)
-    sqldb.forget(workbook_id)
+        _books.pop(files.id, None)
+    sqldb.forget(files.id)
     store.forget(settings, files)
-    return _result(f"Deleted {files.name!r} ({workbook_id}) and everything made from it on this computer.")
+    return _result(f"Deleted {files.name!r} ({files.id}) and everything made from it on this computer.")
 
 
 def _register_python() -> None:

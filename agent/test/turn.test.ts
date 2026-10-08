@@ -192,6 +192,40 @@ describe("tools inside a turn", () => {
   });
 });
 
+describe("tool results in later turns", () => {
+  /** The history the model was sent with the message carrying `token`. */
+  async function historyFor(token: string) {
+    const [request] = (await (
+      await fetch(`https://openrouter.ai/__requests?contains=${token}`)
+    ).json()) as { messages: { role: string; content?: unknown }[] }[];
+    return request.messages.filter((m) => m.role === "assistant").map((m) => String(m.content));
+  }
+
+  it("carries what an earlier reply's tools were given and returned", async () => {
+    const { sessionId, email } = await chatFixture();
+    await say(sessionId, email, "!!toolcall list it");
+    const token = `next-${crypto.randomUUID().slice(0, 8)}`;
+    await say(sessionId, email, token);
+    const [earlier] = await historyFor(token);
+    expect(earlier).toContain("I listed the workspace.");
+    expect(earlier).toContain("[Tools this reply used");
+    expect(earlier).toContain('- list({"path":"/"}) →');
+  });
+
+  it("leaves failed calls out", async () => {
+    const { sessionId, email, agentId } = await chatFixture();
+    await SELF.fetch(
+      `${BASE}/api/agents/${agentId}/config`,
+      as(email, { method: "PATCH", body: JSON.stringify({ cap_scheduled_tasks: 1 }) })
+    );
+    await say(sessionId, email, "!!failloop schedule_task");
+    const token = `next-${crypto.randomUUID().slice(0, 8)}`;
+    await say(sessionId, email, token);
+    const [earlier] = await historyFor(token);
+    expect(earlier).toBe(FAILLOOP_REPLY);
+  });
+});
+
 describe("tools that keep failing", () => {
   /** The streamed legs of a `!!failloop` turn, by the token its message carried. */
   async function legs(token: string) {

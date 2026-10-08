@@ -68,6 +68,52 @@ export function textOf(message: UIMessage | undefined): string {
     .join("");
 }
 
+/** How much of one tool call's input, and of its result, a later turn sees. */
+const NOTE_INPUT_CHARS = 400;
+const NOTE_OUTPUT_CHARS = 600;
+/** And of all the calls in one reply. */
+const NOTES_CHARS = 4000;
+
+const oneLine = (value: unknown, max: number): string => {
+  const text = (typeof value === "string" ? value : (JSON.stringify(value) ?? ""))
+    .replace(/\s+/g, " ")
+    .trim();
+  return text.length > max ? `${text.slice(0, max)}…` : text;
+};
+
+/**
+ * What a reply's successful tool calls were given and found, shortened. Later turns are
+ * sent replies as text only, so without this a model forgets the ids and cells a tool
+ * gave it and spends the next turn guessing or looking them up again. Failed calls are
+ * left out: what went wrong was already said.
+ */
+export function toolNotesOf(message: UIMessage): string {
+  const lines: string[] = [];
+  let used = 0;
+  for (const part of message.parts) {
+    if (!part.type.startsWith("tool-") && part.type !== "dynamic-tool") continue;
+    const call = part as {
+      type: string;
+      toolName?: string;
+      state?: string;
+      input?: unknown;
+      output?: unknown;
+    };
+    if (call.state !== "output-available") continue;
+    const name = call.toolName ?? call.type.replace(/^tool-/, "");
+    if (typeof call.output === "string" && call.output.startsWith(`Tool ${name} failed:`)) continue;
+    const line = `- ${name}(${oneLine(call.input, NOTE_INPUT_CHARS)}) → ${oneLine(call.output, NOTE_OUTPUT_CHARS)}`;
+    if (used + line.length > NOTES_CHARS) {
+      lines.push("- …more calls left out");
+      break;
+    }
+    lines.push(line);
+    used += line.length;
+  }
+  if (lines.length === 0) return "";
+  return `[Tools this reply used, results shortened. Reuse the ids and cells they gave rather than looking them up again.]\n${lines.join("\n")}`;
+}
+
 /**
  * The turn's text and tool steps, read back off Think's stored message (a failed tool
  * keeps its outcome).

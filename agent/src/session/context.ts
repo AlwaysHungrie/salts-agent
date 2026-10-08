@@ -23,7 +23,7 @@ import {
   uploadAttachment,
 } from "./documents";
 import { isPdf, isSheet, isTextLike, safeName, uploadPath } from "./files";
-import { inWords, textOf } from "./format";
+import { inWords, textOf, toolNotesOf } from "./format";
 import { transcribeAttachment } from "./transcribe";
 import type { SessionHost } from "./types";
 
@@ -99,7 +99,9 @@ export async function modelMessages(host: SessionHost, config: Config): Promise<
       ? `${SUMMARY_PREAMBLE}\n\n${textOf(message)}`
       : textOf(message);
     if (message.role === "assistant") {
-      if (text.trim()) messages.push({ role: "assistant", content: text });
+      const notes = toolNotesOf(message);
+      const content = notes ? `${text}\n\n${notes}`.trim() : text;
+      if (content.trim()) messages.push({ role: "assistant", content });
       continue;
     }
     const attachments = attachmentsOf(host, message.id);
