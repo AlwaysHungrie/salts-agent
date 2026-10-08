@@ -428,7 +428,7 @@ The sheet to build, as JSON:
    {"title": "1. Plot Area", "columns": ["Item", "Sq. mt.", "Sq. ft."],
     "rows": [["Plot area", "=Feasibility!C4", "=Feasibility!C4*10.764"],
              {"cells": ["Total", "=SUM_ABOVE()", "=SUM_ABOVE()"], "style": "total"}],
-    "formats": [null, "num2", "int"],
+    "formats": [null, "num2", "int"],   # per column; a row can override: {"cells": [...], "format": "inr"}
     "chart": {"type": "column", "label_column": 1, "value_columns": [3]},
     "note": "optional one line under the table"}],
  "checks": [{"label": "Total matches the model", "left": "=[s1r2c2]", "right": "=Feasibility!C21", "tolerance": 0.01}]}
@@ -437,8 +437,11 @@ Cells: text, numbers, or formulas starting with '='. Formulas use Excel syntax w
 [s1r2c3] the same in section 1 (checks must use this form); SUM_ABOVE() sums the rows above (skipping total rows).
 Functions: SUM AVERAGE MIN MAX COUNT COUNTA PRODUCT SUMPRODUCT ROUND ROUNDUP ROUNDDOWN ABS SQRT INT POWER MOD IF
 IFERROR ISNUMBER ISBLANK AND OR NOT. Formats: int num1 num2 pct pct2 inr (₹ 1,23,456) inr_cr usd usd2 text, or an
-Excel format string. Percent values are fractions (0.25 shows as 25.0%). Charts: bar (horizontal, long labels), column,
-pie, line; they plot consecutive rows (default: the rows before the first total row)."""
+Excel format string. A row's "format" (one for its numbers) or "formats" (per cell) overrides the column's, for
+Item | Value | Unit tables that mix ₹, sq ft and %. Percent values are fractions (0.25 shows as 25.0%). Charts: bar
+(horizontal, long labels), column, pie, line; they plot consecutive rows (default: the rows before the first total row).
+Write the whole sheet in one spec. Every preview is shown to the user, so never preview to test a format or a formula:
+read the text summary of a full preview, fix the spec, preview again only if something was wrong."""
 
 
 def _built(workbook_id: str, spec: dict[str, Any]) -> tuple[store.WorkbookFiles, Built]:
@@ -450,8 +453,7 @@ def _summary(built: Built) -> str:
     parts = []
     for lay in built.sections:
         sec = lay.section
-        fmts = sec.formats or []
-        rows = [[display(v, fmts[c] if c < len(fmts) else None) for c, v in enumerate(r)] for r in lay.values]
+        rows = [[display(v, sec.cell_format(i, c)) for c, v in enumerate(r)] for i, r in enumerate(lay.values)]
         parts.append(f"### {sec.title}\n" + _table(sec.columns, rows))
         errors = [str(v) for r in lay.values for v in r if isinstance(v, str) and v.startswith("#")]
         if errors:

@@ -59,7 +59,7 @@ def write(built: Built, original: Path, target: Path) -> Path:
             row = lay.first_row + r
             for c, (content, value) in enumerate(zip(excel, values, strict=True)):
                 cell = ws.cell(row, FIRST_COL + c, content)
-                fmt = excel_format(sec.formats[c] if sec.formats and c < len(sec.formats) else None)
+                fmt = excel_format(sec.cell_format(r, c))
                 if fmt:
                     cell.number_format = fmt
                 cell.border = BOX

@@ -23,12 +23,8 @@ ROW_IN = 0.3
 plt.rcParams.update({"font.family": "DejaVu Sans", "font.size": 9.5})
 
 
-def _fmt(section, col: int) -> str | None:
-    return section.formats[col] if section.formats and col < len(section.formats) else None
-
-
 def _texts(lay: SectionLayout) -> list[list[str]]:
-    return [[display(v, _fmt(lay.section, c)) for c, v in enumerate(row)] for row in lay.values]
+    return [[display(v, lay.section.cell_format(r, c)) for c, v in enumerate(row)] for r, row in enumerate(lay.values)]
 
 
 def _widths(lay: SectionLayout, texts: list[list[str]]) -> list[float]:
@@ -103,7 +99,7 @@ def _chart(ax, lay: SectionLayout) -> None:
 
     series = [[num(lay.values[r - 1][c - 1]) for r in rows] for c in chart.value_columns]
     names = [lay.section.columns[c - 1] for c in chart.value_columns]
-    fmts = [_fmt(lay.section, c - 1) for c in chart.value_columns]
+    fmts = [lay.section.cell_format(rows[0] - 1, c - 1) for c in chart.value_columns]
     if chart.title and chart.title != lay.section.title:
         ax.set_title(chart.title, loc="left", weight="bold", color=NAVY, size=10.5)
     if chart.type == "pie":

@@ -156,3 +156,30 @@ async def test_pyrun_copies_input_and_collects_outputs(wid, settings):
     assert [p.name for p in res.images] == ["c.png"] and [p.name for p in res.files] == ["t.csv"]
     slow = pyrun.run(files, "import time; time.sleep(5)", timeout=1)
     assert slow.exit_code is None and "stopped" in slow.output
+
+
+async def test_row_formats_override_columns(wid):
+    spec = {
+        "title": "Mixed units",
+        "sections": [
+            {
+                "title": "Sale rate",
+                "columns": ["Item", "Value", "Unit"],
+                "formats": [None, "int", None],
+                "rows": [
+                    {"cells": ["Revenue", "='Model Sheet'!B2", "₹"], "format": "inr"},
+                    ["Area", "='Model Sheet'!B1", "sq ft"],
+                    {"cells": ["Margin", "='Model Sheet'!B6/'Model Sheet'!B2", ""], "formats": [None, "pct"]},
+                ],
+            }
+        ],
+    }
+    body = text(await server.preview_sheet(wid, spec))
+    assert "| Revenue | ₹ 58,12,56,000 | ₹ |" in body
+    assert "| Area | 19,375 | sq ft |" in body
+    assert "| Margin | 85.8% |  |" in body
+    res = await server.export_sheet(wid, spec)
+    (data,) = blobs(res, "resource")
+    ws = openpyxl.load_workbook(io.BytesIO(data))["Dashboard"]
+    formats = [ws.cell(r, 3).number_format for r in range(6, 9)]  # title row 4, header 5, data 6-8
+    assert formats[1] == "#,##0" and formats[2] == "0.0%" and "₹" in formats[0]
