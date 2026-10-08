@@ -264,11 +264,16 @@ export async function readBase64(host: SessionHost, path: string): Promise<strin
 
 /**
  * Hang the files tools made this turn on the reply, unless its text already shows them
- * (a Markdown link to `/files/<id>`), so they are shown once either way.
+ * (a Markdown link to `/files/<id>`), so they are shown once either way. Images are
+ * hung only when the reply links none: a reply that links images picked the ones worth
+ * seeing, and the rest are drafts it moved past (an earlier try, a checks table).
  */
 export function showMadeFiles(host: SessionHost, replyId: string, replyText: string): void {
+  const linked = (id: string) => replyText.includes(`/files/${id}`);
+  const isImage = (id: string) => getAttachment(host, id)?.kind === "image";
+  const picked = host.turn.made.some((id) => isImage(id) && linked(id));
   for (const id of host.turn.made) {
-    if (replyText.includes(`/files/${id}`)) continue;
+    if (linked(id) || (picked && isImage(id))) continue;
     host.exec(
       `INSERT OR REPLACE INTO message_files (message_id, attachment_id) VALUES (?, ?)`,
       replyId,
