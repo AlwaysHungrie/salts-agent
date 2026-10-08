@@ -105,9 +105,14 @@ describe("prepareOpenRouterRequest", () => {
       ],
       usage: { include: true },
     });
-    // Nothing to add and nothing to report: the body is handed back untouched rather
-    // than spending a second of the four breakpoints Anthropic allows.
-    expect(prepareOpenRouterRequest(request(already))?.body).toBe(JSON.stringify(already));
+    // The system breakpoint is not doubled (that would spend a second of the four
+    // Anthropic allows on the same prefix); only the rolling one on the newest message
+    // is added.
+    const body = prepared(already);
+    expect(system(body)?.content).toEqual(already.messages?.[0]?.content);
+    expect(body.messages?.[1]?.content).toEqual([
+      { type: "text", text: "hello", cache_control: { type: "ephemeral" } },
+    ]);
   });
 
   it("asks for nothing on a provider that caches by itself", () => {
@@ -132,7 +137,37 @@ describe("prepareOpenRouterRequest", () => {
   it("survives a body with no system message", () => {
     const body = prepared(anthropic({ messages: [{ role: "user", content: "hello" }] }));
     expect(body.usage?.include).toBe(true);
-    expect(body.messages).toEqual([{ role: "user", content: "hello" }]);
+    expect(body.messages).toEqual([
+      {
+        role: "user",
+        content: [{ type: "text", text: "hello", cache_control: { type: "ephemeral" } }],
+      },
+    ]);
+  });
+
+  it("rolls a breakpoint onto the newest message, so tool rounds read earlier ones from cache", () => {
+    // Round 3 of a turn: the workbook map and two tool results sit before the newest
+    // message, and would otherwise be paid for in full on every round.
+    const body = prepared(
+      anthropic({
+        messages: [
+          { role: "system", content: "rules" },
+          { role: "user", content: "build section 4" },
+          { role: "assistant", content: "" },
+          { role: "tool", content: "a long workbook map" },
+          { role: "assistant", content: "" },
+          { role: "tool", content: "section 4 is in the draft" },
+        ],
+      })
+    );
+    const marked = (body.messages ?? []).filter(
+      (m) => Array.isArray(m.content) && m.content.some((part) => part.cache_control)
+    );
+    expect(marked.map((m) => m.role)).toEqual(["system", "tool"]);
+    expect(body.messages?.[5]?.content).toEqual([
+      { type: "text", text: "section 4 is in the draft", cache_control: { type: "ephemeral" } },
+    ]);
+    expect(body.messages?.[3]?.content).toBe("a long workbook map");
   });
 
   it("forbids providers that train on the data only when asked to", () => {
