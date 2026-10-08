@@ -12,6 +12,7 @@ import hashlib
 import io
 import json
 import re
+import shutil
 import zipfile
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -182,6 +183,18 @@ def load_draft(files: WorkbookFiles) -> dict | None:
 
 def save_draft(files: WorkbookFiles, spec: dict) -> None:
     (files.dir / "draft.json").write_text(json.dumps(spec, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+def clear_draft(files: WorkbookFiles) -> None:
+    (files.dir / "draft.json").unlink(missing_ok=True)
+
+
+def forget(settings: Settings, files: WorkbookFiles) -> None:
+    """Delete the workbook's folder (copy, draft, exports) and the upload it came from. Upload names start with the
+    workbook id, both being the sha256 of the same bytes. Inbox files are the user's own and stay."""
+    shutil.rmtree(files.dir)
+    for path in (settings.data_dir / "uploads").glob(f"{files.id}*"):
+        path.unlink(missing_ok=True)
 
 
 def export_path(files: WorkbookFiles, stem: str, suffix: str) -> Path:

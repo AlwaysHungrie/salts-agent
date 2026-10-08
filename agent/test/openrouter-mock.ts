@@ -349,6 +349,7 @@ type ChatBody = {
   modalities?: string[];
   audio?: { voice?: string; format?: string };
   messages?: { role: string; content?: unknown }[];
+  tool_choice?: unknown;
 };
 
 /**
@@ -526,6 +527,9 @@ function streamedText(text: string) {
     finalChunk(),
   ]);
 }
+
+/** What a `!!failloop` model says once it may no longer call tools. */
+export const FAILLOOP_REPLY = "The tool kept failing, so I stopped.";
 
 /** A streamed tool call, which is how a turn that uses a tool begins. */
 function streamedToolCall(name: string, args: Record<string, unknown>) {
@@ -805,6 +809,13 @@ export async function openrouterMock(request: Request): Promise<Response> {
     if (carriesToolResult(body)) return streamedText("Stored it.");
     const ref = JSON.stringify(body.messages).match(/attachment:[\w-]+/)?.[0] ?? "";
     return streamedToolCall(message.split(/\s+/)[1], { text: "a resume", upload_id: ref });
+  }
+
+  // `!!failloop <tool>`: a model that repeats one failing call for as long as it is let.
+  // An empty prompt makes `schedule_task` fail; a tool the turn lacks fails in the SDK.
+  if (message.startsWith("!!failloop")) {
+    if (body.tool_choice === "none") return streamedText(FAILLOOP_REPLY);
+    return streamedToolCall(message.split(/\s+/)[1], { prompt: "", when: "1" });
   }
 
   if (message.startsWith("!!toolcall")) {

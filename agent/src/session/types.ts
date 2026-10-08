@@ -116,6 +116,8 @@ export type TurnState = {
   scheduled: boolean;
   /** Attachments tools saved for the user this turn (drawn images, MCP previews, files). */
   made: string[];
+  /** Ids of this turn's tool calls that returned a failure rather than throwing one. */
+  failedCalls: string[];
 };
 
 /**

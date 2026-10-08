@@ -2,6 +2,8 @@ import { SELF, env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import {
   COST_PER_TURN,
+  FAILLOOP_REPLY,
+  INVENTED_TOOL,
   MCP_MEDIA_TOOL,
   MCP_TOOLS,
   MCP_UPLOAD_TOOL,
@@ -187,6 +189,45 @@ describe("tools inside a turn", () => {
     };
     const reply = body.messages.find((m) => m.role === "assistant")!;
     expect(reply.steps).toContain("list");
+  });
+});
+
+describe("tools that keep failing", () => {
+  /** The streamed legs of a `!!failloop` turn, by the token its message carried. */
+  async function legs(token: string) {
+    const requests = (await (
+      await fetch(`https://openrouter.ai/__requests?contains=${token}`)
+    ).json()) as {
+      stream?: boolean;
+      tool_choice?: unknown;
+      messages: { role: string; content?: unknown }[];
+    }[];
+    return requests.filter((r) => r.stream);
+  }
+
+  it.each([
+    ["a tool that returns its failure", "schedule_task", "Tool schedule_task failed"],
+    ["a tool the turn does not have", INVENTED_TOOL, "unavailable tool"],
+  ])("stops after three failures in a row and says so: %s", async (_, tool, error) => {
+    const { sessionId, email, agentId } = await chatFixture();
+    const enabled = await SELF.fetch(
+      `${BASE}/api/agents/${agentId}/config`,
+      as(email, { method: "PATCH", body: JSON.stringify({ cap_scheduled_tasks: 1 }) })
+    );
+    expect(enabled.ok).toBe(true);
+    const token = `failloop-${crypto.randomUUID().slice(0, 8)}`;
+    const res = await say(sessionId, email, `!!failloop ${tool} ${token}`);
+    expect(((await res.json()) as { reply: string }).reply).toBe(FAILLOOP_REPLY);
+
+    const sent = await legs(token);
+    // Three failing calls, then one step that may not call tools.
+    expect(sent).toHaveLength(4);
+    expect(sent.slice(0, 3).every((r) => r.tool_choice !== "none")).toBe(true);
+    expect(sent[3].tool_choice).toBe("none");
+    const results = sent[3].messages.filter((m) => m.role === "tool");
+    expect(results).toHaveLength(3);
+    expect(JSON.stringify(results)).toContain(error);
+    expect(JSON.stringify(sent[3])).toContain("3 tool calls in a row have failed");
   });
 });
 

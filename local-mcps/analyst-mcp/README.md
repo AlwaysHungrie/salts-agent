@@ -44,6 +44,8 @@ picture the user approved are the numbers in the file.
 | `breakdown` | Opens a total cell into the items that add up to it exactly; with `groups`, checks every item is in one head and returns the section rows and check. |
 | `add_section` | Adds, replaces (`number`) or removes (`remove`) one section of the draft sheet and shows it as an image. |
 | `export_sheet` | Builds the draft into a copy of the workbook and returns the .xlsx. |
+| `clear_draft` | Empties the draft sheet, to start a new dashboard on the same file. |
+| `forget_workbook` | Deletes a workbook's copy, draft, exports and upload from this computer. Inbox files stay. |
 | `run_python` | Runs Python on a copy of the workbook. **Off** unless `ALLOW_PYTHON=true`; see [Security](#security). |
 
 In SQL, the `cells` table has every non-empty cell: `sheet`, `cell`, `row`, `col`,

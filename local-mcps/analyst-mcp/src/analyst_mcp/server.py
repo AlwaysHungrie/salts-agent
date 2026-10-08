@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import functools
+import inspect
 import json
 import logging
 import re
@@ -89,22 +90,38 @@ def _error(code: str, message: str) -> CallToolResult:
     return CallToolResult(content=[TextContent(type="text", text=json.dumps(body))], is_error=True)
 
 
+FAILED_ARGS_CHARS = 4000
+
+
+def _log_failure(name: str, code: str, message: str, kwargs: dict[str, Any]) -> None:
+    """A refused call, with what the model sent: a model that keeps repeating one mistake is only diagnosable from
+    its arguments, which reach no other log."""
+    sent = json.dumps(kwargs, default=str, ensure_ascii=False)
+    if len(sent) > FAILED_ARGS_CHARS:
+        sent = sent[:FAILED_ARGS_CHARS] + f"... [{len(sent) - FAILED_ARGS_CHARS} more chars]"
+    log.info("tool %s failed: %s: %s\n  args: %s", name, code, message, sent)
+
+
 def tool_handler(name: str):
     """Runs the tool in a worker thread (recalculation and drawing are CPU-bound) and turns failures into
     {code, message} errors, never tracebacks."""
 
     def decorate(fn):
+        signature = inspect.signature(fn)
+
         @functools.wraps(fn)
         async def wrapper(*args, **kwargs):
+            sent = lambda: signature.bind_partial(*args, **kwargs).arguments  # noqa: E731
             try:
                 return await asyncio.to_thread(functools.partial(fn, *args, **kwargs))
             except ToolFailure as e:
-                log.info("tool %s failed: %s", name, e.code)
+                _log_failure(name, e.code, e.message, sent())
                 return _error(e.code, e.message)
             except ValidationError as e:
                 problems = "; ".join(
                     f"{'.'.join(str(p) for p in err['loc']) or 'spec'}: {err['msg']}" for err in e.errors()[:8]
                 )
+                _log_failure(name, "invalid_spec", problems, sent())
                 return _error("invalid_spec", problems)
             except Exception as e:
                 frames = "\n".join(
@@ -678,6 +695,39 @@ def export_sheet(
         f"It contains exactly these sections; tell the user these, no others:\n{contents}"
     )
     return _result(text, files=[(path.name, mime, path.read_bytes())])
+
+
+@mcp.tool(
+    description=(
+        "Empty this workbook's draft sheet, to start a new dashboard on the same file. Only when the user asks to "
+        "start over; to change or drop one section use add_section. Exports already sent are kept."
+    ),
+    annotations=ToolAnnotations(read_only_hint=False, destructive_hint=True, idempotent_hint=True),
+)
+@tool_handler("clear_draft")
+def clear_draft(workbook_id: WorkbookId) -> CallToolResult:
+    files = store.get_files(get_settings(), workbook_id)
+    store.clear_draft(files)
+    return _result(f"The draft for {files.name!r} is empty. The workbook stays open as {workbook_id}.")
+
+
+@mcp.tool(
+    description=(
+        "Delete a workbook from this computer: its copy, draft and exported files, and the uploaded file. Only when "
+        "the user asks to remove the file or move on to a new project. The workbook_id stops working; files in the "
+        "inbox folder are not touched."
+    ),
+    annotations=ToolAnnotations(read_only_hint=False, destructive_hint=True, idempotent_hint=False),
+)
+@tool_handler("forget_workbook")
+def forget_workbook(workbook_id: WorkbookId) -> CallToolResult:
+    settings = get_settings()
+    files = store.get_files(settings, workbook_id)
+    with _books_lock:
+        _books.pop(workbook_id, None)
+    sqldb.forget(workbook_id)
+    store.forget(settings, files)
+    return _result(f"Deleted {files.name!r} ({workbook_id}) and everything made from it on this computer.")
 
 
 def _register_python() -> None:
