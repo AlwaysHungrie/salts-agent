@@ -15,15 +15,18 @@ The original file is never changed.
 2. `open_workbook` returns a map of every number in the workbook. Each entry has its
    cell, the label on its row, its column header, its unit and its formula. The model
    finds numbers from the map, and does not guess cell addresses.
-3. For a new sheet, the model writes one **sheet spec**. A spec is a set of sections.
-   Each section is a table, can have a chart, and holds formulas over workbook cells
-   (`=Feasibility!C4*10.764`). The spec can also include checks that tie its totals
-   back to the workbook's own totals.
-4. `preview_sheet` evaluates the spec in Python and draws one PNG per section, plus
-   one for the checks. The agent shows the images in the chat.
-5. `export_sheet` writes the same spec into a copy of the workbook. Every number in it
-   is a live Excel formula, the checks go on a Checks sheet, and the agent hands the
-   user the file. The export is refused while any check fails.
+3. For a new sheet, the model adds **sections** one at a time with `add_section`. Each
+   section is a table, can have a chart, and holds formulas over workbook cells
+   (`=Feasibility!C4*10.764`), with optional checks that tie its totals back to the
+   workbook's own totals. The server keeps the draft (`workbooks/<id>/draft.json`),
+   because the agent does not carry tool results from one turn to the next.
+4. Each `add_section` call evaluates the section in Python and draws it as a PNG (plus
+   one for its checks). The agent shows the images in the chat. Sections that read
+   wrong (rupees shown as crores, an area shown as ₹, a number typed as text, pie
+   slices that miss part of the total) are refused before anyone sees them.
+5. `export_sheet` writes the draft into a copy of the workbook. Every number in it is
+   a live Excel formula, the checks go on a Checks sheet, and the agent hands the user
+   the file. The export is refused while any check fails.
 
 The preview and the export are made from the same formula text, so the numbers in the
 picture the user approved are the numbers in the file.
@@ -38,8 +41,9 @@ picture the user approved are the numbers in the file.
 | `find` | Finds cells whose text contains some words, with the numbers on the same row. |
 | `query` | Runs one read-only DuckDB SQL query over the workbook. It can draw the result as a chart, or return it as an .xlsx or .csv file. |
 | `what_if` | Changes input cells, recalculates the whole workbook, and reports the outputs before and after. |
-| `preview_sheet` | Renders a sheet spec as images, with its numbers and check results as text. |
-| `export_sheet` | Builds the spec into a copy of the workbook and returns the .xlsx. |
+| `breakdown` | Opens a total cell into the items that add up to it exactly; with `groups`, checks every item is in one head and returns the section rows and check. |
+| `add_section` | Adds, replaces (`number`) or removes (`remove`) one section of the draft sheet and shows it as an image. |
+| `export_sheet` | Builds the draft into a copy of the workbook and returns the .xlsx. |
 | `run_python` | Runs Python on a copy of the workbook. **Off** unless `ALLOW_PYTHON=true`; see [Security](#security). |
 
 In SQL, the `cells` table has every non-empty cell: `sheet`, `cell`, `row`, `col`,

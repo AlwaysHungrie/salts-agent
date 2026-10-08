@@ -139,11 +139,19 @@ def open_files(settings: Settings, *, upload_id: str | None, inbox_file: str | N
 
 def get_files(settings: Settings, workbook_id: str) -> WorkbookFiles:
     if not WORKBOOK_ID.match(workbook_id or ""):
-        raise ToolFailure("bad_workbook_id", "workbook_id is the 12-character id open_workbook returned")
+        raise ToolFailure("bad_workbook_id", "workbook_id is the 12-character id open_workbook gave" + _known(settings))
     folder = settings.data_dir / "workbooks" / workbook_id
     if not (folder / "original.xlsx").exists():
-        raise ToolFailure("workbook_not_found", "no open workbook with that id; call open_workbook first")
+        raise ToolFailure("workbook_not_found", "no open workbook with that id" + _known(settings))
     return WorkbookFiles(id=workbook_id, dir=folder, name=_read_meta(folder).get("name", workbook_id))
+
+
+def _known(settings: Settings) -> str:
+    """The open workbooks, newest first, so a model that lost the id can carry on without opening the file again."""
+    books = sorted(list_workbooks(settings), key=lambda b: b["opened_at"] or "", reverse=True)[:10]
+    if not books:
+        return "; call open_workbook first"
+    return ". Open workbooks: " + ", ".join(f"{b['workbook_id']} ({b['name']})" for b in books)
 
 
 def list_workbooks(settings: Settings) -> list[dict]:
@@ -163,6 +171,17 @@ def list_inbox(settings: Settings) -> list[str]:
     inbox = settings.inbox()
     inbox.mkdir(parents=True, exist_ok=True)
     return sorted(p.name for p in inbox.iterdir() if p.is_file() and p.suffix.lower() in (".xlsx", ".xlsm", ".csv"))
+
+
+def load_draft(files: WorkbookFiles) -> dict | None:
+    """The sheet being built a section at a time. Kept here because the agent does not carry tool results from one
+    turn to the next."""
+    path = files.dir / "draft.json"
+    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
+
+
+def save_draft(files: WorkbookFiles, spec: dict) -> None:
+    (files.dir / "draft.json").write_text(json.dumps(spec, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
 def export_path(files: WorkbookFiles, stem: str, suffix: str) -> Path:

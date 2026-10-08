@@ -8,7 +8,7 @@ User docs: `README.md`.
 
 ```sh
 uv sync
-uv run pytest -q          # ~25 tests, ~15 s, offline
+uv run pytest -q          # ~31 tests, ~15 s, offline
 uv run ruff check src tests
 MCP_TRANSPORT=http MCP_AUTH_TOKEN=x MCP_PORT=8380 uv run analyst-mcp
 ```
@@ -21,7 +21,8 @@ MCP_TRANSPORT=http MCP_AUTH_TOKEN=x MCP_PORT=8380 uv run analyst-mcp
 | `store.py` | Uploads (sha256), workbook folders (`workbooks/<id12>/original.xlsx`, CSV converted once), inbox, export paths |
 | `workbook.py` | Loads cells (values + formulas), recalculates files without cached values, labels/headers/units, what-if via `formulas` |
 | `expr.py` | The Excel formula subset of specs: tokenizer, parser, evaluator, `to_excel` rewrite (`[r2c3]`, `[s1r2c3]`, `SUM_ABOVE()`) |
-| `spec.py` | `SheetSpec` models, layout (where each cell lands), evaluation of every cell and check |
+| `spec.py` | `SheetSpec` models, layout (where each cell lands), evaluation of every cell and check, `problems` |
+| `breakdown.py` | Opens a total into the cells that add up to it; validates head groupings |
 | `render.py` | matplotlib PNGs: section (table + chart), checks |
 | `export.py` | openpyxl copy of the original + new sheet (formulas, native charts) + Checks sheet |
 | `sql.py` | DuckDB in memory per workbook: `cells` + header-row sheets; external access off |
@@ -35,6 +36,8 @@ MCP_TRANSPORT=http MCP_AUTH_TOKEN=x MCP_PORT=8380 uv run analyst-mcp
 - Spec numbers are formulas over workbook cells, not typed results; bare `C4` is rejected so every reference names
   its sheet. `export_sheet` refuses while a check fails.
 - The original is never written; exports go to `workbooks/<id>/exports/`.
+- The draft sheet lives on the server (`draft.json`): the agent drops tool results between turns, so the
+  model must never have to resend earlier sections.
 - Files reach the server only through `/uploads` (agent app) or the inbox. No `file_base64` tool fields, no
   arbitrary paths.
 - Images and files go back as MCP `image` and embedded `resource` (blob) content. The agent stores them as chat

@@ -356,6 +356,69 @@ def build(spec: SheetSpec, wb: Workbook) -> Built:
     return Built(spec, layouts, results, last)
 
 
+TYPED_NUMBER = re.compile(r"^\s*(?:[₹$]|rs\.?)?\s*-?[\d,]*\d(?:\.\d+)?\s*(?:%|cr|crore|lakh|k|m)?\s*$", re.IGNORECASE)
+MONEY = {"inr", "inr_cr", "usd", "usd2"}
+NOT_MONEY = re.compile(r"\bsq\.?\s*(?:m|mt|mtr|ft|feet|metres?|meters?)\b|\bmonths?\b")
+MONEY_WORDS = re.compile(r"₹|\brs\b|\brent\b|\brate\b|\bper\b|\bcost\b|\bprice\b|\bpremium\b|\bcharges?\b")
+
+
+def problems(built: Built, only: int | None = None) -> list[str]:
+    """Mistakes that make a sheet wrong while every formula still evaluates: refused before anyone sees them.
+    `only` limits the look to one section, so a section being changed is not held up by another one."""
+    out = []
+    for si, lay in enumerate(built.sections, 1):
+        if only is not None and si != only:
+            continue
+        sec = lay.section
+        for ri, row in enumerate(lay.values):
+            raw = sec.rows[ri].cells
+            words = " ".join(v.lower() for v in row if isinstance(v, str))
+            for ci, cell in enumerate(raw):
+                if ci and isinstance(cell, str) and TYPED_NUMBER.match(cell):
+                    out.append(
+                        f"section {si} ({sec.title!r}) row {ri + 1} column {ci + 1} is the typed text {cell!r}: write "
+                        "a formula over the workbook's cell instead, and put the unit in the format or another column"
+                    )
+            for ci, v in enumerate(row):
+                if (
+                    isinstance(v, int | float) and not isinstance(v, bool)
+                    and sec.cell_format(ri, ci) in MONEY and NOT_MONEY.search(words) and not MONEY_WORDS.search(words)
+                ):  # fmt: skip
+                    out.append(
+                        f"section {si} ({sec.title!r}) row {ri + 1} shows {v:,.2f} as money but the row is about "
+                        f"{NOT_MONEY.search(words).group(0)!r}: give the row its own format, e.g. "
+                        '{"cells": [...], "format": "num1"}'
+                    )
+            for ci, v in enumerate(row):
+                if not isinstance(v, int | float) or isinstance(v, bool):
+                    continue
+                fmt = sec.cell_format(ri, ci)
+                where = f"section {si} ({sec.title!r}) row {ri + 1} column {ci + 1}"
+                if fmt == "inr_cr" and abs(v) >= 1e5:
+                    out.append(
+                        f"{where} is {v:,.0f} with format inr_cr, which shows a number already in crores: use inr for "
+                        "rupees, or divide by 10^7 in the formula"
+                    )
+                if fmt in ("pct", "pct2") and abs(v) > 10:
+                    out.append(f"{where} is {v:,.2f} with a percent format: percents are fractions (0.25 = 25%)")
+        if sec.chart and sec.chart.type == "pie":
+            plotted = chart_rows(sec)
+            for c in sec.chart.value_columns:
+                values = [lay.values[r - 1][c - 1] for r in plotted]
+                if any(isinstance(v, int | float) and v < 0 for v in values):
+                    out.append(f"section {si} ({sec.title!r}) pie has negative slices; use a bar chart")
+                totals = [i for i, r in enumerate(sec.rows) if r.style == "total" and i + 1 > plotted[-1]]
+                slices = sum(v for v in values if isinstance(v, int | float))
+                for i in totals[:1]:
+                    t = lay.values[i][c - 1]
+                    if isinstance(t, int | float) and abs(t - slices) > max(1.0, abs(t) * 1e-6):
+                        out.append(
+                            f"section {si} ({sec.title!r}): the pie slices add up to {slices:,.2f} but the total row "
+                            f"says {t:,.2f}, so the parts miss something; use the breakdown tool to find every part"
+                        )
+    return out
+
+
 def _sec_address(layouts: list[SectionLayout], s: int, r: int, c: int) -> str:
     if not (1 <= s <= len(layouts)):
         raise ToolFailure("bad_formula", f"there is no section {s}")

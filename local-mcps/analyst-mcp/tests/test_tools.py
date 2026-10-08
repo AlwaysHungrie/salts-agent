@@ -1,12 +1,13 @@
 import copy
 import io
+import json
 
 import openpyxl
 import pytest
 
 from analyst_mcp import server
 
-from .conftest import SAMPLE_SPEC, blobs, error, text
+from .conftest import SAMPLE_SPEC, blobs, build_draft, error, text
 
 PROFIT = 1000 * 2 * 10.764 * 0.9 * 30000 - (1000 * 2 * 10.764 * 0.9 * 4000 + 5000000)
 
@@ -65,20 +66,18 @@ async def test_what_if(wid):
 
 
 async def test_preview_numbers_images_and_checks(wid):
-    res = await server.preview_sheet(wid, SAMPLE_SPEC)
-    body = text(res)
-    assert "All checks pass" in body
-    assert "| Plot area | 1,000.00 | 10,764 |" in body
-    assert f"₹ {PROFIT / 1e7:,.2f}"[:6] not in body  # amount column uses Indian grouping, not crore
-    assert len(blobs(res, "image")) == 3  # two sections + checks
+    first, second = await build_draft(wid, SAMPLE_SPEC)
+    assert "| Plot area | 1,000.00 | 10,764 |" in text(first)
+    assert "- OK: Profit matches the model" in text(second)
+    assert f"₹ {PROFIT / 1e7:,.2f}"[:6] not in text(second)  # amount column uses Indian grouping, not crore
+    assert len(blobs(first, "image")) == 1 and len(blobs(second, "image")) == 2  # each section once, + its checks
 
 
 async def test_preview_reports_failing_check(wid):
     spec = copy.deepcopy(SAMPLE_SPEC)
     spec["checks"][0]["right"] = "='Model Sheet'!B5"
-    body = text(await server.preview_sheet(wid, spec))
-    assert "CHECK: Profit matches the model" in body
-    res = await server.export_sheet(wid, spec)
+    assert "CHECK: Profit matches the model" in text((await build_draft(wid, spec))[-1])
+    res = await server.export_sheet(wid)
     assert error(res)["code"] == "checks_failed"
 
 
@@ -95,12 +94,13 @@ async def test_preview_reports_failing_check(wid):
 async def test_spec_errors_are_specific(wid, change, code):
     spec = copy.deepcopy(SAMPLE_SPEC)
     change(spec)
-    assert error(await server.preview_sheet(wid, spec))["code"] == code
+    assert error((await build_draft(wid, spec))[-1])["code"] == code
 
 
 async def test_export_is_a_copy_with_live_formulas(wid, model_file):
     before = model_file.read_bytes()
-    res = await server.export_sheet(wid, SAMPLE_SPEC, file_name="Client pack")
+    await build_draft(wid, SAMPLE_SPEC)
+    res = await server.export_sheet(wid, file_name="Client pack")
     assert not res.is_error, text(res)
     (data,) = blobs(res, "resource")
     uri = next(c.resource.uri for c in res.content if c.type == "resource")
@@ -174,12 +174,104 @@ async def test_row_formats_override_columns(wid):
             }
         ],
     }
-    body = text(await server.preview_sheet(wid, spec))
+    body = text((await build_draft(wid, spec))[-1])
     assert "| Revenue | ₹ 58,12,56,000 | ₹ |" in body
     assert "| Area | 19,375 | sq ft |" in body
     assert "| Margin | 85.8% |  |" in body
-    res = await server.export_sheet(wid, spec)
+    res = await server.export_sheet(wid)
     (data,) = blobs(res, "resource")
     ws = openpyxl.load_workbook(io.BytesIO(data))["Dashboard"]
     formats = [ws.cell(r, 3).number_format for r in range(6, 9)]  # title row 4, header 5, data 6-8
     assert formats[1] == "#,##0" and formats[2] == "0.0%" and "₹" in formats[0]
+
+
+async def test_breakdown_lists_the_parts_of_a_total(wid):
+    body = text(await server.breakdown(wid, "'Model Sheet'!B6"))
+    # Net profit = Revenue - (Construction + Approvals): the total cost subtotal is opened, signs kept.
+    assert "| B2 | Revenue |" in body
+    assert "| B3 | Construction | minus" in body
+    assert "| B4 | Approvals | minus" in body
+    assert "B5" not in body.split("items:")[1]
+
+
+async def test_breakdown_groups_must_cover_every_item_once(wid):
+    missing = error(await server.breakdown(wid, "'Model Sheet'!B5", {"Building": ["B3"]}))
+    assert missing["code"] == "bad_groups" and "B4 Approvals" in missing["message"]
+    twice = error(await server.breakdown(wid, "'Model Sheet'!B5", {"A": ["B3:B4"], "B": ["B4"]}))
+    assert "in both 'A' and 'B'" in twice["message"]
+
+
+async def test_sections_build_a_draft_that_exports(wid):
+    area = {"title": "1. Area", "columns": ["Item", "Sq. ft."], "formats": [None, "int"],
+            "rows": [["Saleable area", "='Model Sheet'!B1"]]}  # fmt: skip
+    first = await server.add_section(wid, area, title="Project dashboard")
+    assert len(first.content) == 2 and "Draft sections now: 1. Area." in text(first)
+
+    body = text(await server.breakdown(wid, "'Model Sheet'!B5", {"Building": ["B3"], "Approvals": ["B4"]}))
+    section = json.loads(body.split("as the user asked):\n", 1)[1].split("\n\n", 1)[0])
+    check = json.loads(body.split("Its check:\n", 1)[1].split("\n\n", 1)[0])
+    section["title"] = "2. Where the cost goes"
+    second = await server.add_section(wid, section, checks=[check])
+    assert "- OK: Heads add up to Total cost" in text(second)
+    assert "| Total |" in text(second) and "100.0%" in text(second)
+    assert len(blobs(second, "image")) == 2  # the section and its checks, not section 1 again
+
+    # Change section 1 in place; the check of section 2 still points at section 2.
+    area["rows"][0][0] = "Saleable carpet area"
+    assert "1. Area | 2. Where the cost goes" in text(await server.add_section(wid, area, number=1))
+    assert "Draft sheet for" in text(await server.list_workbooks())
+    removed = await server.add_section(wid, number=1, remove=True)
+    assert "Draft sections now: 2. Where the cost goes." in text(removed)
+    await server.add_section(wid, area)  # now section 2; the cost check moved to section 1 with its section
+
+    exported = await server.export_sheet(wid)
+    (data,) = blobs(exported, "resource")
+    book = openpyxl.load_workbook(io.BytesIO(data))
+    ws = book["Dashboard"]
+    assert ws["B2"].value == "Project dashboard"
+    assert "Saleable carpet area" in [c.value for c in ws["B"]]
+    assert "- 2. Where the cost goes (3 rows)\n- 1. Area (1 rows)" in text(exported)
+    assert "Heads add up to Total cost" in [row[0].value for row in book["Checks"].iter_rows(max_col=1)]
+
+
+async def test_preview_refuses_numbers_that_read_wrong(wid):
+    def spec(fmt, value, chart=None):
+        return {"title": "T", "sections": [{"title": "1. S", "columns": ["Item", "Value"], "formats": [None, fmt],
+                                            "rows": [["Revenue", value]], "chart": chart}]}  # fmt: skip
+
+    crore = error((await build_draft(wid, spec("inr_cr", "='Model Sheet'!B2")))[-1])
+    assert crore["code"] == "spec_problems" and "use inr for rupees" in crore["message"]
+    assert not (await build_draft(wid, spec("inr_cr", "='Model Sheet'!B2/10^7")))[-1].is_error
+    pct = error((await build_draft(wid, spec("pct", "=57.7")))[-1])
+    assert "percents are fractions" in pct["message"]
+    typed = error((await build_draft(wid, spec("int", "₹100")))[-1])
+    assert "typed text '₹100'" in typed["message"]
+    rows = [["Revenue", "='Model Sheet'!B2", "₹"], ["Saleable area", "='Model Sheet'!B1", "sq ft"]]
+    area = {"title": "T", "sections": [{"title": "1. S", "columns": ["Item", "Value", "Unit"], "formats": [None, "inr"],
+                                        "rows": rows}]}  # fmt: skip
+    assert "row 2 shows 19,375.20 as money" in error((await build_draft(wid, area))[-1])["message"]
+    pie = {
+        "title": "T",
+        "sections": [{
+            "title": "1. Cost", "columns": ["Head", "Amount"],
+            "rows": [["Construction", "='Model Sheet'!B3"],
+                     {"cells": ["Total", "='Model Sheet'!B5"], "style": "total"}],
+            "chart": {"type": "pie", "value_columns": [2]},
+        }],
+    }  # fmt: skip
+    assert "pie slices add up to" in error((await build_draft(wid, pie))[-1])["message"]
+
+
+def test_big_numbers_get_words():
+    from analyst_mcp.fmt import approx
+
+    assert approx(643834212.77, "Rs.") == "≈ ₹ 64.38 Cr"
+    assert approx(475000, "Rs.") == "≈ ₹ 4.75 lakh"
+    assert approx(35000, "Rs.") == ""
+    assert approx(643834212.77, "") == "≈ 643.83 million"
+    assert approx(19375, "sq ft") == ""
+
+
+async def test_unknown_workbook_id_names_the_open_ones(wid):
+    lost = error(await server.breakdown("abcdefabcdef", "'Model Sheet'!B5"))
+    assert lost["code"] == "workbook_not_found" and f"{wid} (model.xlsx)" in lost["message"]
