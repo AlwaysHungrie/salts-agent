@@ -93,7 +93,7 @@ describe("parseCommand", () => {
 
 describe("modelNicknames", () => {
   it("is what the label holds in brackets", () => {
-    expect(modelNicknames("DeepSeek V4.1 Flash (ds)")).toEqual(["ds"]);
+    expect(modelNicknames("DeepSeek V4 Flash (ds)")).toEqual(["ds"]);
     expect(modelNicknames("Claude Sonnet 5.5 (sonnet)")).toEqual(["sonnet"]);
     expect(modelNicknames("Mini (cheap) (fast)")).toEqual(["cheap", "fast"]);
   });
