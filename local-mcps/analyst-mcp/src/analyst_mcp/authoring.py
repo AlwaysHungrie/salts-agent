@@ -29,7 +29,17 @@ HEX = re.compile(r"^#?([0-9A-Fa-f]{6})$")
 
 class NewSheet(BaseModel):
     name: str = Field(description="Tab name, up to 31 characters")
-    rows: Rows = Field(description="Rows of cells, the first row the column headings. '=...' is a formula")
+    rows: Rows | None = Field(
+        None, description="Rows of cells, the first row the column headings. '=...' is a formula. For a few rows only"
+    )
+    query: str | None = Field(
+        None,
+        description=(
+            "Instead of rows: one SELECT over the project's files (as in the query tool); its result fills the sheet, "
+            "column names as headings. Use it for any table built from the files, e.g. an ABC analysis, so the data "
+            "is never typed out"
+        ),
+    )
 
 
 class Edit(BaseModel):
@@ -94,7 +104,7 @@ def create(sheets: list[NewSheet]) -> bytes:
     wb.remove(wb.active)
     for sheet in sheets:
         ws = wb.create_sheet(_sheet_name(sheet.name, wb.sheetnames))
-        _write_rows(ws, sheet.rows, 1)
+        _write_rows(ws, sheet.rows or [], 1)
         if sheet.rows:
             for cell in ws[1]:
                 cell.font = Font(bold=True)
