@@ -384,3 +384,21 @@ async def test_another_file_cannot_take_a_used_name(settings, proj):
     other.save(settings.inbox() / "other.xlsx")
     err = error(await server.open_file(inbox_file="other.xlsx", project="Model"))
     assert err["code"] == "project_exists" and "switch_to_project" in err["message"]
+
+
+async def test_files_of_one_chat_are_projects_side_by_side(settings):
+    """May, June and July files in one chat: each is a project named after its file, and the model works across them
+    by name, as an ABC analysis over the three months needs."""
+    for month, qty in (("may-data", 10), ("june-data", 20), ("july-data", 30)):
+        wb = openpyxl.Workbook()
+        wb.active.title = "Sales"
+        wb.active.append(["Item", "Value"])
+        for item, share in (("Bolt", 5), ("Nut", 3), ("Washer", 2)):
+            wb.active.append([item, qty * share])
+        wb.save(settings.inbox() / f"{month}.xlsx")
+        assert f'project "{month}"' in text(await server.open_file(inbox_file=f"{month}.xlsx"))
+    totals = [text(await server.query(m, 'SELECT SUM(Value) AS v FROM "Sales"')) for m in ("may", "june", "july")]
+    assert ["| 100 |" in totals[0], "| 200 |" in totals[1], "| 300 |" in totals[2]] == [True] * 3
+    # Filing a second month under the first's name is refused with the way out.
+    err = error(await server.open_file(inbox_file="june-data.xlsx", project="may-data"))
+    assert err["code"] == "project_exists" and "its own name" in err["message"]
