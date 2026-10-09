@@ -162,8 +162,9 @@ def start(
             return _project(folder, meta), False
         raise ToolFailure(
             "project_exists",
-            f'there is already a project "{meta.get("name", name)}"; give this one another name, or switch_to_project '
-            "to work on that one",
+            f'there is already a project "{meta.get("name", name)}" holding another file; each file is its own '
+            "project, so open this one under its own name (leave `project` out to use the file's name), or "
+            "switch_to_project to work on that one",
         )
     (folder / "versions").mkdir(parents=True, exist_ok=True)
     (folder / "versions" / "1.xlsx").write_bytes(data)
