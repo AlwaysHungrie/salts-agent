@@ -62,7 +62,7 @@ picture the user approved are the numbers in the file.
 | `add_section` | Adds, replaces (`number`) or removes (`remove`) one section of the draft sheet and shows it as an image. |
 | `export_sheet` | Builds the draft into a copy of the file and returns the .xlsx. |
 | `create_file` | Makes a new Excel file from rows in `project` (first row bold headings; `=` starts a formula) and returns the .xlsx. |
-| `edit_file` | Applies edits in order, all or none: `set` cells, `append_rows`, `add_sheet`, `rename_sheet` (formulas follow), `delete_sheet` (refused while formulas use it), `format` (bold, number format, fill, width). Saves the file's next version and returns the .xlsx. |
+| `edit_file` | Applies edits in order, all or none: `set` cells, `fill` (the top row of a range copied down it, references shifting as in Excel), `append_rows`, `add_sheet`, `rename_sheet` (formulas follow), `delete_sheet` (refused while formulas use it), `format` (bold, number format, fill, width). Saves the file's next version and returns the .xlsx. |
 | `move_file` | Moves a file (versions, draft) to another project; a project left empty is removed. |
 | `remove_file` | Deletes one file of a project, every version and its upload. Inbox files stay. |
 | `clear_draft` | Empties the draft sheet, to start a new dashboard on the same file. |

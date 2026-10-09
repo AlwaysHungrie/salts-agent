@@ -142,3 +142,37 @@ async def test_a_sheet_from_a_query_needs_no_typed_data(settings):
     assert [c.value for c in ws[2]] == ["Bolt", 150, 0.5, "A"] and ws["D4"].value == "C"
     assert 'Created "ABC analysis" in project "Dialysis"' in text(res)
     assert error(await server.create_file("X", [NewSheet(name="S")], project="Dialysis"))["code"] == "bad_sheet"
+
+
+async def test_fill_copies_one_row_of_formulas_down(settings):
+    """A formula column over 70 items is one set and one fill, not 70 rows typed out (the turn that tried ran out
+    of room after one row)."""
+    items = [["Item", "Qty", "Rate"], ["Gauze", 3, 10], ["Tape", 5, 4], ["Needle", 2, 50]]
+    await server.create_file("Model", [NewSheet(name="Data", rows=items), NewSheet(name="Value", rows=[["Item"]])])
+    res = await server.edit_file(
+        "Model",
+        [
+            Edit(
+                op="set",
+                sheet="Value",
+                cells={
+                    "A2": "=Data!A2",
+                    "B2": "=SUMIF(Data!$A:$A,$A2,Data!B:B)*Data!$C2",
+                    "C2": "=RANK(B2,B$2:B$4)",
+                },
+            ),
+            Edit(op="fill", sheet="Value", range="A2:C4"),
+        ],
+    )
+    assert not res.is_error, text(res)
+    value = book(res)["Value"]
+    assert value["B4"].value == "=SUMIF(Data!$A:$A,$A4,Data!B:B)*Data!$C4"
+    assert value["C3"].value == "=RANK(B3,B$2:B$4)"
+    body = text(res)
+    assert "Value!B4 = 100" in body and "Value!C4 = 1" in body
+
+
+async def test_fill_refuses_an_empty_top_row(settings):
+    await server.create_file("Model", [NewSheet(name="S", rows=[["a"]])])
+    err = error(await server.edit_file("Model", [Edit(op="fill", sheet="S", range="B2:B9")]))
+    assert err["code"] == "bad_range" and "set the first row" in err["message"]
