@@ -80,21 +80,21 @@ describe("parseCommand", () => {
   });
 
   it("parses !model with a nickname", () => {
-    expect(parseCommand("!model $")).toEqual({ nickname: "$" });
-    expect(parseCommand("  !MODEL  $$$ ")).toEqual({ nickname: "$$$" });
+    expect(parseCommand("!model ds")).toEqual({ nickname: "ds" });
+    expect(parseCommand("  !MODEL  Opus ")).toEqual({ nickname: "Opus" });
     expect(parseCommand("@mybot !model fast")).toEqual({ nickname: "fast" });
   });
 
   it("does not match !model without a nickname or inside a sentence", () => {
     expect(parseCommand("!model")).toBe(null);
-    expect(parseCommand("should I use !model $?")).toBe(null);
+    expect(parseCommand("should I use !model ds?")).toBe(null);
   });
 });
 
 describe("modelNicknames", () => {
   it("is what the label holds in brackets", () => {
-    expect(modelNicknames("DeepSeek V4 Flash ($)")).toEqual(["$"]);
-    expect(modelNicknames("Claude Sonnet 5.5 ($$$)")).toEqual(["$$$"]);
+    expect(modelNicknames("DeepSeek V4.1 Flash (ds)")).toEqual(["ds"]);
+    expect(modelNicknames("Claude Sonnet 5.5 (sonnet)")).toEqual(["sonnet"]);
     expect(modelNicknames("Mini (cheap) (fast)")).toEqual(["cheap", "fast"]);
   });
 
