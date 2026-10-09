@@ -24,6 +24,7 @@ MCP_TRANSPORT=http MCP_AUTH_TOKEN=x MCP_PORT=8380 uv run analyst-mcp
 | `spec.py` | `SheetSpec` models, layout (where each cell lands), evaluation of every cell and check, `problems` |
 | `breakdown.py` | Opens a total into the cells that add up to it; validates head groupings |
 | `render.py` | matplotlib PNGs: section (table + chart), checks |
+| `authoring.py` | `create_workbook` (new workbook from rows) and `edit_workbook` (cell, row, sheet and style edits into new bytes) |
 | `export.py` | openpyxl copy of the original + new sheet (formulas, native charts) + Checks sheet |
 | `sql.py` | DuckDB in memory per workbook: `cells` + header-row sheets; external access off |
 | `pyrun.py` | `run_python` subprocess (only registered when `ALLOW_PYTHON=true`) |
@@ -35,7 +36,8 @@ MCP_TRANSPORT=http MCP_AUTH_TOKEN=x MCP_PORT=8380 uv run analyst-mcp
   and write it to Excel another way.
 - Spec numbers are formulas over workbook cells, not typed results; bare `C4` is rejected so every reference names
   its sheet. `export_sheet` refuses while a check fails.
-- The original is never written; exports go to `workbooks/<id>/exports/`.
+- The original is never written; exports go to `workbooks/<id>/exports/`. An edit is new bytes opened as a new
+  workbook (`store.save_written`), so it gets its own id.
 - The draft sheet lives on the server (`draft.json`): the agent carries tool results between turns only shortened, so the
   model must never have to resend earlier sections.
 - Files reach the server only through `/uploads` (agent app) or the inbox. No `file_base64` tool fields, no

@@ -26,8 +26,8 @@ from pydantic import Field, ValidationError, WithJsonSchema
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from . import authoring, export, pyrun, render, store
 from . import breakdown as bd
-from . import export, pyrun, render, store
 from . import sql as sqldb
 from .auth import BearerAuthMiddleware
 from .config import get_settings
@@ -44,7 +44,8 @@ CSV = "text/csv"
 
 INSTRUCTIONS = """\
 Spreadsheet analyst running on the user's own computer. It opens Excel/CSV files, answers questions about them,
-runs what-if scenarios, and builds new sheets (tables + charts) into a copy of the workbook.
+runs what-if scenarios, builds new sheets (tables + charts) into a copy of the workbook, makes new Excel files, and
+edits them. Whenever the user wants an Excel file, use these tools: they send a real .xlsx to the user.
 
 How to work:
 1. Open the file: open_workbook with the attachment's upload_id (or inbox_file for a file in the inbox folder).
@@ -61,6 +62,10 @@ How to work:
    it with add_section, one call per section: each is shown to the user as an image. The server keeps the draft,
    so you never repeat earlier sections; add_section with `number` replaces one the user wants changed.
 6. Only when the user is happy, export_sheet. It returns the .xlsx to the user. The original file is never changed.
+To make a new Excel file (a plan, a list, a table the user asked for): create_workbook with the rows. To change a
+workbook (values, formulas, rows, sheets, bold, colours, number formats): edit_workbook. Both send the file to the user
+and return a workbook_id that every tool here accepts; an edit makes a new copy with a new id, so later edits and
+questions use the newest id.
 When the user asks for something the workbook does not have (a blank cell, no such figure), say so in your reply
 and in the section ("Not given in the workbook"); never leave it out silently or make a number up.
 Images reach the user only through add_section or query results; never write an image link yourself.
@@ -765,6 +770,97 @@ def export_sheet(
         f"It contains exactly these sections; tell the user these, no others:\n{contents}"
     )
     return _result(text, files=[(path.name, mime, path.read_bytes())])
+
+
+# ---------------------------------------------------------------------- writing workbooks
+
+EDITED = " (edited)"
+CHANGED_SHOWN = 40
+
+
+def _written(files: store.WorkbookFiles, verb: str, written: list[tuple[str, str]] = ()) -> CallToolResult:
+    """Open what was written, so the reply says how it reads (formulas computed) and the next call can use it."""
+    note = ""
+    try:
+        _, book = workbook(files.id)
+        sheets = []
+        for sheet in book.sheets:
+            cells = book.sheet_cells(sheet)
+            size = f"{max(c.row for c in cells)} rows x {max(c.col for c in cells)} columns" if cells else "empty"
+            sheets.append(f'"{sheet}" ({size})')
+        note = "Sheets: " + ", ".join(sheets) + "."
+        if written:
+            shown = [
+                f"- {sheet}!{coord} = {show(book.cells[(sheet, coord)].value)}"
+                + (f" [{book.cells[(sheet, coord)].formula}]" if book.cells[(sheet, coord)].formula else "")
+                for sheet, coord in written[:CHANGED_SHOWN]
+                if (sheet, coord) in book.cells
+            ]
+            if shown:
+                note += "\n\nCells now read:\n" + "\n".join(shown)
+    except ToolFailure as e:
+        note = f"The file is saved, but its formulas could not be worked out here ({e.message}); Excel will."
+    macros = store.has_macros(files.original)
+    file_name = f"{Path(files.name).stem}.{'xlsm' if macros else 'xlsx'}"
+    mime = "application/vnd.ms-excel.sheet.macroEnabled.12" if macros else XLSX
+    text = (
+        f'{verb} "{file_name}" as workbook_id={files.id}. The file was sent to the user and is also saved on this '
+        f"computer at {files.original}.\n\n{note}"
+    )
+    return _result(text, files=[(file_name, mime, files.original.read_bytes())])
+
+
+@mcp.tool(
+    description=(
+        "Make a new Excel workbook from rows and send the .xlsx to the user. Use it whenever the user asks for an "
+        "Excel file or spreadsheet of something (a plan, a list, a schedule, a table). Each sheet is a list of rows, "
+        "the first row its column headings (bold and frozen). Numbers stay numbers; a value starting with = is a "
+        "formula (=SUM(B2:B8)). Returns a workbook_id the other tools accept."
+    ),
+    annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=True),
+)
+@tool_handler("create_workbook")
+def create_workbook(
+    name: Annotated[str, Field(description="File name, e.g. 'Weekly diet plan'")],
+    sheets: Annotated[
+        list[authoring.NewSheet],
+        WithJsonSchema({"type": "array", "minItems": 1, "items": inline_schema(authoring.NewSheet)}),
+        Field(min_length=1, description="The sheets, in tab order"),
+    ],
+) -> CallToolResult:
+    data = authoring.create(sheets)
+    stem = Path(name.strip()).stem if name.strip().lower().endswith((".xlsx", ".csv")) else name.strip()
+    files = store.save_written(get_settings(), data, f"{stem or 'Workbook'}.xlsx", "created")
+    return _written(files, "Created")
+
+
+@mcp.tool(
+    description=(
+        "Change a workbook and send the edited .xlsx to the user: write values or formulas into cells, add rows, add, "
+        "rename (formulas follow) or delete sheets, and style ranges (bold, number format, fill colour, column "
+        "width). Edits apply in order, all or none. The workbook itself is left as it was: the edited copy gets a new "
+        "workbook_id, which later edits and questions must use. Look cells up first (read_sheet, find); never guess "
+        "an address."
+    ),
+    annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=False),
+)
+@tool_handler("edit_workbook")
+def edit_workbook(
+    workbook_id: WorkbookId,
+    edits: Annotated[
+        list[authoring.Edit],
+        WithJsonSchema({"type": "array", "minItems": 1, "items": inline_schema(authoring.Edit)}),
+        Field(min_length=1, description="The changes, applied in order"),
+    ],
+    file_name: Annotated[str | None, Field(description="Name for the edited file, without extension")] = None,
+) -> CallToolResult:
+    settings = get_settings()
+    source = store.get_files(settings, workbook_id)
+    data, written = authoring.apply(source.original, edits, store.has_macros(source.original))
+    stem = Path(source.name).stem
+    stem = file_name or (stem if stem.endswith(EDITED) else stem + EDITED)
+    files = store.save_written(settings, data, f"{stem}.xlsx", f"edited from {source.id}")
+    return _written(files, "Edited", written)
 
 
 @mcp.tool(

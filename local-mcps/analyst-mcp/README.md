@@ -2,11 +2,12 @@
 
 An MCP server that runs on your own computer and gives an agent spreadsheet skills. It
 opens Excel (.xlsx, .xlsm) and CSV files and answers questions about them. It can also
-run what-if scenarios and build new sheets (tables and charts) into a copy of the
-workbook. The user sees preview images in the chat before anything is built, and
+run what-if scenarios, build new sheets (tables and charts) into a copy of the
+workbook, make new workbooks from rows, and edit workbooks. The user sees preview images in the chat before anything is built, and
 receives the finished .xlsx as a download.
 
-The original file is never changed.
+The original file is never changed. An edit is saved as a new workbook with its own
+`workbook_id`.
 
 ## How a request goes
 
@@ -44,6 +45,8 @@ picture the user approved are the numbers in the file.
 | `breakdown` | Opens a total cell into the items that add up to it exactly; with `groups`, checks every item is in one head and returns the section rows and check. |
 | `add_section` | Adds, replaces (`number`) or removes (`remove`) one section of the draft sheet and shows it as an image. |
 | `export_sheet` | Builds the draft into a copy of the workbook and returns the .xlsx. |
+| `create_workbook` | Makes a new workbook from rows (first row bold headings; `=` starts a formula) and returns the .xlsx. |
+| `edit_workbook` | Applies edits in order, all or none: `set` cells, `append_rows`, `add_sheet`, `rename_sheet` (formulas follow), `delete_sheet` (refused while formulas use it), `format` (bold, number format, fill, width). Returns the edited .xlsx under a new `workbook_id`. |
 | `clear_draft` | Empties the draft sheet, to start a new dashboard on the same file. |
 | `forget_workbook` | Deletes a workbook's copy, draft, exports and upload from this computer. Inbox files stay. |
 | `run_python` | Runs Python on a copy of the workbook. **Off** unless `ALLOW_PYTHON=true`; see [Security](#security). |
