@@ -8,10 +8,12 @@ import {
   MCP_TOOLS,
   MCP_UPLOAD_TOOL,
   MOCK_XLSX_TEXT,
+  TOOLLOOP_REPLY,
   replyTo,
 } from "./openrouter-mock";
 import { EMPTY_MCP_SERVER, agentIdOf } from "../src/registry";
 import { signedIn } from "./clerk";
+import { SHIPPED } from "./shipped";
 
 /**
  * A whole turn, end to end.
@@ -262,6 +264,25 @@ describe("tools that keep failing", () => {
     expect(results).toHaveLength(3);
     expect(JSON.stringify(results)).toContain(error);
     expect(JSON.stringify(sent[3])).toContain("3 tool calls in a row have failed");
+  });
+});
+
+describe("running out of tool rounds", () => {
+  it("answers on the last round instead of ending the turn on a tool call", async () => {
+    const { sessionId, email } = await chatFixture();
+    const token = `toolloop-${crypto.randomUUID().slice(0, 8)}`;
+    const res = await say(sessionId, email, `!!toolloop ${token}`);
+    expect(((await res.json()) as { reply: string }).reply).toBe(TOOLLOOP_REPLY);
+
+    const requests = (await (
+      await fetch(`https://openrouter.ai/__requests?contains=${token}`)
+    ).json()) as { stream?: boolean; tool_choice?: unknown }[];
+    const sent = requests.filter((r) => r.stream);
+    // Every round but the last may call tools; the last must answer.
+    expect(sent).toHaveLength(SHIPPED.max_tool_rounds);
+    expect(sent.slice(0, -1).every((r) => r.tool_choice !== "none")).toBe(true);
+    expect(sent.at(-1)?.tool_choice).toBe("none");
+    expect(JSON.stringify(sent.at(-1))).toContain("This is the last step of this turn");
   });
 });
 

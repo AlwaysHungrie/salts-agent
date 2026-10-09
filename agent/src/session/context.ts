@@ -193,6 +193,22 @@ export function stopAfterFailures(
   };
 }
 
+/**
+ * The turn's last tool round may not call tools. The SDK ends a turn when its rounds run
+ * out, and a model still calling tools then has done the work and answered nothing.
+ */
+export function answerOnLastRound(
+  host: SessionHost,
+  stepNumber: number,
+  maxSteps: number
+): { toolChoice: "none"; instructions: string } | undefined {
+  if (stepNumber < maxSteps - 1) return undefined;
+  return {
+    toolChoice: "none",
+    instructions: `${systemPrompt(host)}\n\nThis is the last step of this turn: do not call any more tools. Answer now with what you have found so far, say plainly what is still left to do, and tell the user they can say "continue" to carry on.`,
+  };
+}
+
 export function toolContext(host: SessionHost, config: Config): ToolContext {
   return {
     config,
