@@ -25,9 +25,9 @@
 
   "models": [
     { "id": "deepseek/deepseek-v4-flash", "label": "DeepSeek V4 Flash ($)", "vision": false },
-    { "id": "anthropic/claude-haiku-4.5", "label": "Claude Haiku 4.5", "vision": true },
-    { "id": "openai/gpt-5-mini", "label": "GPT-5 Mini", "vision": true },
-    { "id": "google/gemini-2.5-flash", "label": "Gemini 2.5 Flash", "vision": true }
+    { "id": "anthropic/claude-haiku-4.5", "label": "Claude Haiku 4.5 (haiku)", "vision": true },
+    { "id": "openai/gpt-5-mini", "label": "GPT-5 Mini (gpt)", "vision": true },
+    { "id": "google/gemini-2.5-flash", "label": "Gemini 2.5 Flash (gemini)", "vision": true }
   ],
   "default_model": "deepseek/deepseek-v4-flash",
   "system_prompt": "You are a concise assistant running inside a Cloudflare Durable Object.",
