@@ -116,3 +116,29 @@ async def test_a_new_file_joins_the_project_but_not_over_another(settings):
     assert 'Created "Notes" in project "Q3"' in text(added)
     err = error(await server.create_file("budget", [NewSheet(name="S", rows=[["b"]])], project="Q3"))
     assert err["code"] == "file_exists"
+
+
+async def test_a_sheet_from_a_query_needs_no_typed_data(settings):
+    """An ABC analysis over the project's files as one query: the server fills the sheet, so the model never has to
+    write out hundreds of rows (a reply that long gets cut off and the turn ends with nothing)."""
+    from .test_tools import month
+
+    for name, qty in (("may", 10), ("june", 20)):
+        month(settings, name, qty)
+        await server.open_file(inbox_file=f"{name}.xlsx", project="Dialysis")
+    abc = """
+        WITH t AS (SELECT Item, SUM(Value) AS value FROM "Sales" GROUP BY Item),
+        r AS (SELECT *, SUM(value) OVER (ORDER BY value DESC) / SUM(value) OVER () AS cum FROM t)
+        SELECT Item, value, round(cum, 2) AS cum_share,
+               CASE WHEN cum <= 0.5 THEN 'A' WHEN cum <= 0.8 THEN 'B' ELSE 'C' END AS class
+        FROM r ORDER BY value DESC"""
+    res = await server.create_file(
+        "ABC analysis", [NewSheet(name="ABC", query=abc), NewSheet(name="Notes", rows=[["Note"], ["Rates: lowest"]])],
+        project="Dialysis",
+    )  # fmt: skip
+    assert not res.is_error, text(res)
+    ws = book(res)["ABC"]
+    assert [c.value for c in ws[1]] == ["Item", "value", "cum_share", "class"]
+    assert [c.value for c in ws[2]] == ["Bolt", 150, 0.5, "A"] and ws["D4"].value == "C"
+    assert 'Created "ABC analysis" in project "Dialysis"' in text(res)
+    assert error(await server.create_file("X", [NewSheet(name="S")], project="Dialysis"))["code"] == "bad_sheet"

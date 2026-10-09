@@ -920,10 +920,11 @@ def _written(found: store.Book, verb: str, written: list[tuple[str, str]] = ()) 
 @mcp.tool(
     description=(
         "Make a new Excel file from rows and send the .xlsx to the user. Use it whenever the user asks for an Excel "
-        "file or spreadsheet of something (a plan, a list, a schedule, a table, an analysis of several files). Each "
-        "sheet is a list of rows, the first row its column headings (bold and frozen). Numbers stay numbers; a value "
-        "starting with = is a formula (=SUM(B2:B8)). The file joins `project` (a new name starts one; left out, the "
-        "project is named after the file)."
+        "file or spreadsheet of something (a plan, a list, a schedule, a table, an analysis of several files). A "
+        "sheet is either `rows` you write (the first row its column headings, bold and frozen; numbers stay numbers; "
+        "a value starting with = is a formula) or a `query`: one SELECT over the project's files whose result fills "
+        "the sheet. For any table built from the files (an ABC analysis, totals per item), use a query: never type "
+        "the data out. The file joins `project` (a new name starts one; left out, it is named after the file)."
     ),
     annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=True),
 )
@@ -939,8 +940,33 @@ def create_file(
         str | None, Field(description="The project it belongs to, usually the one this chat is on")
     ] = None,
 ) -> CallToolResult:
-    found = store.create_file(get_settings(), project, name, authoring.create(sheets))
+    settings = get_settings()
+    filled = []
+    for sheet in sheets:
+        if bool(sheet.rows) == bool(sheet.query):
+            raise ToolFailure("bad_sheet", f"sheet {sheet.name!r} needs either rows or a query")
+        if sheet.query:
+            if not project:
+                raise ToolFailure("bad_sheet", "a sheet from a query needs `project`, whose files it reads")
+            key, books = _database(store.get_project(settings, project))
+            columns, rows, _ = sqldb.run(key, books, sheet.query, QUERY_SHEET_ROWS)
+            sheet = authoring.NewSheet(name=sheet.name, rows=[list(columns), *([_plain(v) for v in r] for r in rows)])
+        filled.append(sheet)
+    found = store.create_file(settings, project, name, authoring.create(filled))
     return _written(found, "Created")
+
+
+QUERY_SHEET_ROWS = 100_000
+
+
+def _plain(v: object) -> object:
+    """A query value as a cell: numbers and text as they are, anything else (dates, decimals) as text or float."""
+    if v is None or isinstance(v, bool | int | float | str):
+        return v
+    try:
+        return float(v)  # Decimal
+    except (TypeError, ValueError):
+        return show(v)
 
 
 @mcp.tool(
