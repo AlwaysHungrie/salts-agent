@@ -19,6 +19,7 @@ import io
 import json
 import re
 import shutil
+import threading
 import zipfile
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -178,24 +179,32 @@ def _root(settings: Settings) -> Path:
     return root
 
 
+_migrating = threading.Lock()
+
+
 def _migrate(root: Path) -> None:
-    """A project from before projects held files (projects/<p>/versions/) becomes a project with that one file."""
-    for folder in root.iterdir():
-        if not (folder / "versions").is_dir():
-            continue
-        meta = _read(folder / "project.json")
-        target = folder / "files" / folder.name
-        target.mkdir(parents=True, exist_ok=True)
-        (folder / "versions").rename(target / "versions")
-        if (folder / "draft.json").exists():
-            (folder / "draft.json").rename(target / "draft.json")
-        _write(target / "file.json", **{k: v for k, v in meta.items() if k != "updated_at"},
-               updated_at=meta.get("updated_at"))  # fmt: skip
-        (folder / "project.json").write_text(
-            json.dumps({"name": meta.get("name", folder.name), "created_at": meta.get("created_at"),
-                        "updated_at": meta.get("updated_at")}, ensure_ascii=False),  # fmt: skip
-            encoding="utf-8",
-        )
+    """A project from before projects held files (projects/<p>/versions/) becomes a project with that one file. Under a
+    lock: tools run in threads, and two calls at once would both move the same folder."""
+    with _migrating:
+        for folder in root.iterdir():
+            if (folder / "versions").is_dir():
+                _migrate_one(folder)
+
+
+def _migrate_one(folder: Path) -> None:
+    meta = _read(folder / "project.json")
+    target = folder / "files" / folder.name
+    target.mkdir(parents=True, exist_ok=True)
+    (folder / "versions").rename(target / "versions")
+    if (folder / "draft.json").exists():
+        (folder / "draft.json").rename(target / "draft.json")
+    _write(target / "file.json", **{k: v for k, v in meta.items() if k != "updated_at"},
+           updated_at=meta.get("updated_at"))  # fmt: skip
+    (folder / "project.json").write_text(
+        json.dumps({"name": meta.get("name", folder.name), "created_at": meta.get("created_at"),
+                    "updated_at": meta.get("updated_at")}, ensure_ascii=False),  # fmt: skip
+        encoding="utf-8",
+    )
 
 
 def _project(folder: Path, meta: dict) -> Project:

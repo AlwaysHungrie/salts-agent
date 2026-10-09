@@ -881,6 +881,16 @@ describe("what the agent is told it can reach", () => {
     expect(capabilities).not.toContain("WhatsApp");
   });
 
+  it("says the workspace cannot hand the user a file", async () => {
+    const { sessionId, email } = await chatFixture();
+    const token = crypto.randomUUID().slice(0, 8);
+    await say(sessionId, email, `hello ${token}`);
+
+    const prompt = await systemPromptFor(token);
+    expect(prompt).toContain("nothing written there reaches the user");
+    expect(prompt).toContain("never build a file with bash or write");
+  });
+
   it("says nothing about reach when no channel is configured", async () => {
     const { sessionId, email } = await chatFixture();
     const token = crypto.randomUUID().slice(0, 8);

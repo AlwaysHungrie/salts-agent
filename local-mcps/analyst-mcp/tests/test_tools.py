@@ -444,3 +444,16 @@ async def test_projects_from_before_files_still_open(settings):
     (folder / "project.json").write_text('{"name": "Old plan", "version": 1, "updated_at": "2026-10-09"}')
     assert "Bolt" in text(await server.read_sheet("Old plan", "Sales"))
     assert (folder / "files" / "old-plan" / "versions" / "1.xlsx").exists()
+
+
+async def test_calls_at_once_migrate_an_old_project_once(settings):
+    """Tools run in threads; two reads of a project saved the old way must not both move its folder."""
+    import asyncio
+
+    folder = settings.data_dir / "projects" / "old-plan"
+    (folder / "versions").mkdir(parents=True)
+    month(settings, "tmp", 1)
+    (folder / "versions" / "1.xlsx").write_bytes((settings.inbox() / "tmp.xlsx").read_bytes())
+    (folder / "project.json").write_text('{"name": "Old plan", "version": 1}')
+    results = await asyncio.gather(*[server.read_sheet("Old plan", "Sales") for _ in range(4)])
+    assert all(not r.is_error for r in results), [text(r) for r in results]

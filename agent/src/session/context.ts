@@ -81,6 +81,11 @@ export function systemPrompt(host: SessionHost): string {
   parts.push(
     "Files the user attaches are written to the workspace under uploads/, and every message names the ones it carries. Open one with the read tool when the question is about it."
   );
+  // Models reached for bash to build a spreadsheet after an analysis: it has no Python,
+  // and nothing it writes is ever sent, so the work was done and nothing was delivered.
+  parts.push(
+    "The workspace (read, write, bash) is scratch space: its shell has no Python, and nothing written there reaches the user. To give the user a file, use a tool that returns one (a connected MCP server's file tools); never build a file with bash or write."
+  );
   return parts.join("\n\n");
 }
 
