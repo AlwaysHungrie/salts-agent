@@ -420,7 +420,7 @@ describe("!model", () => {
       }
     ).config.model;
 
-  /** An agent offering a named custom model and a catalogue one ("DeepSeek V4 Flash ($)"). */
+  /** An agent offering a named custom model and a catalogue one ("DeepSeek V4.1 Flash (ds)"). */
   async function withModels(locked: string[] = []) {
     const fixture = await chatFixture();
     const reg = registryFor(fixture.agentId);
@@ -428,7 +428,7 @@ describe("!model", () => {
       ...(await reg.meta()),
       models: [
         { id: "openai/gpt-5-mini", vision: true, label: "Mini (cheap)" },
-        { id: "deepseek/deepseek-v4-flash", vision: false },
+        { id: "deepseek/deepseek-v4.1-flash", vision: true },
       ],
       locked,
     });
@@ -441,17 +441,17 @@ describe("!model", () => {
       "Switched to Mini (cheap)."
     );
     expect(await model(agentId, email)).toBe("openai/gpt-5-mini");
-    expect(await reply(await say(sessionId, email, "!model $"))).toBe(
-      "Switched to DeepSeek V4 Flash ($)."
+    expect(await reply(await say(sessionId, email, "!model ds"))).toBe(
+      "Switched to DeepSeek V4.1 Flash (ds)."
     );
-    expect(await model(agentId, email)).toBe("deepseek/deepseek-v4-flash");
+    expect(await model(agentId, email)).toBe("deepseek/deepseek-v4.1-flash");
   });
 
   it("lists the nicknames when none matches, and changes nothing", async () => {
     const { sessionId, email, agentId } = await withModels();
     const before = await model(agentId, email);
-    expect(await reply(await say(sessionId, email, "!model $$$"))).toBe(
-      'No model has the nickname "$$$". Try one of: cheap, $.'
+    expect(await reply(await say(sessionId, email, "!model gpt"))).toBe(
+      'No model has the nickname "gpt". Try one of: cheap, ds.'
     );
     expect(await model(agentId, email)).toBe(before);
   });

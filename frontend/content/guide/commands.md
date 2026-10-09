@@ -61,10 +61,10 @@ The app must already be connected on the **Capabilities** page before you can sw
 
 ## !model
 
-`!model` switches your agent to another model from the list in **Settings** under **Model**. It uses the model's nickname, which is the part of its name in brackets. For example, a model named **DeepSeek V4 Flash ($)** has the nickname `$`, so this switches to it:
+`!model` switches your agent to another model from the list in **Settings** under **Model**. It uses the model's nickname, which is the part of its name in brackets. For example, a model named **DeepSeek V4.1 Flash (ds)** has the nickname `ds`, so this switches to it:
 
 ```
-!model $
+!model ds
 ```
 
 The switch is the same as picking the model in **Settings**, so it applies to the whole agent, not just this conversation. The next reply uses the new model.

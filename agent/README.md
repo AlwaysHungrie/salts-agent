@@ -8,8 +8,8 @@ isolated DOs with their own SQLite database and message history.
 Models are served through OpenRouter. Which model a new agent starts on, and which
 models an agent may be switched *between*, are the `default_model` and `models`
 deployment settings below — a JSON array of `{ "id", "label", "vision" }`. Text in
-brackets in a `label` is a nickname: `"DeepSeek V4 Flash ($)"` is switched to with
-`!model $`. `vision` is
+brackets in a `label` is a nickname: `"DeepSeek V4.1 Flash (ds)"` is switched to with
+`!model ds`. `vision` is
 false for a model that cannot be sent an image, and leaving it out means it can; it is
 the one thing that cannot be looked up, and getting it wrong means a photo fails at the
 provider instead of at the upload.
