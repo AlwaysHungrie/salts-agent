@@ -21,6 +21,7 @@
  * - `!!fail500` — the provider answers 500.
  * - `!!fail401` — the provider rejects the key.
  * - `!!toolcall` — the model calls the `list` tool, then answers using its result.
+ * - `!!toolloop` — the model calls `list` again and again until it may no longer call tools.
  *   The second leg is recognised by the tool message the SDK sends back, so the whole
  *   two-step exchange stays deterministic.
  * - `!!schedule` — the model schedules a task a second out, then confirms it. The task
@@ -555,6 +556,9 @@ function streamedText(text: string) {
 /** What a `!!failloop` model says once it may no longer call tools. */
 export const FAILLOOP_REPLY = "The tool kept failing, so I stopped.";
 
+/** What a `!!toolloop` model says once it may no longer call tools. */
+export const TOOLLOOP_REPLY = "Here is what I found so far.";
+
 /** A streamed tool call, which is how a turn that uses a tool begins. */
 function streamedToolCall(name: string, args: Record<string, unknown>) {
   return stream([
@@ -849,6 +853,12 @@ export async function openrouterMock(request: Request): Promise<Response> {
   if (message.startsWith("!!failloop")) {
     if (body.tool_choice === "none") return streamedText(FAILLOOP_REPLY);
     return streamedToolCall(message.split(/\s+/)[1], { prompt: "", when: "1" });
+  }
+
+  // `!!toolloop`: a model that keeps calling a tool that works, for as long as it is let.
+  if (message.startsWith("!!toolloop")) {
+    if (body.tool_choice === "none") return streamedText(TOOLLOOP_REPLY);
+    return streamedToolCall("list", { path: "/" });
   }
 
   if (message.startsWith("!!toolcall")) {

@@ -38,7 +38,13 @@ import {
 } from "./session/attachments";
 import { channelTurn, deliverToChat } from "./session/channels";
 import { maybeCompact } from "./session/compaction";
-import { capabilityTools, modelMessages, stopAfterFailures, systemPrompt } from "./session/context";
+import {
+  answerOnLastRound,
+  capabilityTools,
+  modelMessages,
+  stopAfterFailures,
+  systemPrompt,
+} from "./session/context";
 import { cacheFileAnnotations } from "./session/documents";
 import { PARSE_CACHE_DIR, publicAttachment } from "./session/files";
 import { describeSchedule, textOf } from "./session/format";
@@ -332,9 +338,15 @@ export class SessionAgent extends Think<Env> {
     };
   }
 
-  /** Tools that keep failing end the turn with the model explaining, not more calls. */
+  /**
+   * Tools that keep failing end the turn with the model explaining, not more calls; so
+   * does running out of tool rounds.
+   */
   override beforeStep(ctx: PrepareStepContext) {
-    return stopAfterFailures(this.host, ctx.steps);
+    return (
+      stopAfterFailures(this.host, ctx.steps) ??
+      answerOnLastRound(this.host, ctx.stepNumber, this.maxSteps)
+    );
   }
 
   /** Token counts arrive per step; a turn's cost is their sum. */
