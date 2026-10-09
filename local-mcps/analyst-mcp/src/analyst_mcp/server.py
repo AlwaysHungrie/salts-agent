@@ -9,7 +9,6 @@ import re
 import sys
 import threading
 import traceback
-from pathlib import Path
 from typing import Annotated, Any, Literal
 
 import uvicorn
@@ -44,51 +43,56 @@ CSV = "text/csv"
 
 INSTRUCTIONS = """\
 Spreadsheet analyst running on the user's own computer. It opens Excel/CSV files, answers questions about them,
-runs what-if scenarios, builds new sheets (tables + charts) into a copy of the workbook, makes new Excel files, and
+runs what-if scenarios, builds new sheets (tables + charts) into a copy of the file, makes new Excel files, and
 edits them. Whenever the user wants an Excel file, use these tools: they send a real .xlsx to the user.
 
+Projects: each file the user works on is a project with a name they know ("Q3 Budget", "Diet plan"). Every tool takes
+`project`, that name. Stay on the project this chat is about and pass its name on every call; when the user says to
+switch to another project, use switch_to_project and from then on pass the new name. list_projects shows them all.
+If the chat has not named a project and there is more than one, ask the user which.
+
 How to work:
-1. Open the file: open_workbook with the attachment's upload_id (or inbox_file for a file in the inbox folder).
-   It returns a map of every number with the words around it (label, column header, unit) and its cell. Keep the
-   workbook_id: later calls reuse it; there is no need to open the file again.
+1. Open the file: open_file with the attachment's upload_id (or inbox_file for a file in the inbox folder) and a
+   project name (the file's name unless the user gave one). It returns a map of every number with the words around
+   it (label, column header, unit) and its cell. Later calls pass the project name; there is no need to open it again.
 2. Find numbers with the map, find, read_sheet or query. Never guess a cell address; look it up.
 3. Answer plain questions directly from the values. Use what_if for "what if X changes" questions.
 4. "Where does the money go", a cost split, any breakdown of a total: use breakdown on the total cell. It lists the
    items that add up to it exactly; you name a few heads and assign every item; it hands back the table rows.
 5. For a new sheet, dashboard or report: write a spec with one section per thing the user asked for, numbered in
-   their order. Every number in it must be a formula over workbook cells (=Feasibility!C4*10.764), never a typed
+   their order. Every number in it must be a formula over the file's cells (=Feasibility!C4*10.764), never a typed
    result. A column holds one kind of quantity (do not put built-up area beside carpet area). Add a total row only
-   when the rows are parts of one whole. Add checks that tie your totals back to the workbook's own totals. Build
+   when the rows are parts of one whole. Add checks that tie your totals back to the file's own totals. Build
    it with add_section, one call per section: each is shown to the user as an image. The server keeps the draft,
    so you never repeat earlier sections; add_section with `number` replaces one the user wants changed.
-6. Only when the user is happy, export_sheet. It returns the .xlsx to the user. The original file is never changed.
-To make a new Excel file (a plan, a list, a table the user asked for): create_workbook with the rows. To change a
-workbook (values, formulas, rows, sheets, bold, colours, number formats): edit_workbook. Both send the file to the user
-and return a workbook_id that every tool here accepts; an edit makes a new copy with a new id, so later edits and
-questions use the newest id.
-When the user asks for something the workbook does not have (a blank cell, no such figure), say so in your reply
-and in the section ("Not given in the workbook"); never leave it out silently or make a number up.
+6. Only when the user is happy, export_sheet. It returns the .xlsx to the user. The project's file is not changed.
+To make a new Excel file (a plan, a list, a table the user asked for): create_project with the rows. To change the
+file (values, formulas, rows, sheets, bold, colours, number formats): edit_project. Both send the file to the user;
+an edit becomes the project's new version, so the project name keeps meaning the latest file.
+When the user asks for something the file does not have (a blank cell, no such figure), say so in your reply
+and in the section ("Not given in the file"); never leave it out silently or make a number up.
 Images reach the user only through add_section or query results; never write an image link yourself.
 Keep replies short and in plain words; the user does not need cell addresses unless they ask.
 """
 
 mcp = MCPServer(name="analyst-mcp", instructions=INSTRUCTIONS, version="0.1.0")
 
-_books: dict[str, tuple[float, Workbook]] = {}
+_books: dict[str, tuple[int, Workbook]] = {}
 _books_lock = threading.Lock()
 
 
-def workbook(workbook_id: str) -> tuple[store.WorkbookFiles, Workbook]:
-    files = store.get_files(get_settings(), workbook_id)
-    mtime = files.original.stat().st_mtime
+def workbook(project: str | store.Project) -> tuple[store.Project, Workbook]:
+    """The project's current file, loaded once per version."""
+    found = store.get(get_settings(), project) if isinstance(project, str) else project
     with _books_lock:
-        cached = _books.get(files.id)
-        if cached and cached[0] == mtime:
-            return files, cached[1]
-    book = load(files.id, files.name, files.original)
+        cached = _books.get(found.key)
+        if cached and cached[0] == found.version:
+            return found, cached[1]
+    book = load(found.id, found.name, found.file)
     with _books_lock:
-        _books[files.id] = (mtime, book)
-    return files, book
+        _books[found.key] = (found.version, book)
+    sqldb.forget(found.key, keep=found.id)
+    return found, book
 
 
 def _error(code: str, message: str) -> CallToolResult:
@@ -168,33 +172,37 @@ def _table(head: list[str], rows: list[list[str]]) -> str:
 
 # ---------------------------------------------------------------------- tools
 
-WorkbookId = Annotated[str, Field(description="The 12-character id open_workbook returned")]
+ProjectName = Annotated[
+    str, Field(description="The project's name, as this chat has been calling it (list_projects shows them)")
+]
 
 
-def _drafts(settings, books: list[dict]) -> list[str]:
-    out = []
-    for b in books:
-        draft = store.load_draft(store.get_files(settings, b["workbook_id"]))
-        if draft and draft.get("sections"):
-            titles = " | ".join(s.get("title", "") for s in draft["sections"])
-            out.append(f"Draft sheet for {b['workbook_id']}: {titles}")
-    return out
+def _draft_titles(project: store.Project) -> str:
+    draft = store.load_draft(project)
+    return "; ".join(s.get("title", "") for s in draft["sections"]) if draft and draft.get("sections") else ""
 
 
 @mcp.tool(
-    description="List workbooks already opened on this server, and files waiting in the inbox folder.",
+    description=(
+        "List the projects on this computer (each is one Excel file under a name the user knows), newest first, and "
+        "files waiting in the inbox folder. Use it when the user asks what projects there are, or which to pick."
+    ),
     annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False),
 )
-@tool_handler("list_workbooks")
-def list_workbooks() -> CallToolResult:
+@tool_handler("list_projects")
+def list_projects() -> CallToolResult:
     settings = get_settings()
-    books = store.list_workbooks(settings)
+    projects = store.list_projects(settings)
     inbox = store.list_inbox(settings)
+    rows = []
+    for p in projects:
+        meta = store.info(p)
+        rows.append([p.name, (meta.get("updated_at") or "")[:16].replace("T", " "),
+                     f"{p.version - 1} edits" if p.version > 1 else "as opened", _draft_titles(p)])  # fmt: skip
     parts = [
-        _table(["workbook_id", "name", "opened"], [[b["workbook_id"], b["name"], b["opened_at"] or ""] for b in books])
-        if books
-        else "No workbooks opened yet.",
-        *_drafts(settings, books),
+        _table(["Project", "Last changed (UTC)", "Changes", "Draft sheet sections"], rows)
+        if projects
+        else "No projects yet.",
         f"Inbox folder on this computer: {settings.inbox().resolve()}",
         ("Files in the inbox: " + ", ".join(inbox)) if inbox else "The inbox is empty.",
     ]
@@ -266,52 +274,78 @@ def _map(book: Workbook) -> str:
     return text
 
 
+def _overview(project: store.Project, head: str) -> CallToolResult:
+    """The project as the model needs it to work: its sheets, a map of every number, its SQL tables."""
+    _, book = workbook(project)
+    lines = [head + " Sheets: " + ", ".join(f'"{s}"' for s in book.sheets)]
+    if book.recalculated:
+        lines.append("The file carried no saved results, so every formula was recalculated here.")
+    if book.has_drawings:
+        lines.append("Note: this file has charts or images; exported copies do not keep them.")
+    if titles := _draft_titles(project):
+        lines.append(f"Its draft sheet has these sections: {titles}.")
+    tables = sqldb.describe(book)
+    guide = INSTRUCTIONS[INSTRUCTIONS.index("Projects:") :]
+    return _result(
+        "\n".join(lines) + "\n\n" + _map(book) + "\n\n## SQL tables (for query)\n" + tables + "\n\n" + guide
+    )
+
+
 @mcp.tool(
     description=(
-        "Open an Excel (.xlsx/.xlsm) or CSV file and get a map of every number in it: its cell, the label in its row, "
-        "its column header, its unit, its formula. Pass the attachment's upload_id from the conversation, or the name "
-        "of a file in the inbox folder (list_workbooks shows them). Opening the same file again is free and returns "
-        "the same workbook_id. The original file is never changed."
+        "Start a project from an Excel (.xlsx/.xlsm) or CSV file and get a map of every number in it: its cell, the "
+        "label in its row, its column header, its unit, its formula. Pass the attachment's upload_id from the "
+        "conversation, or the name of a file in the inbox folder (list_projects shows them), and a project name. "
+        "Opening the same file again is free and returns the same project. The user's file is never changed."
     ),
-    annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False, idempotent_hint=True),
+    annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=True),
 )
-@tool_handler("open_workbook")
-def open_workbook(
+@tool_handler("open_file")
+def open_file(
     upload_id: Annotated[
         str | None, Field(description="ID of a spreadsheet the agent app uploaded (given in the conversation)")
     ] = None,
     inbox_file: Annotated[
         str | None, Field(description="File name in the inbox folder, e.g. 'Sales 2025.xlsx'")
     ] = None,
-    name: Annotated[str | None, Field(description="The file's name as the user knows it, for display")] = None,
+    project: Annotated[
+        str | None,
+        Field(description="Name for the project: the one the user gave, else the file's name, e.g. 'Q3 Budget'"),
+    ] = None,
 ) -> CallToolResult:
-    files = store.open_files(get_settings(), upload_id=upload_id, inbox_file=inbox_file, name=name)
-    _, book = workbook(files.id)
-    head = [f'Opened "{files.name}" as workbook_id={files.id}. Sheets: ' + ", ".join(f'"{s}"' for s in book.sheets)]
-    if book.recalculated:
-        head.append("The file carried no saved results, so every formula was recalculated here.")
-    if book.has_drawings:
-        head.append("Note: this workbook has charts or images; exported copies do not keep them.")
-    tables = sqldb.describe(book)
-    guide = INSTRUCTIONS[INSTRUCTIONS.index("How to work:") :]
-    return _result("\n".join(head) + "\n\n" + _map(book) + "\n\n## SQL tables (for query)\n" + tables + "\n\n" + guide)
+    found, new = store.open_file(get_settings(), upload_id=upload_id, inbox_file=inbox_file, name=project)
+    verb = "Started" if new else "Back on"
+    return _overview(found, f'{verb} project "{found.name}". Pass project="{found.name}" to the other tools.')
+
+
+@mcp.tool(
+    description=(
+        "Switch this chat to another project, when the user says to work on it (\"switch to the budget\", \"go back "
+        "to the diet plan\"). Returns its map of numbers; pass its name to every tool from then on."
+    ),
+    annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False, idempotent_hint=True),
+)
+@tool_handler("switch_to_project")
+def switch_to_project(project: ProjectName) -> CallToolResult:
+    found = store.get(get_settings(), project, forgive=False)
+    return _overview(found, f'Now on project "{found.name}". Pass project="{found.name}" to the other tools.')
 
 
 @mcp.tool(
     description=(
         "Read a sheet (or a range like A1:F40) cell by cell: values, and formulas where there are any. "
-        "Use it to see how a part of the workbook is laid out."
+        "Use it to see how a part of the file is laid out."
     ),
     annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False),
 )
 @tool_handler("read_sheet")
 def read_sheet(
-    workbook_id: WorkbookId,
+    project: ProjectName,
     sheet: Annotated[str, Field(description="Sheet name")],
     cell_range: Annotated[str | None, Field(description="Optional range, e.g. A1:F40")] = None,
     start_row: Annotated[int, Field(ge=1, description="First row to show, for paging")] = 1,
 ) -> CallToolResult:
-    _, book = workbook(workbook_id)
+    _, book = workbook(project)
     real = book.sheet(sheet)
     bounds = bounds_of(cell_range)
     limit = get_settings().max_rows
@@ -343,10 +377,10 @@ def read_sheet(
 )
 @tool_handler("find")
 def find(
-    workbook_id: WorkbookId,
+    project: ProjectName,
     text: Annotated[str, Field(description="Words to look for")],
 ) -> CallToolResult:
-    _, book = workbook(workbook_id)
+    _, book = workbook(project)
     needle = " ".join(text.lower().split())
     if not needle:
         raise ToolFailure("bad_request", "text is empty")
@@ -372,16 +406,16 @@ ChartType = Literal["bar", "column", "pie", "line"]
 
 @mcp.tool(
     description=(
-        "Run one read-only SQL query (DuckDB) over the workbook. Table `cells` has every cell (sheet, cell, row, col, "
+        "Run one read-only SQL query (DuckDB) over the file. Table `cells` has every cell (sheet, cell, row, col, "
         "value, number, formula, label, header, unit); a sheet with a header row is also a table named after the sheet "
-        "(quote it: SELECT * FROM \"Sales 2025\"). open_workbook lists the tables. Optionally draw the result as a "
-        "chart (shown to the user) or return it as a file."
+        "(quote it: SELECT * FROM \"Sales 2025\"). open_file and switch_to_project list the tables. Optionally draw "
+        "the result as a chart (shown to the user) or return it as a file."
     ),
     annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False),
 )
 @tool_handler("query")
 def query(
-    workbook_id: WorkbookId,
+    project: ProjectName,
     sql: Annotated[str, Field(description="One SELECT/WITH/DESCRIBE/SUMMARIZE statement")],
     chart: Annotated[ChartType | None, Field(description="Draw the result: bar, column, pie or line")] = None,
     chart_title: Annotated[str | None, Field(description="Title for the chart")] = None,
@@ -393,7 +427,7 @@ def query(
         Literal["xlsx", "csv"] | None, Field(description="Also return the full result as a file for the user")
     ] = None,
 ) -> CallToolResult:
-    files, book = workbook(workbook_id)
+    files, book = workbook(project)
     limit = get_settings().max_rows
     columns, rows, more = sqldb.run(book, sql, limit if not file_format else 100_000)
     shown = rows[:limit]
@@ -437,19 +471,19 @@ def _cell(v: object) -> object:
 
 @mcp.tool(
     description=(
-        "What-if: change some input cells and see how chosen output cells move, recalculating the whole workbook "
+        "What-if: change some input cells and see how chosen output cells move, recalculating the whole file "
         "(the file is not changed). E.g. changes {'Feasibility!C29': 38000}, outputs ['Feasibility!C95']. "
-        "The first call on a workbook can take up to a minute while its formulas are compiled."
+        "The first call on a project can take up to a minute while its formulas are compiled."
     ),
     annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False, idempotent_hint=True),
 )
 @tool_handler("what_if")
 def what_if(
-    workbook_id: WorkbookId,
+    project: ProjectName,
     changes: Annotated[dict[str, float], Field(description="Cell → new number, e.g. {'Feasibility!C29': 38000}")],
     outputs: Annotated[list[str], Field(min_length=1, description="Cells to report, e.g. ['Feasibility!C95']")],
 ) -> CallToolResult:
-    _, book = workbook(workbook_id)
+    _, book = workbook(project)
     if not changes:
         raise ToolFailure("bad_request", "changes is empty")
     parsed_changes = {book.parse_ref(k): v for k, v in changes.items()}
@@ -485,14 +519,14 @@ def what_if(
 )
 @tool_handler("breakdown")
 def breakdown(
-    workbook_id: WorkbookId,
+    project: ProjectName,
     cell: Annotated[str, Field(description="The total, e.g. Feasibility!C93")],
     groups: Annotated[
         dict[str, list[str]] | None,
         Field(description="Head → item cells or ranges, e.g. {'Construction': ['C33', 'C34'], 'Fees': ['C38:C39']}"),
     ] = None,
 ) -> CallToolResult:
-    _, book = workbook(workbook_id)
+    _, book = workbook(project)
     sheet, coord = book.parse_ref(cell)
     items, total = bd.components(book, sheet, coord)
     label = book.fact(book.cell(sheet, coord)).label or f"{sheet}!{coord}"
@@ -537,7 +571,7 @@ def breakdown(
 
 
 SPEC_DOC = """\
-A section, as JSON (the sheet and cell names here are placeholders; use the workbook's own):
+A section, as JSON (the sheet and cell names here are placeholders; use the file's own):
 {"title": "2. Revenue by region", "columns": ["Region", "Revenue", "Share"],
  "rows": [["North", "=SheetName!C4", "=[r1c2]/[r3c2]"], ["South", "=SheetName!C5", "=[r2c2]/[r3c2]"],
           {"cells": ["Total", "=SUM_ABOVE()", "=SUM_ABOVE()"], "style": "total"}],
@@ -558,8 +592,8 @@ column, pie, line; they plot consecutive rows (default: the rows before the firs
 Every call is shown to the user, so never call it to test a format or a formula."""
 
 
-def _built(workbook_id: str, spec: dict[str, Any], only: int | None = None) -> tuple[store.WorkbookFiles, Built]:
-    files, book = workbook(workbook_id)
+def _built(project: str | store.Project, spec: dict[str, Any], only: int | None = None) -> tuple[store.Project, Built]:
+    files, book = workbook(project)
     built = build(SheetSpec.model_validate(spec), book)
     if found := problems(built, only):
         found_text = " | ".join(found)
@@ -571,11 +605,11 @@ CELL_REF = re.compile(r"\[(?:s(\d+))?r(\d+)c(\d+)\]")
 CRORE, HUNDRED = "10^7", "100"
 
 
-def _fix_units(workbook_id: str, spec: dict[str, Any], n: int) -> tuple[dict[str, Any], list[str]]:
+def _fix_units(project: store.Project, spec: dict[str, Any], n: int) -> tuple[dict[str, Any], list[str]]:
     """Section n with its unit slips corrected instead of refused: rupees under inr_cr are divided by 10^7, a percent
     written as 36.6 under pct by 100. Every reference to a corrected cell is multiplied back, so the formulas and checks
     that use it keep their meaning. A SUM_ABOVE() total is left alone: it adds the corrected cells."""
-    _, book = workbook(workbook_id)
+    _, book = workbook(project)
     lay = build(SheetSpec.model_validate(spec), book).sections[n - 1]
     sec = lay.section
     scale: dict[tuple[int, int], str] = {}
@@ -633,7 +667,7 @@ def _numbered(formula: str, n: int) -> str:
     return re.sub(r"\[(r\d+c\d+)\]", rf"[s{n}\1]", formula)
 
 
-def _remove_section(files: store.WorkbookFiles, draft: dict, number: int | None) -> CallToolResult:
+def _remove_section(files: store.Project, draft: dict, number: int | None) -> CallToolResult:
     sections = draft["sections"]
     if number is None or not 1 <= number <= len(sections):
         raise ToolFailure("bad_number", f"remove needs `number`, 1 to {len(sections)}")
@@ -656,7 +690,7 @@ def _remove_section(files: store.WorkbookFiles, draft: dict, number: int | None)
 
 @mcp.tool(
     description=(
-        "Build a new sheet (dashboard, report, summary) one section at a time. Adds the section to this workbook's "
+        "Build a new sheet (dashboard, report, summary) one section at a time. Adds the section to this project's "
         "draft sheet, or replaces section `number` when the user wants it changed, and shows that section to the user "
         "as an image (with its checks). The draft stays on this server: earlier sections never need repeating, and "
         "export_sheet builds the whole draft. For a whole sheet at once, call it once per section. remove=true with "
@@ -666,7 +700,7 @@ def _remove_section(files: store.WorkbookFiles, draft: dict, number: int | None)
 )
 @tool_handler("add_section")
 def add_section(
-    workbook_id: WorkbookId,
+    project: ProjectName,
     section: Annotated[
         dict[str, Any] | None,
         # Validated as a dict (the draft keeps what was sent; a bad spec is logged), advertised with every field:
@@ -680,15 +714,15 @@ def add_section(
     checks: Annotated[
         list[dict[str, Any]] | None,
         WithJsonSchema({"anyOf": [{"type": "array", "items": inline_schema(Check)}, {"type": "null"}]}),
-        Field(description="Checks tying this section to the workbook's own totals"),
+        Field(description="Checks tying this section to the file's own totals"),
     ] = None,
     title: Annotated[str | None, Field(description="Title of the whole sheet")] = None,
     sheet_name: Annotated[str | None, Field(description="Name of the new sheet (default Dashboard)")] = None,
     remove: Annotated[bool, Field(description="Take section `number` out of the draft")] = False,
 ) -> CallToolResult:
-    files = store.get_files(get_settings(), workbook_id)
+    files = store.get(get_settings(), project)
     draft = store.load_draft(files)
-    draft = draft or {"sheet_name": "Dashboard", "title": Path(files.name).stem, "sections": [], "checks": []}
+    draft = draft or {"sheet_name": "Dashboard", "title": files.name, "sections": [], "checks": []}
     if remove:
         return _remove_section(files, draft, number)
     if section is None:
@@ -711,8 +745,8 @@ def add_section(
         if not isinstance(c, dict) or "left" not in c or "right" not in c:
             raise ToolFailure("invalid_spec", "each check needs label, left and right")
         kept.append({**c, "left": _numbered(c["left"], n), "right": _numbered(c["right"], n), "section": n})
-    spec, fixed = _fix_units(workbook_id, {**draft, "sections": sections, "checks": kept}, n)
-    _, built = _built(workbook_id, spec, only=n)
+    spec, fixed = _fix_units(files, {**draft, "sections": sections, "checks": kept}, n)
+    _, built = _built(files, spec, only=n)
     store.save_draft(files, spec)
 
     lay = built.sections[n - 1]
@@ -741,26 +775,27 @@ def add_section(
 
 @mcp.tool(
     description=(
-        "Build the draft sheet (every section from add_section) into a copy of the workbook and send the .xlsx to the "
-        "user. Call only after the user approved the sections. Every number in the new sheet is a live formula over "
-        "the workbook's own cells; checks go on a Checks sheet."
+        "Build the draft sheet (every section from add_section) into a copy of the project's file and send the .xlsx "
+        "to the user. Call only after the user approved the sections. Every number in the new sheet is a live formula "
+        "over the file's own cells; checks go on a Checks sheet."
     ),
     annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=False),
 )
 @tool_handler("export_sheet")
 def export_sheet(
-    workbook_id: WorkbookId,
+    project: ProjectName,
     file_name: Annotated[str | None, Field(description="Name for the file, without extension")] = None,
 ) -> CallToolResult:
-    spec = store.load_draft(store.get_files(get_settings(), workbook_id))
+    found = store.get(get_settings(), project)
+    spec = store.load_draft(found)
     if not spec or not spec.get("sections"):
         raise ToolFailure("no_draft", "the draft has no sections yet: add them with add_section")
-    files, built = _built(workbook_id, spec)
+    files, built = _built(found, spec)
     if not built.all_ok:
         failing = ", ".join(c.check.label for c in built.checks if not c.ok)
         raise ToolFailure("checks_failed", f"these checks fail, so nothing was exported: {failing}")
-    stem = file_name or f"{Path(files.name).stem} - {built.spec.sheet_name}"
-    path = export.write(built, files.original, store.export_path(files, stem, ".xlsx"))
+    stem = file_name or f"{files.name} - {built.spec.sheet_name}"
+    path = export.write(built, files.file, store.export_path(files, stem, ".xlsx"))
     mime = XLSX if path.suffix == ".xlsx" else "application/vnd.ms-excel.sheet.macroEnabled.12"
     contents = "\n".join(f"- {lay.section.title} ({len(lay.section.rows)} rows)" for lay in built.sections)
     text = (
@@ -772,17 +807,16 @@ def export_sheet(
     return _result(text, files=[(path.name, mime, path.read_bytes())])
 
 
-# ---------------------------------------------------------------------- writing workbooks
+# ---------------------------------------------------------------------- writing files
 
-EDITED = " (edited)"
 CHANGED_SHOWN = 40
 
 
-def _written(files: store.WorkbookFiles, verb: str, written: list[tuple[str, str]] = ()) -> CallToolResult:
+def _written(project: store.Project, verb: str, written: list[tuple[str, str]] = ()) -> CallToolResult:
     """Open what was written, so the reply says how it reads (formulas computed) and the next call can use it."""
     note = ""
     try:
-        _, book = workbook(files.id)
+        _, book = workbook(project)
         sheets = []
         for sheet in book.sheets:
             cells = book.sheet_cells(sheet)
@@ -800,106 +834,100 @@ def _written(files: store.WorkbookFiles, verb: str, written: list[tuple[str, str
                 note += "\n\nCells now read:\n" + "\n".join(shown)
     except ToolFailure as e:
         note = f"The file is saved, but its formulas could not be worked out here ({e.message}); Excel will."
-    macros = store.has_macros(files.original)
-    file_name = f"{Path(files.name).stem}.{'xlsm' if macros else 'xlsx'}"
+    macros = store.has_macros(project.file)
+    file_name = f"{project.name}.{'xlsm' if macros else 'xlsx'}"
     mime = "application/vnd.ms-excel.sheet.macroEnabled.12" if macros else XLSX
     text = (
-        f'{verb} "{file_name}" as workbook_id={files.id}. The file was sent to the user and is also saved on this '
-        f"computer at {files.original}.\n\n{note}"
+        f'{verb} project "{project.name}". "{file_name}" was sent to the user and is also saved on this computer at '
+        f"{project.file}.\n\n{note}"
     )
-    return _result(text, files=[(file_name, mime, files.original.read_bytes())])
+    return _result(text, files=[(file_name, mime, project.file.read_bytes())])
 
 
 @mcp.tool(
     description=(
-        "Make a new Excel workbook from rows and send the .xlsx to the user. Use it whenever the user asks for an "
-        "Excel file or spreadsheet of something (a plan, a list, a schedule, a table). Each sheet is a list of rows, "
-        "the first row its column headings (bold and frozen). Numbers stay numbers; a value starting with = is a "
-        "formula (=SUM(B2:B8)). Returns a workbook_id the other tools accept."
+        "Make a new Excel file from rows, as a new project, and send the .xlsx to the user. Use it whenever the "
+        "user asks for an Excel file or spreadsheet of something (a plan, a list, a schedule, a table). Each sheet is "
+        "a list of rows, the first row its column headings (bold and frozen). Numbers stay numbers; a value starting "
+        "with = is a formula (=SUM(B2:B8)). The other tools then take the project's name."
     ),
     annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=True),
 )
-@tool_handler("create_workbook")
-def create_workbook(
-    name: Annotated[str, Field(description="File name, e.g. 'Weekly diet plan'")],
+@tool_handler("create_project")
+def create_project(
+    name: Annotated[str, Field(description="Project and file name, e.g. 'Weekly diet plan'")],
     sheets: Annotated[
         list[authoring.NewSheet],
         WithJsonSchema({"type": "array", "minItems": 1, "items": inline_schema(authoring.NewSheet)}),
         Field(min_length=1, description="The sheets, in tab order"),
     ],
 ) -> CallToolResult:
-    data = authoring.create(sheets)
-    stem = Path(name.strip()).stem if name.strip().lower().endswith((".xlsx", ".csv")) else name.strip()
-    files = store.save_written(get_settings(), data, f"{stem or 'Workbook'}.xlsx", "created")
-    return _written(files, "Created")
+    found, _ = store.start(get_settings(), name, authoring.create(sheets), "created")
+    return _written(found, "Created")
 
 
 @mcp.tool(
     description=(
-        "Change a workbook and send the edited .xlsx to the user: write values or formulas into cells, add rows, add, "
-        "rename (formulas follow) or delete sheets, and style ranges (bold, number format, fill colour, column "
-        "width). Edits apply in order, all or none. The workbook itself is left as it was: the edited copy gets a new "
-        "workbook_id, which later edits and questions must use. Look cells up first (read_sheet, find); never guess "
-        "an address."
+        "Change the project's file and send the edited .xlsx to the user: write values or formulas into cells, add "
+        "rows, add, rename (formulas follow) or delete sheets, and style ranges (bold, number format, fill colour, "
+        "column width). Edits apply in order, all or none. The result is the project's new version (the one before is "
+        "kept on this computer), so later questions and edits see the change. Look cells up first (read_sheet, find); "
+        "never guess an address."
     ),
     annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=False),
 )
-@tool_handler("edit_workbook")
-def edit_workbook(
-    workbook_id: WorkbookId,
+@tool_handler("edit_project")
+def edit_project(
+    project: ProjectName,
     edits: Annotated[
         list[authoring.Edit],
         WithJsonSchema({"type": "array", "minItems": 1, "items": inline_schema(authoring.Edit)}),
         Field(min_length=1, description="The changes, applied in order"),
     ],
-    file_name: Annotated[str | None, Field(description="Name for the edited file, without extension")] = None,
 ) -> CallToolResult:
     settings = get_settings()
-    source = store.get_files(settings, workbook_id)
-    data, written = authoring.apply(source.original, edits, store.has_macros(source.original))
-    stem = Path(source.name).stem
-    stem = file_name or (stem if stem.endswith(EDITED) else stem + EDITED)
-    files = store.save_written(settings, data, f"{stem}.xlsx", f"edited from {source.id}")
-    return _written(files, "Edited", written)
+    found = store.get(settings, project)
+    data, written = authoring.apply(found.file, edits, store.has_macros(found.file))
+    change = ", ".join(sorted({e.op for e in edits}))
+    return _written(store.save_version(settings, found, data, change), "Edited", written)
 
 
 @mcp.tool(
     description=(
-        "Empty this workbook's draft sheet, to start a new dashboard on the same file. Only when the user asks to "
+        "Empty the project's draft sheet, to start a new dashboard on the same file. Only when the user asks to "
         "start over; to change or drop one section use add_section. Exports already sent are kept."
     ),
     annotations=ToolAnnotations(read_only_hint=False, destructive_hint=True, idempotent_hint=True),
 )
 @tool_handler("clear_draft")
-def clear_draft(workbook_id: WorkbookId) -> CallToolResult:
-    files = store.get_files(get_settings(), workbook_id)
-    store.clear_draft(files)
-    return _result(f"The draft for {files.name!r} is empty. The workbook stays open as {files.id}.")
+def clear_draft(project: ProjectName) -> CallToolResult:
+    found = store.get(get_settings(), project)
+    store.clear_draft(found)
+    return _result(f'The draft for project "{found.name}" is empty. The project and its file stay.')
 
 
 @mcp.tool(
     description=(
-        "Delete a workbook from this computer: its copy, draft and exported files, and the uploaded file. Only when "
-        "the user asks to remove the file or move on to a new project. The workbook_id stops working; files in the "
-        "inbox folder are not touched."
+        "Delete a project from this computer: every version of its file, its draft and exported files, and the "
+        "uploaded file. Only when the user asks to delete the project. Files in the inbox folder are not touched."
     ),
     annotations=ToolAnnotations(read_only_hint=False, destructive_hint=True, idempotent_hint=False),
 )
-@tool_handler("forget_workbook")
-def forget_workbook(workbook_id: WorkbookId) -> CallToolResult:
+@tool_handler("delete_project")
+def delete_project(project: ProjectName) -> CallToolResult:
     settings = get_settings()
-    files = store.get_files(settings, workbook_id)
+    found = store.get(settings, project, forgive=False)
     with _books_lock:
-        _books.pop(files.id, None)
-    sqldb.forget(files.id)
-    store.forget(settings, files)
-    return _result(f"Deleted {files.name!r} ({files.id}) and everything made from it on this computer.")
+        _books.pop(found.key, None)
+    sqldb.forget(found.key)
+    store.delete(settings, found)
+    return _result(f'Deleted project "{found.name}" and everything made from it on this computer.')
 
 
 def _register_python() -> None:
     @mcp.tool(
         description=(
-            "Run Python on a copy of the workbook for analysis the other tools cannot do. The script starts with "
+            "Run Python on a copy of the project's file for analysis the other tools cannot do. The script starts with "
             "pandas imported, INPUT = 'input.xlsx' (the copy) and OUT = 'out'. print() what the user should know; "
             "save charts as PNG and tables as .xlsx/.csv into OUT to send them to the user. No network. "
             "Prefer query, what_if and add_section when they can do the job."
@@ -908,10 +936,10 @@ def _register_python() -> None:
     )
     @tool_handler("run_python")
     def run_python(
-        workbook_id: WorkbookId,
+        project: ProjectName,
         code: Annotated[str, Field(description="Python source")],
     ) -> CallToolResult:
-        files, _ = workbook(workbook_id)
+        files, _ = workbook(project)
         res = pyrun.run(files, code, get_settings().python_timeout_seconds)
         status = "timed out" if res.exit_code is None else f"exit code {res.exit_code}"
         text = f"Python {status}.\n\n{res.output or '(no output)'}"
@@ -936,7 +964,7 @@ async def healthz(_: Request) -> JSONResponse:
 @mcp.custom_route("/uploads", methods=["POST"])
 async def upload(request: Request) -> JSONResponse:
     """Raw spreadsheet bytes in, upload_id out: the agent app sends a chat attachment here, then the model passes
-    the id to open_workbook. Behind the same bearer auth as /mcp."""
+    the id to open_file. Behind the same bearer auth as /mcp."""
     settings = get_settings()
     try:
         limit = settings.max_file_bytes

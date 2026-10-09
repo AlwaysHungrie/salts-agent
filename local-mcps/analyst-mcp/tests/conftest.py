@@ -51,24 +51,24 @@ def model_file(settings) -> Path:
 
 
 @pytest.fixture
-async def wid(model_file) -> str:
-    res = await server.open_workbook(inbox_file=model_file.name)
+async def proj(model_file) -> str:
+    res = await server.open_file(inbox_file=model_file.name)
     assert not res.is_error, res.content[0].text
-    return res.content[0].text.split("workbook_id=")[1].split(".")[0]
+    return "model"
 
 
-async def build_draft(wid: str, spec: dict) -> list:
+async def build_draft(proj: str, spec: dict) -> list:
     """Adds a whole spec to an empty draft a section at a time, the spec's checks with the last section. Stops at the
     first error, which is then the last result."""
     from analyst_mcp import store
 
-    files = store.get_files(config.get_settings(), wid)
+    files = store.get(config.get_settings(), proj)
     (files.dir / "draft.json").unlink(missing_ok=True)
     out = []
     last = len(spec["sections"])
     for i, section in enumerate(spec["sections"], 1):
         res = await server.add_section(
-            wid, section, checks=spec.get("checks") if i == last else None, title=spec.get("title"),
+            proj, section, checks=spec.get("checks") if i == last else None, title=spec.get("title"),
             sheet_name=spec.get("sheet_name"),
         )  # fmt: skip
         out.append(res)

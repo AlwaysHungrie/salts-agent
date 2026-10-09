@@ -3,29 +3,37 @@
 An MCP server that runs on your own computer and gives an agent spreadsheet skills. It
 opens Excel (.xlsx, .xlsm) and CSV files and answers questions about them. It can also
 run what-if scenarios, build new sheets (tables and charts) into a copy of the
-workbook, make new workbooks from rows, and edit workbooks. The user sees preview images in the chat before anything is built, and
-receives the finished .xlsx as a download.
+file, make new Excel files from rows, and edit them. The user sees preview images in the chat before anything is
+built, and receives the finished .xlsx as a download.
 
-The original file is never changed. An edit is saved as a new workbook with its own
-`workbook_id`.
+## Projects
+
+Each file the user works on is a **project** with a name they know ("Q3 Budget", "Diet plan"). Every tool takes
+`project`, that name, so a chat stays on its project by naming it. Saying "switch to the diet plan" moves the chat to
+another project (`switch_to_project`), and `list_projects` lists them. Several chats can each work on their own
+project at the same time. A name finds its project loosely ("budget" finds "Q3 Budget"). If a chat names no project
+and there are several, the tool refuses with the list, so the model asks the user.
+
+The user's own file is never changed. An edit saves the project's next version
+(`projects/<name>/versions/<n>.xlsx`); earlier versions stay on disk.
 
 ## How a request goes
 
-1. The user attaches a workbook in the chat. The agent app uploads it to this server
-   (`POST /uploads`) and the model opens it with `open_workbook`.
-2. `open_workbook` returns a map of every number in the workbook. Each entry has its
+1. The user attaches a file in the chat. The agent app uploads it to this server
+   (`POST /uploads`) and the model starts a project from it with `open_file`.
+2. `open_file` returns a map of every number in the file. Each entry has its
    cell, the label on its row, its column header, its unit and its formula. The model
    finds numbers from the map, and does not guess cell addresses.
 3. For a new sheet, the model adds **sections** one at a time with `add_section`. Each
-   section is a table, can have a chart, and holds formulas over workbook cells
+   section is a table, can have a chart, and holds formulas over the file's cells
    (`=Feasibility!C4*10.764`), with optional checks that tie its totals back to the
-   workbook's own totals. The server keeps the draft (`workbooks/<id>/draft.json`),
+   file's own totals. The server keeps the draft (`projects/<name>/draft.json`),
    because the agent does not carry tool results from one turn to the next.
 4. Each `add_section` call evaluates the section in Python and draws it as a PNG (plus
    one for its checks). The agent shows the images in the chat. Sections that read
    wrong (rupees shown as crores, an area shown as ₹, a number typed as text, pie
    slices that miss part of the total) are refused before anyone sees them.
-5. `export_sheet` writes the draft into a copy of the workbook. Every number in it is
+5. `export_sheet` writes the draft into a copy of the file. Every number in it is
    a live Excel formula, the checks go on a Checks sheet, and the agent hands the user
    the file. The export is refused while any check fails.
 
@@ -36,20 +44,21 @@ picture the user approved are the numbers in the file.
 
 | Tool | What it does |
 | --- | --- |
-| `list_workbooks` | Lists opened workbooks and the files in the inbox folder. |
-| `open_workbook` | Opens an upload (`upload_id`) or an inbox file (`inbox_file`). Returns the map of numbers and the SQL tables. |
+| `list_projects` | Lists the projects (newest first, with edits and draft sections) and the files in the inbox folder. |
+| `open_file` | Starts a project from an upload (`upload_id`) or an inbox file (`inbox_file`), named `project` or after the file. Returns the map of numbers and the SQL tables. A name already used by another file is refused. |
+| `switch_to_project` | Moves the chat to another project by name. Returns its map of numbers and SQL tables. |
 | `read_sheet` | Reads a sheet or a range cell by cell, with formulas. Pages with `start_row`. |
 | `find` | Finds cells whose text contains some words, with the numbers on the same row. |
-| `query` | Runs one read-only DuckDB SQL query over the workbook. It can draw the result as a chart, or return it as an .xlsx or .csv file. |
-| `what_if` | Changes input cells, recalculates the whole workbook, and reports the outputs before and after. |
+| `query` | Runs one read-only DuckDB SQL query over the file. It can draw the result as a chart, or return it as an .xlsx or .csv file. |
+| `what_if` | Changes input cells, recalculates the whole file, and reports the outputs before and after. |
 | `breakdown` | Opens a total cell into the items that add up to it exactly; with `groups`, checks every item is in one head and returns the section rows and check. |
 | `add_section` | Adds, replaces (`number`) or removes (`remove`) one section of the draft sheet and shows it as an image. |
-| `export_sheet` | Builds the draft into a copy of the workbook and returns the .xlsx. |
-| `create_workbook` | Makes a new workbook from rows (first row bold headings; `=` starts a formula) and returns the .xlsx. |
-| `edit_workbook` | Applies edits in order, all or none: `set` cells, `append_rows`, `add_sheet`, `rename_sheet` (formulas follow), `delete_sheet` (refused while formulas use it), `format` (bold, number format, fill, width). Returns the edited .xlsx under a new `workbook_id`. |
+| `export_sheet` | Builds the draft into a copy of the file and returns the .xlsx. |
+| `create_project` | Makes a new Excel file from rows as a new project (first row bold headings; `=` starts a formula) and returns the .xlsx. |
+| `edit_project` | Applies edits in order, all or none: `set` cells, `append_rows`, `add_sheet`, `rename_sheet` (formulas follow), `delete_sheet` (refused while formulas use it), `format` (bold, number format, fill, width). Saves the project's next version and returns the .xlsx. |
 | `clear_draft` | Empties the draft sheet, to start a new dashboard on the same file. |
-| `forget_workbook` | Deletes a workbook's copy, draft, exports and upload from this computer. Inbox files stay. |
-| `run_python` | Runs Python on a copy of the workbook. **Off** unless `ALLOW_PYTHON=true`; see [Security](#security). |
+| `delete_project` | Deletes a project's versions, draft, exports and upload from this computer. Inbox files stay. |
+| `run_python` | Runs Python on a copy of the project's file. **Off** unless `ALLOW_PYTHON=true`; see [Security](#security). |
 
 In SQL, the `cells` table has every non-empty cell: `sheet`, `cell`, `row`, `col`,
 `value`, `number`, `formula`, `label`, `header`, `unit`. A sheet with a header row is
@@ -116,7 +125,7 @@ Set these in `.env` (see `.env.example`) or in the environment.
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
-| `DATA_DIR` | `./data` | Holds uploads, opened workbooks (`workbooks/<id>/original.xlsx`) and exports (`workbooks/<id>/exports/`). |
+| `DATA_DIR` | `./data` | Holds uploads and projects (`projects/<name>/versions/<n>.xlsx`, exports in `projects/<name>/exports/`). |
 | `INBOX_DIR` | `DATA_DIR/inbox` | A folder of files the agent can open by name. |
 | `MAX_FILE_BYTES` | 25 MB | The largest file accepted. |
 | `MAX_ROWS` | 200 | The most rows a query or a sheet read returns. |
@@ -126,11 +135,11 @@ Set these in `.env` (see `.env.example`) or in the environment.
 ## Limits
 
 - Old `.xls` and OpenDocument `.ods` files are refused. Save them as `.xlsx` first.
-- An exported copy does not keep charts or images that were already in the workbook.
-  `open_workbook` says when a workbook has them.
+- An exported copy does not keep charts or images that were already in the file.
+  `open_file` says when a file has them.
 - Exported formulas have no saved results. Excel, Google Sheets and Numbers calculate
   them when the file opens; quick-look previews show them empty.
-- `what_if` compiles the workbook's formulas the first time it runs on a workbook,
+- `what_if` compiles the file's formulas the first time it runs on a project version,
   which takes seconds to a minute. Later calls are fast. Excel functions the
   [`formulas`](https://github.com/vinci1it2000/formulas) package does not support make
   it fail with a `recalc_failed` error.
@@ -144,6 +153,6 @@ Set these in `.env` (see `.env.example`) or in the environment.
 - **SQL:** queries run in an in-memory DuckDB with external access switched off. Only
   reading statements are accepted.
 - **`run_python`:** it runs code the model wrote on this machine. Each run gets a fresh
-  folder, a copy of the workbook, an emptied environment and a time limit. That is not
+  folder, a copy of the project's file, an emptied environment and a time limit. That is not
   a sandbox: the code can read anything your user account can read. Leave it off unless
   you trust everyone who can message the agent.
