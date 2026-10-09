@@ -23,7 +23,7 @@ We recommend locking settings that cost you money, and leaving the rest unlocked
 | **OpenRouter** | The OpenRouter API key every agent uses. Lock it if you are paying and do not want users to replace it with their own key. |
 | **Monthly spend limit** | How much each agent can spend in a calendar month, in US dollars. 0 means no limit. Users can see it but cannot change it. |
 | **Member limit** | How many other people each user can add to their agent. 0 means no limit. Users cannot change it. |
-| **Model options** | The list of models your users can choose from. Enter each model's OpenRouter ID, for example `anthropic/claude-haiku-4.5`. Leave it empty to use the default list. |
+| **Model options** | The list of models your users can choose from. Enter each model's OpenRouter ID, for example `anthropic/claude-haiku-4.5`, and optionally a name. Anything in brackets in the name, such as `Fast ($)`, is a nickname users can switch to with `!model $`. Leave the list empty to use the default list. |
 | **Model** | The model every agent starts on. Lock it if you want everyone on the same model. |
 | **Custom instructions** | Instructions every agent reads before each conversation. Lock them if the agents must stay on one subject or use your company's tone. |
 | **Extended reasoning**, **Creativity**, **Reply length cap**, **Context window** | How the agent thinks and answers. See [Choose the right model](/guide/choosing-a-model). Extended reasoning and longer replies cost more, so lock them if you want to keep costs down. |

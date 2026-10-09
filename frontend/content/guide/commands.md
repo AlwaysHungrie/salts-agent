@@ -19,6 +19,7 @@ To use a command, send it as the whole message, for example `!new`. In a Telegra
 | `!delete` | Deletes this conversation and everything in it. |
 | `!enable-mcp <name>` | Switches on a connected app. |
 | `!disable-mcp <name>` | Switches off a connected app. |
+| `!model <nickname>` | Switches your agent to another model. |
 
 ## !new
 
@@ -57,3 +58,15 @@ Apps you connect to your agent, such as Notion or GitHub, make every reply a lit
 ```
 
 The app must already be connected on the **Capabilities** page before you can switch it on this way.
+
+## !model
+
+`!model` switches your agent to another model from the list in **Settings** under **Model**. It uses the model's nickname, which is the part of its name in brackets. For example, a model named **DeepSeek V4 Flash ($)** has the nickname `$`, so this switches to it:
+
+```
+!model $
+```
+
+The switch is the same as picking the model in **Settings**, so it applies to the whole agent, not just this conversation. The next reply uses the new model.
+
+A model without brackets in its name has no nickname and can only be picked in **Settings**. If the model is locked by whoever manages your agent, `!model` does not work.

@@ -4,6 +4,9 @@
   new behaviour lands with tests, and `npm run deploy` refuses on a red suite.
 - No unrequested thinking/analysis. Answer what is asked.
 - No extra features or content beyond the ask.
+- Changing a bang command or agent behaviour: check whether the docs need updating too —
+  `agent/README.md` and the user guide in `frontend/content/guide/` (`commands.md` lists
+  every command).
 - Do not use Playwright.
 
 # Admin: deployment settings

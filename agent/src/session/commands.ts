@@ -1,6 +1,9 @@
 import { enabled, mcpServerReady, withMcpAuth } from "../capabilities";
-import type { Command, CommandResult, McpCommand } from "../commands";
+import type { Command, CommandResult, McpCommand, ModelCommand } from "../commands";
+import { modelCatalog, modelNicknames } from "../models";
 import { sessionLimitMessage, type SessionRow } from "../registry";
+import { lockedColumns } from "../validation/meta";
+import { modelOptions } from "../worker/capability-views";
 import { compact } from "./compaction";
 import { spendBlocked } from "./turns";
 import type { SessionHost } from "./types";
@@ -10,7 +13,11 @@ import type { SessionHost } from "./types";
  * (`destroy`), because destroying the object aborts the isolate.
  */
 export async function runCommand(host: SessionHost, command: Command): Promise<CommandResult> {
-  if (typeof command === "object") return await mcpCommand(host, command);
+  if (typeof command === "object") {
+    return "nickname" in command
+      ? await modelCommand(host, command)
+      : await mcpCommand(host, command);
+  }
   // TEMP, remove with `oom`: allocate until the isolate is killed, logging progress.
   if (command === "oom") {
     // Filled byte buffers, which a runtime cannot represent cleverly the way it can strings.
@@ -119,6 +126,40 @@ export async function compactCommand(host: SessionHost): Promise<CommandResult> 
       destroy: false,
     };
   }
+}
+
+/**
+ * `!model <nickname>`: switch the agent to the model the settings page offers whose label
+ * carries the nickname in brackets. The agent's model, not just this session's — the same
+ * as picking it on the settings page, and refused where that page could not change it.
+ */
+export async function modelCommand(
+  host: SessionHost,
+  { nickname }: ModelCommand
+): Promise<CommandResult> {
+  const reg = host.registry();
+  const settings = await host.settingsNow();
+  const meta = await reg.meta();
+  if (lockedColumns(meta.locked).has("model")) {
+    return { text: "The model is locked for this agent.", destroy: false };
+  }
+  const offered = modelOptions(meta.models, modelCatalog(settings));
+  const wanted = nickname.toLowerCase();
+  const found = offered.find((m) =>
+    modelNicknames(m.label).some((n) => n.toLowerCase() === wanted)
+  );
+  if (!found) {
+    const known = offered.flatMap((m) => modelNicknames(m.label));
+    return {
+      text: known.length
+        ? `No model has the nickname "${nickname}". Try one of: ${known.join(", ")}.`
+        : `No model has the nickname "${nickname}". Nicknames are set in brackets in a model's name.`,
+      destroy: false,
+    };
+  }
+  await reg.setConfig({ model: found.id }, settings.default_model, settings.config_defaults);
+  await host.loadConfig();
+  return { text: `Switched to ${found.label}.`, destroy: false };
 }
 
 /**

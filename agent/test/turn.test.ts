@@ -411,6 +411,61 @@ describe("!enable-mcp and !disable-mcp", () => {
   });
 });
 
+describe("!model", () => {
+  const reply = async (res: Response) => ((await res.json()) as { reply: string }).reply;
+  const model = async (agentId: string, email: string) =>
+    (
+      (await (await SELF.fetch(`${BASE}/api/agents/${agentId}/config`, as(email))).json()) as {
+        config: { model: string };
+      }
+    ).config.model;
+
+  /** An agent offering a named custom model and a catalogue one ("DeepSeek V4 Flash ($)"). */
+  async function withModels(locked: string[] = []) {
+    const fixture = await chatFixture();
+    const reg = registryFor(fixture.agentId);
+    await reg.setMeta({
+      ...(await reg.meta()),
+      models: [
+        { id: "openai/gpt-5-mini", vision: true, label: "Mini (cheap)" },
+        { id: "deepseek/deepseek-v4-flash", vision: false },
+      ],
+      locked,
+    });
+    return fixture;
+  }
+
+  it("switches the agent to the model carrying the nickname", async () => {
+    const { sessionId, email, agentId } = await withModels();
+    expect(await reply(await say(sessionId, email, "!model CHEAP"))).toBe(
+      "Switched to Mini (cheap)."
+    );
+    expect(await model(agentId, email)).toBe("openai/gpt-5-mini");
+    expect(await reply(await say(sessionId, email, "!model $"))).toBe(
+      "Switched to DeepSeek V4 Flash ($)."
+    );
+    expect(await model(agentId, email)).toBe("deepseek/deepseek-v4-flash");
+  });
+
+  it("lists the nicknames when none matches, and changes nothing", async () => {
+    const { sessionId, email, agentId } = await withModels();
+    const before = await model(agentId, email);
+    expect(await reply(await say(sessionId, email, "!model $$$"))).toBe(
+      'No model has the nickname "$$$". Try one of: cheap, $.'
+    );
+    expect(await model(agentId, email)).toBe(before);
+  });
+
+  it("refuses when the model is locked", async () => {
+    const { sessionId, email, agentId } = await withModels(["model"]);
+    const before = await model(agentId, email);
+    expect(await reply(await say(sessionId, email, "!model cheap"))).toBe(
+      "The model is locked for this agent."
+    );
+    expect(await model(agentId, email)).toBe(before);
+  });
+});
+
 describe("access control on a turn", () => {
   it("refuses a stranger", async () => {
     const { sessionId } = await chatFixture();

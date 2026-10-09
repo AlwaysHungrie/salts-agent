@@ -9,9 +9,9 @@ import type { DeploymentSettings } from "../settings";
  */
 export function modelOptions(chosen: ModelChoice[], catalog: ModelOption[]): ModelOption[] {
   if (!chosen.length) return catalog;
-  return chosen.map(({ id, vision }) => ({
+  return chosen.map(({ id, vision, label }) => ({
     id,
-    label: catalog.find((m) => m.id === id)?.label ?? id,
+    label: label || (catalog.find((m) => m.id === id)?.label ?? id),
     vision,
   }));
 }

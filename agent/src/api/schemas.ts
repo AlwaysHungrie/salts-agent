@@ -153,7 +153,9 @@ const tunable = z
 
 export const MetaSettingsSchema = z
   .object({
-    models: z.array(z.object({ id: z.string(), vision: z.boolean() })),
+    models: z.array(
+      z.object({ id: z.string(), vision: z.boolean(), label: z.string().optional() })
+    ),
     defaults: tunable,
     locked: z.array(z.string()),
     capabilities: z.record(
