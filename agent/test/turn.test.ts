@@ -192,6 +192,23 @@ describe("tools inside a turn", () => {
     const reply = body.messages.find((m) => m.role === "assistant")!;
     expect(reply.steps).toContain("list");
   });
+
+  it("records a tool that returned a failure as failed", async () => {
+    const { sessionId, email, agentId } = await chatFixture();
+    await SELF.fetch(
+      `${BASE}/api/agents/${agentId}/config`,
+      as(email, { method: "PATCH", body: JSON.stringify({ cap_scheduled_tasks: 1 }) })
+    );
+    await say(sessionId, email, "!!failloop schedule_task");
+    const body = (await (await transcript(sessionId, email)).json()) as {
+      messages: { role: string; steps: string }[];
+    };
+    const reply = body.messages.find((m) => m.role === "assistant")!;
+    const tools = (JSON.parse(reply.steps) as { kind: string; tools?: { ok: boolean }[] }[])
+      .flatMap((s) => s.tools ?? []);
+    expect(tools.length).toBeGreaterThan(0);
+    expect(tools.every((t) => !t.ok)).toBe(true);
+  });
 });
 
 describe("tool results in later turns", () => {

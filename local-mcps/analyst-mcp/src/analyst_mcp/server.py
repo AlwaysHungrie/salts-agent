@@ -473,11 +473,12 @@ ChartType = Literal["bar", "column", "pie", "line"]
 @mcp.tool(
     description=(
         "Run one read-only SQL query (DuckDB) over the file. Table `cells` has every cell (sheet, cell, row, col, "
-        "value, number, formula, label, header, unit); a sheet with a header row is also a table named after the sheet "
-        "(quote it: SELECT * FROM \"Sales 2025\"). It reads every file of the project: `cells` has a `file` column, a "
-        "sheet name several files share is one stacked table with a `file` column, and \"<file>.<sheet>\" is one "
-        "file's sheet. open_file and switch_to_project list the tables. Optionally draw "
-        "the result as a chart (shown to the user) or return it as a file."
+        "value, number, formula, label, header, unit; row is a number, col the column letter: col = 'C'); a sheet "
+        "with a header row is also a table named after the sheet (quote it: SELECT * FROM \"Sales 2025\"). It reads "
+        "every file of the project: `cells` has a `file` column, a sheet name several files share is one stacked "
+        "table with a `file` column, and \"<file>.<sheet>\" is one file's sheet. open_file and switch_to_project list "
+        "the tables. Quote a name that is an SQL word (AS \"class\", AS \"months\"). Optionally draw the result as a "
+        "chart (shown to the user) or return it as a file."
     ),
     annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False),
 )
@@ -972,7 +973,8 @@ def _plain(v: object) -> object:
 @mcp.tool(
     description=(
         "Change a file of the project and send the edited .xlsx to the user: write values or formulas into cells, "
-        "add rows, add, rename (formulas follow) or delete sheets, and style ranges (bold, number format, fill "
+        "fill a row of formulas down a column (one set for the first row, one fill for the rest: never type every "
+        "row), add rows, add, rename (formulas follow) or delete sheets, and style ranges (bold, number format, fill "
         "colour, column width). Edits apply in order, all or none. The result is the file's new version (the one "
         "before is kept on this computer), so later questions and edits see the change. Look cells up first "
         "(read_sheet, find); never guess an address."

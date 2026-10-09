@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Literal
 
 import openpyxl
+from openpyxl.formula.translate import Translator
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter, range_boundaries
 from openpyxl.utils.cell import coordinate_from_string
@@ -45,9 +46,11 @@ class NewSheet(BaseModel):
 class Edit(BaseModel):
     """One change. Which fields count depends on op."""
 
-    op: Literal["set", "append_rows", "add_sheet", "rename_sheet", "delete_sheet", "format"] = Field(
+    op: Literal["set", "fill", "append_rows", "add_sheet", "rename_sheet", "delete_sheet", "format"] = Field(
         description=(
-            "set: write `cells` into `sheet`. append_rows: add `rows` under the last used row of `sheet`. "
+            "set: write `cells` into `sheet`. fill: copy the top row of `range` down to its last row, references "
+            "shifting as Excel's fill-down does (write one row of formulas with set, then fill B2:J72; $ pins a "
+            "reference). append_rows: add `rows` under the last used row of `sheet`. "
             "add_sheet: new sheet `sheet`, optionally with `rows`. rename_sheet: `sheet` becomes `to` (formulas "
             "follow). delete_sheet: remove `sheet`. format: style `range` of `sheet` (bold, number_format, fill, "
             "width)"
@@ -59,7 +62,9 @@ class Edit(BaseModel):
     )
     rows: Rows | None = Field(None, description="append_rows, add_sheet: rows of cells")
     to: str | None = Field(None, description="rename_sheet: the new name")
-    range: str | None = Field(None, description="format: cells to style, e.g. A1:F1 or B:B")
+    range: str | None = Field(
+        None, description="format: cells to style, e.g. A1:F1 or B:B. fill: the top row and where it goes, e.g. B2:J72"
+    )
     bold: bool | None = Field(None, description="format: bold on or off")
     number_format: str | None = Field(None, description="format: Excel number format, e.g. #,##0.00 or 0%")
     fill: str | None = Field(None, description="format: background colour as hex, e.g. FFF2CC")
@@ -150,6 +155,35 @@ def _set(ws: Worksheet, cells: dict[str, CellValue]) -> list[tuple[str, str]]:
     return done
 
 
+def _fill(ws: Worksheet, edit: Edit) -> list[tuple[str, str]]:
+    """The top row of `edit.range` copied into every row below it, formulas translated; the last row's cells."""
+    if not edit.range:
+        raise ToolFailure("bad_edit", "fill needs a range, e.g. B2:J72")
+    try:
+        min_col, min_row, max_col, max_row = range_boundaries(edit.range.replace("$", "").upper())
+    except ValueError as e:
+        raise ToolFailure("bad_range", f"{edit.range!r} is not a range like B2:J72") from e
+    if None in (min_col, min_row, max_col, max_row) or max_row <= min_row:
+        raise ToolFailure("bad_range", f"fill needs a range of at least two rows, like B2:J72, not {edit.range!r}")
+    if max_row - min_row > FILL_ROWS:
+        raise ToolFailure("bad_range", f"fill copies at most {FILL_ROWS} rows at a time")
+    top = [ws.cell(min_row, c) for c in range(min_col, max_col + 1)]
+    if all(cell.value is None for cell in top):
+        raise ToolFailure("bad_range", f"row {min_row} of {edit.range!r} is empty: set the first row, then fill")
+    for cell in top:
+        for r in range(min_row + 1, max_row + 1):
+            target = ws.cell(r, cell.column)
+            value = cell.value
+            if isinstance(value, str) and value.startswith("="):
+                value = Translator(value, origin=cell.coordinate).translate_formula(target.coordinate)
+            target.value = value
+            target.number_format = cell.number_format
+    return [(ws.title, ws.cell(max_row, cell.column).coordinate) for cell in top if cell.value is not None]
+
+
+FILL_ROWS = 100_000
+
+
 def _format(ws: Worksheet, edit: Edit) -> None:
     if not edit.range:
         raise ToolFailure("bad_edit", "format needs a range, e.g. A1:F1")
@@ -200,6 +234,8 @@ def apply(original: Path, edits: list[Edit], macros: bool) -> tuple[bytes, list[
                 if not edit.cells:
                     raise ToolFailure("bad_edit", "set needs cells")
                 written += _set(ws, edit.cells)
+            elif edit.op == "fill":
+                written += _fill(ws, edit)
             elif edit.op == "append_rows":
                 if not edit.rows:
                     raise ToolFailure("bad_edit", "append_rows needs rows")

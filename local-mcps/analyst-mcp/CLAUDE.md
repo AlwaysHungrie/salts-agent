@@ -25,7 +25,7 @@ MCP_TRANSPORT=http MCP_AUTH_TOKEN=x MCP_PORT=8380 uv run analyst-mcp
 | `spec.py` | `SheetSpec` models, layout (where each cell lands), evaluation of every cell and check, `problems` |
 | `breakdown.py` | Opens a total into the cells that add up to it; validates head groupings |
 | `render.py` | matplotlib PNGs: section (table + chart), checks |
-| `authoring.py` | `create_file` (new file from rows) and `edit_file` (cell, row, sheet and style edits into new bytes) |
+| `authoring.py` | `create_file` (new file from rows) and `edit_file` (cell, fill-down, row, sheet and style edits into new bytes) |
 | `export.py` | openpyxl copy of the original + new sheet (formulas, native charts) + Checks sheet |
 | `sql.py` | DuckDB in memory per project: `cells` (with `file`) + header-row sheets, shared sheet names stacked; external access off |
 | `pyrun.py` | `run_python` subprocess (only registered when `ALLOW_PYTHON=true`) |

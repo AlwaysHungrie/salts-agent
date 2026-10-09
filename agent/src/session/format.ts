@@ -82,6 +82,15 @@ const oneLine = (value: unknown, max: number): string => {
 };
 
 /**
+ * Whether a stored tool call failed: an error the SDK recorded, or a failure one of our
+ * tools returned as its output (`runTool` reports those as text, so the SDK sees a result).
+ */
+function failed(call: { state?: string; output?: unknown }, name: string): boolean {
+  if (call.state === "output-error") return true;
+  return typeof call.output === "string" && call.output.startsWith(`Tool ${name} failed:`);
+}
+
+/**
  * What a reply's successful tool calls were given and found, shortened. Later turns are
  * sent replies as text only, so without this a model forgets the ids and cells a tool
  * gave it and spends the next turn guessing or looking them up again. Failed calls are
@@ -101,7 +110,7 @@ export function toolNotesOf(message: UIMessage): string {
     };
     if (call.state !== "output-available") continue;
     const name = call.toolName ?? call.type.replace(/^tool-/, "");
-    if (typeof call.output === "string" && call.output.startsWith(`Tool ${name} failed:`)) continue;
+    if (failed(call, name)) continue;
     const line = `- ${name}(${oneLine(call.input, NOTE_INPUT_CHARS)}) → ${oneLine(call.output, NOTE_OUTPUT_CHARS)}`;
     if (used + line.length > NOTES_CHARS) {
       lines.push("- …more calls left out");
@@ -128,9 +137,9 @@ export function stepsOf(message: UIMessage): TurnStep[] {
       continue;
     }
     if (!part.type.startsWith("tool-") && part.type !== "dynamic-tool") continue;
-    const called = part as { type: string; toolName?: string; state?: string };
+    const called = part as { type: string; toolName?: string; state?: string; output?: unknown };
     const name = called.toolName ?? called.type.replace(/^tool-/, "");
-    const ok = called.state !== "output-error";
+    const ok = !failed(called, name);
     const last = steps[steps.length - 1];
     if (last?.kind === "tools") last.tools.push({ name, ok });
     else steps.push({ kind: "tools", tools: [{ name, ok }] });
