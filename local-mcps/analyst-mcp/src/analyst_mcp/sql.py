@@ -109,11 +109,12 @@ def connection(wb: Workbook) -> tuple[duckdb.DuckDBPyConnection, list[str]]:
         return con, tables
 
 
-def forget(workbook_id: str) -> None:
+def forget(project_key: str, keep: str = "") -> None:
+    """Close the project's databases (one per version loaded), all but `keep`."""
     with _lock:
-        entry = _conns.pop(workbook_id, None)
-    if entry:
-        entry[0].close()
+        gone = [_conns.pop(k) for k in list(_conns) if k.split("@")[0] == project_key and k != keep]
+    for con, _ in gone:
+        con.close()
 
 
 def describe(wb: Workbook) -> str:

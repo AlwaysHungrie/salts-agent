@@ -1,11 +1,15 @@
-"""Files on disk: uploads in, opened workbooks, exports out.
+"""Files on disk: uploads in, projects, exports out.
 
-DATA_DIR/uploads/<sha256>.<ext>          bytes the agent app POSTed to /uploads
-DATA_DIR/workbooks/<id>/original.xlsx    the workbook every tool reads (a CSV is converted once)
-DATA_DIR/workbooks/<id>/meta.json        display name and where it came from
-DATA_DIR/workbooks/<id>/exports/         xlsx and png files this server wrote
+A project is one Excel file under a name the user knows. The model passes that name to every tool, so a chat keeps to
+its project by naming it, and moves to another by naming that one.
 
-The original is never written to: exports are copies.
+DATA_DIR/uploads/<sha256>.<ext>              bytes the agent app POSTed to /uploads
+DATA_DIR/projects/<key>/versions/<n>.xlsx    the file; an edit adds version n+1 (a CSV is converted once)
+DATA_DIR/projects/<key>/project.json         name, current version, where it came from
+DATA_DIR/projects/<key>/draft.json           the sheet being built a section at a time
+DATA_DIR/projects/<key>/exports/             xlsx and png files this server wrote
+
+A version is never written to once saved: edits add a version, exports are copies.
 """
 
 import hashlib
@@ -22,19 +26,27 @@ from .config import Settings
 from .errors import ToolFailure
 
 UPLOAD_ID = re.compile(r"^[0-9a-f]{64}$")
-WORKBOOK_ID = re.compile(r"^[0-9a-f]{12}$")
 XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+NAME_CHARS = 80
+SHOWN_PROJECTS = 20
 
 
 @dataclass
-class WorkbookFiles:
-    id: str
+class Project:
+    key: str
     dir: Path
     name: str
+    version: int
 
     @property
-    def original(self) -> Path:
-        return self.dir / "original.xlsx"
+    def id(self) -> str:
+        """Names this version's loaded workbook in the caches: an edit is a new version, so stale results cannot
+        survive it."""
+        return f"{self.key}@{self.version}"
+
+    @property
+    def file(self) -> Path:
+        return self.dir / "versions" / f"{self.version}.xlsx"
 
     @property
     def exports(self) -> Path:
@@ -97,7 +109,7 @@ def _inbox_path(settings: Settings, name: str) -> Path:
     return path
 
 
-def _csv_to_xlsx(data: bytes, sheet: str, target: Path) -> None:
+def _csv_to_xlsx(data: bytes, sheet: str) -> bytes:
     import pandas as pd
 
     for encoding in ("utf-8-sig", "cp1252", "latin-1"):
@@ -108,12 +120,64 @@ def _csv_to_xlsx(data: bytes, sheet: str, target: Path) -> None:
             continue
     sep = "\t" if text.count("\t") > text.count(",") else ","
     frame = pd.read_csv(io.StringIO(text), sep=sep)
-    with pd.ExcelWriter(target, engine="openpyxl") as writer:
+    out = io.BytesIO()
+    with pd.ExcelWriter(out, engine="openpyxl") as writer:
         frame.to_excel(writer, sheet_name=sheet[:31] or "Sheet1", index=False)
+    return out.getvalue()
 
 
-def open_files(settings: Settings, *, upload_id: str | None, inbox_file: str | None, name: str | None) -> WorkbookFiles:
-    """Make (or reuse) the workbook folder for an upload or an inbox file. Same bytes, same id."""
+def _key(name: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:60]
+
+
+def _clean_name(name: str | None) -> str:
+    """The name as the user would say it: spaces tidied, a file extension dropped ('Budget.xlsx' is 'Budget')."""
+    cleaned = " ".join((name or "").split())
+    if cleaned.lower().endswith((".xlsx", ".xlsm", ".csv")):
+        cleaned = Path(cleaned).stem
+    if not _key(cleaned):
+        raise ToolFailure("bad_project_name", "a project needs a name with letters or digits, e.g. 'Q3 budget'")
+    return cleaned[:NAME_CHARS]
+
+
+def _root(settings: Settings) -> Path:
+    return settings.data_dir / "projects"
+
+
+def _project(folder: Path, meta: dict) -> Project:
+    return Project(key=folder.name, dir=folder, name=meta.get("name", folder.name), version=int(meta.get("version", 1)))
+
+
+def start(
+    settings: Settings, name: str | None, data: bytes, source: str, digest: str | None = None
+) -> tuple[Project, bool]:
+    """A new project holding `data` as version 1, and whether it is new. Starting it again from the same file is the
+    same project; another file under a name already taken is refused, so no project is replaced by accident."""
+    name = _clean_name(name)
+    digest = digest or hashlib.sha256(data).hexdigest()
+    folder = _root(settings) / _key(name)
+    if (folder / "project.json").exists():
+        meta = _read_meta(folder)
+        if meta.get("sha256") == digest:
+            return _project(folder, meta), False
+        raise ToolFailure(
+            "project_exists",
+            f'there is already a project "{meta.get("name", name)}"; give this one another name, or switch_to_project '
+            "to work on that one",
+        )
+    (folder / "versions").mkdir(parents=True, exist_ok=True)
+    (folder / "versions" / "1.xlsx").write_bytes(data)
+    now = _now()
+    meta = {"name": name, "version": 1, "source": source, "sha256": digest, "created_at": now, "updated_at": now,
+            "history": [{"version": 1, "change": source, "at": now}]}  # fmt: skip
+    _write_meta(folder, **meta)
+    return _project(folder, meta), True
+
+
+def open_file(
+    settings: Settings, *, upload_id: str | None, inbox_file: str | None, name: str | None
+) -> tuple[Project, bool]:
+    """A project from an upload or an inbox file, named `name` or after the file."""
     if bool(upload_id) == bool(inbox_file):
         raise ToolFailure("bad_request", "pass exactly one of upload_id or inbox_file")
     source = _upload_path(settings, upload_id) if upload_id else _inbox_path(settings, inbox_file or "")
@@ -121,37 +185,21 @@ def open_files(settings: Settings, *, upload_id: str | None, inbox_file: str | N
     if len(data) > settings.max_file_bytes:
         raise ToolFailure("file_too_large", f"file exceeds {settings.max_file_bytes // (1024 * 1024)} MB")
     kind = _kind(data)
-    wid = hashlib.sha256(data).hexdigest()[:12]
-    folder = settings.data_dir / "workbooks" / wid
-    display = name or (inbox_file if inbox_file else f"workbook-{wid}.{kind}")
-    files = WorkbookFiles(id=wid, dir=folder, name=display)
-    if not files.original.exists():
-        folder.mkdir(parents=True, exist_ok=True)
-        if kind == "csv":
-            _csv_to_xlsx(data, Path(display).stem, files.original)
-        else:
-            files.original.write_bytes(data)
-        meta = {"name": display, "source": "upload" if upload_id else "inbox", "opened_at": _now()}
-        (folder / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
-    elif name:
-        _write_meta(folder, name=name)
-    return files
+    digest = hashlib.sha256(data).hexdigest()
+    name = _clean_name(name or inbox_file or f"Spreadsheet {digest[:6]}")
+    xlsx = _csv_to_xlsx(data, name) if kind == "csv" else data
+    return start(settings, name, xlsx, "upload" if upload_id else f"inbox file {inbox_file}", digest)
 
 
-def save_written(settings: Settings, data: bytes, name: str, source: str) -> WorkbookFiles:
-    """Open a workbook this server wrote (made from rows, or an edited copy) like an upload: same bytes, same id, so
-    every other tool reads it and later edits start from it."""
-    wid = hashlib.sha256(data).hexdigest()[:12]
-    folder = settings.data_dir / "workbooks" / wid
-    files = WorkbookFiles(id=wid, dir=folder, name=name)
-    if not files.original.exists():
-        folder.mkdir(parents=True, exist_ok=True)
-        files.original.write_bytes(data)
-        meta = {"name": name, "source": source, "opened_at": _now()}
-        (folder / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
-    else:
-        _write_meta(folder, name=name)
-    return files
+def save_version(settings: Settings, project: Project, data: bytes, change: str) -> Project:
+    """The project's next version. The ones before stay on disk as they were."""
+    meta = _read_meta(project.dir)
+    version = max(int(p.stem) for p in (project.dir / "versions").glob("*.xlsx")) + 1
+    (project.dir / "versions" / f"{version}.xlsx").write_bytes(data)
+    now = _now()
+    history = [*meta.get("history", []), {"version": version, "change": change, "at": now}]
+    _write_meta(project.dir, version=version, updated_at=now, history=history)
+    return Project(key=project.key, dir=project.dir, name=project.name, version=version)
 
 
 def has_macros(path: Path) -> bool:
@@ -159,42 +207,50 @@ def has_macros(path: Path) -> bool:
         return "xl/vbaProject.bin" in z.namelist()
 
 
-def get_files(settings: Settings, workbook_id: str) -> WorkbookFiles:
-    """The workbook with that id. An id this server never gave (the agent forgets tool results between turns, so a
-    model guesses: a chat attachment's id, the file name) means the only open workbook when there is just one."""
-    folder = settings.data_dir / "workbooks" / (workbook_id or "")
-    if not WORKBOOK_ID.match(workbook_id or "") or not (folder / "original.xlsx").exists():
-        books = list_workbooks(settings)
-        if len(books) != 1:
-            if not WORKBOOK_ID.match(workbook_id or ""):
-                raise ToolFailure(
-                    "bad_workbook_id", "workbook_id is the 12-character id open_workbook gave" + _known(settings)
-                )
-            raise ToolFailure("workbook_not_found", "no open workbook with that id" + _known(settings))
-        workbook_id = books[0]["workbook_id"]
-        folder = settings.data_dir / "workbooks" / workbook_id
-    return WorkbookFiles(id=workbook_id, dir=folder, name=_read_meta(folder).get("name", workbook_id))
+def get(settings: Settings, name: str, forgive: bool = True) -> Project:
+    """The project the model named. A close name finds it ('budget' for 'Q3 Budget', the file name for the project
+    named after it). With `forgive`, a name that matches none means the only project when there is just one: the model
+    sometimes passes the file name it saw instead."""
+    projects = list_projects(settings)
+    wanted = _key(Path(name).stem if name.lower().endswith((".xlsx", ".xlsm", ".csv")) else name) if name else ""
+    if wanted:
+        exact = [p for p in projects if p.key == wanted]
+        close = exact or [p for p in projects if wanted in p.key or p.key in wanted]
+        if len(close) == 1:
+            return close[0]
+        if len(close) > 1:
+            raise ToolFailure(
+                "project_unclear", f"{name!r} could be " + ", ".join(f'"{p.name}"' for p in close) + "; ask which"
+            )
+    if forgive and len(projects) == 1:
+        return projects[0]
+    said = f"no project named {name!r}" if wanted else "say which project"
+    raise ToolFailure("project_not_found", said + known(projects))
 
 
-def _known(settings: Settings) -> str:
-    """The open workbooks, newest first, so a model that lost the id can carry on without opening the file again."""
-    books = sorted(list_workbooks(settings), key=lambda b: b["opened_at"] or "", reverse=True)[:10]
-    if not books:
-        return "; call open_workbook first"
-    return ". Open workbooks: " + ", ".join(f"{b['workbook_id']} ({b['name']})" for b in books)
+def known(projects: list[Project]) -> str:
+    """The projects, so a model can ask the user which one is meant."""
+    if not projects:
+        return "; there are no projects yet: open_file for an attached file, create_project for a new one"
+    shown = ", ".join(f'"{p.name}"' for p in projects[:SHOWN_PROJECTS])
+    more = f" and {len(projects) - SHOWN_PROJECTS} more" if len(projects) > SHOWN_PROJECTS else ""
+    return f". Projects: {shown}{more}. If the user has not said which, ask them"
 
 
-def list_workbooks(settings: Settings) -> list[dict]:
-    root = settings.data_dir / "workbooks"
-    rows = []
+def list_projects(settings: Settings) -> list[Project]:
+    """Every project, the one changed last first."""
+    root = _root(settings)
+    found = []
     if root.exists():
-        for folder in sorted(root.iterdir()):
-            if (folder / "original.xlsx").exists():
-                meta = _read_meta(folder)
-                rows.append(
-                    {"workbook_id": folder.name, "name": meta.get("name", ""), "opened_at": meta.get("opened_at")}
-                )
-    return rows
+        for folder in root.iterdir():
+            meta = _read_meta(folder)
+            if meta:
+                found.append((meta.get("updated_at") or "", _project(folder, meta)))
+    return [p for _, p in sorted(found, key=lambda f: f[0], reverse=True)]
+
+
+def info(project: Project) -> dict:
+    return _read_meta(project.dir)
 
 
 def list_inbox(settings: Settings) -> list[str]:
@@ -203,33 +259,35 @@ def list_inbox(settings: Settings) -> list[str]:
     return sorted(p.name for p in inbox.iterdir() if p.is_file() and p.suffix.lower() in (".xlsx", ".xlsm", ".csv"))
 
 
-def load_draft(files: WorkbookFiles) -> dict | None:
+def load_draft(project: Project) -> dict | None:
     """The sheet being built a section at a time. Kept here because the agent does not carry tool results from one
     turn to the next."""
-    path = files.dir / "draft.json"
+    path = project.dir / "draft.json"
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
 
 
-def save_draft(files: WorkbookFiles, spec: dict) -> None:
-    (files.dir / "draft.json").write_text(json.dumps(spec, ensure_ascii=False, indent=1), encoding="utf-8")
+def save_draft(project: Project, spec: dict) -> None:
+    (project.dir / "draft.json").write_text(json.dumps(spec, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
-def clear_draft(files: WorkbookFiles) -> None:
-    (files.dir / "draft.json").unlink(missing_ok=True)
+def clear_draft(project: Project) -> None:
+    (project.dir / "draft.json").unlink(missing_ok=True)
 
 
-def forget(settings: Settings, files: WorkbookFiles) -> None:
-    """Delete the workbook's folder (copy, draft, exports) and the upload it came from. Upload names start with the
-    workbook id, both being the sha256 of the same bytes. Inbox files are the user's own and stay."""
-    shutil.rmtree(files.dir)
-    for path in (settings.data_dir / "uploads").glob(f"{files.id}*"):
-        path.unlink(missing_ok=True)
+def delete(settings: Settings, project: Project) -> None:
+    """Delete the project's folder (every version, draft, exports) and the upload it came from, which is named by
+    the sha256 the project keeps. Inbox files are the user's own and stay."""
+    digest = _read_meta(project.dir).get("sha256", "")
+    shutil.rmtree(project.dir)
+    if UPLOAD_ID.match(digest):
+        for path in (settings.data_dir / "uploads").glob(f"{digest}.*"):
+            path.unlink(missing_ok=True)
 
 
-def export_path(files: WorkbookFiles, stem: str, suffix: str) -> Path:
+def export_path(project: Project, stem: str, suffix: str) -> Path:
     safe = re.sub(r"[^A-Za-z0-9 ._-]+", "", stem).strip() or "export"
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    return files.exports / f"{safe} {stamp}{suffix}"
+    return project.exports / f"{safe} {stamp}{suffix}"
 
 
 def _now() -> str:
@@ -238,11 +296,11 @@ def _now() -> str:
 
 def _read_meta(folder: Path) -> dict:
     try:
-        return json.loads((folder / "meta.json").read_text(encoding="utf-8"))
+        return json.loads((folder / "project.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
 
 
 def _write_meta(folder: Path, **changes) -> None:
     meta = _read_meta(folder) | changes
-    (folder / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
+    (folder / "project.json").write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
