@@ -138,6 +138,27 @@ def open_files(settings: Settings, *, upload_id: str | None, inbox_file: str | N
     return files
 
 
+def save_written(settings: Settings, data: bytes, name: str, source: str) -> WorkbookFiles:
+    """Open a workbook this server wrote (made from rows, or an edited copy) like an upload: same bytes, same id, so
+    every other tool reads it and later edits start from it."""
+    wid = hashlib.sha256(data).hexdigest()[:12]
+    folder = settings.data_dir / "workbooks" / wid
+    files = WorkbookFiles(id=wid, dir=folder, name=name)
+    if not files.original.exists():
+        folder.mkdir(parents=True, exist_ok=True)
+        files.original.write_bytes(data)
+        meta = {"name": name, "source": source, "opened_at": _now()}
+        (folder / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
+    else:
+        _write_meta(folder, name=name)
+    return files
+
+
+def has_macros(path: Path) -> bool:
+    with zipfile.ZipFile(path) as z:
+        return "xl/vbaProject.bin" in z.namelist()
+
+
 def get_files(settings: Settings, workbook_id: str) -> WorkbookFiles:
     """The workbook with that id. An id this server never gave (the agent forgets tool results between turns, so a
     model guesses: a chat attachment's id, the file name) means the only open workbook when there is just one."""
