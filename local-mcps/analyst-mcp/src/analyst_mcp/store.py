@@ -1,13 +1,15 @@
-"""Files on disk: uploads in, projects, exports out.
+"""Files on disk: uploads in, projects of files, exports out.
 
-A project is one Excel file under a name the user knows. The model passes that name to every tool, so a chat keeps to
-its project by naming it, and moves to another by naming that one.
+A project is a named folder of files the user works on together ("Dialysis": the rate sheet, the sub-inventory, May,
+June and July data). The model passes the project's name to every tool, and a file's name where it matters, so a chat
+keeps to its project by naming it and moves to another by naming that one.
 
-DATA_DIR/uploads/<sha256>.<ext>              bytes the agent app POSTed to /uploads
-DATA_DIR/projects/<key>/versions/<n>.xlsx    the file; an edit adds version n+1 (a CSV is converted once)
-DATA_DIR/projects/<key>/project.json         name, current version, where it came from
-DATA_DIR/projects/<key>/draft.json           the sheet being built a section at a time
-DATA_DIR/projects/<key>/exports/             xlsx and png files this server wrote
+DATA_DIR/uploads/<sha256>.<ext>                              bytes the agent app POSTed to /uploads
+DATA_DIR/projects/<p>/project.json                           the project's name, when it changed
+DATA_DIR/projects/<p>/files/<f>/versions/<n>.xlsx            a file; an edit adds version n+1 (CSV converted once)
+DATA_DIR/projects/<p>/files/<f>/file.json                    its name, current version, where it came from
+DATA_DIR/projects/<p>/files/<f>/draft.json                   the sheet being built on it a section at a time
+DATA_DIR/projects/<p>/exports/                               xlsx and png files this server wrote
 
 A version is never written to once saved: edits add a version, exports are copies.
 """
@@ -28,11 +30,40 @@ from .errors import ToolFailure
 UPLOAD_ID = re.compile(r"^[0-9a-f]{64}$")
 XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 NAME_CHARS = 80
-SHOWN_PROJECTS = 20
+SHOWN = 20
+EXTENSIONS = (".xlsx", ".xlsm", ".csv")
 
 
 @dataclass
 class Project:
+    key: str
+    dir: Path
+    name: str
+
+    @property
+    def exports(self) -> Path:
+        path = self.dir / "exports"
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    def books(self) -> list["Book"]:
+        """The project's files, in the order they were added."""
+        found = []
+        folder = self.dir / "files"
+        if folder.exists():
+            for sub in folder.iterdir():
+                meta = _read(sub / "file.json")
+                first = sub / "versions" / "1.xlsx"
+                if meta and first.exists():
+                    found.append((first.stat().st_mtime_ns, _book(self, sub, meta)))
+        return [b for _, b in sorted(found, key=lambda f: (f[0], f[1].key))]
+
+
+@dataclass
+class Book:
+    """One file of a project."""
+
+    project: Project
     key: str
     dir: Path
     name: str
@@ -42,7 +73,7 @@ class Project:
     def id(self) -> str:
         """Names this version's loaded workbook in the caches: an edit is a new version, so stale results cannot
         survive it."""
-        return f"{self.key}@{self.version}"
+        return f"{self.project.key}/{self.key}@{self.version}"
 
     @property
     def file(self) -> Path:
@@ -50,9 +81,7 @@ class Project:
 
     @property
     def exports(self) -> Path:
-        path = self.dir / "exports"
-        path.mkdir(parents=True, exist_ok=True)
-        return path
+        return self.project.exports
 
 
 def _kind(data: bytes) -> str:
@@ -130,55 +159,103 @@ def _key(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:60]
 
 
-def _clean_name(name: str | None) -> str:
+def _stem(name: str) -> str:
+    return Path(name).stem if name.lower().endswith(EXTENSIONS) else name
+
+
+def _clean_name(name: str | None, what: str = "project") -> str:
     """The name as the user would say it: spaces tidied, a file extension dropped ('Budget.xlsx' is 'Budget')."""
-    cleaned = " ".join((name or "").split())
-    if cleaned.lower().endswith((".xlsx", ".xlsm", ".csv")):
-        cleaned = Path(cleaned).stem
+    cleaned = _stem(" ".join((name or "").split()))
     if not _key(cleaned):
-        raise ToolFailure("bad_project_name", "a project needs a name with letters or digits, e.g. 'Q3 budget'")
+        raise ToolFailure(f"bad_{what}_name", f"a {what} needs a name with letters or digits, e.g. 'Dialysis'")
     return cleaned[:NAME_CHARS]
 
 
 def _root(settings: Settings) -> Path:
-    return settings.data_dir / "projects"
+    root = settings.data_dir / "projects"
+    if root.exists():
+        _migrate(root)
+    return root
+
+
+def _migrate(root: Path) -> None:
+    """A project from before projects held files (projects/<p>/versions/) becomes a project with that one file."""
+    for folder in root.iterdir():
+        if not (folder / "versions").is_dir():
+            continue
+        meta = _read(folder / "project.json")
+        target = folder / "files" / folder.name
+        target.mkdir(parents=True, exist_ok=True)
+        (folder / "versions").rename(target / "versions")
+        if (folder / "draft.json").exists():
+            (folder / "draft.json").rename(target / "draft.json")
+        _write(target / "file.json", **{k: v for k, v in meta.items() if k != "updated_at"},
+               updated_at=meta.get("updated_at"))  # fmt: skip
+        (folder / "project.json").write_text(
+            json.dumps({"name": meta.get("name", folder.name), "created_at": meta.get("created_at"),
+                        "updated_at": meta.get("updated_at")}, ensure_ascii=False),  # fmt: skip
+            encoding="utf-8",
+        )
 
 
 def _project(folder: Path, meta: dict) -> Project:
-    return Project(key=folder.name, dir=folder, name=meta.get("name", folder.name), version=int(meta.get("version", 1)))
+    return Project(key=folder.name, dir=folder, name=meta.get("name", folder.name))
 
 
-def start(
-    settings: Settings, name: str | None, data: bytes, source: str, digest: str | None = None
-) -> tuple[Project, bool]:
-    """A new project holding `data` as version 1, and whether it is new. Starting it again from the same file is the
-    same project; another file under a name already taken is refused, so no project is replaced by accident."""
+def _book(project: Project, folder: Path, meta: dict) -> Book:
+    return Book(project=project, key=folder.name, dir=folder, name=meta.get("name", folder.name),
+                version=int(meta.get("version", 1)))  # fmt: skip
+
+
+def _touch(project: Project) -> None:
+    _write(project.dir / "project.json", updated_at=_now())
+
+
+def _ensure_project(settings: Settings, name: str | None) -> tuple[Project, bool]:
+    """The project named `name`, made when there is none yet."""
     name = _clean_name(name)
-    digest = digest or hashlib.sha256(data).hexdigest()
     folder = _root(settings) / _key(name)
-    if (folder / "project.json").exists():
-        meta = _read_meta(folder)
+    meta = _read(folder / "project.json")
+    if meta:
+        return _project(folder, meta), False
+    folder.mkdir(parents=True, exist_ok=True)
+    now = _now()
+    _write(folder / "project.json", name=name, created_at=now, updated_at=now)
+    return Project(key=folder.name, dir=folder, name=name), True
+
+
+def _put(project: Project, name: str, data: bytes, source: str, digest: str, replace: bool) -> tuple[Book, str]:
+    """Store `data` as the file `name` of the project. Returns the file and what happened: "added", "same" (that file
+    is already there), "replaced" (a new version of a file with that name)."""
+    name = _clean_name(name, "file")
+    folder = project.dir / "files" / _key(name)
+    meta = _read(folder / "file.json")
+    if meta:
+        book = _book(project, folder, meta)
         if meta.get("sha256") == digest:
-            return _project(folder, meta), False
-        raise ToolFailure(
-            "project_exists",
-            f'there is already a project "{meta.get("name", name)}" holding another file; each file is its own '
-            "project, so open this one under its own name (leave `project` out to use the file's name), or "
-            "switch_to_project to work on that one",
-        )
+            return book, "same"
+        if not replace:
+            raise ToolFailure(
+                "file_exists",
+                f'project "{project.name}" already has a file "{book.name}"; give the new one another name, or '
+                "edit_file to change that one",
+            )
+        return save_version(book, data, source), "replaced"
     (folder / "versions").mkdir(parents=True, exist_ok=True)
     (folder / "versions" / "1.xlsx").write_bytes(data)
     now = _now()
-    meta = {"name": name, "version": 1, "source": source, "sha256": digest, "created_at": now, "updated_at": now,
-            "history": [{"version": 1, "change": source, "at": now}]}  # fmt: skip
-    _write_meta(folder, **meta)
-    return _project(folder, meta), True
+    _write(folder / "file.json", name=name, version=1, source=source, sha256=digest, created_at=now, updated_at=now,
+           history=[{"version": 1, "change": source, "at": now}])  # fmt: skip
+    _touch(project)
+    return Book(project=project, key=folder.name, dir=folder, name=name, version=1), "added"
 
 
-def open_file(
-    settings: Settings, *, upload_id: str | None, inbox_file: str | None, name: str | None
-) -> tuple[Project, bool]:
-    """A project from an upload or an inbox file, named `name` or after the file."""
+def add_file(
+    settings: Settings, *, project: str | None, upload_id: str | None, inbox_file: str | None, name: str | None
+) -> tuple[Book, bool, str]:
+    """Put an upload or an inbox file into a project (made when new; named after the file when no name is given).
+    The same file again changes nothing; a different file under a name the project has is that file's new version.
+    Returns the file, whether the project is new, and what happened to the file."""
     if bool(upload_id) == bool(inbox_file):
         raise ToolFailure("bad_request", "pass exactly one of upload_id or inbox_file")
     source = _upload_path(settings, upload_id) if upload_id else _inbox_path(settings, inbox_file or "")
@@ -187,55 +264,107 @@ def open_file(
         raise ToolFailure("file_too_large", f"file exceeds {settings.max_file_bytes // (1024 * 1024)} MB")
     kind = _kind(data)
     digest = hashlib.sha256(data).hexdigest()
-    name = _clean_name(name or inbox_file or f"Spreadsheet {digest[:6]}")
+    name = _clean_name(name or inbox_file or f"Spreadsheet {digest[:6]}", "file")
     xlsx = _csv_to_xlsx(data, name) if kind == "csv" else data
-    return start(settings, name, xlsx, "upload" if upload_id else f"inbox file {inbox_file}", digest)
+    found, new = _ensure_project(settings, project or name)
+    book, what = _put(found, name, xlsx, "upload" if upload_id else f"inbox file {inbox_file}", digest, replace=True)
+    return book, new, what
 
 
-def save_version(settings: Settings, project: Project, data: bytes, change: str) -> Project:
-    """The project's next version. The ones before stay on disk as they were."""
-    meta = _read_meta(project.dir)
-    version = max(int(p.stem) for p in (project.dir / "versions").glob("*.xlsx")) + 1
-    (project.dir / "versions" / f"{version}.xlsx").write_bytes(data)
+def create_file(settings: Settings, project: str | None, name: str, data: bytes) -> Book:
+    found, _ = _ensure_project(settings, project or name)
+    book, _ = _put(found, name, data, "created", hashlib.sha256(data).hexdigest(), replace=False)
+    return book
+
+
+def save_version(book: Book, data: bytes, change: str) -> Book:
+    """The file's next version. The ones before stay on disk as they were."""
+    meta = _read(book.dir / "file.json")
+    version = max(int(p.stem) for p in (book.dir / "versions").glob("*.xlsx")) + 1
+    (book.dir / "versions" / f"{version}.xlsx").write_bytes(data)
     now = _now()
     history = [*meta.get("history", []), {"version": version, "change": change, "at": now}]
-    _write_meta(project.dir, version=version, updated_at=now, history=history)
-    return Project(key=project.key, dir=project.dir, name=project.name, version=version)
+    _write(book.dir / "file.json", version=version, updated_at=now, history=history,
+           sha256=hashlib.sha256(data).hexdigest())  # fmt: skip
+    _touch(book.project)
+    return Book(project=book.project, key=book.key, dir=book.dir, name=book.name, version=version)
 
 
-def has_macros(path: Path) -> bool:
-    with zipfile.ZipFile(path) as z:
-        return "xl/vbaProject.bin" in z.namelist()
+def _match(items: list, name: str, key) -> list:
+    """Items whose name is `name`, else those whose name holds it or is held by it ('budget' for 'Q3 Budget')."""
+    wanted = _key(_stem(name)) if name else ""
+    if not wanted:
+        return []
+    exact = [i for i in items if key(i) == wanted]
+    return exact or [i for i in items if wanted in key(i) or key(i) in wanted]
 
 
-def get(settings: Settings, name: str, forgive: bool = True) -> Project:
-    """The project the model named. A close name finds it ('budget' for 'Q3 Budget', the file name for the project
-    named after it). With `forgive`, a name that matches none means the only project when there is just one: the model
-    sometimes passes the file name it saw instead."""
+def get_project(settings: Settings, name: str, forgive: bool = True) -> Project:
+    """The project the model named. With `forgive`, a name that matches none means the only project when there is
+    just one: the model sometimes passes a file name instead."""
     projects = list_projects(settings)
-    wanted = _key(Path(name).stem if name.lower().endswith((".xlsx", ".xlsm", ".csv")) else name) if name else ""
-    if wanted:
-        exact = [p for p in projects if p.key == wanted]
-        close = exact or [p for p in projects if wanted in p.key or p.key in wanted]
-        if len(close) == 1:
-            return close[0]
-        if len(close) > 1:
-            raise ToolFailure(
-                "project_unclear", f"{name!r} could be " + ", ".join(f'"{p.name}"' for p in close) + "; ask which"
-            )
+    close = _match(projects, name, lambda p: p.key)
+    if not close:
+        # A file's name finds the project holding it.
+        close = list({b.project.key: b.project for p in projects for b in _match(p.books(), name, lambda b: b.key)}
+                     .values())  # fmt: skip
+    if len(close) == 1:
+        return close[0]
+    if len(close) > 1:
+        raise ToolFailure("project_unclear", f"{name!r} could be " + _names(close) + "; ask which")
     if forgive and len(projects) == 1:
         return projects[0]
-    said = f"no project named {name!r}" if wanted else "say which project"
+    said = f"no project named {name!r}" if name and name.strip() else "say which project"
     raise ToolFailure("project_not_found", said + known(projects))
 
 
+def get_book(settings: Settings, project: str, file: str | None = None, sheets: tuple[str, ...] = ()) -> Book:
+    """A file of the project. Without `file`, the only file, or the only one with all of `sheets` (the sheets the
+    call names)."""
+    found = get_project(settings, project)
+    books = found.books()
+    if not books:
+        raise ToolFailure("no_files", f'project "{found.name}" has no files yet: open_file or create_file')
+    if file:
+        close = _match(books, file, lambda b: b.key)
+        if len(close) == 1:
+            return close[0]
+        if len(books) == 1:
+            return books[0]
+        said = f"{file!r} could be " if close else f'project "{found.name}" has no file {file!r}; its files are '
+        raise ToolFailure("file_not_found", said + _names(close or books))
+    if len(books) == 1:
+        return books[0]
+    if sheets:
+        wanted = {s.strip().lower() for s in sheets}
+        holding = [b for b in books if wanted <= {s.lower() for s in sheet_names(b)}]
+        if len(holding) == 1:
+            return holding[0]
+    raise ToolFailure(
+        "file_needed", f'project "{found.name}" has several files; pass `file`, one of ' + _names(books)
+    )
+
+
+def sheet_names(book: Book) -> list[str]:
+    import openpyxl
+
+    wb = openpyxl.load_workbook(book.file, read_only=True)
+    try:
+        return list(wb.sheetnames)
+    finally:
+        wb.close()
+
+
+def _names(items: list) -> str:
+    shown = ", ".join(f'"{i.name}"' for i in items[:SHOWN])
+    return shown + (f" and {len(items) - SHOWN} more" if len(items) > SHOWN else "")
+
+
 def known(projects: list[Project]) -> str:
-    """The projects, so a model can ask the user which one is meant."""
+    """The projects, so a model can pick the one the user means, or ask."""
     if not projects:
-        return "; there are no projects yet: open_file for an attached file, create_project for a new one"
-    shown = ", ".join(f'"{p.name}"' for p in projects[:SHOWN_PROJECTS])
-    more = f" and {len(projects) - SHOWN_PROJECTS} more" if len(projects) > SHOWN_PROJECTS else ""
-    return f". Projects: {shown}{more}. If the user has not said which, ask them"
+        return "; there are no projects yet: open_file for an attached file, create_file for a new one"
+    return f". Projects: {_names(projects)}. Pick the one the user means; if unsure, ask them"
 
 
 def list_projects(settings: Settings) -> list[Project]:
@@ -244,14 +373,57 @@ def list_projects(settings: Settings) -> list[Project]:
     found = []
     if root.exists():
         for folder in root.iterdir():
-            meta = _read_meta(folder)
+            meta = _read(folder / "project.json")
             if meta:
                 found.append((meta.get("updated_at") or "", _project(folder, meta)))
     return [p for _, p in sorted(found, key=lambda f: f[0], reverse=True)]
 
 
-def info(project: Project) -> dict:
-    return _read_meta(project.dir)
+def info(item: Project | Book) -> dict:
+    return _read(item.dir / ("project.json" if isinstance(item, Project) else "file.json"))
+
+
+def move_file(settings: Settings, book: Book, to: str) -> tuple[Book, bool]:
+    """Move a file, with its versions and draft, into another project (made when new)."""
+    target, new = _ensure_project(settings, to)
+    if target.key == book.project.key:
+        return book, False
+    dest = target.dir / "files" / book.key
+    if dest.exists():
+        raise ToolFailure("file_exists", f'project "{target.name}" already has a file "{book.name}"')
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(book.dir), str(dest))
+    _touch(target)
+    if not book.project.books():
+        shutil.rmtree(book.project.dir)  # a project left with no files is gone
+    else:
+        _touch(book.project)
+    return Book(project=target, key=book.key, dir=dest, name=book.name, version=book.version), new
+
+
+def remove_file(settings: Settings, book: Book) -> None:
+    """Delete one file (every version, its draft) and the upload it came from. Inbox files stay."""
+    _forget_upload(settings, _read(book.dir / "file.json").get("sha256", ""))
+    shutil.rmtree(book.dir)
+    _touch(book.project)
+
+
+def delete_project(settings: Settings, project: Project) -> None:
+    """Delete the project: every file, draft and export, and the uploads they came from. Inbox files stay."""
+    for book in project.books():
+        _forget_upload(settings, _read(book.dir / "file.json").get("sha256", ""))
+    shutil.rmtree(project.dir)
+
+
+def _forget_upload(settings: Settings, digest: str) -> None:
+    if UPLOAD_ID.match(digest):
+        for path in (settings.data_dir / "uploads").glob(f"{digest}.*"):
+            path.unlink(missing_ok=True)
+
+
+def has_macros(path: Path) -> bool:
+    with zipfile.ZipFile(path) as z:
+        return "xl/vbaProject.bin" in z.namelist()
 
 
 def list_inbox(settings: Settings) -> list[str]:
@@ -260,48 +432,37 @@ def list_inbox(settings: Settings) -> list[str]:
     return sorted(p.name for p in inbox.iterdir() if p.is_file() and p.suffix.lower() in (".xlsx", ".xlsm", ".csv"))
 
 
-def load_draft(project: Project) -> dict | None:
+def load_draft(book: Book) -> dict | None:
     """The sheet being built a section at a time. Kept here because the agent does not carry tool results from one
     turn to the next."""
-    path = project.dir / "draft.json"
+    path = book.dir / "draft.json"
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
 
 
-def save_draft(project: Project, spec: dict) -> None:
-    (project.dir / "draft.json").write_text(json.dumps(spec, ensure_ascii=False, indent=1), encoding="utf-8")
+def save_draft(book: Book, spec: dict) -> None:
+    (book.dir / "draft.json").write_text(json.dumps(spec, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
-def clear_draft(project: Project) -> None:
-    (project.dir / "draft.json").unlink(missing_ok=True)
+def clear_draft(book: Book) -> None:
+    (book.dir / "draft.json").unlink(missing_ok=True)
 
 
-def delete(settings: Settings, project: Project) -> None:
-    """Delete the project's folder (every version, draft, exports) and the upload it came from, which is named by
-    the sha256 the project keeps. Inbox files are the user's own and stay."""
-    digest = _read_meta(project.dir).get("sha256", "")
-    shutil.rmtree(project.dir)
-    if UPLOAD_ID.match(digest):
-        for path in (settings.data_dir / "uploads").glob(f"{digest}.*"):
-            path.unlink(missing_ok=True)
-
-
-def export_path(project: Project, stem: str, suffix: str) -> Path:
+def export_path(item: Project | Book, stem: str, suffix: str) -> Path:
     safe = re.sub(r"[^A-Za-z0-9 ._-]+", "", stem).strip() or "export"
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    return project.exports / f"{safe} {stamp}{suffix}"
+    return item.exports / f"{safe} {stamp}{suffix}"
 
 
 def _now() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
 
 
-def _read_meta(folder: Path) -> dict:
+def _read(path: Path) -> dict:
     try:
-        return json.loads((folder / "project.json").read_text(encoding="utf-8"))
+        return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
 
 
-def _write_meta(folder: Path, **changes) -> None:
-    meta = _read_meta(folder) | changes
-    (folder / "project.json").write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
+def _write(path: Path, **changes) -> None:
+    path.write_text(json.dumps(_read(path) | changes, ensure_ascii=False), encoding="utf-8")

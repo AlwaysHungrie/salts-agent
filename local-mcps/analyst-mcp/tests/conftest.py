@@ -62,7 +62,7 @@ async def build_draft(proj: str, spec: dict) -> list:
     first error, which is then the last result."""
     from analyst_mcp import store
 
-    files = store.get(config.get_settings(), proj)
+    files = store.get_book(config.get_settings(), proj)
     (files.dir / "draft.json").unlink(missing_ok=True)
     out = []
     last = len(spec["sections"])
