@@ -7,3 +7,11 @@ export type ModelOption = { id: string; label: string; vision: boolean };
 export function modelCatalog(settings: DeploymentSettings): ModelOption[] {
   return settings.models.map((m) => ({ ...m }));
 }
+
+/**
+ * A model's nicknames: whatever its label holds in brackets, so "DeepSeek V4 Flash ($)"
+ * answers to `!model $`. A label without brackets has none.
+ */
+export function modelNicknames(label: string): string[] {
+  return [...label.matchAll(/\(([^()]*)\)/g)].map((m) => m[1].trim()).filter(Boolean);
+}

@@ -7,13 +7,16 @@ isolated DOs with their own SQLite database and message history.
 
 Models are served through OpenRouter. Which model a new agent starts on, and which
 models an agent may be switched *between*, are the `default_model` and `models`
-deployment settings below — a JSON array of `{ "id", "label", "vision" }`. `vision` is
+deployment settings below — a JSON array of `{ "id", "label", "vision" }`. Text in
+brackets in a `label` is a nickname: `"DeepSeek V4 Flash ($)"` is switched to with
+`!model $`. `vision` is
 false for a model that cannot be sent an image, and leaving it out means it can; it is
 the one thing that cannot be looked up, and getting it wrong means a photo fails at the
 provider instead of at the upload.
 
 Meta settings may go further and name any OpenRouter id at all, with its own answer to
-the same question — see the model list in that dialog.
+the same question and an optional `label` (which carries nicknames the same way) — see
+the model list in that dialog.
 
 ## Deployment settings
 
@@ -267,7 +270,9 @@ Two routes are deliberately outside all of this:
 
 A message that is nothing but a bang command is handled before a turn starts, the same
 in the browser, Telegram and WhatsApp: `!new`, `!clear`, `!delete`, `!stop`, `!unstick`,
-`!compact`, and `!enable-mcp <name>` / `!disable-mcp <name>`. See
+`!compact`, `!enable-mcp <name>` / `!disable-mcp <name>`, and `!model <nickname>`, which
+sets the agent's model to the offered one whose label holds the nickname in brackets
+(refused when meta locks `model`). See
 [`src/commands.ts`](src/commands.ts).
 
 ## Capabilities

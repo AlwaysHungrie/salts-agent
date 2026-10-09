@@ -414,7 +414,7 @@ export type MetaSettings = {
  * images. There is no label — a model in the deployment's catalogue is shown under
  * the name that gives it, and one that is not is shown as the id it is.
  */
-export type ModelChoice = { id: string; vision: boolean };
+export type ModelChoice = { id: string; vision: boolean; label?: string };
 
 export type MetaTunableKey =
   | "model"

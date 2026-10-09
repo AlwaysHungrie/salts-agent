@@ -10,6 +10,8 @@ The model is what reads your messages and writes your agent's replies. Different
 
 You can pick the model in your agent's **Settings** under **Model**, and change it at any time. The next reply will use the new model, even in the middle of a conversation.
 
+On Telegram or WhatsApp, you can also switch with `!model` and the model's nickname, which is the part of its name in brackets. For example, `!model $` switches to **DeepSeek V4 Flash ($)**. See [Commands](/guide/commands).
+
 ## Start with the default
 
 Your agent starts on a model that is cheap and fast, and good enough for everyday questions, writing, summaries and reminders. We recommend using it for a few days before you change anything.
