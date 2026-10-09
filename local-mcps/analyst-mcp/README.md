@@ -8,26 +8,33 @@ built, and receives the finished .xlsx as a download.
 
 ## Projects
 
-Each file the user works on is a **project** with a name they know ("Q3 Budget", "Diet plan"). Every tool takes
-`project`, that name, so a chat stays on its project by naming it. Saying "switch to the diet plan" moves the chat to
-another project (`switch_to_project`), and `list_projects` lists them. Several chats can each work on their own
-project at the same time. A name finds its project loosely ("budget" finds "Q3 Budget"). If a chat names no project
-and there are several, the tool refuses with the list, so the model asks the user.
+A **project** is a named set of files the user works on together. For example, "Dialysis" might hold a rate sheet,
+the sub-inventory, and May, June and July data.
+- **Naming:** every tool takes `project`, its name, so a chat stays on its project by naming it. Names match loosely,
+  so "budget" finds "Q3 Budget".
+- **Picking a project:** the model picks the project from the user's words (`list_projects` shows each project with
+  its files) and asks only when it can't tell. "Switch to dialysis" moves the chat (`switch_to_project`).
+- **Adding files:** `open_file` adds an attachment to a project, or starts a new one. `move_file` regroups files.
+- **SQL across files:** `query` reads every file of the project. A sheet name several files share is one stacked
+  table with a `file` column, so totals across files are one query. `"<file>.<sheet>"` is one file's sheet.
+- **One-file tools:** reads, edits, what-if and dashboards work on one file. They take `file` when the project has
+  several, unless the sheet named picks it.
 
-The user's own file is never changed. An edit saves the project's next version
-(`projects/<name>/versions/<n>.xlsx`); earlier versions stay on disk.
+The user's own file is never changed. An edit saves the file's next version
+(`projects/<project>/files/<file>/versions/<n>.xlsx`); earlier versions stay on disk. Projects saved before
+projects held files open as projects with one file.
 
 ## How a request goes
 
 1. The user attaches a file in the chat. The agent app uploads it to this server
-   (`POST /uploads`) and the model starts a project from it with `open_file`.
+   (`POST /uploads`) and the model adds it to a project with `open_file`.
 2. `open_file` returns a map of every number in the file. Each entry has its
    cell, the label on its row, its column header, its unit and its formula. The model
    finds numbers from the map, and does not guess cell addresses.
 3. For a new sheet, the model adds **sections** one at a time with `add_section`. Each
    section is a table, can have a chart, and holds formulas over the file's cells
    (`=Feasibility!C4*10.764`), with optional checks that tie its totals back to the
-   file's own totals. The server keeps the draft (`projects/<name>/draft.json`),
+   file's own totals. The server keeps the draft (`projects/<p>/files/<f>/draft.json`),
    because the agent does not carry tool results from one turn to the next.
 4. Each `add_section` call evaluates the section in Python and draws it as a PNG (plus
    one for its checks). The agent shows the images in the chat. Sections that read
@@ -44,20 +51,22 @@ picture the user approved are the numbers in the file.
 
 | Tool | What it does |
 | --- | --- |
-| `list_projects` | Lists the projects (newest first, with edits and draft sections) and the files in the inbox folder. |
-| `open_file` | Starts a project from an upload (`upload_id`) or an inbox file (`inbox_file`), named `project` or after the file. Returns the map of numbers and the SQL tables. A name already used by another file is refused. |
-| `switch_to_project` | Moves the chat to another project by name. Returns its map of numbers and SQL tables. |
+| `list_projects` | Lists the projects with their files (edits, draft sections), newest first, and the files in the inbox folder. |
+| `open_file` | Adds an upload (`upload_id`) or an inbox file (`inbox_file`) to `project` (made when new; named after the file when left out). A changed file under a name the project has becomes its new version. Returns the map of numbers and the SQL tables. |
+| `switch_to_project` | Moves the chat to another project by name. Returns the map of each of its files and the SQL tables. |
 | `read_sheet` | Reads a sheet or a range cell by cell, with formulas. Pages with `start_row`. |
-| `find` | Finds cells whose text contains some words, with the numbers on the same row. |
-| `query` | Runs one read-only DuckDB SQL query over the file. It can draw the result as a chart, or return it as an .xlsx or .csv file. |
+| `find` | Finds cells whose text contains some words, with the numbers on the same row, in every file of the project. |
+| `query` | Runs one read-only DuckDB SQL query over every file of the project. It can draw the result as a chart, or return it as an .xlsx or .csv file. |
 | `what_if` | Changes input cells, recalculates the whole file, and reports the outputs before and after. |
 | `breakdown` | Opens a total cell into the items that add up to it exactly; with `groups`, checks every item is in one head and returns the section rows and check. |
 | `add_section` | Adds, replaces (`number`) or removes (`remove`) one section of the draft sheet and shows it as an image. |
 | `export_sheet` | Builds the draft into a copy of the file and returns the .xlsx. |
-| `create_project` | Makes a new Excel file from rows as a new project (first row bold headings; `=` starts a formula) and returns the .xlsx. |
-| `edit_project` | Applies edits in order, all or none: `set` cells, `append_rows`, `add_sheet`, `rename_sheet` (formulas follow), `delete_sheet` (refused while formulas use it), `format` (bold, number format, fill, width). Saves the project's next version and returns the .xlsx. |
+| `create_file` | Makes a new Excel file from rows in `project` (first row bold headings; `=` starts a formula) and returns the .xlsx. |
+| `edit_file` | Applies edits in order, all or none: `set` cells, `append_rows`, `add_sheet`, `rename_sheet` (formulas follow), `delete_sheet` (refused while formulas use it), `format` (bold, number format, fill, width). Saves the file's next version and returns the .xlsx. |
+| `move_file` | Moves a file (versions, draft) to another project; a project left empty is removed. |
+| `remove_file` | Deletes one file of a project, every version and its upload. Inbox files stay. |
 | `clear_draft` | Empties the draft sheet, to start a new dashboard on the same file. |
-| `delete_project` | Deletes a project's versions, draft, exports and upload from this computer. Inbox files stay. |
+| `delete_project` | Deletes a project's files, drafts, exports and uploads from this computer. Inbox files stay. |
 | `run_python` | Runs Python on a copy of the project's file. **Off** unless `ALLOW_PYTHON=true`; see [Security](#security). |
 
 In SQL, the `cells` table has every non-empty cell: `sheet`, `cell`, `row`, `col`,
@@ -125,7 +134,7 @@ Set these in `.env` (see `.env.example`) or in the environment.
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
-| `DATA_DIR` | `./data` | Holds uploads and projects (`projects/<name>/versions/<n>.xlsx`, exports in `projects/<name>/exports/`). |
+| `DATA_DIR` | `./data` | Holds uploads and projects (`projects/<p>/files/<f>/versions/<n>.xlsx`, exports in `projects/<p>/exports/`). |
 | `INBOX_DIR` | `DATA_DIR/inbox` | A folder of files the agent can open by name. |
 | `MAX_FILE_BYTES` | 25 MB | The largest file accepted. |
 | `MAX_ROWS` | 200 | The most rows a query or a sheet read returns. |

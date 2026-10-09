@@ -12,7 +12,7 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .store import Project, export_path
+from .store import Book, export_path
 
 PRELUDE = """\
 import pandas as pd
@@ -30,17 +30,17 @@ class RunResult:
     folder: Path | None = None
 
 
-def run(project: Project, code: str, timeout: int) -> RunResult:
-    folder = export_path(project, "python run", "")
+def run(book: Book, code: str, timeout: int) -> RunResult:
+    folder = export_path(book, "python run", "")
     (folder / "out").mkdir(parents=True)
-    shutil.copyfile(project.file, folder / "input.xlsx")
+    shutil.copyfile(book.file, folder / "input.xlsx")
     (folder / "script.py").write_text(PRELUDE + "\n" + code, encoding="utf-8")
     env = {
         "PATH": os.environ.get("PATH", ""),
         "HOME": str(folder),
         "MPLBACKEND": "Agg",
         # Shared across runs: matplotlib otherwise rebuilds its font cache in every fresh HOME.
-        "MPLCONFIGDIR": str(project.dir.parent.parent / ".mplconfig"),
+        "MPLCONFIGDIR": str(book.project.dir.parent.parent / ".mplconfig"),
         "PYTHONIOENCODING": "utf-8",
         "SYSTEMROOT": os.environ.get("SYSTEMROOT", ""),  # Windows needs it to start Python at all
     }

@@ -1,10 +1,13 @@
-"""Read-only SQL over a workbook with DuckDB.
+"""Read-only SQL over a project's files with DuckDB.
 
-Two kinds of table:
-  cells             every non-empty cell: sheet, cell, row, col, value, number, formula, label, header, unit
-  "<sheet name>"    a sheet read as a table when it has a header row (text across the top, data below)
+Tables:
+  cells                  every non-empty cell of every file: file, sheet, cell, row, col, value, number, formula,
+                         label, header, unit
+  "<sheet name>"         a sheet read as a table when it has a header row (text across the top, data below). A sheet
+                         name several files share is all of them stacked, with a `file` column (May, June, July)
+  "<file>.<sheet name>"  one file's sheet, when the project has several files
 
-The database is in memory and built from the workbook; external access (files, network) is switched off before any
+The database is in memory and built from the files; external access (files, network) is switched off before any
 query runs, and only reading statements are accepted.
 """
 
@@ -85,40 +88,59 @@ def _sheet_frame(wb: Workbook, sheet: str) -> pd.DataFrame | None:
     return None
 
 
-def connection(wb: Workbook) -> tuple[duckdb.DuckDBPyConnection, list[str]]:
+def _table(con: duckdb.DuckDBPyConnection, name: str, frame: pd.DataFrame) -> None:
+    con.register("frame", frame)
+    con.execute(f'CREATE TABLE "{name.replace(chr(34), chr(34) * 2)}" AS SELECT * FROM frame')
+    con.unregister("frame")
+
+
+def connection(key: str, books: list[tuple[str, Workbook]]) -> tuple[duckdb.DuckDBPyConnection, list[str]]:
+    """The project's database: `books` are (file name, loaded workbook); `key` names this set of versions."""
     with _lock:
-        if wb.id in _conns:
-            return _conns[wb.id]
+        if key in _conns:
+            return _conns[key]
         con = duckdb.connect(":memory:")
         tables = ["cells"]
-        frame = _cells_frame(wb)
-        con.register("cells_frame", frame)
-        con.execute("CREATE TABLE cells AS SELECT * FROM cells_frame")
-        con.unregister("cells_frame")
-        for sheet in wb.sheets:
-            sf = _sheet_frame(wb, sheet)
-            if sf is None or sheet.lower() == "cells":
-                continue
-            con.register("sheet_frame", sf)
-            con.execute(f'CREATE TABLE "{sheet.replace(chr(34), chr(34) * 2)}" AS SELECT * FROM sheet_frame')
-            con.unregister("sheet_frame")
+        frames = []
+        for name, wb in books:
+            frame = _cells_frame(wb)
+            frame.insert(0, "file", name)
+            frames.append(frame)
+        _table(con, "cells", pd.concat(frames, ignore_index=True))
+        by_sheet: dict[str, list[tuple[str, pd.DataFrame]]] = {}
+        for name, wb in books:
+            for sheet in wb.sheets:
+                sf = _sheet_frame(wb, sheet)
+                if sf is not None and sheet.lower() != "cells":
+                    by_sheet.setdefault(sheet, []).append((name, sf))
+        several = len(books) > 1
+        for sheet, parts in by_sheet.items():
+            if several:
+                for name, sf in parts:
+                    _table(con, f"{name}.{sheet}", sf)
+                    tables.append(f"{name}.{sheet}")
+                stacked = pd.concat([sf.assign(file=name)[["file", *sf.columns]] for name, sf in parts],
+                                    ignore_index=True)  # fmt: skip
+                _table(con, sheet, stacked)
+            else:
+                _table(con, sheet, parts[0][1])
             tables.append(sheet)
         con.execute("SET enable_external_access = false")
         con.execute("SET lock_configuration = true")
-        _conns[wb.id] = (con, tables)
+        _conns[key] = (con, tables)
         return con, tables
 
 
 def forget(project_key: str, keep: str = "") -> None:
-    """Close the project's databases (one per version loaded), all but `keep`."""
+    """Close the project's databases (one per set of file versions), all but `keep`."""
     with _lock:
-        gone = [_conns.pop(k) for k in list(_conns) if k.split("@")[0] == project_key and k != keep]
+        gone = [_conns.pop(k) for k in list(_conns) if k.split(":")[0] == project_key and k != keep]
     for con, _ in gone:
         con.close()
 
 
-def describe(wb: Workbook) -> str:
-    con, tables = connection(wb)
+def describe(key: str, books: list[tuple[str, Workbook]]) -> str:
+    con, tables = connection(key, books)
     lines = []
     for t in tables:
         cols = con.cursor().execute(f'DESCRIBE "{t}"').fetchall()
@@ -127,13 +149,13 @@ def describe(wb: Workbook) -> str:
     return "\n".join(lines)
 
 
-def run(wb: Workbook, sql: str, limit: int) -> tuple[list[str], list[tuple], bool]:
+def run(key: str, books: list[tuple[str, Workbook]], sql: str, limit: int) -> tuple[list[str], list[tuple], bool]:
     text = sql.strip().rstrip(";").strip()
     if not text or ";" in text:
         raise ToolFailure("bad_sql", "send exactly one statement")
     if not READING.match(text):
         raise ToolFailure("read_only", "only reading statements run here (SELECT, WITH, DESCRIBE, SUMMARIZE, …)")
-    con, _ = connection(wb)
+    con, _ = connection(key, books)
     cur = con.cursor()
     try:
         cur.execute(text)

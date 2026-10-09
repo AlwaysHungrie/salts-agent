@@ -46,17 +46,19 @@ Spreadsheet analyst running on the user's own computer. It opens Excel/CSV files
 runs what-if scenarios, builds new sheets (tables + charts) into a copy of the file, makes new Excel files, and
 edits them. Whenever the user wants an Excel file, use these tools: they send a real .xlsx to the user.
 
-Projects: each file the user works on is a project with a name they know ("Q3 Budget", "Diet plan"). Every tool takes
-`project`, that name. Stay on the project this chat is about and pass its name on every call; when the user says to
-switch to another project, use switch_to_project and from then on pass the new name. list_projects shows them all.
-Several files in one chat (May, June and July data) are one project each, named after the file: open each with
-open_file, then work across them by passing each name in turn (query each, combine the results in your answer).
-If the chat has not named a project and there is more than one, ask the user which.
+Projects: a project is a named set of files the user works on together ("Dialysis": a rate sheet, the sub-inventory,
+May, June and July data). Every tool takes `project`, its name. Pick the project yourself when the user's words make
+it clear (list_projects shows each project with its files); ask only when you cannot tell. Then stay on it and pass
+its name on every call. When the user says to switch, use switch_to_project and pass the new name from then on.
+Tools that work on one file (read_sheet, what_if, breakdown, add_section, export_sheet, edit_file) take `file` too
+when the project has several. query reads every file of the project at once: a sheet name several files share is one
+stacked table with a `file` column, so totals across files are one query.
 
 How to work:
-1. Open the file: open_file with the attachment's upload_id (or inbox_file for a file in the inbox folder) and a
-   project name (the file's name unless the user gave one). It returns a map of every number with the words around
-   it (label, column header, unit) and its cell. Later calls pass the project name; there is no need to open it again.
+1. Open the file: open_file with the attachment's upload_id (or inbox_file for a file in the inbox folder) and the
+   project it belongs to (a new name makes a new project; leave it out to name the project after the file). It
+   returns a map of every number with the words around it (label, column header, unit) and its cell. Later calls
+   pass the project name; there is no need to open it again.
 2. Find numbers with the map, find, read_sheet or query. Never guess a cell address; look it up.
 3. Answer plain questions directly from the values. Use what_if for "what if X changes" questions.
 4. "Where does the money go", a cost split, any breakdown of a total: use breakdown on the total cell. It lists the
@@ -68,9 +70,9 @@ How to work:
    it with add_section, one call per section: each is shown to the user as an image. The server keeps the draft,
    so you never repeat earlier sections; add_section with `number` replaces one the user wants changed.
 6. Only when the user is happy, export_sheet. It returns the .xlsx to the user. The project's file is not changed.
-To make a new Excel file (a plan, a list, a table the user asked for): create_project with the rows. To change the
-file (values, formulas, rows, sheets, bold, colours, number formats): edit_project. Both send the file to the user;
-an edit becomes the project's new version, so the project name keeps meaning the latest file.
+To make a new Excel file (a plan, a list, a table, an analysis of several files): create_file with the rows. To
+change a file (values, formulas, rows, sheets, bold, colours, number formats): edit_file. Both send the file to the
+user; an edit becomes the file's new version, so its name keeps meaning the latest file.
 When the user asks for something the file does not have (a blank cell, no such figure), say so in your reply
 and in the section ("Not given in the file"); never leave it out silently or make a number up.
 Images reach the user only through add_section or query results; never write an image link yourself.
@@ -83,18 +85,38 @@ _books: dict[str, tuple[int, Workbook]] = {}
 _books_lock = threading.Lock()
 
 
-def workbook(project: str | store.Project) -> tuple[store.Project, Workbook]:
-    """The project's current file, loaded once per version."""
-    found = store.get(get_settings(), project) if isinstance(project, str) else project
+def _ref_sheets(refs) -> tuple[str, ...]:
+    """The sheets that cell references like Feasibility!C4 or 'Model Sheet'!B6 name."""
+    out = []
+    for ref in refs:
+        if "!" in ref:
+            out.append(ref.rsplit("!", 1)[0].strip().strip("'").replace("''", "'"))
+    return tuple(out)
+
+
+def workbook(
+    project: str | store.Book, file: str | None = None, sheets: tuple[str, ...] = ()
+) -> tuple[store.Book, Workbook]:
+    """A file of the project, loaded once per version. Without `file`, the project's only file, or the only one with
+    `sheets`."""
+    found = store.get_book(get_settings(), project, file, sheets) if isinstance(project, str) else project
+    slot = f"{found.project.key}/{found.key}"
     with _books_lock:
-        cached = _books.get(found.key)
+        cached = _books.get(slot)
         if cached and cached[0] == found.version:
             return found, cached[1]
     book = load(found.id, found.name, found.file)
     with _books_lock:
-        _books[found.key] = (found.version, book)
-    sqldb.forget(found.key, keep=found.id)
+        _books[slot] = (found.version, book)
     return found, book
+
+
+def _database(project: store.Project) -> tuple[str, list[tuple[str, Workbook]]]:
+    """The project's files for SQL, and the key naming this set of versions."""
+    books = [(b.name, workbook(b)[1]) for b in project.books()]
+    key = project.key + ":" + "|".join(b.id for b in project.books())
+    sqldb.forget(project.key, keep=key)
+    return key, books
 
 
 def _error(code: str, message: str) -> CallToolResult:
@@ -177,17 +199,21 @@ def _table(head: list[str], rows: list[list[str]]) -> str:
 ProjectName = Annotated[
     str, Field(description="The project's name, as this chat has been calling it (list_projects shows them)")
 ]
+FileName = Annotated[
+    str | None,
+    Field(description="Which file of the project, when it has several (list_projects shows them); else leave out"),
+]
 
 
-def _draft_titles(project: store.Project) -> str:
-    draft = store.load_draft(project)
+def _draft_titles(book: store.Book) -> str:
+    draft = store.load_draft(book)
     return "; ".join(s.get("title", "") for s in draft["sections"]) if draft and draft.get("sections") else ""
 
 
 @mcp.tool(
     description=(
-        "List the projects on this computer (each is one Excel file under a name the user knows), newest first, and "
-        "files waiting in the inbox folder. Use it when the user asks what projects there are, or which to pick."
+        "List the projects on this computer (each a named set of files the user works on together) with their files, "
+        "newest first, and files waiting in the inbox folder. Use it to find the project the user means."
     ),
     annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False),
 )
@@ -198,13 +224,16 @@ def list_projects() -> CallToolResult:
     inbox = store.list_inbox(settings)
     rows = []
     for p in projects:
-        meta = store.info(p)
-        rows.append([p.name, (meta.get("updated_at") or "")[:16].replace("T", " "),
-                     f"{p.version - 1} edits" if p.version > 1 else "as opened", _draft_titles(p)])  # fmt: skip
+        files = []
+        for b in p.books():
+            notes = [f"{b.version - 1} edits"] if b.version > 1 else []
+            if titles := _draft_titles(b):
+                notes.append(f"draft sheet: {titles}")
+            files.append(b.name + (f" ({'; '.join(notes)})" if notes else ""))
+        changed = (store.info(p).get("updated_at") or "")[:16].replace("T", " ")
+        rows.append([p.name, ", ".join(files) or "(no files)", changed])
     parts = [
-        _table(["Project", "Last changed (UTC)", "Changes", "Draft sheet sections"], rows)
-        if projects
-        else "No projects yet.",
+        _table(["Project", "Files", "Last changed (UTC)"], rows) if projects else "No projects yet.",
         f"Inbox folder on this computer: {settings.inbox().resolve()}",
         ("Files in the inbox: " + ", ".join(inbox)) if inbox else "The inbox is empty.",
     ]
@@ -276,29 +305,50 @@ def _map(book: Workbook) -> str:
     return text
 
 
-def _overview(project: store.Project, head: str) -> CallToolResult:
-    """The project as the model needs it to work: its sheets, a map of every number, its SQL tables."""
-    _, book = workbook(project)
-    lines = [head + " Sheets: " + ", ".join(f'"{s}"' for s in book.sheets)]
+def _file_part(found: store.Book, chars: int) -> str:
+    """One file as the model needs it: its sheets and a map of every number."""
+    _, book = workbook(found)
+    lines = [f'# File "{found.name}". Sheets: ' + ", ".join(f'"{s}"' for s in book.sheets)]
     if book.recalculated:
         lines.append("The file carried no saved results, so every formula was recalculated here.")
     if book.has_drawings:
         lines.append("Note: this file has charts or images; exported copies do not keep them.")
-    if titles := _draft_titles(project):
+    if titles := _draft_titles(found):
         lines.append(f"Its draft sheet has these sections: {titles}.")
-    tables = sqldb.describe(book)
+    text = _map(book)
+    if len(text) > chars:
+        text = text[:chars] + "\n\n[map shortened: use read_sheet, find or query for the rest]"
+    return "\n".join(lines) + "\n\n" + text
+
+
+def _overview(project: store.Project, head: str, first: store.Book | None = None) -> CallToolResult:
+    """The project as the model needs it to work: each file's map (`first` in full, the others shorter), the SQL
+    tables over all of them, and how to work."""
+    books = project.books()
+    lines = [head]
+    if len(books) > 1:
+        lines.append(f"Files in this project: {', '.join(f'{b.name!r}' for b in books)}. Pass `file` to the tools "
+                     "that work on one file; query reads them all.")  # fmt: skip
+    ordered = ([first] if first else []) + [b for b in books if not first or b.key != first.key]
+    share = MAP_CHARS if len(books) == 1 else MAP_CHARS // 2 if first else MAP_CHARS // len(books)
+    parts = [_file_part(b, MAP_CHARS if first and b.key == first.key else share) for b in ordered]
+    if first and len(books) > 1:
+        parts = parts[:1] + [f'# Also in this project: {", ".join(repr(b.name) for b in ordered[1:])} '
+                             "(switch_to_project shows their maps)"]  # fmt: skip
+    key, dbs = _database(project)
     guide = INSTRUCTIONS[INSTRUCTIONS.index("Projects:") :]
-    return _result(
-        "\n".join(lines) + "\n\n" + _map(book) + "\n\n## SQL tables (for query)\n" + tables + "\n\n" + guide
-    )
+    return _result("\n".join(lines) + "\n\n" + "\n\n".join(parts) + "\n\n## SQL tables (for query)\n"
+                   + sqldb.describe(key, dbs) + "\n\n" + guide)  # fmt: skip
 
 
 @mcp.tool(
     description=(
-        "Start a project from an Excel (.xlsx/.xlsm) or CSV file and get a map of every number in it: its cell, the "
+        "Add an Excel (.xlsx/.xlsm) or CSV file to a project and get a map of every number in it: its cell, the "
         "label in its row, its column header, its unit, its formula. Pass the attachment's upload_id from the "
-        "conversation, or the name of a file in the inbox folder (list_projects shows them), and a project name. "
-        "Opening the same file again is free and returns the same project. The user's file is never changed."
+        "conversation (or the name of a file in the inbox folder) and the project it belongs to: an existing one to "
+        "add it there, a new name to start one, or leave it out to name the project after the file. Opening the "
+        "same file again changes nothing; a changed file under the same name becomes that file's new version. The "
+        "user's own file is never changed."
     ),
     annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=True),
 )
@@ -311,25 +361,32 @@ def open_file(
         str | None, Field(description="File name in the inbox folder, e.g. 'Sales 2025.xlsx'")
     ] = None,
     project: Annotated[
-        str | None,
-        Field(description="Name for the project: the one the user gave, else the file's name, e.g. 'Q3 Budget'"),
+        str | None, Field(description="The project to put it in, e.g. 'Dialysis'; a new name starts a project")
+    ] = None,
+    file_name: Annotated[
+        str | None, Field(description="The attachment's file name, e.g. 'June data.xlsx'")
     ] = None,
 ) -> CallToolResult:
-    found, new = store.open_file(get_settings(), upload_id=upload_id, inbox_file=inbox_file, name=project)
-    verb = "Started" if new else "Back on"
-    return _overview(found, f'{verb} project "{found.name}". Pass project="{found.name}" to the other tools.')
+    book, new, what = store.add_file(
+        get_settings(), project=project, upload_id=upload_id, inbox_file=inbox_file, name=file_name
+    )
+    p = book.project
+    said = {"added": f'Added "{book.name}" to', "same": f'"{book.name}" is already in',
+            "replaced": f'Saved the new "{book.name}" as version {book.version} in'}[what]  # fmt: skip
+    head = f'{said} {"new " if new else ""}project "{p.name}". Pass project="{p.name}" to the other tools.'
+    return _overview(p, head, first=book)
 
 
 @mcp.tool(
     description=(
-        "Switch this chat to another project, when the user says to work on it (\"switch to the budget\", \"go back "
-        "to the diet plan\"). Returns its map of numbers; pass its name to every tool from then on."
+        "Switch this chat to another project, when the user says to work on it (\"switch to dialysis\", \"go back to "
+        "the budget\"). Returns the map of numbers of each of its files; pass its name to every tool from then on."
     ),
     annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False, idempotent_hint=True),
 )
 @tool_handler("switch_to_project")
 def switch_to_project(project: ProjectName) -> CallToolResult:
-    found = store.get(get_settings(), project, forgive=False)
+    found = store.get_project(get_settings(), project, forgive=False)
     return _overview(found, f'Now on project "{found.name}". Pass project="{found.name}" to the other tools.')
 
 
@@ -346,8 +403,9 @@ def read_sheet(
     sheet: Annotated[str, Field(description="Sheet name")],
     cell_range: Annotated[str | None, Field(description="Optional range, e.g. A1:F40")] = None,
     start_row: Annotated[int, Field(ge=1, description="First row to show, for paging")] = 1,
+    file: FileName = None,
 ) -> CallToolResult:
-    _, book = workbook(project)
+    _, book = workbook(project, file, (sheet,))
     real = book.sheet(sheet)
     bounds = bounds_of(cell_range)
     limit = get_settings().max_rows
@@ -372,8 +430,8 @@ def read_sheet(
 
 @mcp.tool(
     description=(
-        "Find cells whose text contains some words (case-insensitive), with the numbers on the same row. "
-        "E.g. find 'net profit' or 'sale rate'."
+        "Find cells whose text contains some words (case-insensitive), with the numbers on the same row, in every "
+        "file of the project (or one `file`). E.g. find 'net profit' or 'sale rate'."
     ),
     annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False),
 )
@@ -381,25 +439,31 @@ def read_sheet(
 def find(
     project: ProjectName,
     text: Annotated[str, Field(description="Words to look for")],
+    file: FileName = None,
 ) -> CallToolResult:
-    _, book = workbook(project)
     needle = " ".join(text.lower().split())
     if not needle:
         raise ToolFailure("bad_request", "text is empty")
+    found = store.get_project(get_settings(), project)
+    books = [workbook(project, file)[0]] if file else found.books()
     hits = []
-    for c in sorted(book.cells.values(), key=lambda c: (book.sheets.index(c.sheet), c.row, c.col)):
-        if isinstance(c.value, str) and needle in " ".join(c.value.lower().split()):
-            same_row = [
-                o for o in book.sheet_cells(c.sheet)
-                if o.row == c.row and o.col > c.col and isinstance(o.value, int | float)
-            ]  # fmt: skip
-            numbers = ", ".join(
-                f"{o.coord} = {show(o.value)}" + (f" [{o.formula}]" if o.formula else "") for o in same_row[:6]
-            )
-            hits.append(f'- {c.sheet}!{c.coord} "{show(c.value)}"' + (f" → {numbers}" if numbers else ""))
-        if len(hits) >= 40:
-            hits.append("[more matches: narrow the words]")
-            break
+    for b in books:
+        _, book = workbook(b)
+        where = f"[{b.name}] " if len(books) > 1 else ""
+        for c in sorted(book.cells.values(), key=lambda c: (book.sheets.index(c.sheet), c.row, c.col)):
+            if len(hits) >= 40:
+                break
+            if isinstance(c.value, str) and needle in " ".join(c.value.lower().split()):
+                same_row = [
+                    o for o in book.sheet_cells(c.sheet)
+                    if o.row == c.row and o.col > c.col and isinstance(o.value, int | float)
+                ]  # fmt: skip
+                numbers = ", ".join(
+                    f"{o.coord} = {show(o.value)}" + (f" [{o.formula}]" if o.formula else "") for o in same_row[:6]
+                )
+                hits.append(f'- {where}{c.sheet}!{c.coord} "{show(c.value)}"' + (f" → {numbers}" if numbers else ""))
+    if len(hits) >= 40:
+        hits.append("[more matches: narrow the words]")
     return _result("\n".join(hits) if hits else f"No cell contains {text!r}.")
 
 
@@ -410,7 +474,9 @@ ChartType = Literal["bar", "column", "pie", "line"]
     description=(
         "Run one read-only SQL query (DuckDB) over the file. Table `cells` has every cell (sheet, cell, row, col, "
         "value, number, formula, label, header, unit); a sheet with a header row is also a table named after the sheet "
-        "(quote it: SELECT * FROM \"Sales 2025\"). open_file and switch_to_project list the tables. Optionally draw "
+        "(quote it: SELECT * FROM \"Sales 2025\"). It reads every file of the project: `cells` has a `file` column, a "
+        "sheet name several files share is one stacked table with a `file` column, and \"<file>.<sheet>\" is one "
+        "file's sheet. open_file and switch_to_project list the tables. Optionally draw "
         "the result as a chart (shown to the user) or return it as a file."
     ),
     annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False),
@@ -429,9 +495,10 @@ def query(
         Literal["xlsx", "csv"] | None, Field(description="Also return the full result as a file for the user")
     ] = None,
 ) -> CallToolResult:
-    files, book = workbook(project)
+    files = store.get_project(get_settings(), project)
+    key, books = _database(files)
     limit = get_settings().max_rows
-    columns, rows, more = sqldb.run(book, sql, limit if not file_format else 100_000)
+    columns, rows, more = sqldb.run(key, books, sql, limit if not file_format else 100_000)
     shown = rows[:limit]
     text = _table(columns, [[show(v) for v in r] for r in shown]) if columns else "Done."
     if len(rows) > limit or more:
@@ -484,8 +551,9 @@ def what_if(
     project: ProjectName,
     changes: Annotated[dict[str, float], Field(description="Cell → new number, e.g. {'Feasibility!C29': 38000}")],
     outputs: Annotated[list[str], Field(min_length=1, description="Cells to report, e.g. ['Feasibility!C95']")],
+    file: FileName = None,
 ) -> CallToolResult:
-    _, book = workbook(project)
+    _, book = workbook(project, file, _ref_sheets([*changes, *outputs]))
     if not changes:
         raise ToolFailure("bad_request", "changes is empty")
     parsed_changes = {book.parse_ref(k): v for k, v in changes.items()}
@@ -527,8 +595,9 @@ def breakdown(
         dict[str, list[str]] | None,
         Field(description="Head → item cells or ranges, e.g. {'Construction': ['C33', 'C34'], 'Fees': ['C38:C39']}"),
     ] = None,
+    file: FileName = None,
 ) -> CallToolResult:
-    _, book = workbook(project)
+    _, book = workbook(project, file, _ref_sheets([cell]))
     sheet, coord = book.parse_ref(cell)
     items, total = bd.components(book, sheet, coord)
     label = book.fact(book.cell(sheet, coord)).label or f"{sheet}!{coord}"
@@ -594,7 +663,7 @@ column, pie, line; they plot consecutive rows (default: the rows before the firs
 Every call is shown to the user, so never call it to test a format or a formula."""
 
 
-def _built(project: str | store.Project, spec: dict[str, Any], only: int | None = None) -> tuple[store.Project, Built]:
+def _built(project: store.Book, spec: dict[str, Any], only: int | None = None) -> tuple[store.Book, Built]:
     files, book = workbook(project)
     built = build(SheetSpec.model_validate(spec), book)
     if found := problems(built, only):
@@ -607,7 +676,7 @@ CELL_REF = re.compile(r"\[(?:s(\d+))?r(\d+)c(\d+)\]")
 CRORE, HUNDRED = "10^7", "100"
 
 
-def _fix_units(project: store.Project, spec: dict[str, Any], n: int) -> tuple[dict[str, Any], list[str]]:
+def _fix_units(project: store.Book, spec: dict[str, Any], n: int) -> tuple[dict[str, Any], list[str]]:
     """Section n with its unit slips corrected instead of refused: rupees under inr_cr are divided by 10^7, a percent
     written as 36.6 under pct by 100. Every reference to a corrected cell is multiplied back, so the formulas and checks
     that use it keep their meaning. A SUM_ABOVE() total is left alone: it adds the corrected cells."""
@@ -669,7 +738,7 @@ def _numbered(formula: str, n: int) -> str:
     return re.sub(r"\[(r\d+c\d+)\]", rf"[s{n}\1]", formula)
 
 
-def _remove_section(files: store.Project, draft: dict, number: int | None) -> CallToolResult:
+def _remove_section(files: store.Book, draft: dict, number: int | None) -> CallToolResult:
     sections = draft["sections"]
     if number is None or not 1 <= number <= len(sections):
         raise ToolFailure("bad_number", f"remove needs `number`, 1 to {len(sections)}")
@@ -692,7 +761,7 @@ def _remove_section(files: store.Project, draft: dict, number: int | None) -> Ca
 
 @mcp.tool(
     description=(
-        "Build a new sheet (dashboard, report, summary) one section at a time. Adds the section to this project's "
+        "Build a new sheet (dashboard, report, summary) one section at a time. Adds the section to the file's "
         "draft sheet, or replaces section `number` when the user wants it changed, and shows that section to the user "
         "as an image (with its checks). The draft stays on this server: earlier sections never need repeating, and "
         "export_sheet builds the whole draft. For a whole sheet at once, call it once per section. remove=true with "
@@ -721,8 +790,9 @@ def add_section(
     title: Annotated[str | None, Field(description="Title of the whole sheet")] = None,
     sheet_name: Annotated[str | None, Field(description="Name of the new sheet (default Dashboard)")] = None,
     remove: Annotated[bool, Field(description="Take section `number` out of the draft")] = False,
+    file: FileName = None,
 ) -> CallToolResult:
-    files = store.get(get_settings(), project)
+    files, _ = workbook(project, file)
     draft = store.load_draft(files)
     draft = draft or {"sheet_name": "Dashboard", "title": files.name, "sections": [], "checks": []}
     if remove:
@@ -787,8 +857,9 @@ def add_section(
 def export_sheet(
     project: ProjectName,
     file_name: Annotated[str | None, Field(description="Name for the file, without extension")] = None,
+    file: FileName = None,
 ) -> CallToolResult:
-    found = store.get(get_settings(), project)
+    found, _ = workbook(project, file)
     spec = store.load_draft(found)
     if not spec or not spec.get("sections"):
         raise ToolFailure("no_draft", "the draft has no sections yet: add them with add_section")
@@ -814,11 +885,11 @@ def export_sheet(
 CHANGED_SHOWN = 40
 
 
-def _written(project: store.Project, verb: str, written: list[tuple[str, str]] = ()) -> CallToolResult:
+def _written(found: store.Book, verb: str, written: list[tuple[str, str]] = ()) -> CallToolResult:
     """Open what was written, so the reply says how it reads (formulas computed) and the next call can use it."""
     note = ""
     try:
-        _, book = workbook(project)
+        _, book = workbook(found)
         sheets = []
         for sheet in book.sheets:
             cells = book.sheet_cells(sheet)
@@ -836,94 +907,139 @@ def _written(project: store.Project, verb: str, written: list[tuple[str, str]] =
                 note += "\n\nCells now read:\n" + "\n".join(shown)
     except ToolFailure as e:
         note = f"The file is saved, but its formulas could not be worked out here ({e.message}); Excel will."
-    macros = store.has_macros(project.file)
-    file_name = f"{project.name}.{'xlsm' if macros else 'xlsx'}"
+    macros = store.has_macros(found.file)
+    file_name = f"{found.name}.{'xlsm' if macros else 'xlsx'}"
     mime = "application/vnd.ms-excel.sheet.macroEnabled.12" if macros else XLSX
     text = (
-        f'{verb} project "{project.name}". "{file_name}" was sent to the user and is also saved on this computer at '
-        f"{project.file}.\n\n{note}"
+        f'{verb} "{found.name}" in project "{found.project.name}". "{file_name}" was sent to the user and is also '
+        f"saved on this computer at {found.file}.\n\n{note}"
     )
-    return _result(text, files=[(file_name, mime, project.file.read_bytes())])
+    return _result(text, files=[(file_name, mime, found.file.read_bytes())])
 
 
 @mcp.tool(
     description=(
-        "Make a new Excel file from rows, as a new project, and send the .xlsx to the user. Use it whenever the "
-        "user asks for an Excel file or spreadsheet of something (a plan, a list, a schedule, a table). Each sheet is "
-        "a list of rows, the first row its column headings (bold and frozen). Numbers stay numbers; a value starting "
-        "with = is a formula (=SUM(B2:B8)). The other tools then take the project's name."
+        "Make a new Excel file from rows and send the .xlsx to the user. Use it whenever the user asks for an Excel "
+        "file or spreadsheet of something (a plan, a list, a schedule, a table, an analysis of several files). Each "
+        "sheet is a list of rows, the first row its column headings (bold and frozen). Numbers stay numbers; a value "
+        "starting with = is a formula (=SUM(B2:B8)). The file joins `project` (a new name starts one; left out, the "
+        "project is named after the file)."
     ),
     annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=True),
 )
-@tool_handler("create_project")
-def create_project(
-    name: Annotated[str, Field(description="Project and file name, e.g. 'Weekly diet plan'")],
+@tool_handler("create_file")
+def create_file(
+    name: Annotated[str, Field(description="File name, e.g. 'Dialysis ABC analysis'")],
     sheets: Annotated[
         list[authoring.NewSheet],
         WithJsonSchema({"type": "array", "minItems": 1, "items": inline_schema(authoring.NewSheet)}),
         Field(min_length=1, description="The sheets, in tab order"),
     ],
+    project: Annotated[
+        str | None, Field(description="The project it belongs to, usually the one this chat is on")
+    ] = None,
 ) -> CallToolResult:
-    found, _ = store.start(get_settings(), name, authoring.create(sheets), "created")
+    found = store.create_file(get_settings(), project, name, authoring.create(sheets))
     return _written(found, "Created")
 
 
 @mcp.tool(
     description=(
-        "Change the project's file and send the edited .xlsx to the user: write values or formulas into cells, add "
-        "rows, add, rename (formulas follow) or delete sheets, and style ranges (bold, number format, fill colour, "
-        "column width). Edits apply in order, all or none. The result is the project's new version (the one before is "
-        "kept on this computer), so later questions and edits see the change. Look cells up first (read_sheet, find); "
-        "never guess an address."
+        "Change a file of the project and send the edited .xlsx to the user: write values or formulas into cells, "
+        "add rows, add, rename (formulas follow) or delete sheets, and style ranges (bold, number format, fill "
+        "colour, column width). Edits apply in order, all or none. The result is the file's new version (the one "
+        "before is kept on this computer), so later questions and edits see the change. Look cells up first "
+        "(read_sheet, find); never guess an address."
     ),
     annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=False),
 )
-@tool_handler("edit_project")
-def edit_project(
+@tool_handler("edit_file")
+def edit_file(
     project: ProjectName,
     edits: Annotated[
         list[authoring.Edit],
         WithJsonSchema({"type": "array", "minItems": 1, "items": inline_schema(authoring.Edit)}),
         Field(min_length=1, description="The changes, applied in order"),
     ],
+    file: FileName = None,
 ) -> CallToolResult:
-    settings = get_settings()
-    found = store.get(settings, project)
+    found, _ = workbook(project, file, tuple(e.sheet for e in edits if e.op != "add_sheet"))
     data, written = authoring.apply(found.file, edits, store.has_macros(found.file))
     change = ", ".join(sorted({e.op for e in edits}))
-    return _written(store.save_version(settings, found, data, change), "Edited", written)
+    return _written(store.save_version(found, data, change), "Edited", written)
 
 
 @mcp.tool(
     description=(
-        "Empty the project's draft sheet, to start a new dashboard on the same file. Only when the user asks to "
-        "start over; to change or drop one section use add_section. Exports already sent are kept."
+        "Empty a file's draft sheet, to start a new dashboard on the same file. Only when the user asks to start "
+        "over; to change or drop one section use add_section. Exports already sent are kept."
     ),
     annotations=ToolAnnotations(read_only_hint=False, destructive_hint=True, idempotent_hint=True),
 )
 @tool_handler("clear_draft")
-def clear_draft(project: ProjectName) -> CallToolResult:
-    found = store.get(get_settings(), project)
+def clear_draft(project: ProjectName, file: FileName = None) -> CallToolResult:
+    found, _ = workbook(project, file)
     store.clear_draft(found)
-    return _result(f'The draft for project "{found.name}" is empty. The project and its file stay.')
+    return _result(f'The draft for "{found.name}" is empty. The file stays in project "{found.project.name}".')
 
 
 @mcp.tool(
     description=(
-        "Delete a project from this computer: every version of its file, its draft and exported files, and the "
-        "uploaded file. Only when the user asks to delete the project. Files in the inbox folder are not touched."
+        "Move a file (with its versions and draft) to another project, e.g. to put the dialysis files together. A "
+        "new name starts a project; a project left with no files is removed."
+    ),
+    annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=True),
+)
+@tool_handler("move_file")
+def move_file(
+    project: ProjectName,
+    file: Annotated[str, Field(description="The file to move")],
+    to_project: Annotated[str, Field(description="The project to move it to")],
+) -> CallToolResult:
+    found, _ = workbook(project, file)
+    moved, new = store.move_file(get_settings(), found, to_project)
+    _drop(found.project.key)
+    return _result(f'"{moved.name}" is now in {"new " if new else ""}project "{moved.project.name}".')
+
+
+@mcp.tool(
+    description=(
+        "Remove one file from a project on this computer: every version of it, its draft, and its upload. Only when "
+        "the user asks. Files in the inbox folder are not touched."
+    ),
+    annotations=ToolAnnotations(read_only_hint=False, destructive_hint=True, idempotent_hint=False),
+)
+@tool_handler("remove_file")
+def remove_file(project: ProjectName, file: Annotated[str, Field(description="The file to remove")]) -> CallToolResult:
+    settings = get_settings()
+    found = store.get_book(settings, project, file)
+    _drop(found.project.key)
+    store.remove_file(settings, found)
+    return _result(f'Removed "{found.name}" from project "{found.project.name}".')
+
+
+@mcp.tool(
+    description=(
+        "Delete a project from this computer: all its files with every version, drafts, exported files and uploads. "
+        "Only when the user asks to delete the project. Files in the inbox folder are not touched."
     ),
     annotations=ToolAnnotations(read_only_hint=False, destructive_hint=True, idempotent_hint=False),
 )
 @tool_handler("delete_project")
 def delete_project(project: ProjectName) -> CallToolResult:
     settings = get_settings()
-    found = store.get(settings, project, forgive=False)
-    with _books_lock:
-        _books.pop(found.key, None)
-    sqldb.forget(found.key)
-    store.delete(settings, found)
+    found = store.get_project(settings, project, forgive=False)
+    _drop(found.key)
+    store.delete_project(settings, found)
     return _result(f'Deleted project "{found.name}" and everything made from it on this computer.')
+
+
+def _drop(project_key: str) -> None:
+    """Forget the project's loaded files and databases."""
+    with _books_lock:
+        for slot in [k for k in _books if k.split("/")[0] == project_key]:
+            _books.pop(slot)
+    sqldb.forget(project_key)
 
 
 def _register_python() -> None:
@@ -940,8 +1056,9 @@ def _register_python() -> None:
     def run_python(
         project: ProjectName,
         code: Annotated[str, Field(description="Python source")],
+        file: FileName = None,
     ) -> CallToolResult:
-        files, _ = workbook(project)
+        files, _ = workbook(project, file)
         res = pyrun.run(files, code, get_settings().python_timeout_seconds)
         status = "timed out" if res.exit_code is None else f"exit code {res.exit_code}"
         text = f"Python {status}.\n\n{res.output or '(no output)'}"

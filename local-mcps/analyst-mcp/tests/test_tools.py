@@ -26,7 +26,7 @@ async def test_open_recalculates_and_maps(proj):
 
 async def test_open_same_file_twice_gives_same_project(proj):
     again = await server.open_file(inbox_file="model.xlsx")
-    assert 'Back on project "model"' in text(again)
+    assert '"model" is already in project "model"' in text(again)
 
 
 async def test_inbox_name_cannot_escape(settings, proj):
@@ -133,8 +133,8 @@ async def test_delete_project_removes_its_files_but_not_the_inbox(settings, mode
     from analyst_mcp import store
 
     upload_id, _ = store.save_upload(settings, model_file.read_bytes())
-    assert 'Started project "Plot"' in text(await server.open_file(upload_id=upload_id, project="Plot"))
-    await build_draft("Plot", SAMPLE_SPEC)
+    assert 'to new project "Plot"' in text(await server.open_file(upload_id=upload_id, project="Plot"))
+    await build_draft("Plot", SAMPLE_SPEC)  # the project's one file needs no `file`
     assert not (await server.delete_project("plot")).is_error
     assert not (settings.data_dir / "projects" / "plot").exists()
     assert not list((settings.data_dir / "uploads").iterdir())
@@ -175,8 +175,8 @@ async def test_csv_upload_flow(settings):
     res = client.post("/uploads", content=csv, headers={"authorization": "Bearer test-token"})
     assert res.status_code == 200, res.text
     upload_id = res.json()["upload_id"]
-    opened = await server.open_file(upload_id=upload_id, project="sales.csv")
-    assert 'Started project "sales"' in text(opened)
+    opened = await server.open_file(upload_id=upload_id, file_name="sales.csv")
+    assert 'to new project "sales"' in text(opened)
     q = text(await server.query("sales", 'SELECT Region, SUM(Sales) AS total FROM "sales" GROUP BY 1 ORDER BY 1'))
     assert "| North | 160 |" in q
     old_xls = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1rest"
@@ -191,7 +191,7 @@ def test_run_python_is_off_by_default():
 async def test_pyrun_copies_input_and_collects_outputs(proj, settings):
     from analyst_mcp import pyrun, store
 
-    files = store.get(settings, proj)
+    files = store.get_book(settings, proj)
     code = (
         "import matplotlib.pyplot as plt\n"
         "df = pd.read_excel(INPUT, sheet_name='Tenants')\n"
@@ -378,27 +378,69 @@ async def test_switch_shows_the_project_and_never_guesses(settings, proj):
     assert error(await server.switch_to_project("Sales"))["code"] == "project_not_found"
 
 
-async def test_another_file_cannot_take_a_used_name(settings, proj):
-    other = openpyxl.Workbook()
-    other.active["A1"] = "x"
-    other.save(settings.inbox() / "other.xlsx")
-    err = error(await server.open_file(inbox_file="other.xlsx", project="Model"))
-    assert err["code"] == "project_exists" and "switch_to_project" in err["message"]
+def month(settings, name: str, qty: int, sheet: str = "Sales") -> None:
+    wb = openpyxl.Workbook()
+    wb.active.title = sheet
+    wb.active.append(["Item", "Value"])
+    for item, share in (("Bolt", 5), ("Nut", 3), ("Washer", 2)):
+        wb.active.append([item, qty * share])
+    wb.save(settings.inbox() / f"{name}.xlsx")
 
 
-async def test_files_of_one_chat_are_projects_side_by_side(settings):
-    """May, June and July files in one chat: each is a project named after its file, and the model works across them
-    by name, as an ABC analysis over the three months needs."""
-    for month, qty in (("may-data", 10), ("june-data", 20), ("july-data", 30)):
-        wb = openpyxl.Workbook()
-        wb.active.title = "Sales"
-        wb.active.append(["Item", "Value"])
-        for item, share in (("Bolt", 5), ("Nut", 3), ("Washer", 2)):
-            wb.active.append([item, qty * share])
-        wb.save(settings.inbox() / f"{month}.xlsx")
-        assert f'project "{month}"' in text(await server.open_file(inbox_file=f"{month}.xlsx"))
-    totals = [text(await server.query(m, 'SELECT SUM(Value) AS v FROM "Sales"')) for m in ("may", "june", "july")]
-    assert ["| 100 |" in totals[0], "| 200 |" in totals[1], "| 300 |" in totals[2]] == [True] * 3
-    # Filing a second month under the first's name is refused with the way out.
-    err = error(await server.open_file(inbox_file="june-data.xlsx", project="may-data"))
-    assert err["code"] == "project_exists" and "its own name" in err["message"]
+async def test_a_project_holds_files_and_query_reads_them_all(settings):
+    """May, June and July in one project: SQL stacks their shared sheet with a `file` column, so totals across the
+    months (an ABC analysis) are one query; one file's sheet is "<file>.<sheet>"."""
+    for name, qty in (("may-data", 10), ("june-data", 20), ("july-data", 30)):
+        month(settings, name, qty)
+        res = await server.open_file(inbox_file=f"{name}.xlsx", project="Dialysis")
+        assert not res.is_error, text(res)
+    assert "Files in this project: 'may-data', 'june-data', 'july-data'" in text(res)
+    q = text(await server.query("dialysis", 'SELECT Item, SUM(Value) AS v FROM "Sales" GROUP BY 1 ORDER BY v DESC'))
+    assert "| Bolt | 300 |" in q and "| Washer | 120 |" in q
+    june = text(await server.query("Dialysis", 'SELECT SUM(Value) AS v FROM "june-data.Sales"'))
+    assert "| 200 |" in june
+    files = text(await server.query("Dialysis", "SELECT DISTINCT file FROM cells ORDER BY 1"))
+    assert "| july-data |" in files and "| may-data |" in files
+    found = text(await server.find("Dialysis", "washer"))
+    assert "[may-data] Sales!A4" in found and "[july-data] Sales!A4" in found
+    listed = text(await server.list_projects())
+    assert "| Dialysis | may-data, june-data, july-data |" in listed
+
+
+async def test_one_file_tools_ask_which_file_unless_the_sheet_says(settings):
+    month(settings, "rates", 1, sheet="Rates")
+    month(settings, "stock", 2, sheet="Stock")
+    for name in ("rates", "stock"):
+        await server.open_file(inbox_file=f"{name}.xlsx", project="Dialysis")
+    assert "Bolt" in text(await server.read_sheet("Dialysis", "Rates"))  # only one file has that sheet
+    month(settings, "stock2", 3, sheet="Rates")
+    await server.open_file(inbox_file="stock2.xlsx", project="Dialysis")
+    err = error(await server.read_sheet("Dialysis", "Rates"))
+    assert err["code"] == "file_needed" and '"rates"' in err["message"] and '"stock2"' in err["message"]
+    assert "Bolt" in text(await server.read_sheet("Dialysis", "Rates", file="stock2"))
+
+
+async def test_the_same_name_is_a_new_version_and_files_move(settings):
+    month(settings, "june", 1)
+    await server.open_file(inbox_file="june.xlsx", project="Q2")
+    month(settings, "june", 2)
+    again = text(await server.open_file(inbox_file="june.xlsx", project="Q2"))
+    assert 'Saved the new "june" as version 2' in again
+    assert "| 10 |" in text(await server.query("Q2", 'SELECT Value FROM "Sales" WHERE Item = \'Bolt\''))
+    month(settings, "rates", 1)
+    await server.open_file(inbox_file="rates.xlsx")  # a project of its own, named after the file
+    moved = text(await server.move_file("rates", "rates", "Q2"))
+    assert 'now in project "Q2"' in moved
+    listed = text(await server.list_projects())
+    assert "| Q2 | june (1 edits), rates |" in listed and "| rates |" not in listed
+
+
+async def test_projects_from_before_files_still_open(settings):
+    """A project saved as projects/<p>/versions/ (one file per project) becomes a project with that one file."""
+    folder = settings.data_dir / "projects" / "old-plan"
+    (folder / "versions").mkdir(parents=True)
+    month(settings, "tmp", 1)
+    (folder / "versions" / "1.xlsx").write_bytes((settings.inbox() / "tmp.xlsx").read_bytes())
+    (folder / "project.json").write_text('{"name": "Old plan", "version": 1, "updated_at": "2026-10-09"}')
+    assert "Bolt" in text(await server.read_sheet("Old plan", "Sales"))
+    assert (folder / "files" / "old-plan" / "versions" / "1.xlsx").exists()
