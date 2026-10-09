@@ -9,7 +9,7 @@ export function modelCatalog(settings: DeploymentSettings): ModelOption[] {
 }
 
 /**
- * A model's nicknames: whatever its label holds in brackets, so "DeepSeek V4.1 Flash (ds)"
+ * A model's nicknames: whatever its label holds in brackets, so "DeepSeek V4 Flash (ds)"
  * answers to `!model ds`. A label without brackets has none.
  */
 export function modelNicknames(label: string): string[] {

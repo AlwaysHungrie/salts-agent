@@ -441,7 +441,7 @@ describe("!model", () => {
       }
     ).config.model;
 
-  /** An agent offering a named custom model and a catalogue one ("DeepSeek V4.1 Flash (ds)"). */
+  /** An agent offering a named custom model and a catalogue one ("DeepSeek V4 Flash (ds)"). */
   async function withModels(locked: string[] = []) {
     const fixture = await chatFixture();
     const reg = registryFor(fixture.agentId);
@@ -449,7 +449,7 @@ describe("!model", () => {
       ...(await reg.meta()),
       models: [
         { id: "openai/gpt-5-mini", vision: true, label: "Mini (cheap)" },
-        { id: "deepseek/deepseek-v4.1-flash", vision: true },
+        { id: "deepseek/deepseek-v4-flash", vision: false },
       ],
       locked,
     });
@@ -463,9 +463,9 @@ describe("!model", () => {
     );
     expect(await model(agentId, email)).toBe("openai/gpt-5-mini");
     expect(await reply(await say(sessionId, email, "!model ds"))).toBe(
-      "Switched to DeepSeek V4.1 Flash (ds)."
+      "Switched to DeepSeek V4 Flash (ds)."
     );
-    expect(await model(agentId, email)).toBe("deepseek/deepseek-v4.1-flash");
+    expect(await model(agentId, email)).toBe("deepseek/deepseek-v4-flash");
   });
 
   it("lists the nicknames when none matches, and changes nothing", async () => {
