@@ -448,8 +448,23 @@ def load_draft(book: Book) -> dict | None:
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
 
 
+_draft_locks: dict[Path, threading.Lock] = {}
+_draft_locks_guard = threading.Lock()
+
+
+def draft_lock(book: Book) -> threading.Lock:
+    """Held across a draft's read-change-save. Tools run in threads and a model calls add_section several times at
+    once; unlocked, each saves its own copy and the overlapping writes left a draft no tool could read."""
+    with _draft_locks_guard:
+        return _draft_locks.setdefault(book.dir.resolve(), threading.Lock())
+
+
 def save_draft(book: Book, spec: dict) -> None:
-    (book.dir / "draft.json").write_text(json.dumps(spec, ensure_ascii=False, indent=1), encoding="utf-8")
+    """Written whole to a temporary file and swapped in, so a reader never meets half a draft."""
+    path = book.dir / "draft.json"
+    tmp = path.with_name(f"draft.json.{threading.get_ident()}.tmp")
+    tmp.write_text(json.dumps(spec, ensure_ascii=False, indent=1), encoding="utf-8")
+    tmp.replace(path)
 
 
 def clear_draft(book: Book) -> None:
