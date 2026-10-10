@@ -304,6 +304,22 @@ describe("what the channel seam buys", () => {
     expect(text?.text).toBe("Your dashboard is ready: Client report.xlsx");
   });
 
+  it("sends a file a tool made even when the reply only names it", async () => {
+    const { hook, chat, agentId } = await agentFixture();
+    await env.SessionRegistry.get(env.SessionRegistry.idFromName(agentId)).addMcpServer({
+      ...EMPTY_MCP_SERVER,
+      id: crypto.randomUUID(),
+      name: "Reports",
+      url: "https://mcp.test/media/mcp",
+      tools_json: JSON.stringify([MCP_MEDIA_TOOL]),
+      created_at: Date.now(),
+    });
+    await post(hook, update(chat, "!!exportnamed mcp_reports_build_report"));
+
+    const sent = await waitForReply(chat, 3);
+    expect(sent.find((s) => s.document !== undefined)?.document).toBe("Client report.xlsx");
+  });
+
   it("ingests a file the message carried", async () => {
     const { hook, chat, email } = await agentFixture({ cap_file_ingest: 1 });
     const res = await post(hook, withDocument(chat, "what does this say"));
