@@ -60,17 +60,18 @@ salts-tools start web
 1. Checks that Docker and cloudflared are installed (and uv, for `matchmaker`), and that
    Docker is running. Starts Docker if it is not.
 2. Generates a token if the OS secret store does not already hold one.
-3. Asks for the agent ID.
-4. Shows the token **once**. Paste it into the agent's settings under Capabilities →
+3. Asks for the agent IDs, space separated. One salts-tools serves as many agents as you
+   list, and each of them gets every service.
+4. Shows the token **once**. Paste it into each agent's settings under Capabilities →
    **Web search** → **SearXNG token**, then save. Leave the Brave key blank. When a
    Brave key is set, the agent uses Brave and ignores SearXNG. This one token guards
    every service, and it is how the Worker knows the addresses come from you.
 5. Starts the gateway, the service and the tunnel, and sends the service's address to
-   the agent.
+   every agent.
 6. Asks whether to start salts-tools at login.
 
-If the agent refuses the token because it was not saved in the agent, you can retry
-or generate a new one.
+If an agent refuses the token because it was not saved in that agent, salts-tools names
+it, and you can retry or generate a new one (which then goes into every agent).
 
 ## Adding the matchmaker
 
@@ -85,7 +86,7 @@ change. It starts Postgres (`docker compose` in `local-mcps/matchmaker-mcp`), ru
 
 The agent gets an MCP server named `matchmaker`, with `Authorization: Bearer <token>`
 already set. The tools that call a model also need these headers, which you add once on
-that server in the agent's settings (they stay when the address changes):
+that server in each agent's settings (they stay when the address changes):
 
 | Header | Suggested value | Covers |
 | --- | --- | --- |
@@ -128,9 +129,9 @@ and token. Its log is `~/.salts-tools/analyst.log`.
 | `salts-tools start <service>…` | Starts those services only, on the running tunnel if there is one. Services already running keep running; others are not started. |
 | `salts-tools stop <service>` | Turns one service off and stops it. The others and the tunnel keep running. Stopping the last one stops everything. |
 | `salts-tools stop` | Stops the supervisor, the tunnel and the containers. The next `start` brings back the same services. |
-| `salts-tools restart` | Opens a new tunnel and sends its addresses to the agent. |
+| `salts-tools restart` | Opens a new tunnel and sends its addresses to every agent. |
 | `salts-tools reset` | Back to a first run: deletes the token, `~/.salts-tools` (state and logs), the login item and any salts-web leftovers. Keeps the matchmaker's database. Stop salts-tools first. |
-| `salts-tools setup` | Runs the first-run questions again, for example to switch agents. Starts nothing. |
+| `salts-tools setup` | Runs the first-run questions again, for example to add or remove agents. Starts nothing; a running salts-tools sends its addresses to newly listed agents within 30 seconds. |
 | `salts-tools autostart on` / `off` | Adds or removes the login item. See [Where things live](#where-things-live). |
 
 Services: `web`, `matchmaker`, `analyst`.
@@ -165,8 +166,9 @@ the following every 30 seconds:
   brings the service up. A service turned off with `stop <service>` is taken down.
 - cloudflared is running. If not, it restarts cloudflared.
 - The tunnel answers from outside. After three failures in a row it opens a new tunnel.
-- The agent has each service's current address. If not, it sends it, and retries until
-  the Worker accepts it. This covers a laptop that wakes up offline.
+- Every agent has each service's current address. If not, it sends it, and retries until
+  the Worker accepts it. This covers a laptop that wakes up offline. An agent that
+  refuses does not hold up the others.
 
 Addresses go to the Worker with the token as `Authorization: Bearer`, and no Clerk
 session. The Worker accepts them only when the token matches the agent's saved SearXNG
@@ -208,7 +210,7 @@ the Docker wait and leaves it to the supervisor, so login is never held up.
   | Linux without a keyring (headless) | `~/.salts-tools/token`, mode `0600` |
   | Windows | `%USERPROFILE%\.salts-tools\token.dpapi`, encrypted with DPAPI for the current user |
 
-- **State**: `~/.salts-tools/state.json` holds the agent ID, Worker URL, which services
+- **State**: `~/.salts-tools/state.json` holds the agent IDs, Worker URL, which services
   are on, their ports, and the tunnel address. It contains no secrets.
 - **Logs**: `~/.salts-tools/supervisor.log`, `~/.salts-tools/matchmaker.log`,
   `~/.salts-tools/analyst.log`.
