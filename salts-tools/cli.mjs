@@ -15,7 +15,7 @@
 //   salts-tools stop [service]
 //                         stop one service, or with none named everything: the
 //                         supervisor, the tunnel and the containers
-//   salts-tools setup     the first-run questions again (agent id, token); starts nothing
+//   salts-tools setup     the first-run questions again (agent ids, token); starts nothing
 //   salts-tools restart   bring the tunnel up again and push its new address
 //   salts-tools reset     forget the agent (state.json) and delete the saved token
 //   salts-tools autostart on|off
@@ -29,7 +29,10 @@
 // against the staging Worker instead of production. The two are separate instances —
 // own token, state, containers, ports, tunnel and login item — and can run side by side.
 //
-// One token guards everything: the agent's SearXNG token. The gateway checks it, SearXNG's
+// One install serves any number of agents: every one is told every address, and each holds
+// the same token in its SearXNG token field.
+//
+// One token guards everything: the agents' SearXNG token. The gateway checks it, SearXNG's
 // Caddy gate and the matchmaker (as its MCP_AUTH_TOKEN) check it again, and the Worker
 // takes it as proof when an address is pushed.
 //
@@ -59,6 +62,7 @@ import os from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
+import { agentIdsOf, agentsLabel, parseAgentIds } from "./agents.mjs";
 import { startGateway } from "./gateway.mjs";
 import { caffeinateArgs, orphanTunnels, parseProcessList, supervisorsOf } from "./procs.mjs";
 
@@ -747,8 +751,8 @@ async function supervise() {
   if (ended) log(`ended ${ended} stray supervisor/cloudflared process(es)`);
 
   let token = readToken();
-  const { agentId, worker } = readState();
-  if (!token || !agentId) {
+  const { worker } = readState();
+  if (!token || !agentIdsOf(readState()).length) {
     log(`not set up: run \`salts-tools ${withTarget("start")}\` in a terminal first`);
     writeState({ lastError: "not set up" });
     process.exit(1);
@@ -760,7 +764,7 @@ async function supervise() {
   const gatewayPort = await portFrom(readState().gatewayPort, GATEWAY_PORT);
   await startGateway(gatewayPort, { token: () => token, routes: () => ports });
   writeState({ gatewayPort });
-  log(`supervisor up (pid ${process.pid}) for agent ${agentId}; gateway on 127.0.0.1:${gatewayPort}`);
+  log(`supervisor up (pid ${process.pid}) for ${agentsLabel(agentIdsOf(readState()))}; gateway on 127.0.0.1:${gatewayPort}`);
 
   let tunnel = null;
   let url = "";
@@ -846,7 +850,7 @@ async function supervise() {
           delete ports[name];
           log(`${name}: turned off; stopping it`);
           svc.down();
-          writeSvc(name, { up: false, pushedTo: "", error: "" });
+          writeSvc(name, { up: false, pushedTo: "", agents: {}, error: "" });
         }
         continue;
       }
@@ -866,25 +870,41 @@ async function supervise() {
   };
 
   const pushAll = async () => {
-    const { svc = {} } = readState();
+    // Read each time, so agents added with `setup` are told on the next heartbeat.
+    const { svc = {}, ...state } = readState();
+    const agentIds = agentIdsOf(state);
     for (const name of Object.keys(ports)) {
-      if (svc[name]?.pushedTo === url) continue;
-      const status = await push(worker || DEFAULT_WORKER, agentId, token, SERVICES[name].push(url));
+      // Agents that already have this address are not asked again while another refuses.
+      const agents = { ...svc[name]?.agents };
+      if (svc[name]?.pushedTo === url && agentIds.every((id) => agents[id] === url)) continue;
+      let status = 200;
+      let agentId = "";
+      for (const id of agentIds) {
+        if (agents[id] === url) continue;
+        const answer = await push(worker || DEFAULT_WORKER, id, token, SERVICES[name].push(url));
+        if (answer === 200) {
+          agents[id] = url;
+          log(`agent ${id}: ${name} now at ${SERVICES[name].reached(url)}`);
+        } else if (status === 200) {
+          status = answer;
+          agentId = id;
+        }
+      }
+      writeSvc(name, { agents });
       if (status === 200) {
-        writeSvc(name, { pushedTo: url, pushedAt: new Date().toISOString(), pushStatus: 200, error: "" });
-        log(`agent ${agentId}: ${name} now at ${SERVICES[name].reached(url)}`);
+        writeSvc(name, { pushedTo: url, pushedAt: new Date().toISOString(), pushStatus: 200, error: "", failedAgent: "" });
         continue;
       }
       const why =
         status === 401
-          ? `the agent refused the token — paste it into the agent's SearXNG token field, or run \`salts-tools ${withTarget("setup")}\``
+          ? `agent ${agentId} refused the token — paste it into that agent's SearXNG token field, or run \`salts-tools ${withTarget("setup")}\``
           : status === 409
-            ? `the agent already has an MCP server named "${name}" with a different Authorization header — delete it or set it to this token`
+            ? `agent ${agentId} already has an MCP server named "${name}" with a different Authorization header — delete it or set it to this token`
             : status === 0
               ? "could not reach the Worker (offline?)"
               : `the Worker answered ${status}`;
-      writeSvc(name, { error: `push: ${why}`, pushStatus: status });
-      log(`${name}: could not update the agent: ${why}`);
+      writeSvc(name, { error: `push: ${why}`, pushStatus: status, failedAgent: agentId });
+      log(`${name}: could not update agent ${agentId}: ${why}`);
     }
   };
 
@@ -956,7 +976,7 @@ async function supervise() {
       rmSync(RESTART_FILE, { force: true });
       stopTunnel();
       const svc = readState().svc ?? {};
-      for (const name of NAMES) svc[name] = { ...svc[name], pushedTo: "" };
+      for (const name of NAMES) svc[name] = { ...svc[name], pushedTo: "", agents: {} };
       writeState({ svc });
       tick().then(() => log("manual restart done"));
     }
@@ -998,7 +1018,7 @@ async function migrateFromSaltsWeb() {
     if (existsSync(path.join(old, file))) copyFileSync(path.join(old, file), path.join(HOME, file));
   }
   writeState({
-    agentId: prev.agentId,
+    agentIds: prev.agentId ? [prev.agentId] : [],
     worker: prev.worker,
     services: ["web"],
     svc: { web: { port: prev.port || 0 } },
@@ -1053,7 +1073,9 @@ async function waitForPush(pid, since, names, timeoutMs = 300_000) {
     if (names.every(done)) return { ok: true, state: s };
     for (const n of names) {
       const e = svc[n] ?? {};
-      if (e.pushStatus === 401 && e.error?.startsWith("push:")) return { ok: false, state: s, refused: true };
+      if (e.pushStatus === 401 && e.error?.startsWith("push:")) {
+        return { ok: false, state: s, refused: true, agentId: e.failedAgent };
+      }
       // Any other answer from the Worker will not change by waiting (a 404 is a Worker
       // without the route); offline (0) might.
       if (e.pushStatus > 0 && e.pushStatus !== 200 && e.error?.startsWith("push:")) {
@@ -1158,7 +1180,7 @@ ${BOLD}Your salts-tools token${OFF} ${YELLOW}(shown this once — it is kept in 
   │  ${BOLD}${token}${OFF}  │
   └${line}┘
 
-In the agent's settings → Capabilities → ${BOLD}Web search${OFF}, paste it into
+In each agent's settings → Capabilities → ${BOLD}Web search${OFF}, paste it into
 ${BOLD}SearXNG token${OFF} and save. Leave the Brave key blank, or SearXNG is not used.
 It guards every service salts-tools runs; the URLs fill themselves in.
 `);
@@ -1179,21 +1201,27 @@ async function setup(rl, { force }) {
     console.log(`${GREEN}✓${OFF} token already in ${tokenStoreName()}`);
   }
 
-  let agentId = state.agentId;
-  if (!agentId || force) {
+  let agentIds = agentIdsOf(state);
+  if (!agentIds.length || force) {
     for (;;) {
-      const answer = (
-        await rl.question(`Agent ID${agentId ? ` ${DIM}[${agentId}]${OFF}` : ""}: `)
-      ).trim();
-      agentId = answer || agentId;
-      if (agentId) break;
+      const answer = await rl.question(
+        `Agent IDs, space separated${agentIds.length ? ` ${DIM}[${agentIds.join(" ")}]${OFF}` : ""}: `
+      );
+      const typed = parseAgentIds(answer);
+      if (typed.length) agentIds = typed;
+      if (agentIds.length) break;
     }
   }
-  writeState({ agentId, worker: process.env.SALTS_TOOLS_WORKER || state.worker || DEFAULT_WORKER });
+  // `agentId` (one agent) is what older versions wrote; the list replaces it.
+  writeState({
+    agentIds,
+    agentId: undefined,
+    worker: process.env.SALTS_TOOLS_WORKER || state.worker || DEFAULT_WORKER,
+  });
 
   if (fresh) {
     showToken(token);
-    await rl.question("Press Enter once it is saved in the agent… ");
+    await rl.question("Press Enter once it is saved in every agent… ");
   }
   return { token, fresh };
 }
@@ -1209,7 +1237,7 @@ function namedServices() {
 function report(state, names) {
   console.log(`${GREEN}✓${OFF} tunnel at ${state.url}`);
   for (const name of names) {
-    console.log(`${GREEN}✓${OFF} ${SERVICES[name].label}: agent ${state.agentId} reaches it at ${SERVICES[name].reached(state.url)}`);
+    console.log(`${GREEN}✓${OFF} ${SERVICES[name].label}: ${agentsLabel(agentIdsOf(state))} can reach it at ${SERVICES[name].reached(state.url)}`);
   }
   if (names.includes("analyst")) {
     console.log(`
@@ -1230,7 +1258,7 @@ ALLOW_PYTHON=true there.${OFF}`);
     const width = Math.max(...headers.map(([h]) => h.length));
     console.log(`
 The agent's ${BOLD}matchmaker${OFF} MCP server already has the ${BOLD}Authorization${OFF} header.
-Its paid tools also need these headers. Add them on that server in the agent's
+Its paid tools also need these headers. Add them on that server in each agent's
 settings → ${BOLD}MCP servers${OFF} (they are kept when the address changes):
 `);
     for (const [header, value, note] of headers) {
@@ -1253,12 +1281,11 @@ async function askAutostart(rl) {
 async function setupOnly() {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   try {
-    const before = readState().agentId;
+    const before = agentIdsOf(readState()).join(" ");
     // No autostart question here: turning it on runs the login item at once.
     await setup(rl, { force: true });
-    const { agentId } = readState();
-    if (supervisorPid() && agentId !== before) {
-      console.log(`salts-tools is running for agent ${before}; \`salts-tools ${withTarget("stop")}\` and start again to switch.`);
+    if (supervisorPid() && agentIdsOf(readState()).join(" ") !== before) {
+      console.log(`salts-tools is running; ${agentsLabel(agentIdsOf(readState()))} get every address within a minute.`);
     } else if (!supervisorPid()) {
       console.log(`Set up. Start a service with \`salts-tools ${withTarget("start")} <${NAMES.join("|")}>\`.`);
     }
@@ -1295,7 +1322,7 @@ async function start({ interactive }) {
       console.log(`${GREEN}✓${OFF} Docker running`);
     }
 
-    const firstRun = !readToken() || !readState().agentId;
+    const firstRun = !readToken() || !agentIdsOf(readState()).length;
     if (firstRun && !rl) {
       console.error(`${RED}✗${OFF} not set up yet — run \`salts-tools ${withTarget("start")}\` in a terminal`);
       process.exit(1);
@@ -1310,7 +1337,7 @@ async function start({ interactive }) {
     const wanted = pid && readState().url ? named : services;
     for (;;) {
       const since = new Date().toISOString();
-      for (const name of wanted) writeSvc(name, { pushedTo: "", pushStatus: 0, error: "" });
+      for (const name of wanted) writeSvc(name, { pushedTo: "", agents: {}, pushStatus: 0, error: "" });
       if (pid && readState().url) {
         writeFileSync(RELOAD_FILE, since);
       } else {
@@ -1333,13 +1360,13 @@ async function start({ interactive }) {
         break;
       }
       if (result.refused) {
-        console.log(`${RED}✗${OFF} the agent refused the token.`);
+        console.log(`${RED}✗${OFF} agent ${result.agentId} refused the token.`);
         const choice = (
-          await rl.question("[r] retry after pasting it in the agent, [n] make a new token, [q] quit: ")
+          await rl.question("[r] retry after pasting it in that agent, [n] make a new token, [q] quit: ")
         ).trim().toLowerCase();
         if (choice === "n") {
           showToken(newToken());
-          await rl.question("Press Enter once it is saved in the agent… ");
+          await rl.question("Press Enter once it is saved in every agent… ");
         } else if (choice !== "r") {
           console.log(`The supervisor keeps retrying in the background; log at ${LOG_FILE}`);
           return;
@@ -1349,14 +1376,14 @@ async function start({ interactive }) {
       const failed = result.pushFailed;
       if (failed && result.state.svc?.[failed]?.pushStatus === 409) {
         console.log(`
-${RED}✗${OFF} Your agent already has an MCP server called ${BOLD}${failed}${OFF}, set up without your
+${RED}✗${OFF} Agent ${result.state.svc[failed].failedAgent} already has an MCP server called ${BOLD}${failed}${OFF}, set up without your
   salts-tools token. salts-tools does not change a server it did not set up, so it
   left that one alone.
 
   The tunnel is up at ${result.state.url}
   ("${failed}" will be at ${SERVICES[failed].reached(result.state.url)}).
 
-  To fix it, open the agent's settings → ${BOLD}MCP servers${OFF} and either:
+  To fix it, open that agent's settings → ${BOLD}MCP servers${OFF} and either:
     • ${BOLD}delete${OFF} "${failed}": salts-tools adds it again, already connected, or
     • ${BOLD}edit${OFF} "${failed}" and set its ${BOLD}Authorization${OFF} header to your token
       (choose [t] below to see the exact value).
@@ -1408,7 +1435,7 @@ async function stop() {
       for (let i = 0; i < 120 && readState().svc?.[name]?.up && alive(pid); i++) await sleep(1000);
     } else if (dockerUp()) {
       SERVICES[name].down();
-      writeSvc(name, { up: false, pushedTo: "" });
+      writeSvc(name, { up: false, pushedTo: "", agents: {} });
     }
     console.log(`${GREEN}✓${OFF} ${SERVICES[name].label} stopped; still running: ${rest.join(", ")}`);
     return;
@@ -1425,7 +1452,7 @@ async function stop() {
     console.log(`${GREEN}✓${OFF} containers stopped`);
   }
   const svc = readState().svc ?? {};
-  for (const name of NAMES) svc[name] = { ...svc[name], up: false, pushedTo: "" };
+  for (const name of NAMES) svc[name] = { ...svc[name], up: false, pushedTo: "", agents: {} };
   writeState({ url: "", svc });
   if (existsSync(AUTOSTART.file)) console.log(`${DIM}autostart is still on; it starts again at next login${OFF}`);
 }

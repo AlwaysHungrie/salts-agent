@@ -58,20 +58,22 @@ salts-tools start
 
 salts-tools will ask you a few questions:
 
-1. **Agent ID**: paste your agent ID.
+1. **Agent IDs**: paste your agent ID. To give several agents web search from the same computer, paste all their IDs with a space between each one.
 2. salts-tools will then show you a **token**. Copy it, and leave your terminal open while you do the next step.
 
 ## 4. Add the token to your agent
 
-Open your agent, go to **Capabilities**, and find **Web search**.
+Open your agent, go to **Capabilities**, and find **Web search**. If you entered several agent IDs, do this for each of those agents, using the same token.
 
 1. Switch **Web search** on.
 2. Paste the token into **SearXNG token** and save.
 3. Leave **Brave Search API key** and **SearXNG URL** empty. salts-tools fills in the URL for you.
 
-Go back to your terminal and press **Enter**. When salts-tools is done, you will see three green ticks, ending with `SearXNG: agent <your-agent-id> reaches it at …`.
+Go back to your terminal and press **Enter**. When salts-tools is done, you will see three green ticks, ending with `SearXNG: agent <your-agent-id> can reach it at …`.
 
 Finally, salts-tools asks whether it should start automatically when you log in. We recommend saying yes, otherwise your agent loses web search every time you restart your computer.
+
+To add or remove agents later, run `salts-tools setup` and enter the full list of agent IDs again.
 
 ## You are done
 
