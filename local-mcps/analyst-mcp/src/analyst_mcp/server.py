@@ -794,6 +794,19 @@ def add_section(
     file: FileName = None,
 ) -> CallToolResult:
     files, _ = workbook(project, file)
+    with store.draft_lock(files):
+        return _add_section(files, section, number, checks, title, sheet_name, remove)
+
+
+def _add_section(
+    files: store.Book,
+    section: dict[str, Any] | None,
+    number: int | None,
+    checks: list[dict[str, Any]] | None,
+    title: str | None,
+    sheet_name: str | None,
+    remove: bool,
+) -> CallToolResult:
     draft = store.load_draft(files)
     draft = draft or {"sheet_name": "Dashboard", "title": files.name, "sections": [], "checks": []}
     if remove:

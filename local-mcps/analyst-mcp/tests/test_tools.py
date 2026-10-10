@@ -129,6 +129,22 @@ async def test_clear_draft_starts_over_on_the_same_file(proj):
     assert "Draft sections now: " + SAMPLE_SPEC["sections"][0]["title"] + "." in text(res)
 
 
+async def test_sections_sent_at_once_all_land_in_a_readable_draft(proj):
+    """A model sends several add_section calls in one step; they run in threads at the same time. Each must see the
+    others' sections, and the draft must stay readable (overlapping writes once left one no tool could open)."""
+    import asyncio
+
+    from analyst_mcp import store
+
+    section = SAMPLE_SPEC["sections"][0]
+    results = await asyncio.gather(
+        *(server.add_section(proj, {**section, "title": f"Part {i}"}) for i in range(8))
+    )
+    assert not any(r.is_error for r in results), [text(r) for r in results if r.is_error]
+    draft = store.load_draft(store.get_book(server.get_settings(), proj))
+    assert sorted(s["title"] for s in draft["sections"]) == sorted(f"Part {i}" for i in range(8))
+
+
 async def test_delete_project_removes_its_files_but_not_the_inbox(settings, model_file):
     from analyst_mcp import store
 
