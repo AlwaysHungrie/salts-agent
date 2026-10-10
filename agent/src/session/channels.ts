@@ -9,7 +9,7 @@ import {
 } from "../channel";
 import { parseCommand } from "../commands";
 import { toArrayBuffer } from "../util/bytes";
-import { drawnIds, getAttachment, insertAttachment } from "./attachments";
+import { attachmentsOf, drawnIds, getAttachment, insertAttachment } from "./attachments";
 import { runCommand } from "./commands";
 import { isPdf, isSheet, uploadPath } from "./files";
 import { reportable, textOf, turnFailure } from "./format";
@@ -50,7 +50,7 @@ export async function deliverToChat(
     await channel.sendText(target, chatText(text) || "(no reply)");
     console.log(`${channel.id} delivered for session ${host.name()} to ${target.to}`);
     await sendDrawn(host, channel, target, drawnBefore);
-    await sendLinked(host, channel, target, text, drawnBefore);
+    await sendLinked(host, channel, target, text, message.id, drawnBefore);
     if (host.turn.scheduled && channel.scheduledNotice) {
       await channel.sendText(target, channel.scheduledNotice);
     }
@@ -150,7 +150,7 @@ export async function channelTurn(
     // An image the agent drew during the turn is a file in a chat, not a link.
     await sendDrawn(host, channel, target, drawnBefore);
     // So is a file the reply links: the link only opens in the browser app.
-    await sendLinked(host, channel, target, reply, drawnBefore);
+    await sendLinked(host, channel, target, reply, result.message?.id ?? "", drawnBefore);
     // Its own message, so the model cannot paraphrase away what the user must do.
     if (host.turn.scheduled && channel.scheduledNotice) {
       await channel.sendText(target, channel.scheduledNotice);
@@ -255,17 +255,23 @@ export function chatText(reply: string): string {
 }
 
 /**
- * Send each session file the reply links, once, as a file. Images drawn this turn are
- * skipped: `sendDrawn` has already sent them. A channel without the send sends nothing.
+ * Send each session file the reply links or carries, once, as a file. A file a tool made
+ * hangs on the reply even when the text only names it (see showMadeFiles), and the browser
+ * shows it there; a chat has only this send. Images drawn this turn are skipped:
+ * `sendDrawn` has already sent them. A channel without the send sends nothing.
  */
 export async function sendLinked(
   host: SessionHost,
   channel: Channel,
   target: ChannelTarget,
   reply: string,
+  replyId: string,
   drawnBefore: Set<string>
 ): Promise<void> {
-  const ids = new Set([...reply.matchAll(FILE_LINK)].map((m) => m[2]));
+  const ids = new Set([
+    ...[...reply.matchAll(FILE_LINK)].map((m) => m[2]),
+    ...attachmentsOf(host, replyId).map((a) => a.id),
+  ]);
   for (const id of ids) {
     const file = getAttachment(host, id);
     if (!file || (file.kind === "image" && !drawnBefore.has(id))) continue;

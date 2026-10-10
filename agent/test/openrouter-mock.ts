@@ -32,6 +32,8 @@
  *   answered here too, with a one-pixel PNG.
  * - `!!export <tool>` — the model calls that tool, then answers with a link to the
  *   workbook its result carried, as a model handing over an export does.
+ * - `!!exportnamed <tool>` — the same, but the answer only names the workbook in bold,
+ *   with no link: a model that forgets to link what it made.
  * - anything else — the model replies `You said: <message>`.
  *
  * A compaction's summary call is recognised by Think's summary prompt and answered
@@ -837,6 +839,12 @@ export async function openrouterMock(request: Request): Promise<Response> {
     if (carriesToolResult(body)) return streamedText("Stored it.");
     const ref = JSON.stringify(body.messages).match(/attachment:[\w-]+/)?.[0] ?? "";
     return streamedToolCall(message.split(/\s+/)[1], { text: "a resume", upload_id: ref });
+  }
+
+  // `!!exportnamed <tool>`: call that tool, then name the workbook without linking it.
+  if (message.startsWith("!!exportnamed")) {
+    if (carriesToolResult(body)) return streamedText("I exported **Client report.xlsx** for you.");
+    return streamedToolCall(message.split(/\s+/)[1], {});
   }
 
   // `!!export <tool>`: call that tool, then link the workbook its result carried.
