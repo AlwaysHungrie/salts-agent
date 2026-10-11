@@ -19,6 +19,11 @@ describe("parseCommand", () => {
     expect(parseCommand("!stop")).toBe("stop");
     expect(parseCommand("!compact")).toBe("compact");
     expect(parseCommand("!oom")).toBe("oom");
+    expect(parseCommand("!help")).toBe("help");
+    expect(parseCommand("!docs")).toBe("docs");
+    expect(parseCommand("!settings")).toBe("settings");
+    expect(parseCommand("!mcp")).toBe("mcp");
+    expect(parseCommand("!model")).toBe("model");
   });
 
   it("ignores case and surrounding space", () => {
@@ -85,8 +90,7 @@ describe("parseCommand", () => {
     expect(parseCommand("@mybot !model fast")).toEqual({ nickname: "fast" });
   });
 
-  it("does not match !model without a nickname or inside a sentence", () => {
-    expect(parseCommand("!model")).toBe(null);
+  it("does not match !model inside a sentence", () => {
     expect(parseCommand("should I use !model ds?")).toBe(null);
   });
 });

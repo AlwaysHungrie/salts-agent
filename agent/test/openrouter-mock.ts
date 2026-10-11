@@ -399,6 +399,11 @@ const json = (value: unknown, status = 200) =>
 
 /** The last thing the user actually typed, which is where the triggers live. */
 function lastUserMessage(body: ChatBody): string {
+  // The time a message was sent leads it (see `sentAt`); it is not something typed.
+  return lastUserContent(body).replace(/^\[Sent [^\]]* UTC\]\n/, "");
+}
+
+function lastUserContent(body: ChatBody): string {
   const messages = body.messages ?? [];
   for (let i = messages.length - 1; i >= 0; i--) {
     const message = messages[i];

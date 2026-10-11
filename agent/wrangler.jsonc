@@ -57,7 +57,8 @@
         { "binding": "FILES", "bucket_name": "salt-agent-files-staging" }
       ],
       "vars": {
-        "CLERK_ISSUER": "https://rich-horse-1284.clerk.accounts.dev"
+        "CLERK_ISSUER": "https://rich-horse-1284.clerk.accounts.dev",
+        "APP_URL": "https://salts-agent-app-git-staging-dhairyashah98-gmailcoms-projects.vercel.app"
       }
     }
   },
@@ -67,6 +68,8 @@
     // is public too — so it lives here rather than in `wrangler secret`, and the same
     // value is right for `wrangler dev` and for a deploy because both sign in against
     // the same Clerk instance.
-    "CLERK_ISSUER": "https://rich-horse-1284.clerk.accounts.dev"
+    "CLERK_ISSUER": "https://rich-horse-1284.clerk.accounts.dev",
+    // The web app the `!docs`, `!settings` and `!mcp` links point at.
+    "APP_URL": "https://salts-agent-app.vercel.app"
   }
 }

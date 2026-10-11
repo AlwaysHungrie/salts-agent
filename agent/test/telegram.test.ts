@@ -190,6 +190,7 @@ describe("a whole round trip", () => {
     await post(hook, update(chat, "!new"));
     const [sent] = await waitForReply(chat);
     expect(sent.text).toContain("Starting fresh");
+    expect(sent.text).toContain("Send `!help` to see every command.");
   });
 
   it("stops a reply that is still being written with !stop", async () => {

@@ -6,7 +6,20 @@
 // TEMP — `oom` is a probe for the 128 MB isolate limit, not a feature. Remove it, and
 // its branch in `runCommand`, once the behaviour it exposes has been seen.
 export type Command =
-  "unstick" | "delete" | "new" | "clear" | "stop" | "compact" | "oom" | McpCommand | ModelCommand;
+  | "unstick"
+  | "delete"
+  | "new"
+  | "clear"
+  | "stop"
+  | "compact"
+  | "oom"
+  | "help"
+  | "docs"
+  | "settings"
+  | "mcp"
+  | "model"
+  | McpCommand
+  | ModelCommand;
 
 /** `!enable-mcp <name>` / `!disable-mcp <name>`. */
 export type McpCommand = { mcp: "enable" | "disable"; server: string };
@@ -14,7 +27,21 @@ export type McpCommand = { mcp: "enable" | "disable"; server: string };
 /** `!model <nickname>`: switch to the offered model whose label carries it in brackets. */
 export type ModelCommand = { nickname: string };
 
-const COMMANDS = ["unstick", "delete", "new", "clear", "stop", "compact", "oom"] as const;
+/** Bare `!mcp` and `!model` list what there is; with an argument they act (see below). */
+const COMMANDS = [
+  "unstick",
+  "delete",
+  "new",
+  "clear",
+  "stop",
+  "compact",
+  "oom",
+  "help",
+  "docs",
+  "settings",
+  "mcp",
+  "model",
+] as const;
 
 /**
  * A command's reply, and whether the session is finished. `destroy` depends on context:

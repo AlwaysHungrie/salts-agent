@@ -31,7 +31,7 @@
     { "id": "anthropic/claude-opus-5.5", "label": "Claude Opus 5.5 (opus)", "vision": true }
   ],
   "default_model": "deepseek/deepseek-v4-flash",
-  "system_prompt": "You are a concise assistant running inside a Cloudflare Durable Object.",
+  "system_prompt": "You are a concise assistant.",
   "config_defaults": {
     "temperature": 0.7,
     "max_tokens": 0,
