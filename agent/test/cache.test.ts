@@ -274,7 +274,7 @@ describe("a turn's real request", () => {
     // definitions in cache across every round of every later turn.
     expect(Array.isArray(parts)).toBe(true);
     expect(parts.at(-1)?.cache_control).toEqual({ type: "ephemeral" });
-    expect(parts.at(-1)?.text).toContain("Durable Object");
+    expect(parts.at(-1)?.text).toContain("concise assistant");
   });
 
   it("carries none on the default model, which caches by itself", async () => {

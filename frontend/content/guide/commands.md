@@ -17,8 +17,13 @@ To use a command, send it as the whole message, for example `!new`. In a Telegra
 | `!compact` | Summarises the older part of the conversation, so replies become cheaper. |
 | `!unstick` | Fixes a conversation where your agent has stopped responding. |
 | `!delete` | Deletes this conversation and everything in it. |
+| `!help` | Lists every command. |
+| `!docs` | Sends a link to this guide. |
+| `!settings` | Sends a link to your agent's settings. |
+| `!mcp` | Lists your connected apps and whether each is on. |
 | `!enable-mcp <name>` | Switches on a connected app. |
 | `!disable-mcp <name>` | Switches off a connected app. |
+| `!model` | Lists the models you can switch to. |
 | `!model <nickname>` | Switches your agent to another model. |
 
 ## !new
@@ -49,7 +54,11 @@ Very rarely, a reply never finishes and your agent stops responding to anything 
 
 `!delete` deletes the conversation, along with its messages, files and scheduled tasks. This cannot be undone. Anything your agent saved to its memory is not deleted.
 
-## !enable-mcp and !disable-mcp
+## !help, !docs and !settings
+
+`!help` explains how conversations work and lists every command. `!docs` sends a link to this guide, and `!settings` sends a link to your agent's **Settings** page.
+
+## !mcp, !enable-mcp and !disable-mcp
 
 Apps you connect to your agent, such as Notion or GitHub, make every reply a little more expensive, even when they are not used. These commands let you switch an app on only when you need it. Use the name the app has on your **Capabilities** page, for example:
 
@@ -57,7 +66,7 @@ Apps you connect to your agent, such as Notion or GitHub, make every reply a lit
 !enable-mcp Notion
 ```
 
-The app must already be connected on the **Capabilities** page before you can switch it on this way.
+The app must already be connected on the **Capabilities** page before you can switch it on this way. Send `!mcp` to see every app, whether it is on, and the command that switches it.
 
 ## !model
 
@@ -68,5 +77,7 @@ The app must already be connected on the **Capabilities** page before you can sw
 ```
 
 The switch is the same as picking the model in **Settings**, so it applies to the whole agent, not just this conversation. The next reply uses the new model.
+
+Send `!model` on its own to see every nickname, with the current model marked.
 
 A model without brackets in its name has no nickname and can only be picked in **Settings**. If the model is locked by whoever manages your agent, `!model` does not work.

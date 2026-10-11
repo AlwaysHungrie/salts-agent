@@ -382,6 +382,26 @@ describe("bang commands over chat", () => {
     expect(await registryFor(agentId).spendThisMonth()).toBe(0);
   });
 
+  it("explains sessions and lists every command with !help", async () => {
+    const { sessionId, email } = await chatFixture();
+    const help = ((await (await say(sessionId, email, "!help")).json()) as { reply: string })
+      .reply;
+    expect(help).toContain("session");
+    for (const command of ["!new", "!clear", "!model", "!mcp", "!settings", "!docs"]) {
+      expect(help).toContain(command);
+    }
+  });
+
+  it("links the guide and the agent's settings", async () => {
+    const { sessionId, email, agentId } = await chatFixture();
+    const reply = async (message: string) =>
+      ((await (await say(sessionId, email, message)).json()) as { reply: string }).reply;
+    expect(await reply("!docs")).toBe("The user guide: https://salts-agent-app.vercel.app/guide");
+    expect(await reply("!settings")).toBe(
+      `This agent's settings: https://salts-agent-app.vercel.app/a/${agentId}/settings`
+    );
+  });
+
   it("treats a sentence mentioning a command as an ordinary message", async () => {
     const { sessionId, email } = await chatFixture();
     const res = await say(sessionId, email, "what does !new do?");
@@ -440,6 +460,26 @@ describe("!enable-mcp and !disable-mcp", () => {
     expect(await reply(await say(sessionId, email, "!enable-mcp docs"))).toContain("not connected");
   });
 
+  it("lists servers with the command that flips each", async () => {
+    const off = await withServer();
+    expect(await reply(await say(off.sessionId, off.email, "!mcp"))).toContain(
+      "- Docs — off. Send `!enable-mcp Docs` to turn it on."
+    );
+    const on = await withServer({ enabled: 1 });
+    expect(await reply(await say(on.sessionId, on.email, "!mcp"))).toContain(
+      "- Docs — on. Send `!disable-mcp Docs` to turn it off."
+    );
+    const unconnected = await withServer({ enabled: 1, auth: "oauth" });
+    expect(await reply(await say(unconnected.sessionId, unconnected.email, "!mcp"))).toContain(
+      `- Docs — not connected; connect it at https://salts-agent-app.vercel.app/a/${unconnected.agentId}/capabilities.`
+    );
+  });
+
+  it("says when there are no servers", async () => {
+    const { sessionId, email } = await chatFixture();
+    expect(await reply(await say(sessionId, email, "!mcp"))).toMatch(/^No MCP servers/);
+  });
+
   it("reports a server it cannot reach", async () => {
     const { sessionId, email, agentId } = await withServer({ url: "https://unreachable.test/" });
     expect(await reply(await say(sessionId, email, "!enable-mcp docs"))).toMatch(
@@ -492,6 +532,15 @@ describe("!model", () => {
       'No model has the nickname "gpt". Try one of: cheap, ds.'
     );
     expect(await model(agentId, email)).toBe(before);
+  });
+
+  it("lists the nicknames with the current model marked", async () => {
+    const { sessionId, email } = await withModels();
+    await say(sessionId, email, "!model ds");
+    const text = await reply(await say(sessionId, email, "!model"));
+    expect(text).toContain("- `cheap` — Mini (cheap)\n");
+    expect(text).toContain("- `ds` — DeepSeek V4 Flash (ds) (current)");
+    expect(text).toContain("Send `!model <nickname>` to switch.");
   });
 
   it("refuses when the model is locked", async () => {
@@ -884,6 +933,23 @@ describe("what the agent is told it can reach", () => {
     const turn = all.find((b) => b.stream);
     return String(turn?.messages?.find((m) => m.role === "system")?.content ?? "");
   }
+
+  it("stamps each user message with when it was sent, not the system prompt", async () => {
+    const { sessionId, email } = await chatFixture();
+    const token = crypto.randomUUID().slice(0, 8);
+    await say(sessionId, email, `hello ${token}`);
+
+    const all = (await (
+      await fetch(`https://openrouter.ai/__requests?contains=${token}`)
+    ).json()) as { stream?: boolean; messages?: { role: string; content?: unknown }[] }[];
+    const user = all.find((b) => b.stream)?.messages?.find((m) => m.role === "user");
+    expect(String(user?.content)).toMatch(
+      new RegExp(`^\\[Sent \\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2} UTC\\]\\nhello ${token}$`)
+    );
+    const prompt = await systemPromptFor(token);
+    expect(prompt).toContain("Each user message starts with when it was sent");
+    expect(prompt).not.toContain("Durable Object");
+  });
 
   it("names a configured channel as reach, not as a capability", async () => {
     const { sessionId, email } = await whatsappFixture();

@@ -78,6 +78,11 @@ export function systemPrompt(host: SessionHost): string {
         .join(", ")}.`
     );
   }
+  // Said once here rather than as today's date, which would change the prompt and break
+  // the cache every day: the time travels on each message instead (see `sentAt`).
+  parts.push(
+    "Each user message starts with when it was sent, in UTC, like [Sent 2026-01-31 14:05 UTC]. Use it as the current date and time."
+  );
   parts.push(
     "Files the user attaches are written to the workspace under uploads/, and every message names the ones it carries. Open one with the read tool when the question is about it."
   );
@@ -95,7 +100,7 @@ export async function modelMessages(host: SessionHost, config: Config): Promise<
 
   const messages: ModelMessage[] = [];
   for (const message of kept) {
-    const text = message.id.startsWith(COMPACTION_PREFIX)
+    let text = message.id.startsWith(COMPACTION_PREFIX)
       ? `${SUMMARY_PREAMBLE}\n\n${textOf(message)}`
       : textOf(message);
     if (message.role === "assistant") {
@@ -104,6 +109,8 @@ export async function modelMessages(host: SessionHost, config: Config): Promise<
       if (content.trim()) messages.push({ role: "assistant", content });
       continue;
     }
+    const stamp = sentAt(host, message.id);
+    if (stamp) text = `${stamp}\n${text}`;
     const attachments = attachmentsOf(host, message.id);
     // Parsed on the first turn that needs it, the way a clip is transcribed on the
     // first turn that needs its words.
@@ -126,6 +133,21 @@ export async function modelMessages(host: SessionHost, config: Config): Promise<
     );
   }
   return messages;
+}
+
+/**
+ * When a user message was sent, as `[Sent YYYY-MM-DD HH:MM UTC]`, from the time its turn
+ * opened. Fixed per message, so earlier turns render the same and stay cached. Empty for
+ * a message with no recorded time (a compaction summary).
+ */
+export function sentAt(host: SessionHost, messageId: string): string {
+  const ts = host.exec<{ ts: number }>(
+    `SELECT ts FROM usage WHERE message_id = ?`,
+    messageId
+  )[0]?.ts;
+  if (!ts) return "";
+  const iso = new Date(ts).toISOString();
+  return `[Sent ${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC]`;
 }
 
 /**

@@ -272,8 +272,15 @@ A message that is nothing but a bang command is handled before a turn starts, th
 in the browser, Telegram and WhatsApp: `!new`, `!clear`, `!delete`, `!stop`, `!unstick`,
 `!compact`, `!enable-mcp <name>` / `!disable-mcp <name>`, and `!model <nickname>`, which
 sets the agent's model to the offered one whose label holds the nickname in brackets
-(refused when meta locks `model`). See
-[`src/commands.ts`](src/commands.ts).
+(refused when meta locks `model`). Bare `!model` lists the nicknames and `!mcp` lists the
+agent's MCP servers with the command that flips each. `!help` explains sessions and lists
+every command; `!new` and `!clear` point at it. `!docs` and `!settings` link the user guide
+and the agent's settings page under `APP_URL` (a `var` in `wrangler.jsonc`; unset, they
+say there is none). See [`src/commands.ts`](src/commands.ts).
+
+Each user message reaches the model prefixed with when it was sent (`[Sent YYYY-MM-DD
+HH:MM UTC]`, from the time its turn opened), not today's date in the system prompt: a
+fixed stamp per message keeps earlier turns, and the prompt, identical and cached.
 
 ## Capabilities
 
