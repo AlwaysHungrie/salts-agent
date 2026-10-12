@@ -538,9 +538,19 @@ describe("!model", () => {
     const { sessionId, email } = await withModels();
     await say(sessionId, email, "!model ds");
     const text = await reply(await say(sessionId, email, "!model"));
+    expect(text).toMatch(/^Current model: DeepSeek V4 Flash \(ds\)\n/);
     expect(text).toContain("- `cheap` — Mini (cheap)\n");
     expect(text).toContain("- `ds` — DeepSeek V4 Flash (ds) (current)");
     expect(text).toContain("Send `!model <nickname>` to switch.");
+  });
+
+  it("names the current model even when it has no nickname", async () => {
+    const { sessionId, email, agentId } = await withModels();
+    const current = await model(agentId, email);
+    const text = await reply(await say(sessionId, email, "!model"));
+    expect(text.split("\n")[0]).toMatch(/^Current model: /);
+    expect(text.split("\n")[0]).not.toBe("Current model: ");
+    expect(current).toBeTruthy();
   });
 
   it("refuses when the model is locked", async () => {

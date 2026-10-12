@@ -23,7 +23,7 @@ To use a command, send it as the whole message, for example `!new`. In a Telegra
 | `!mcp` | Lists your connected apps and whether each is on. |
 | `!enable-mcp <name>` | Switches on a connected app. |
 | `!disable-mcp <name>` | Switches off a connected app. |
-| `!model` | Lists the models you can switch to. |
+| `!model` | Shows the current model and lists the models you can switch to. |
 | `!model <nickname>` | Switches your agent to another model. |
 
 ## !new
@@ -78,6 +78,6 @@ The app must already be connected on the **Capabilities** page before you can sw
 
 The switch is the same as picking the model in **Settings**, so it applies to the whole agent, not just this conversation. The next reply uses the new model.
 
-Send `!model` on its own to see every nickname, with the current model marked.
+Send `!model` on its own to see which model your agent is using now, and every nickname, with the current model marked.
 
 A model without brackets in its name has no nickname and can only be picked in **Settings**. If the model is locked by whoever manages your agent, `!model` does not work.
