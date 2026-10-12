@@ -272,7 +272,7 @@ A message that is nothing but a bang command is handled before a turn starts, th
 in the browser, Telegram and WhatsApp: `!new`, `!clear`, `!delete`, `!stop`, `!unstick`,
 `!compact`, `!enable-mcp <name>` / `!disable-mcp <name>`, and `!model <nickname>`, which
 sets the agent's model to the offered one whose label holds the nickname in brackets
-(refused when meta locks `model`). Bare `!model` lists the nicknames and `!mcp` lists the
+(refused when meta locks `model`). Bare `!model` names the current model and lists the nicknames and `!mcp` lists the
 agent's MCP servers with the command that flips each. `!help` explains sessions and lists
 every command; `!new` and `!clear` point at it. `!docs` and `!settings` link the user guide
 and the agent's settings page under `APP_URL` (a `var` in `wrangler.jsonc`; unset, they

@@ -154,18 +154,18 @@ export async function mcpList(host: SessionHost): Promise<CommandResult> {
   return { text: `MCP servers:\n${lines.join("\n")}${off}`, destroy: false };
 }
 
-/** `!model`: the offered models' nicknames, the current one marked. */
+/** `!model`: the current model, then the offered models' nicknames with the current one marked. */
 export async function modelList(host: SessionHost): Promise<CommandResult> {
   const settings = await host.settingsNow();
   const meta = await host.registry().meta();
   await host.loadConfig();
   const current = host.config().model;
-  const offered = modelOptions(meta.models, modelCatalog(settings)).filter(
-    (m) => modelNicknames(m.label).length > 0
-  );
+  const options = modelOptions(meta.models, modelCatalog(settings));
+  const head = `Current model: ${options.find((m) => m.id === current)?.label ?? current}`;
+  const offered = options.filter((m) => modelNicknames(m.label).length > 0);
   if (offered.length === 0) {
     return {
-      text: "No model has a nickname. Nicknames are set in brackets in a model's name.",
+      text: `${head}\n\nNo model has a nickname. Nicknames are set in brackets in a model's name.`,
       destroy: false,
     };
   }
@@ -178,7 +178,7 @@ export async function modelList(host: SessionHost): Promise<CommandResult> {
   const locked = lockedColumns(meta.locked).has("model")
     ? "\n\nThe model is locked for this agent."
     : "\n\nSend `!model <nickname>` to switch.";
-  return { text: `Models:\n${lines.join("\n")}${locked}`, destroy: false };
+  return { text: `${head}\n\nModels:\n${lines.join("\n")}${locked}`, destroy: false };
 }
 
 /**
