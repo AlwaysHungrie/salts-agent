@@ -105,6 +105,7 @@ export async function channelTurn(
   if ("skipped" in inbound) return { ok: false, skipped: inbound.skipped };
   const { channel, target } = inbound;
   await channel.typing(target);
+  const stopTyping = keepTyping(channel, target);
 
   try {
     // A command is answered by the session itself, without a turn: the model has no
@@ -146,6 +147,7 @@ export async function channelTurn(
         ? textOf(result.message as unknown as UIMessage)
         : turnFailure(result.status, result.error);
 
+    stopTyping();
     await channel.sendText(target, chatText(reply) || "(no reply)");
     // An image the agent drew during the turn is a file in a chat, not a link.
     await sendDrawn(host, channel, target, drawnBefore);
@@ -173,7 +175,22 @@ export async function channelTurn(
         // The chat is unreachable; the error is already the answer to the request.
       });
     return { ok: false };
+  } finally {
+    stopTyping();
   }
+}
+
+/**
+ * Repeat the typing indicator until stopped: it lapses on its own (Telegram's after 5 s),
+ * and a turn that runs tools or several rounds outlives one.
+ */
+export function keepTyping(channel: Channel, target: ChannelTarget): () => void {
+  const timer = setInterval(() => {
+    void channel.typing(target).catch(() => {
+      // Best effort, as the first one.
+    });
+  }, channel.typingEveryMs);
+  return () => clearInterval(timer);
 }
 
 /**
