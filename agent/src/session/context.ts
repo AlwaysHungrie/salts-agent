@@ -99,14 +99,15 @@ export async function modelMessages(host: SessionHost, config: Config): Promise<
   const kept = limit > 0 ? all.slice(-limit) : all;
 
   const messages: ModelMessage[] = [];
+  /** The last reply's tool notes, waiting for the user message after it (see `toolNotesOf`). */
+  let notes = "";
   for (const message of kept) {
     let text = message.id.startsWith(COMPACTION_PREFIX)
       ? `${SUMMARY_PREAMBLE}\n\n${textOf(message)}`
       : textOf(message);
     if (message.role === "assistant") {
-      const notes = toolNotesOf(message);
-      const content = notes ? `${text}\n\n${notes}`.trim() : text;
-      if (content.trim()) messages.push({ role: "assistant", content });
+      notes = toolNotesOf(message);
+      if (text.trim()) messages.push({ role: "assistant", content: text });
       continue;
     }
     const stamp = sentAt(host, message.id);
@@ -121,6 +122,7 @@ export async function modelMessages(host: SessionHost, config: Config): Promise<
     const parts = await fileParts(host, attachments, new Set(parsed.map((p) => p.id)));
     const content = [
       { type: "text" as const, text },
+      ...(notes ? [{ type: "text" as const, text: notes }] : []),
       ...uploads.map((note) => ({ type: "text" as const, text: note })),
       ...parsed.map((p) => ({
         type: "text" as const,
@@ -128,10 +130,12 @@ export async function modelMessages(host: SessionHost, config: Config): Promise<
       })),
       ...parts,
     ];
+    notes = "";
     messages.push(
       content.length === 1 ? { role: "user", content: text } : { role: "user", content }
     );
   }
+  if (notes) messages.push({ role: "user", content: notes });
   return messages;
 }
 
