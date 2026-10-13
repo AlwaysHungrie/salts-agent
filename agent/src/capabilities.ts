@@ -383,6 +383,8 @@ export type ToolContext = {
   uploadAttachment: (server: McpServerRow, id: string) => Promise<string>;
   /** The PDFs, workbooks and CSVs this chat's messages carried, newest first. */
   sharedFiles: () => { id: string; name: string }[];
+  /** The PDFs, workbooks and CSVs of the latest message that carried any file. */
+  latestFiles: () => { id: string; name: string }[];
   /**
    * Send an Ogg Opus voice note to this session's chat. Throws a reason the model can act
    * on when the channel cannot carry one.
@@ -879,6 +881,24 @@ export function mcpToolSpecs(servers: McpServerRow[]): ToolSpec[] {
         description: `[${server.name}] ${tool.description ?? tool.name}`,
         parameters: tool.inputSchema ?? { type: "object", properties: {} },
         async run(args, ctx) {
+          /**
+           * A call that needed a file and was sent none, made again with the one file the
+           * user's latest message carried. Some models will not copy an upload_id even when
+           * handed it; the file they mean is not in doubt. Undefined when it is (several
+           * files, or none), or when the second call fails too.
+           */
+          const withLatestFile = async (sent: Record<string, unknown>) => {
+            const latest = ctx.latestFiles();
+            if (latest.length !== 1) return undefined;
+            try {
+              const id = await ctx.uploadAttachment(server, latest[0].id);
+              return await withMcpAuth(server, ctx.registry, (client) =>
+                client.callTool(tool.name, { ...sent, upload_id: id })
+              );
+            } catch {
+              return undefined;
+            }
+          };
           try {
             // A file goes to a server only when the model hands it to one of its tools.
             const ref = typeof args.upload_id === "string" ? args.upload_id : "";
@@ -886,9 +906,16 @@ export function mcpToolSpecs(servers: McpServerRow[]): ToolSpec[] {
               const id = await ctx.uploadAttachment(server, ref.slice(ATTACHMENT_REF.length));
               args = { ...args, upload_id: id };
             }
-            const result = await withMcpAuth(server, ctx.registry, (client) =>
-              client.callTool(tool.name, args)
-            );
+            const call = (sent: Record<string, unknown>) =>
+              withMcpAuth(server, ctx.registry, (client) => client.callTool(tool.name, sent));
+            let result;
+            try {
+              result = await call(args);
+            } catch (err) {
+              const retried = !args.upload_id && takesUpload(tool) ? await withLatestFile(args) : undefined;
+              if (!retried) throw err;
+              result = retried;
+            }
             return await deliverMcpOutput(result, ctx);
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err);

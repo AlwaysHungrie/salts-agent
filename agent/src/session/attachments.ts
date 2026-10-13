@@ -307,6 +307,19 @@ export function sharedFiles(host: SessionHost): Attachment[] {
     .slice(0, SHARED_FILES_SHOWN);
 }
 
+/** The PDFs, workbooks and CSVs of the latest message that carried any file. */
+export function latestFiles(host: SessionHost): Attachment[] {
+  return host
+    .exec<Attachment>(
+      `SELECT a.* FROM attachments a JOIN message_files m ON m.attachment_id = a.id
+       WHERE m.message_id = (
+         SELECT f.message_id FROM message_files f JOIN attachments b ON b.id = f.attachment_id
+         ORDER BY b.ts DESC LIMIT 1
+       )`
+    )
+    .filter(isForwardable);
+}
+
 /** Every image in this session so far, so the ones a turn adds can be told apart. */
 export function drawnIds(host: SessionHost): Set<string> {
   return new Set(
