@@ -3,6 +3,8 @@
  * the user attached, and answer. Nothing here knows about sessions or turns.
  */
 
+import { toTelegramHtml } from "./telegram-format";
+
 /** Telegram's own host. A local Bot API server can stand in through the Env var. */
 export const TELEGRAM_API = "https://api.telegram.org";
 
@@ -119,21 +121,31 @@ export class Telegram {
     });
   }
 
-  /** Send a reply, split at Telegram's length limit. Returns the message ids sent. */
+  /**
+   * Send a reply, split at Telegram's length limit, its Markdown shown as formatting.
+   * Returns the message ids sent.
+   */
   async send(chatId: string, text: string, replyTo?: number, threadId?: number): Promise<number[]> {
     const ids: number[] = [];
     for (const chunk of split(text)) {
-      const sent = await this.call<{ message_id: number }>("sendMessage", {
+      const base = {
         chat_id: chatId,
-        text: chunk,
         // Without the thread a reply lands in the group's General topic, not the one
         // that was talking.
         ...(threadId ? { message_thread_id: threadId } : {}),
-        // Telegram's Markdown is strict enough that a stray underscore breaks the
-        // whole message, so replies are sent as plain text.
         ...(replyTo && ids.length === 0
           ? { reply_parameters: { message_id: replyTo, allow_sending_without_reply: true } }
           : {}),
+      };
+      // Telegram's Markdown modes refuse a message over one stray underscore, so the
+      // Markdown goes as HTML. Should Telegram still refuse it, the words go as they are.
+      const sent = await this.call<{ message_id: number }>("sendMessage", {
+        ...base,
+        text: toTelegramHtml(chunk),
+        parse_mode: "HTML",
+      }).catch(async (err: unknown) => {
+        if (!/can't parse entities|unsupported start tag|can't find end tag/i.test(String(err))) throw err;
+        return await this.call<{ message_id: number }>("sendMessage", { ...base, text: chunk });
       });
       ids.push(sent.message_id);
     }

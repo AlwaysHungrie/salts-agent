@@ -59,6 +59,8 @@ import { TEST_CLERK_JWKS } from "./clerk-key";
 const tgSent: {
   chatId: string;
   text: string;
+  /** How Telegram was told to read `text`: "HTML", or unset for plain text. */
+  parseMode?: string;
   replyTo?: number;
   threadId?: number;
   /** Set on a photo: the file's name. */
@@ -137,17 +139,26 @@ async function telegramMock(request: Request, url: URL): Promise<Response> {
   const body = (await request.json().catch(() => ({}))) as {
     chat_id?: string;
     text?: string;
+    parse_mode?: string;
     message_thread_id?: number;
     reply_parameters?: { message_id?: number };
   };
+  // A message Telegram cannot read as HTML, the way an unclosed tag would be.
+  if (body.parse_mode === "HTML" && body.text?.includes(TELEGRAM_UNPARSABLE)) {
+    return json({ ok: false, description: "Bad Request: can't parse entities: unclosed tag" }, 400);
+  }
   tgSent.push({
     chatId: String(body.chat_id ?? ""),
     text: body.text ?? "",
+    parseMode: body.parse_mode,
     replyTo: body.reply_parameters?.message_id,
     threadId: body.message_thread_id,
   });
   return json({ ok: true, result: { message_id: tgSent.length } });
 }
+
+/** Text the Telegram stand-in refuses to parse as HTML, to reach the plain-text resend. */
+export const TELEGRAM_UNPARSABLE = "UNPARSABLE-HTML";
 
 /** What the Telegram stand-in serves for any file a message attached. */
 export const TELEGRAM_FILE_BODY = "a document the agent was sent";
