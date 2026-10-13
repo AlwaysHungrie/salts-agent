@@ -25,7 +25,7 @@ from pydantic import Field, ValidationError, WithJsonSchema
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
-from . import authoring, export, pyrun, render, store
+from . import authoring, export, pyrun, render, report, store
 from . import breakdown as bd
 from . import sql as sqldb
 from .auth import BearerAuthMiddleware
@@ -70,6 +70,8 @@ How to work:
    it with add_section, one call per section: each is shown to the user as an image. The server keeps the draft,
    so you never repeat earlier sections; add_section with `number` replaces one the user wants changed.
 6. Only when the user is happy, export_sheet. It returns the .xlsx to the user. The project's file is not changed.
+   When the user wants a PDF report or presentation of it instead (or too), export_report prints the same draft as a
+   designed slide deck: a cover, key figures, one slide per section, and notes.
 To make a new Excel file (a plan, a list, a table, an analysis of several files): create_file with the rows. To
 change a file (values, formulas, rows, sheets, bold, colours, number formats): edit_file. Both send the file to the
 user; an edit becomes the file's new version, so its name keeps meaning the latest file.
@@ -892,6 +894,50 @@ def export_sheet(
         f"It contains exactly these sections; tell the user these, no others:\n{contents}"
     )
     return _result(text, files=[(path.name, mime, path.read_bytes())])
+
+
+@mcp.tool(
+    description=(
+        "Print the draft sheet (every section from add_section) as a designed PDF report and send it to the user: a "
+        "16:9 slide deck with a cover, an 'at a glance' slide of key figures, one slide per section (its table beside "
+        "its chart) and a notes slide. Call only after the user approved the sections. Numbers come from the draft "
+        "cells: highlights name a cell as [s2r3c2], and leads, notes and the subtitle write numbers as {s2r3c2}, "
+        "never typed. Keep the words plain, for the user's client: no cell addresses or formula talk."
+    ),
+    annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=False),
+)
+@tool_handler("export_report")
+def export_report(
+    project: ProjectName,
+    report_spec: Annotated[
+        dict[str, Any],
+        WithJsonSchema(inline_schema(report.Report)),
+        Field(description="The report: title, subtitle, kicker, date, facts, highlights, leads, notes, footer"),
+    ],
+    file_name: Annotated[str | None, Field(description="Name for the file, without extension")] = None,
+    file: FileName = None,
+) -> CallToolResult:
+    found, _ = workbook(project, file)
+    spec = store.load_draft(found)
+    if not spec or not spec.get("sections"):
+        raise ToolFailure("no_draft", "the draft has no sections yet: add them with add_section")
+    meta = report.Report.model_validate(report_spec)
+    files, built = _built(found, spec)
+    if not built.all_ok:
+        failing = ", ".join(c.check.label for c in built.checks if not c.ok)
+        raise ToolFailure("checks_failed", f"these checks fail, so nothing was printed: {failing}")
+    if len(meta.leads) > len(built.sections):
+        raise ToolFailure("invalid_spec", f"{len(meta.leads)} leads for {len(built.sections)} sections")
+    page = report.build_html(built, meta)
+    chrome = report.find_chrome(get_settings().chrome_path)
+    stem = file_name or meta.title
+    path = report.print_pdf(page, store.export_path(files, stem, ".pdf"), chrome)
+    contents = "\n".join(f"- {lay.section.title}" for lay in built.sections)
+    text = (
+        f"Printed {path.name}. The PDF was sent to the user and is also saved on this computer at {path}.\n\n"
+        f"Its section slides are exactly these; tell the user these, no others:\n{contents}"
+    )
+    return _result(text, files=[(f"{stem}.pdf", "application/pdf", path.read_bytes())])
 
 
 # ---------------------------------------------------------------------- writing files

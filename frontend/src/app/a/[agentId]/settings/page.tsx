@@ -710,7 +710,7 @@ export default function Settings({
             {isAdmin && agent && (
               <Row
                 title="Meta settings"
-                hint="Model list, defaults and locked settings for this agent."
+                hint="Advanced settings. Manage default options and lock settings from being changed."
               >
                 <button
                   onClick={() => setMetaOpen(true)}
