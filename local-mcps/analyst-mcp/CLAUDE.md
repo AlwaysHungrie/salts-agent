@@ -27,13 +27,14 @@ MCP_TRANSPORT=http MCP_AUTH_TOKEN=x MCP_PORT=8380 uv run analyst-mcp
 | `render.py` | matplotlib PNGs: section (table + chart), checks |
 | `authoring.py` | `create_file` (new file from rows) and `edit_file` (cell, fill-down, row, sheet and style edits into new bytes) |
 | `export.py` | openpyxl copy of the original + new sheet (formulas, native charts) + Checks sheet |
+| `report.py` | `export_report`: the draft as HTML slides (cover, key figures, section tables + SVG charts, notes), printed to PDF by headless Chrome |
 | `sql.py` | DuckDB in memory per project: `cells` (with `file`) + header-row sheets, shared sheet names stacked; external access off |
 | `pyrun.py` | `run_python` subprocess (only registered when `ALLOW_PYTHON=true`) |
 | `fmt.py` | Value display per number format (Indian grouping for `inr`) |
 
 ## Decisions that must not be undone
 
-- Preview and export come from the same spec formulas (`spec.build`). Never compute a number for the picture one way
+- Preview, export and report come from the same spec formulas (`spec.build`). Never compute a number for the picture one way
   and write it to Excel another way.
 - Spec numbers are formulas over workbook cells, not typed results; bare `C4` is rejected so every reference names
   its sheet. `export_sheet` refuses while a check fails.

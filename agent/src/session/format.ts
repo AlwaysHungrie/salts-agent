@@ -59,6 +59,21 @@ export function turnFailure(status: string, error?: string): string {
   return `That turn did not finish${why}. If it keeps happening, !unstick clears this session's turn state.`;
 }
 
+/** Said when a turn ran out of tool rounds and its reply does not say how to go on. */
+export const OUT_OF_ROUNDS =
+  'I ran out of steps before finishing this. Say "continue" and I will carry on from here.';
+
+/**
+ * A reply as a chat should get it. Some models, told to stop calling tools, write the
+ * call out as text in their own markup; that is never an answer, so it is cut. A turn
+ * that ran out of rounds says so, unless the reply already offers "continue".
+ */
+export function chatReply(text: string, outOfRounds: boolean): string {
+  const cleaned = text.replace(/<tool_call>[\s\S]*?(<\/tool_call>|$)/g, "").trim();
+  if (!outOfRounds || /\bcontinue\b/i.test(cleaned)) return cleaned;
+  return cleaned ? `${cleaned}\n\n${OUT_OF_ROUNDS}` : OUT_OF_ROUNDS;
+}
+
 /** Every text part of a message, joined — what the transcript API calls its content. */
 export function textOf(message: UIMessage | undefined): string {
   if (!message) return "";
@@ -95,6 +110,10 @@ function failed(call: { state?: string; output?: unknown }, name: string): boole
  * sent replies as text only, so without this a model forgets the ids and cells a tool
  * gave it and spends the next turn guessing or looking them up again. Failed calls are
  * left out: what went wrong was already said.
+ *
+ * It travels on the next user message, never inside the reply: a weaker model reads its
+ * own past replies as the shape of a reply, and copies a list of calls into its answer
+ * as text ("→ Sent the file") instead of calling the tool.
  */
 export function toolNotesOf(message: UIMessage): string {
   const lines: string[] = [];
@@ -120,7 +139,7 @@ export function toolNotesOf(message: UIMessage): string {
     used += line.length;
   }
   if (lines.length === 0) return "";
-  return `[Tools this reply used, results shortened. Reuse the ids and cells they gave rather than looking them up again.]\n${lines.join("\n")}`;
+  return `[Record of the tools your previous reply called, results shortened. Reuse the ids and cells they gave rather than looking them up again. This is a record, not a way to act: to do any of it again, call the tool. Never write calls like these in a reply.]\n${lines.join("\n")}`;
 }
 
 /**

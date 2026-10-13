@@ -43,6 +43,10 @@ projects held files open as projects with one file.
 5. `export_sheet` writes the draft into a copy of the file. Every number in it is
    a live Excel formula, the checks go on a Checks sheet, and the agent hands the user
    the file. The export is refused while any check fails.
+6. `export_report` prints the same draft as a PDF slide deck for a client: a cover, key figures, one slide per
+   section (its table beside its chart) and a notes slide. Key figures name draft cells (`[s2r3c2]`), and the
+   sentences write numbers as `{s2r3c2}`, so the report shows the draft's numbers. Chrome, Chromium or Edge on this
+   computer prints it (set `CHROME_PATH` when it is somewhere unusual); it is refused while any check fails.
 
 The preview and the export are made from the same formula text, so the numbers in the
 picture the user approved are the numbers in the file.
@@ -59,8 +63,10 @@ picture the user approved are the numbers in the file.
 | `query` | Runs one read-only DuckDB SQL query over every file of the project. It can draw the result as a chart, or return it as an .xlsx or .csv file. |
 | `what_if` | Changes input cells, recalculates the whole file, and reports the outputs before and after. |
 | `breakdown` | Opens a total cell into the items that add up to it exactly; with `groups`, checks every item is in one head and returns the section rows and check. |
-| `add_section` | Adds, replaces (`number`) or removes (`remove`) one section of the draft sheet and shows it as an image. |
+| `add_section` | Adds one section of the draft sheet, or replaces section `number` with the whole section sent again, and shows it as an image. |
+| `remove_section` | Takes section `number` out of the draft; later sections and their checks move up one. |
 | `export_sheet` | Builds the draft into a copy of the file and returns the .xlsx. |
+| `export_report` | Prints the draft as a designed PDF report (16:9 slides) and returns the .pdf. |
 | `create_file` | Makes a new Excel file from rows in `project` (first row bold headings; `=` starts a formula) and returns the .xlsx. |
 | `edit_file` | Applies edits in order, all or none: `set` cells, `fill` (the top row of a range copied down it, references shifting as in Excel), `append_rows`, `add_sheet`, `rename_sheet` (formulas follow), `delete_sheet` (refused while formulas use it), `format` (bold, number format, fill, width). Saves the file's next version and returns the .xlsx. |
 | `move_file` | Moves a file (versions, draft) to another project; a project left empty is removed. |

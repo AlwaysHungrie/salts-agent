@@ -64,7 +64,7 @@ export function AgentListRow({
       ) : (
         <div className="min-w-0 flex-1">{title}</div>
       )}
-      {/* Admin settings are reachable only from here, never from the agent's own pages. */}
+      {/* Admin settings: here, and on the agent's settings page when the admin is also a member. */}
       {showMeta && isAdmin && (
         <button
           onClick={() => onMeta(agent)}

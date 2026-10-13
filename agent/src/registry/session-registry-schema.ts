@@ -217,4 +217,10 @@ export const SESSION_REGISTRY_MIGRATIONS: readonly Migration[] = [
       );
     },
   },
+  {
+    name: "mcp server instructions",
+    up: (sql) => {
+      addColumnIfMissing(sql, "mcp_servers", `instructions TEXT NOT NULL DEFAULT ''`);
+    },
+  },
 ];

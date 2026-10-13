@@ -68,7 +68,7 @@ async def build_draft(proj: str, spec: dict) -> list:
     last = len(spec["sections"])
     for i, section in enumerate(spec["sections"], 1):
         res = await server.add_section(
-            proj, section, checks=spec.get("checks") if i == last else None, title=spec.get("title"),
+            proj, section, checks=spec.get("checks") if i == last else None, sheet_title=spec.get("title"),
             sheet_name=spec.get("sheet_name"),
         )  # fmt: skip
         out.append(res)

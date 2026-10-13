@@ -77,6 +77,8 @@ export type Channel = {
   id: ChannelId;
   /** Look busy. Best effort: a turn that failed to look busy must not fail. */
   typing: (target: ChannelTarget) => Promise<void>;
+  /** How often `typing` is repeated during a turn: the indicator lapses on its own. */
+  typingEveryMs: number;
   /** Send a reply, split by the channel at its own length limit. */
   sendText: (target: ChannelTarget, text: string) => Promise<void>;
   /** Send an image the agent drew. Absent on a channel that cannot carry one. */
@@ -141,6 +143,8 @@ function telegramChannel(config: Config, env: ChannelEnv): Channel {
   return {
     id: "telegram",
     typing: (target) => bot.typing(target.to, target.threadId),
+    // "Typing…" shows for 5 s or until the bot sends something.
+    typingEveryMs: 4_000,
     sendText: async (target, text) => {
       await bot.send(target.to, text, Number(target.replyTo) || undefined, target.threadId);
     },
@@ -213,6 +217,8 @@ function whatsappChannel(config: Config, env: ChannelEnv): Channel {
     typing: async (target) => {
       if (target.replyTo) await chat.typing(target.replyTo);
     },
+    // The bubble shows for 25 s or until the reply arrives.
+    typingEveryMs: 20_000,
     sendText: async (target, text) => {
       await chat.send(target.to, text, target.replyTo);
     },

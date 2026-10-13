@@ -12,7 +12,7 @@ import { toArrayBuffer } from "../util/bytes";
 import { attachmentsOf, drawnIds, getAttachment, insertAttachment } from "./attachments";
 import { runCommand } from "./commands";
 import { isPdf, isSheet, uploadPath } from "./files";
-import { reportable, textOf, turnFailure } from "./format";
+import { chatReply, reportable, textOf, turnFailure } from "./format";
 import { openTurn, spendBlocked } from "./turns";
 import type { Attachment, SessionHost } from "./types";
 
@@ -46,7 +46,7 @@ export async function deliverToChat(
   }
 
   try {
-    const text = textOf(message);
+    const text = chatReply(textOf(message), host.turn.outOfRounds);
     await channel.sendText(target, chatText(text) || "(no reply)");
     console.log(`${channel.id} delivered for session ${host.name()} to ${target.to}`);
     await sendDrawn(host, channel, target, drawnBefore);
@@ -105,6 +105,7 @@ export async function channelTurn(
   if ("skipped" in inbound) return { ok: false, skipped: inbound.skipped };
   const { channel, target } = inbound;
   await channel.typing(target);
+  const stopTyping = keepTyping(channel, target);
 
   try {
     // A command is answered by the session itself, without a turn: the model has no
@@ -143,9 +144,10 @@ export async function channelTurn(
     }
     const reply =
       result.status === "completed"
-        ? textOf(result.message as unknown as UIMessage)
+        ? chatReply(textOf(result.message as unknown as UIMessage), host.turn.outOfRounds)
         : turnFailure(result.status, result.error);
 
+    stopTyping();
     await channel.sendText(target, chatText(reply) || "(no reply)");
     // An image the agent drew during the turn is a file in a chat, not a link.
     await sendDrawn(host, channel, target, drawnBefore);
@@ -173,7 +175,22 @@ export async function channelTurn(
         // The chat is unreachable; the error is already the answer to the request.
       });
     return { ok: false };
+  } finally {
+    stopTyping();
   }
+}
+
+/**
+ * Repeat the typing indicator until stopped: it lapses on its own (Telegram's after 5 s),
+ * and a turn that runs tools or several rounds outlives one.
+ */
+export function keepTyping(channel: Channel, target: ChannelTarget): () => void {
+  const timer = setInterval(() => {
+    void channel.typing(target).catch(() => {
+      // Best effort, as the first one.
+    });
+  }, channel.typingEveryMs);
+  return () => clearInterval(timer);
 }
 
 /**

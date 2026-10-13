@@ -281,9 +281,10 @@ export async function mcpCommand(
     };
   }
   try {
-    const tools = await withMcpAuth(updated, reg, (client) => client.listTools());
+    const { tools, instructions } = await withMcpAuth(updated, reg, (client) => client.describe());
     await reg.updateMcpServer(row.id, {
       tools_json: JSON.stringify(tools),
+      instructions,
       tools_synced_at: Date.now(),
       last_error: "",
     });

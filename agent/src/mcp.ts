@@ -45,6 +45,11 @@ export type McpServerRow = {
   /** Cached `tools/list`, as JSON. Refreshed on save, on connect, and on demand. */
   tools_json: string;
   /**
+   * What the server's `initialize` said about using its tools, cached with them. Goes in
+   * the system prompt: a weaker model works a server well only when told how.
+   */
+  instructions: string;
+  /**
    * Tools the agent may not call, as a JSON array. Stored as exclusions so a tool the
    * provider adds later arrives switched on.
    */
@@ -65,6 +70,7 @@ export type McpServerView = Omit<
   | "oauth_state"
   | "headers"
   | "tools_json"
+  | "instructions"
   | "disabled_tools"
 > & {
   /**
@@ -153,6 +159,8 @@ async function readEnvelope(res: Response): Promise<JsonRpcResponse | undefined>
 export class McpClient {
   private sessionId = "";
   private initialized = false;
+  /** The server's `instructions` from `initialize`, once it has run. */
+  instructions = "";
   private nextId = 1;
 
   constructor(
@@ -200,15 +208,22 @@ export class McpClient {
 
   private async ensureInitialized() {
     if (this.initialized) return;
-    await this.send("initialize", {
+    const result = (await this.send("initialize", {
       protocolVersion: MCP_PROTOCOL_VERSION,
       capabilities: {},
       clientInfo: { name: "salts-agent", version: "1.0" },
-    });
+    })) as { instructions?: unknown } | undefined;
+    this.instructions = typeof result?.instructions === "string" ? result.instructions.trim() : "";
     // Best effort: some servers close the stream before the notification lands, and
     // the session works regardless.
     await this.send("notifications/initialized", undefined, true).catch(() => {});
     this.initialized = true;
+  }
+
+  /** The server's tools and its instructions for using them, as one sync caches them. */
+  async describe(): Promise<{ tools: McpTool[]; instructions: string }> {
+    const tools = await this.listTools();
+    return { tools, instructions: this.instructions };
   }
 
   async listTools(): Promise<McpTool[]> {

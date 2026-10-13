@@ -59,6 +59,8 @@ import { TEST_CLERK_JWKS } from "./clerk-key";
 const tgSent: {
   chatId: string;
   text: string;
+  /** How Telegram was told to read `text`: "HTML", or unset for plain text. */
+  parseMode?: string;
   replyTo?: number;
   threadId?: number;
   /** Set on a photo: the file's name. */
@@ -137,17 +139,26 @@ async function telegramMock(request: Request, url: URL): Promise<Response> {
   const body = (await request.json().catch(() => ({}))) as {
     chat_id?: string;
     text?: string;
+    parse_mode?: string;
     message_thread_id?: number;
     reply_parameters?: { message_id?: number };
   };
+  // A message Telegram cannot read as HTML, the way an unclosed tag would be.
+  if (body.parse_mode === "HTML" && body.text?.includes(TELEGRAM_UNPARSABLE)) {
+    return json({ ok: false, description: "Bad Request: can't parse entities: unclosed tag" }, 400);
+  }
   tgSent.push({
     chatId: String(body.chat_id ?? ""),
     text: body.text ?? "",
+    parseMode: body.parse_mode,
     replyTo: body.reply_parameters?.message_id,
     threadId: body.message_thread_id,
   });
   return json({ ok: true, result: { message_id: tgSent.length } });
 }
+
+/** Text the Telegram stand-in refuses to parse as HTML, to reach the plain-text resend. */
+export const TELEGRAM_UNPARSABLE = "UNPARSABLE-HTML";
 
 /** What the Telegram stand-in serves for any file a message attached. */
 export const TELEGRAM_FILE_BODY = "a document the agent was sent";
@@ -635,6 +646,9 @@ export const MCP_MEDIA_TOOL = {
   inputSchema: { type: "object", properties: { upload_id: { type: "string" } } },
 };
 
+/** What the server at `/` says, on `initialize`, about using its tools. */
+export const MCP_INSTRUCTIONS = "Search before reading a page.";
+
 /** A 1x1 PNG, and the bytes of the workbook `build_report` returns. */
 export const MOCK_PNG =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
@@ -684,6 +698,7 @@ async function mcpMock(request: Request, url: URL): Promise<Response> {
           protocolVersion: "2025-06-18",
           capabilities: { tools: {} },
           serverInfo: { name: "mock-mcp", version: "1.0" },
+          ...(url.pathname === "/" ? { instructions: MCP_INSTRUCTIONS } : {}),
         },
       }),
       { headers: { "content-type": "application/json", "mcp-session-id": "mock-session" } }
@@ -715,6 +730,13 @@ async function mcpMock(request: Request, url: URL): Promise<Response> {
             },
           },
         ],
+      });
+    }
+    // Like analyst-mcp: a tool that needs a file refuses a call that passed none.
+    if (body.params?.name === MCP_UPLOAD_TOOL.name && !body.params.arguments?.upload_id) {
+      return reply({
+        content: [{ type: "text", text: "pass exactly one of upload_id or inbox_file" }],
+        isError: true,
       });
     }
     return reply({ content: [{ type: "text", text: "done" }] });
@@ -837,6 +859,19 @@ export async function openrouterMock(request: Request): Promise<Response> {
   if (message.startsWith("!!draw")) {
     if (carriesToolResult(body)) return streamedText("Drew it.");
     return streamedToolCall("generate_image", { prompt: "a mock drawing" });
+  }
+
+  // `!!repeat <tool>`: call that tool with the same arguments again, as a looping model does.
+  if (message.startsWith("!!repeat")) {
+    const results = (body.messages ?? []).filter((m) => m.role === "tool").length;
+    if (results >= 2) return streamedText("Done.");
+    return streamedToolCall(message.split(/\s+/)[1], { query: "same" });
+  }
+
+  // `!!ingestbare <tool>`: call that tool without the attachment, as a weaker model does.
+  if (message.startsWith("!!ingestbare")) {
+    if (carriesToolResult(body)) return streamedText("Couldn't store it.");
+    return streamedToolCall(message.split(/\s+/)[1], { text: "a resume" });
   }
 
   // `!!ingest <tool>`: hand the attachment the turn names to that tool, as a model would.

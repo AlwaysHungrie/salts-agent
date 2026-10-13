@@ -12,7 +12,7 @@ import {
 } from "../capabilities";
 import type { Config } from "../registry";
 import { base64ToBytes } from "../util/bytes";
-import { attachmentsOf, insertAttachment } from "./attachments";
+import { attachmentsOf, insertAttachment, latestFiles, sharedFiles } from "./attachments";
 import { sendVoiceNote } from "./channels";
 import { compactedMessages } from "./compaction";
 import {
@@ -78,6 +78,12 @@ export function systemPrompt(host: SessionHost): string {
         .join(", ")}.`
     );
   }
+  // Each server's own guide to its tools: tool descriptions say what one call does, not
+  // the order a task takes, and a weaker model guesses that order wrong without it.
+  for (const server of connected) {
+    if (!server.instructions.trim()) continue;
+    parts.push(`How to use the ${server.name} tools, from that server:\n\n${server.instructions.trim()}`);
+  }
   // Said once here rather than as today's date, which would change the prompt and break
   // the cache every day: the time travels on each message instead (see `sentAt`).
   parts.push(
@@ -99,14 +105,15 @@ export async function modelMessages(host: SessionHost, config: Config): Promise<
   const kept = limit > 0 ? all.slice(-limit) : all;
 
   const messages: ModelMessage[] = [];
+  /** The last reply's tool notes, waiting for the user message after it (see `toolNotesOf`). */
+  let notes = "";
   for (const message of kept) {
     let text = message.id.startsWith(COMPACTION_PREFIX)
       ? `${SUMMARY_PREAMBLE}\n\n${textOf(message)}`
       : textOf(message);
     if (message.role === "assistant") {
-      const notes = toolNotesOf(message);
-      const content = notes ? `${text}\n\n${notes}`.trim() : text;
-      if (content.trim()) messages.push({ role: "assistant", content });
+      notes = toolNotesOf(message);
+      if (text.trim()) messages.push({ role: "assistant", content: text });
       continue;
     }
     const stamp = sentAt(host, message.id);
@@ -121,6 +128,7 @@ export async function modelMessages(host: SessionHost, config: Config): Promise<
     const parts = await fileParts(host, attachments, new Set(parsed.map((p) => p.id)));
     const content = [
       { type: "text" as const, text },
+      ...(notes ? [{ type: "text" as const, text: notes }] : []),
       ...uploads.map((note) => ({ type: "text" as const, text: note })),
       ...parsed.map((p) => ({
         type: "text" as const,
@@ -128,10 +136,12 @@ export async function modelMessages(host: SessionHost, config: Config): Promise<
       })),
       ...parts,
     ];
+    notes = "";
     messages.push(
       content.length === 1 ? { role: "user", content: text } : { role: "user", content }
     );
   }
+  if (notes) messages.push({ role: "user", content: notes });
   return messages;
 }
 
@@ -169,14 +179,32 @@ export function capabilityTools(host: SessionHost, config: Config): ToolSet {
       // A failure is returned rather than thrown, so the model reads what went
       // wrong and can correct itself on the next round.
       execute: async (args, { toolCallId }) => {
+        // A weaker model can call one tool with the same arguments round after round,
+        // never reading the result, until the turn's rounds run out. A repeat is refused
+        // as a failure, so three in a row end the turn with an explanation.
+        const call = `${spec.name}(${stableJson(args)})`;
+        if (host.turn.calls.includes(call)) {
+          host.turn.failedCalls.push(toolCallId);
+          return `Tool ${spec.name} failed: it was already called with exactly these arguments in this turn, and its result is above. Do not call it again with the same arguments: use that result and go on to the next step.`;
+        }
         const result = await runTool(spec.name, args as Record<string, unknown>, context, spec);
         // Returned, so the SDK records a result; `failedInARow` needs to know it failed.
         if (!result.ok) host.turn.failedCalls.push(toolCallId);
+        else host.turn.calls.push(call);
         return result.content;
       },
     });
   }
   return tools;
+}
+
+/** JSON with object keys sorted, so the same arguments in another order read the same. */
+function stableJson(value: unknown): string {
+  return JSON.stringify(value, (_, v: unknown) =>
+    v && typeof v === "object" && !Array.isArray(v)
+      ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b)))
+      : v
+  );
 }
 
 /** Tool calls that may fail in a row before the turn is made to stop and say so. */
@@ -225,6 +253,7 @@ export function answerOnLastRound(
   maxSteps: number
 ): { toolChoice: "none"; instructions: string } | undefined {
   if (stepNumber < maxSteps - 1) return undefined;
+  host.turn.outOfRounds = true;
   return {
     toolChoice: "none",
     instructions: `${systemPrompt(host)}\n\nThis is the last step of this turn: do not call any more tools. Answer now with what you have found so far, say plainly what is still left to do, and tell the user they can say "continue" to carry on.`,
@@ -292,6 +321,8 @@ export function toolContext(host: SessionHost, config: Config): ToolContext {
     },
     transcribeAttachment: (id) => transcribeAttachment(host, id),
     uploadAttachment: (server, id) => uploadAttachment(host, server, id),
+    sharedFiles: () => sharedFiles(host),
+    latestFiles: () => latestFiles(host),
     sendVoiceNote: (bytes) => sendVoiceNote(host, bytes),
     schedule: async (when, prompt) => {
       const task = await host.scheduleTask(when, prompt);
