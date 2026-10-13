@@ -93,10 +93,11 @@ export async function syncMcpTools(reg: Registry, row: McpServerRow): Promise<Mc
     return (await reg.updateMcpServer(row.id, { tools_json: "", last_error: "" })) ?? row;
   }
   try {
-    const tools = await withMcpAuth(row, reg, (client) => client.listTools());
+    const { tools, instructions } = await withMcpAuth(row, reg, (client) => client.describe());
     return (
       (await reg.updateMcpServer(row.id, {
         tools_json: JSON.stringify(tools),
+        instructions,
         tools_synced_at: Date.now(),
         last_error: "",
       })) ?? row

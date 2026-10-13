@@ -78,6 +78,12 @@ export function systemPrompt(host: SessionHost): string {
         .join(", ")}.`
     );
   }
+  // Each server's own guide to its tools: tool descriptions say what one call does, not
+  // the order a task takes, and a weaker model guesses that order wrong without it.
+  for (const server of connected) {
+    if (!server.instructions.trim()) continue;
+    parts.push(`How to use the ${server.name} tools, from that server:\n\n${server.instructions.trim()}`);
+  }
   // Said once here rather than as today's date, which would change the prompt and break
   // the cache every day: the time travels on each message instead (see `sentAt`).
   parts.push(
