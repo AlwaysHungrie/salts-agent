@@ -59,6 +59,21 @@ export function turnFailure(status: string, error?: string): string {
   return `That turn did not finish${why}. If it keeps happening, !unstick clears this session's turn state.`;
 }
 
+/** Said when a turn ran out of tool rounds and its reply does not say how to go on. */
+export const OUT_OF_ROUNDS =
+  'I ran out of steps before finishing this. Say "continue" and I will carry on from here.';
+
+/**
+ * A reply as a chat should get it. Some models, told to stop calling tools, write the
+ * call out as text in their own markup; that is never an answer, so it is cut. A turn
+ * that ran out of rounds says so, unless the reply already offers "continue".
+ */
+export function chatReply(text: string, outOfRounds: boolean): string {
+  const cleaned = text.replace(/<tool_call>[\s\S]*?(<\/tool_call>|$)/g, "").trim();
+  if (!outOfRounds || /\bcontinue\b/i.test(cleaned)) return cleaned;
+  return cleaned ? `${cleaned}\n\n${OUT_OF_ROUNDS}` : OUT_OF_ROUNDS;
+}
+
 /** Every text part of a message, joined — what the transcript API calls its content. */
 export function textOf(message: UIMessage | undefined): string {
   if (!message) return "";

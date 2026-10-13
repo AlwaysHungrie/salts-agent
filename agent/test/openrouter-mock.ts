@@ -850,6 +850,13 @@ export async function openrouterMock(request: Request): Promise<Response> {
     return streamedToolCall("generate_image", { prompt: "a mock drawing" });
   }
 
+  // `!!repeat <tool>`: call that tool with the same arguments again, as a looping model does.
+  if (message.startsWith("!!repeat")) {
+    const results = (body.messages ?? []).filter((m) => m.role === "tool").length;
+    if (results >= 2) return streamedText("Done.");
+    return streamedToolCall(message.split(/\s+/)[1], { query: "same" });
+  }
+
   // `!!ingestbare <tool>`: call that tool without the attachment, as a weaker model does.
   if (message.startsWith("!!ingestbare")) {
     if (carriesToolResult(body)) return streamedText("Couldn't store it.");

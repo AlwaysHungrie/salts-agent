@@ -12,7 +12,7 @@ import { toArrayBuffer } from "../util/bytes";
 import { attachmentsOf, drawnIds, getAttachment, insertAttachment } from "./attachments";
 import { runCommand } from "./commands";
 import { isPdf, isSheet, uploadPath } from "./files";
-import { reportable, textOf, turnFailure } from "./format";
+import { chatReply, reportable, textOf, turnFailure } from "./format";
 import { openTurn, spendBlocked } from "./turns";
 import type { Attachment, SessionHost } from "./types";
 
@@ -46,7 +46,7 @@ export async function deliverToChat(
   }
 
   try {
-    const text = textOf(message);
+    const text = chatReply(textOf(message), host.turn.outOfRounds);
     await channel.sendText(target, chatText(text) || "(no reply)");
     console.log(`${channel.id} delivered for session ${host.name()} to ${target.to}`);
     await sendDrawn(host, channel, target, drawnBefore);
@@ -144,7 +144,7 @@ export async function channelTurn(
     }
     const reply =
       result.status === "completed"
-        ? textOf(result.message as unknown as UIMessage)
+        ? chatReply(textOf(result.message as unknown as UIMessage), host.turn.outOfRounds)
         : turnFailure(result.status, result.error);
 
     stopTyping();
