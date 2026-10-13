@@ -53,6 +53,7 @@ const SECTION_ORDER = [
   "WhatsApp",
   "MCP servers",
   "Advanced use",
+  "salts-tools",
   "Fleets",
   "API",
 ];

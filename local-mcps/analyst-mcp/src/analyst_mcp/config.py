@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     # run_python executes model-written code on this machine. Off unless set to true.
     allow_python: bool = False
     python_timeout_seconds: int = 60
+    # Chrome, Chromium or Edge, which prints PDF reports. Found in the usual places when unset.
+    chrome_path: Path | None = None
 
     def inbox(self) -> Path:
         return self.inbox_dir or self.data_dir / "inbox"
