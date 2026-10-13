@@ -160,6 +160,25 @@ export class Telegram {
     if (!res.ok) throw new Error(`telegram sendPhoto: ${res.status} ${await res.text()}`);
   }
 
+  /** Send a file the agent made (an exported workbook, a PDF) as a download. */
+  async sendDocument(
+    chatId: string,
+    bytes: ArrayBuffer,
+    name: string,
+    mime: string,
+    threadId?: number
+  ) {
+    const form = new FormData();
+    form.set("chat_id", chatId);
+    if (threadId) form.set("message_thread_id", String(threadId));
+    form.set("document", new Blob([bytes], { type: mime }), name);
+    const res = await fetch(`${this.api}/bot${this.token}/sendDocument`, {
+      method: "POST",
+      body: form,
+    });
+    if (!res.ok) throw new Error(`telegram sendDocument: ${res.status} ${await res.text()}`);
+  }
+
   /** Send a voice note (`sendVoice`, not `sendAudio`): Ogg Opus shows as a waveform. */
   async sendVoice(chatId: string, bytes: ArrayBuffer, threadId?: number) {
     const form = new FormData();

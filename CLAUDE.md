@@ -4,6 +4,9 @@
   new behaviour lands with tests, and `npm run deploy` refuses on a red suite.
 - No unrequested thinking/analysis. Answer what is asked.
 - No extra features or content beyond the ask.
+- Changing a bang command or agent behaviour: check whether the docs need updating too —
+  `agent/README.md` and the user guide in `frontend/content/guide/` (`commands.md` lists
+  every command).
 - Do not use Playwright.
 
 # Admin: deployment settings
@@ -53,9 +56,9 @@
 
 - `agent/` — agent code
 - `frontend/` — Next.js app (pnpm)
-- `app-experiments/socratic-salt/` — Next.js app (pnpm): public challenge agents on the same Worker
+- `app-experiments/devcon-jobs-matchmaker/` — Next.js app (pnpm, local MongoDB): standalone jobs matchmaker on the staging agent via its API key
 - `salts-tools/` — laptop CLI: runs local services behind one ngrok tunnel, pushes their URLs to the agent
-- `local-mcps/` — MCP servers salts-tools runs (`matchmaker-mcp`, Python/uv)
+- `local-mcps/` — MCP servers salts-tools runs (`matchmaker-mcp`, `analyst-mcp` for Excel/CSV analysis; Python/uv)
 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence

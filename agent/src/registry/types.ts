@@ -180,8 +180,11 @@ export type McpCatalogEntry = {
   color?: string;
 };
 
-/** A model an agent may use, and whether it accepts images. Labelled from the catalogue. */
-export type ModelChoice = { id: string; vision: boolean };
+/**
+ * A model an agent may use, and whether it accepts images. `label` names it (brackets in it
+ * are nicknames for `!model`); without one it is labelled from the catalogue.
+ */
+export type ModelChoice = { id: string; vision: boolean; label?: string };
 
 /** The tuning settings a default may be given for. */
 export type MetaTunableKey =

@@ -221,21 +221,43 @@ export class McpClient {
     }));
   }
 
-  /** Calls a tool and flattens its content blocks to the text a model can read. */
-  async callTool(name: string, args: Record<string, unknown>): Promise<string> {
+  /**
+   * Calls a tool. Its text blocks become the text a model reads; images and embedded
+   * files come back as base64 for the caller to store and show the user, never inlined
+   * into that text.
+   */
+  async callTool(name: string, args: Record<string, unknown>): Promise<McpToolResult> {
     await this.ensureInitialized();
     const result = (await this.send("tools/call", { name, arguments: args })) as
       | {
-          content?: { type: string; text?: string; data?: string; mimeType?: string }[];
+          content?: McpContentBlock[];
           structuredContent?: unknown;
           isError?: boolean;
         }
       | undefined;
 
+    const images: McpToolResult["images"] = [];
+    const files: McpToolResult["files"] = [];
     const parts = (result?.content ?? [])
       .map((block) => {
         if (block.type === "text") return block.text ?? "";
-        if (block.type === "image") return `[image: ${block.mimeType ?? "image"}]`;
+        if (block.type === "image") {
+          if (typeof block.data === "string" && block.data) {
+            images.push({ data: block.data, mime: block.mimeType ?? "image/png" });
+            return "";
+          }
+          return `[image: ${block.mimeType ?? "image"}]`;
+        }
+        const resource = block.type === "resource" ? block.resource : undefined;
+        if (resource && typeof resource.blob === "string" && resource.blob) {
+          files.push({
+            data: resource.blob,
+            mime: resource.mimeType ?? "application/octet-stream",
+            name: fileNameOf(resource.uri),
+          });
+          return "";
+        }
+        if (resource && typeof resource.text === "string") return resource.text;
         return `[${block.type}]`;
       })
       .filter(Boolean);
@@ -243,11 +265,17 @@ export class McpClient {
     const text =
       parts.length > 0
         ? parts.join("\n")
-        : result?.structuredContent !== undefined
-          ? JSON.stringify(result.structuredContent)
-          : "The tool returned nothing.";
-    if (result?.isError) throw new Error(text);
-    return text.length > 24000 ? `${text.slice(0, 24000)}\n\n[truncated]` : text;
+        : images.length > 0 || files.length > 0
+          ? ""
+          : result?.structuredContent !== undefined
+            ? JSON.stringify(result.structuredContent)
+            : "The tool returned nothing.";
+    if (result?.isError) throw new Error(text || "The tool failed.");
+    return {
+      text: text.length > 24000 ? `${text.slice(0, 24000)}\n\n[truncated]` : text,
+      images,
+      files,
+    };
   }
 
   /**
@@ -272,6 +300,35 @@ export class McpClient {
       throw new Error("upload returned no usable upload_id");
     return upload_id;
   }
+}
+
+type McpContentBlock = {
+  type: string;
+  text?: string;
+  data?: string;
+  mimeType?: string;
+  resource?: { uri?: string; mimeType?: string; blob?: string; text?: string };
+};
+
+/** A tool's answer: text for the model, and the images and files it made for the user. */
+export type McpToolResult = {
+  text: string;
+  images: { data: string; mime: string }[];
+  files: { data: string; mime: string; name: string }[];
+};
+
+/** The last path segment of a resource URI, as a plain file name. */
+export function fileNameOf(uri: string | undefined): string {
+  const last = (uri ?? "").split(/[/\\]/).pop() ?? "";
+  let name = last;
+  try {
+    name = decodeURIComponent(last);
+  } catch {
+    // A malformed escape: keep it as written.
+  }
+  // Control characters would break a Markdown link or a download header.
+  const printable = [...name].filter((ch) => ch.charCodeAt(0) >= 0x20).join("");
+  return printable.trim() || "file";
 }
 
 const UPLOAD_TIMEOUT_MS = 30_000;

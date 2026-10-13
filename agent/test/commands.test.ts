@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseCommand } from "../src/commands";
+import { modelNicknames } from "../src/models";
 
 /**
  * Bang commands, matched before a turn is ever started.
@@ -18,6 +19,11 @@ describe("parseCommand", () => {
     expect(parseCommand("!stop")).toBe("stop");
     expect(parseCommand("!compact")).toBe("compact");
     expect(parseCommand("!oom")).toBe("oom");
+    expect(parseCommand("!help")).toBe("help");
+    expect(parseCommand("!docs")).toBe("docs");
+    expect(parseCommand("!settings")).toBe("settings");
+    expect(parseCommand("!mcp")).toBe("mcp");
+    expect(parseCommand("!model")).toBe("model");
   });
 
   it("ignores case and surrounding space", () => {
@@ -76,5 +82,28 @@ describe("parseCommand", () => {
 
   it("does not match an mcp command inside a sentence", () => {
     expect(parseCommand("how do I use !enable-mcp notion?")).toBe(null);
+  });
+
+  it("parses !model with a nickname", () => {
+    expect(parseCommand("!model ds")).toEqual({ nickname: "ds" });
+    expect(parseCommand("  !MODEL  Opus ")).toEqual({ nickname: "Opus" });
+    expect(parseCommand("@mybot !model fast")).toEqual({ nickname: "fast" });
+  });
+
+  it("does not match !model inside a sentence", () => {
+    expect(parseCommand("should I use !model ds?")).toBe(null);
+  });
+});
+
+describe("modelNicknames", () => {
+  it("is what the label holds in brackets", () => {
+    expect(modelNicknames("DeepSeek V4 Flash (ds)")).toEqual(["ds"]);
+    expect(modelNicknames("Claude Sonnet 5.5 (sonnet)")).toEqual(["sonnet"]);
+    expect(modelNicknames("Mini (cheap) (fast)")).toEqual(["cheap", "fast"]);
+  });
+
+  it("is nothing for a label without brackets, or empty ones", () => {
+    expect(modelNicknames("GPT-5 Mini")).toEqual([]);
+    expect(modelNicknames("Odd ( )")).toEqual([]);
   });
 });

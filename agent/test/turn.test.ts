@@ -1,8 +1,19 @@
 import { SELF, env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
-import { COST_PER_TURN, MCP_TOOLS, MCP_UPLOAD_TOOL, replyTo } from "./openrouter-mock";
+import {
+  COST_PER_TURN,
+  FAILLOOP_REPLY,
+  INVENTED_TOOL,
+  MCP_MEDIA_TOOL,
+  MCP_TOOLS,
+  MCP_UPLOAD_TOOL,
+  MOCK_XLSX_TEXT,
+  TOOLLOOP_REPLY,
+  replyTo,
+} from "./openrouter-mock";
 import { EMPTY_MCP_SERVER, agentIdOf } from "../src/registry";
 import { signedIn } from "./clerk";
+import { SHIPPED } from "./shipped";
 
 /**
  * A whole turn, end to end.
@@ -181,6 +192,115 @@ describe("tools inside a turn", () => {
     const reply = body.messages.find((m) => m.role === "assistant")!;
     expect(reply.steps).toContain("list");
   });
+
+  it("records a tool that returned a failure as failed", async () => {
+    const { sessionId, email, agentId } = await chatFixture();
+    await SELF.fetch(
+      `${BASE}/api/agents/${agentId}/config`,
+      as(email, { method: "PATCH", body: JSON.stringify({ cap_scheduled_tasks: 1 }) })
+    );
+    await say(sessionId, email, "!!failloop schedule_task");
+    const body = (await (await transcript(sessionId, email)).json()) as {
+      messages: { role: string; steps: string }[];
+    };
+    const reply = body.messages.find((m) => m.role === "assistant")!;
+    const tools = (JSON.parse(reply.steps) as { kind: string; tools?: { ok: boolean }[] }[])
+      .flatMap((s) => s.tools ?? []);
+    expect(tools.length).toBeGreaterThan(0);
+    expect(tools.every((t) => !t.ok)).toBe(true);
+  });
+});
+
+describe("tool results in later turns", () => {
+  /** The history the model was sent with the message carrying `token`. */
+  async function historyFor(token: string) {
+    const [request] = (await (
+      await fetch(`https://openrouter.ai/__requests?contains=${token}`)
+    ).json()) as { messages: { role: string; content?: unknown }[] }[];
+    return request.messages.filter((m) => m.role === "assistant").map((m) => String(m.content));
+  }
+
+  it("carries what an earlier reply's tools were given and returned", async () => {
+    const { sessionId, email } = await chatFixture();
+    await say(sessionId, email, "!!toolcall list it");
+    const token = `next-${crypto.randomUUID().slice(0, 8)}`;
+    await say(sessionId, email, token);
+    const [earlier] = await historyFor(token);
+    expect(earlier).toContain("I listed the workspace.");
+    expect(earlier).toContain("[Tools this reply used");
+    expect(earlier).toContain('- list({"path":"/"}) →');
+  });
+
+  it("leaves failed calls out", async () => {
+    const { sessionId, email, agentId } = await chatFixture();
+    await SELF.fetch(
+      `${BASE}/api/agents/${agentId}/config`,
+      as(email, { method: "PATCH", body: JSON.stringify({ cap_scheduled_tasks: 1 }) })
+    );
+    await say(sessionId, email, "!!failloop schedule_task");
+    const token = `next-${crypto.randomUUID().slice(0, 8)}`;
+    await say(sessionId, email, token);
+    const [earlier] = await historyFor(token);
+    expect(earlier).toBe(FAILLOOP_REPLY);
+  });
+});
+
+describe("tools that keep failing", () => {
+  /** The streamed legs of a `!!failloop` turn, by the token its message carried. */
+  async function legs(token: string) {
+    const requests = (await (
+      await fetch(`https://openrouter.ai/__requests?contains=${token}`)
+    ).json()) as {
+      stream?: boolean;
+      tool_choice?: unknown;
+      messages: { role: string; content?: unknown }[];
+    }[];
+    return requests.filter((r) => r.stream);
+  }
+
+  it.each([
+    ["a tool that returns its failure", "schedule_task", "Tool schedule_task failed"],
+    ["a tool the turn does not have", INVENTED_TOOL, "unavailable tool"],
+  ])("stops after three failures in a row and says so: %s", async (_, tool, error) => {
+    const { sessionId, email, agentId } = await chatFixture();
+    const enabled = await SELF.fetch(
+      `${BASE}/api/agents/${agentId}/config`,
+      as(email, { method: "PATCH", body: JSON.stringify({ cap_scheduled_tasks: 1 }) })
+    );
+    expect(enabled.ok).toBe(true);
+    const token = `failloop-${crypto.randomUUID().slice(0, 8)}`;
+    const res = await say(sessionId, email, `!!failloop ${tool} ${token}`);
+    expect(((await res.json()) as { reply: string }).reply).toBe(FAILLOOP_REPLY);
+
+    const sent = await legs(token);
+    // Three failing calls, then one step that may not call tools.
+    expect(sent).toHaveLength(4);
+    expect(sent.slice(0, 3).every((r) => r.tool_choice !== "none")).toBe(true);
+    expect(sent[3].tool_choice).toBe("none");
+    const results = sent[3].messages.filter((m) => m.role === "tool");
+    expect(results).toHaveLength(3);
+    expect(JSON.stringify(results)).toContain(error);
+    expect(JSON.stringify(sent[3])).toContain("3 tool calls in a row have failed");
+  });
+});
+
+describe("running out of tool rounds", () => {
+  it("answers on the last round instead of ending the turn on a tool call", async () => {
+    const { sessionId, email } = await chatFixture();
+    const token = `toolloop-${crypto.randomUUID().slice(0, 8)}`;
+    const res = await say(sessionId, email, `!!toolloop ${token}`);
+    expect(((await res.json()) as { reply: string }).reply).toBe(TOOLLOOP_REPLY);
+
+    const requests = (await (
+      await fetch(`https://openrouter.ai/__requests?contains=${token}`)
+    ).json()) as { stream?: boolean; tool_choice?: unknown }[];
+    const sent = requests.filter((r) => r.stream);
+    // Every round but the last may call tools; the last must answer.
+    expect(sent).toHaveLength(SHIPPED.max_tool_rounds);
+    expect(sent.slice(0, -1).every((r) => r.tool_choice !== "none")).toBe(true);
+    expect(sent.at(-1)?.tool_choice).toBe("none");
+    expect(JSON.stringify(sent.at(-1))).toContain("This is the last step of this turn");
+  });
 });
 
 describe("when the provider fails", () => {
@@ -262,6 +382,26 @@ describe("bang commands over chat", () => {
     expect(await registryFor(agentId).spendThisMonth()).toBe(0);
   });
 
+  it("explains sessions and lists every command with !help", async () => {
+    const { sessionId, email } = await chatFixture();
+    const help = ((await (await say(sessionId, email, "!help")).json()) as { reply: string })
+      .reply;
+    expect(help).toContain("session");
+    for (const command of ["!new", "!clear", "!model", "!mcp", "!settings", "!docs"]) {
+      expect(help).toContain(command);
+    }
+  });
+
+  it("links the guide and the agent's settings", async () => {
+    const { sessionId, email, agentId } = await chatFixture();
+    const reply = async (message: string) =>
+      ((await (await say(sessionId, email, message)).json()) as { reply: string }).reply;
+    expect(await reply("!docs")).toBe("The user guide: https://salts-agent-app.vercel.app/guide");
+    expect(await reply("!settings")).toBe(
+      `This agent's settings: https://salts-agent-app.vercel.app/a/${agentId}/settings`
+    );
+  });
+
   it("treats a sentence mentioning a command as an ordinary message", async () => {
     const { sessionId, email } = await chatFixture();
     const res = await say(sessionId, email, "what does !new do?");
@@ -320,12 +460,106 @@ describe("!enable-mcp and !disable-mcp", () => {
     expect(await reply(await say(sessionId, email, "!enable-mcp docs"))).toContain("not connected");
   });
 
+  it("lists servers with the command that flips each", async () => {
+    const off = await withServer();
+    expect(await reply(await say(off.sessionId, off.email, "!mcp"))).toContain(
+      "- Docs — off. Send `!enable-mcp Docs` to turn it on."
+    );
+    const on = await withServer({ enabled: 1 });
+    expect(await reply(await say(on.sessionId, on.email, "!mcp"))).toContain(
+      "- Docs — on. Send `!disable-mcp Docs` to turn it off."
+    );
+    const unconnected = await withServer({ enabled: 1, auth: "oauth" });
+    expect(await reply(await say(unconnected.sessionId, unconnected.email, "!mcp"))).toContain(
+      `- Docs — not connected; connect it at https://salts-agent-app.vercel.app/a/${unconnected.agentId}/capabilities.`
+    );
+  });
+
+  it("says when there are no servers", async () => {
+    const { sessionId, email } = await chatFixture();
+    expect(await reply(await say(sessionId, email, "!mcp"))).toMatch(/^No MCP servers/);
+  });
+
   it("reports a server it cannot reach", async () => {
     const { sessionId, email, agentId } = await withServer({ url: "https://unreachable.test/" });
     expect(await reply(await say(sessionId, email, "!enable-mcp docs"))).toMatch(
       /^Error connecting to Docs/
     );
     expect((await row(agentId)).last_error).not.toBe("");
+  });
+});
+
+describe("!model", () => {
+  const reply = async (res: Response) => ((await res.json()) as { reply: string }).reply;
+  const model = async (agentId: string, email: string) =>
+    (
+      (await (await SELF.fetch(`${BASE}/api/agents/${agentId}/config`, as(email))).json()) as {
+        config: { model: string };
+      }
+    ).config.model;
+
+  /** An agent offering a named custom model and a catalogue one ("DeepSeek V4 Flash (ds)"). */
+  async function withModels(locked: string[] = []) {
+    const fixture = await chatFixture();
+    const reg = registryFor(fixture.agentId);
+    await reg.setMeta({
+      ...(await reg.meta()),
+      models: [
+        { id: "openai/gpt-5-mini", vision: true, label: "Mini (cheap)" },
+        { id: "deepseek/deepseek-v4-flash", vision: false },
+      ],
+      locked,
+    });
+    return fixture;
+  }
+
+  it("switches the agent to the model carrying the nickname", async () => {
+    const { sessionId, email, agentId } = await withModels();
+    expect(await reply(await say(sessionId, email, "!model CHEAP"))).toBe(
+      "Switched to Mini (cheap)."
+    );
+    expect(await model(agentId, email)).toBe("openai/gpt-5-mini");
+    expect(await reply(await say(sessionId, email, "!model ds"))).toBe(
+      "Switched to DeepSeek V4 Flash (ds)."
+    );
+    expect(await model(agentId, email)).toBe("deepseek/deepseek-v4-flash");
+  });
+
+  it("lists the nicknames when none matches, and changes nothing", async () => {
+    const { sessionId, email, agentId } = await withModels();
+    const before = await model(agentId, email);
+    expect(await reply(await say(sessionId, email, "!model gpt"))).toBe(
+      'No model has the nickname "gpt". Try one of: cheap, ds.'
+    );
+    expect(await model(agentId, email)).toBe(before);
+  });
+
+  it("lists the nicknames with the current model marked", async () => {
+    const { sessionId, email } = await withModels();
+    await say(sessionId, email, "!model ds");
+    const text = await reply(await say(sessionId, email, "!model"));
+    expect(text).toMatch(/^Current model: DeepSeek V4 Flash \(ds\)\n/);
+    expect(text).toContain("- `cheap` — Mini (cheap)\n");
+    expect(text).toContain("- `ds` — DeepSeek V4 Flash (ds) (current)");
+    expect(text).toContain("Send `!model <nickname>` to switch.");
+  });
+
+  it("names the current model even when it has no nickname", async () => {
+    const { sessionId, email, agentId } = await withModels();
+    const current = await model(agentId, email);
+    const text = await reply(await say(sessionId, email, "!model"));
+    expect(text.split("\n")[0]).toMatch(/^Current model: /);
+    expect(text.split("\n")[0]).not.toBe("Current model: ");
+    expect(current).toBeTruthy();
+  });
+
+  it("refuses when the model is locked", async () => {
+    const { sessionId, email, agentId } = await withModels(["model"]);
+    const before = await model(agentId, email);
+    expect(await reply(await say(sessionId, email, "!model cheap"))).toBe(
+      "The model is locked for this agent."
+    );
+    expect(await model(agentId, email)).toBe(before);
   });
 });
 
@@ -581,6 +815,80 @@ describe("a PDF sent to an MCP server that takes uploads", () => {
 
     expect(await turnFor(token)).not.toContain("upload_id");
   });
+
+  const XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+  async function attachSheet(sessionId: string, email: string, name = "model.xlsx") {
+    const form = new FormData();
+    form.set("file", new File(["PK a workbook"], name, { type: XLSX }));
+    return SELF.fetch(`${BASE}/agents/session-agent/${sessionId}/files`, {
+      method: "POST",
+      headers: signedIn(email),
+      body: form,
+    });
+  }
+
+  it("takes an Excel workbook only when a server can read it, and forwards it as a sheet", async () => {
+    const plain = await withServer("https://mcp.test/", MCP_TOOLS);
+    const refused = await attachSheet(plain.sessionId, plain.email);
+    expect(refused.status).toBe(415);
+    expect(((await refused.json()) as { error: string }).error).toContain("MCP server");
+
+    const { sessionId, email } = await withServer("https://mcp.test/files/mcp", [MCP_UPLOAD_TOOL]);
+    const res = await attachSheet(sessionId, email);
+    expect(res.status).toBe(200);
+    const { attachment } = (await res.json()) as { attachment: { kind: string } };
+    expect(attachment.kind).toBe("sheet");
+
+    const token = crypto.randomUUID().slice(0, 8);
+    const before = (await uploads()).length;
+    await (await say(sessionId, email, `!!ingest mcp_recruiter_ingest_resume ${token}`)).text();
+    expect(await turnFor(token)).toMatch(/\[Attachment model\.xlsx: to give this file to a tool/);
+    const sent = (await uploads()).slice(before);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({ mime: XLSX, bytes: 13 });
+  });
+
+  it("keeps the pictures and files a tool makes, and hands the model links to them", async () => {
+    const { sessionId, email } = await withServer("https://mcp.test/media/mcp", [MCP_MEDIA_TOOL]);
+    const token = crypto.randomUUID().slice(0, 8);
+    await (await say(sessionId, email, `!!ingest mcp_recruiter_build_report ${token}`)).text();
+
+    const sentBack = await turnFor(token);
+    expect(sentBack).toContain("Report built.");
+    expect(sentBack).not.toContain("iVBORw0KGgo"); // the bytes never reach the model
+    const image = sentBack.match(/!\[Image 1\]\((\/agents\/session-agent\/[^)]+)\)/)?.[1];
+    const file = sentBack.match(/\[Client report\.xlsx\]\((\/agents\/session-agent\/[^)]+)\)/)?.[1];
+    expect(image).toBeTruthy();
+    expect(file).toBeTruthy();
+
+    const png = await SELF.fetch(`${BASE}${image}`, { headers: signedIn(email) });
+    expect(png.headers.get("content-type")).toBe("image/png");
+    await png.arrayBuffer();
+    const xlsx = await SELF.fetch(`${BASE}${file}`, { headers: signedIn(email) });
+    expect(xlsx.headers.get("content-type")).toBe(XLSX);
+    expect(xlsx.headers.get("content-disposition")).toBe(
+      "attachment; filename*=UTF-8''Client%20report.xlsx"
+    );
+    expect(new TextDecoder().decode(await xlsx.arrayBuffer())).toBe(MOCK_XLSX_TEXT);
+  });
+
+  it("hangs what a tool made on the reply when the reply does not show it", async () => {
+    // The mock answers "Stored it." without the links, as a turn cut off at its tool-round
+    // limit (or a model that forgot them) would.
+    const { sessionId, email } = await withServer("https://mcp.test/media/mcp", [MCP_MEDIA_TOOL]);
+    await (await say(sessionId, email, "!!ingest mcp_recruiter_build_report")).text();
+
+    const { messages } = (await (
+      await SELF.fetch(`${BASE}/agents/session-agent/${sessionId}/messages`, as(email))
+    ).json()) as {
+      messages: { role: string; content: string; attachments: { kind: string; name: string }[] }[];
+    };
+    const reply = messages.filter((m) => m.role === "assistant").at(-1)!;
+    expect(reply.content).toBe("Stored it.");
+    expect(reply.attachments.map((a) => a.kind).sort()).toEqual(["image", "sheet"]);
+    expect(reply.attachments.find((a) => a.kind === "sheet")?.name).toBe("Client report.xlsx");
+  });
 });
 
 describe("what the agent is told it can reach", () => {
@@ -635,6 +943,23 @@ describe("what the agent is told it can reach", () => {
     const turn = all.find((b) => b.stream);
     return String(turn?.messages?.find((m) => m.role === "system")?.content ?? "");
   }
+
+  it("stamps each user message with when it was sent, not the system prompt", async () => {
+    const { sessionId, email } = await chatFixture();
+    const token = crypto.randomUUID().slice(0, 8);
+    await say(sessionId, email, `hello ${token}`);
+
+    const all = (await (
+      await fetch(`https://openrouter.ai/__requests?contains=${token}`)
+    ).json()) as { stream?: boolean; messages?: { role: string; content?: unknown }[] }[];
+    const user = all.find((b) => b.stream)?.messages?.find((m) => m.role === "user");
+    expect(String(user?.content)).toMatch(
+      new RegExp(`^\\[Sent \\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2} UTC\\]\\nhello ${token}$`)
+    );
+    const prompt = await systemPromptFor(token);
+    expect(prompt).toContain("Each user message starts with when it was sent");
+    expect(prompt).not.toContain("Durable Object");
+  });
 
   it("names a configured channel as reach, not as a capability", async () => {
     const { sessionId, email } = await whatsappFixture();

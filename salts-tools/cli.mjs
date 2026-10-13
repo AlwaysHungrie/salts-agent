@@ -1,32 +1,40 @@
 #!/usr/bin/env node
 // salts-tools: local services for a salt-agent, from this laptop, behind one tunnel.
 //
-// Runs the services below, puts them on the internet through a single ngrok tunnel, and
+// Runs the services below, puts them on the internet through a single cloudflared quick
+// tunnel (no account needed), and
 // tells the agent where each one is. Every service shares the tunnel's address and is
 // told apart by path (see gateway.mjs): `<tunnel>/web` is SearXNG, `<tunnel>/matchmaker`
-// the matchmaker MCP server. The address changes whenever ngrok restarts, so a
-// supervisor process watches it and pushes every new address to the agent.
+// the matchmaker MCP server, `<tunnel>/analyst` the spreadsheet analyst MCP server. The
+// address changes whenever cloudflared restarts, so a supervisor process watches it and
+// pushes every new address to the agent.
 //
+//   salts-tools           the dashboard: every service, agent and setting on one screen,
+//                         started, stopped and changed from the keyboard (see the end)
 //   salts-tools start [service…]
 //                         check the machine, set up on first run, start the named services
 //                         (beside any already running) or, with none named, the ones last on
 //   salts-tools stop [service]
 //                         stop one service, or with none named everything: the
 //                         supervisor, the tunnel and the containers
-//   salts-tools setup     the first-run questions again (agent id, token); starts nothing
+//   salts-tools setup     the first-run questions again (agent ids, token); starts nothing
 //   salts-tools restart   bring the tunnel up again and push its new address
 //   salts-tools reset     forget the agent (state.json) and delete the saved token
 //   salts-tools autostart on|off
 //                         start at login, or stop doing so (a LaunchAgent on macOS, a
 //                         systemd user unit on Linux, a Startup-folder script on Windows)
 //
-// Services: web (SearXNG), matchmaker (local-mcps/matchmaker-mcp).
+// Services: web (SearXNG), matchmaker (local-mcps/matchmaker-mcp), analyst
+// (local-mcps/analyst-mcp).
 //
 // Every command takes a `:staging` suffix (`start:staging`, `stop:staging`, …) to run
 // against the staging Worker instead of production. The two are separate instances —
 // own token, state, containers, ports, tunnel and login item — and can run side by side.
 //
-// One token guards everything: the agent's SearXNG token. The gateway checks it, SearXNG's
+// One install serves any number of agents: every one is told every address, and each holds
+// the same token in its SearXNG token field.
+//
+// One token guards everything: the agents' SearXNG token. The gateway checks it, SearXNG's
 // Caddy gate and the matchmaker (as its MCP_AUTH_TOKEN) check it again, and the Worker
 // takes it as proof when an address is pushed.
 //
@@ -37,14 +45,17 @@
 
 import { spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
+import { Resolver } from "node:dns/promises";
 import {
   appendFileSync,
+  closeSync,
   copyFileSync,
   existsSync,
   mkdirSync,
   openSync,
   readdirSync,
   readFileSync,
+  readSync,
   renameSync,
   rmSync,
   statSync,
@@ -55,8 +66,11 @@ import os from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
+import { agentIdsOf, agentsLabel, parseAgentIds } from "./agents.mjs";
 import { startGateway } from "./gateway.mjs";
-import { orphanNgroks, parseProcessList, supervisorsOf } from "./procs.mjs";
+import { caffeinateArgs, orphanTunnels, parseProcessList, supervisorsOf } from "./procs.mjs";
+import { agentStatus, serviceStatus } from "./status.mjs";
+import { BOLD, DIM, INV, OFF, follow, keys, paint, rowText, wrap } from "./tui.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const CLI = fileURLToPath(import.meta.url);
@@ -83,6 +97,7 @@ const STATE_FILE = path.join(HOME, "state.json");
 const PID_FILE = path.join(HOME, "supervisor.pid");
 const LOG_FILE = path.join(HOME, "supervisor.log");
 const MATCHMAKER_LOG = path.join(HOME, "matchmaker.log");
+const ANALYST_LOG = path.join(HOME, "analyst.log");
 /** `salts-tools restart` drops this file; the supervisor picks it up (no SIGUSR1 on Windows). */
 const RESTART_FILE = path.join(HOME, "restart.request");
 /** `start`/`stop` of one service drop this file: the supervisor re-reads which are on. */
@@ -119,21 +134,37 @@ const AUTOSTART = autostartFor("salts-tools");
 const HEARTBEAT_MS = 30_000;
 /** Public checks that may fail in a row before the tunnel is torn down and rebuilt. */
 const PUBLIC_FAILURES_BEFORE_RESTART = 3;
+/** How long a new tunnel may take to connect and resolve before it is rebuilt. */
+const TUNNEL_READY_MS = 120_000;
 const DOCKER_WAIT_MS = 180_000;
 /** Where each free-port scan starts, far enough apart not to race each other. */
 const GATEWAY_PORT = 8080;
 const WEB_PORT = 8180;
 const MATCHMAKER_PORT = 8280;
 const MATCHMAKER_PG_PORT = 5432;
+const ANALYST_PORT = 8380;
 
-const BOLD = "\x1b[1m";
-const DIM = "\x1b[2m";
 const GREEN = "\x1b[32m";
 const RED = "\x1b[31m";
-const YELLOW = "\x1b[33m";
-const OFF = "\x1b[0m";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Wait until `host` has a DNS record, asking 1.1.1.1 directly. A quick tunnel's name is
+ * published a few seconds after cloudflared prints it, and asking the system resolver
+ * too early leaves it caching "no such host" long after the name exists.
+ */
+async function resolvable(host, seconds = 60) {
+  const resolver = new Resolver({ timeout: 3000, tries: 1 });
+  resolver.setServers(["1.1.1.1", "1.0.0.1"]);
+  for (let i = 0; i < seconds; i++) {
+    try {
+      if ((await resolver.resolve4(host)).length) return true;
+    } catch {}
+    await sleep(1000);
+  }
+  return false;
+}
 
 // ─── state ──────────────────────────────────────────────────────────────────────
 
@@ -322,27 +353,12 @@ async function ensureDocker(say = () => {}) {
   throw new Error(`Docker did not come up within ${DOCKER_WAIT_MS / 1000}s`);
 }
 
-/** Where ngrok's config file is, if it has a valid one. */
-function ngrokConfigPath() {
-  const res = run("ngrok", ["config", "check"]);
-  const m = `${res.stdout}${res.stderr}`.match(/Valid configuration file at (.+)/);
-  return res.status === 0 && m ? m[1].trim() : "";
-}
-
-function ngrokHasAuthtoken() {
-  const file = ngrokConfigPath();
-  if (!file) return false;
-  try {
-    return /^\s*authtoken:\s*\S+/m.test(readFileSync(file, "utf8"));
-  } catch {
-    return false;
-  }
-}
-
 /** The problems that stop these services running at all, none of which it can fix itself. */
 function missingTools(names) {
   const out = [];
-  if (!have("docker")) {
+  if (!usesDocker(names)) {
+    // Nothing to check: the services named run without containers.
+  } else if (!have("docker")) {
     out.push(
       IS_MAC
         ? "docker is not installed — install Docker Desktop (or OrbStack / Colima)"
@@ -351,17 +367,20 @@ function missingTools(names) {
           : "docker is not installed — install Docker Engine with the compose plugin (https://docs.docker.com/engine/install/)"
     );
   } else if (run("docker", ["compose", "version"]).status !== 0) out.push("`docker compose` is not available — update Docker");
-  if (!have("ngrok")) {
+  if (!have("cloudflared")) {
     out.push(
       IS_MAC
-        ? "ngrok is not installed — `brew install ngrok`"
+        ? "cloudflared is not installed — `brew install cloudflared`"
         : IS_WIN
-          ? "ngrok is not installed — `winget install ngrok.ngrok`"
-          : "ngrok is not installed — see https://ngrok.com/download/linux"
+          ? "cloudflared is not installed — `winget install --id Cloudflare.cloudflared`"
+          : "cloudflared is not installed — see https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/"
     );
   }
-  if (names.includes("matchmaker") && !have("uv")) {
-    out.push("uv is not installed (the matchmaker needs it) — see https://docs.astral.sh/uv/");
+  for (const name of names.filter((n) => SERVICES[n]?.uv)) {
+    if (!have("uv")) {
+      out.push(`uv is not installed (the ${name} needs it) — see https://docs.astral.sh/uv/`);
+      break;
+    }
   }
   return out;
 }
@@ -407,9 +426,7 @@ function publishedPort(dir, project, service, containerPort, env = {}) {
 async function ok(url, token) {
   try {
     const res = await fetch(url, {
-      headers: token
-        ? { authorization: `Bearer ${token}`, "ngrok-skip-browser-warning": "1" }
-        : {},
+      headers: token ? { authorization: `Bearer ${token}` } : {},
       signal: AbortSignal.timeout(10_000),
     });
     return res.ok;
@@ -452,6 +469,11 @@ const webPort = () => publishedPort(WEB_DIR, WEB_PROJECT, "caddy", 8081, webEnv(
 const MATCHMAKER_DIR = path.join(here, "..", "local-mcps", "matchmaker-mcp");
 // The folder's own name, so a database made by running it by hand is the one used.
 const MATCHMAKER_PROJECT = `matchmaker-mcp${SUFFIX}`;
+const ANALYST_DIR = path.join(here, "..", "local-mcps", "analyst-mcp");
+const ANALYST_BIN = IS_WIN
+  ? path.join(ANALYST_DIR, ".venv", "Scripts", "analyst-mcp.exe")
+  : path.join(ANALYST_DIR, ".venv", "bin", "analyst-mcp");
+
 const MATCHMAKER_BIN = IS_WIN
   ? path.join(MATCHMAKER_DIR, ".venv", "Scripts", "recruiter-mcp.exe")
   : path.join(MATCHMAKER_DIR, ".venv", "bin", "recruiter-mcp");
@@ -464,6 +486,9 @@ const MATCHMAKER_BIN = IS_WIN
 const SERVICES = {
   web: {
     label: "SearXNG",
+    about: "web search for the agent (SearXNG, in Docker)",
+    log: LOG_FILE,
+    docker: true,
     healthy: (port, token) => ok(`http://127.0.0.1:${port}/healthz`, token),
     async up(token) {
       let port = webPort();
@@ -486,6 +511,10 @@ const SERVICES = {
 
   matchmaker: {
     label: "matchmaker MCP",
+    about: "resume ingestion and job matching (Postgres in Docker, uv)",
+    log: MATCHMAKER_LOG,
+    docker: true,
+    uv: true,
     child: null,
     healthy: (port) => ok(`http://127.0.0.1:${port}/healthz`),
     async up(token) {
@@ -552,7 +581,73 @@ const SERVICES = {
     push: (tunnel) => ({ route: "mcp", body: { name: "matchmaker", url: `${tunnel}/matchmaker/mcp` } }),
     reached: (tunnel) => `${tunnel}/matchmaker/mcp`,
   },
+
+  analyst: {
+    label: "analyst MCP",
+    about: "Excel and CSV analysis (uv, no Docker)",
+    log: ANALYST_LOG,
+    docker: false,
+    uv: true,
+    child: null,
+    healthy: (port) => ok(`http://127.0.0.1:${port}/healthz`),
+    async up(token) {
+      if (!existsSync(ANALYST_BIN)) {
+        log("analyst: uv sync");
+        const res = run("uv", ["sync", "--frozen"], { cwd: ANALYST_DIR, timeout: 600_000 });
+        if (res.status !== 0) throw new Error(`analyst: uv sync failed: ${(res.stderr || res.stdout).trim()}`);
+      }
+      this.stop();
+      const port = await portFrom(readState().svc?.analyst?.port, ANALYST_PORT);
+      const out = openSync(ANALYST_LOG, "a");
+      // Its own .env still applies (DATA_DIR, INBOX_DIR, ALLOW_PYTHON, …); these win over it.
+      const child = spawn(ANALYST_BIN, [], {
+        cwd: ANALYST_DIR,
+        stdio: ["ignore", out, out],
+        windowsHide: true,
+        env: {
+          ...process.env,
+          MCP_TRANSPORT: "http",
+          MCP_HOST: "127.0.0.1",
+          MCP_PORT: String(port),
+          MCP_AUTH_TOKEN: token,
+        },
+      });
+      this.child = child;
+      child.on("exit", (code, signal) => {
+        if (this.child === child) this.child = null;
+        log(`analyst exited (${signal ?? code})`);
+      });
+      writeSvc("analyst", { pid: child.pid });
+      log(`analyst started (pid ${child.pid}) on port ${port}; log at ${ANALYST_LOG}`);
+      if (!(await waitUntil(() => this.healthy(port), 60))) {
+        throw new Error(`analyst did not answer on port ${port} — see ${ANALYST_LOG}`);
+      }
+      return port;
+    },
+    stop() {
+      if (this.child) this.child.kill("SIGTERM");
+      this.child = null;
+      const stale = readState().svc?.analyst?.pid;
+      if (isProcess(stale, /analyst-mcp/i)) process.kill(stale, "SIGTERM");
+    },
+    down() {
+      this.stop();
+      return { status: 0, stdout: "", stderr: "" };
+    },
+    push: (tunnel) => ({ route: "mcp", body: { name: "analyst", url: `${tunnel}/analyst/mcp` } }),
+    reached: (tunnel) => `${tunnel}/analyst/mcp`,
+  },
 };
+
+/** Whether any of these services runs in Docker. */
+function usesDocker(names) {
+  return names.some((name) => SERVICES[name]?.docker);
+}
+
+/** Stop every service that runs as a child process of the supervisor (not containers). */
+function stopChildren() {
+  for (const svc of Object.values(SERVICES)) svc.stop?.();
+}
 const NAMES = Object.keys(SERVICES);
 
 /** Tell the agent where a service is now. Returns the Worker's status, or 0 offline. */
@@ -601,7 +696,7 @@ function pidIn(file) {
 }
 
 const supervisorPid = () => pidIn(PID_FILE);
-const isNgrok = (pid) => isProcess(pid, /ngrok/i);
+const isTunnel = (pid) => isProcess(pid, /cloudflared/i);
 
 function processList() {
   const res = IS_WIN
@@ -615,8 +710,7 @@ function processList() {
 /**
  * End every supervisor of this target except `except`, then every tunnel left without its
  * supervisor. supervisor.pid names only the newest supervisor, so one started beside it
- * (a second `start`, the login item) used to keep running with its own ngrok until the
- * free plan's 3 sessions were used up and no new tunnel could open.
+ * (a second `start`, the login item) used to keep running with its own tunnel.
  */
 async function endStrays(except = 0) {
   const kill = (pid, sig) => {
@@ -625,10 +719,10 @@ async function endStrays(except = 0) {
     } catch {}
   };
   const others = supervisorsOf(processList(), withTarget("_supervise"), except);
-  for (const pid of others) kill(pid, "SIGTERM"); // each stops its own ngrok on the way out
+  for (const pid of others) kill(pid, "SIGTERM"); // each stops its own tunnel on the way out
   for (let i = 0; i < 20 && others.some(alive); i++) await sleep(250);
   for (const pid of others.filter(alive)) kill(pid, "SIGKILL");
-  const orphans = orphanNgroks(processList());
+  const orphans = orphanTunnels(processList());
   for (const pid of orphans) kill(pid, "SIGTERM");
   return others.length + orphans.length;
 }
@@ -638,9 +732,9 @@ async function endStrays(except = 0) {
  * the agent pointed at the tunnel.
  *
  * Every heartbeat walks the same list — Docker reachable, each service that is on
- * answering locally (and each that was turned off taken down), ngrok alive, tunnel
+ * answering locally (and each that was turned off taken down), cloudflared alive, tunnel
  * answering from outside, agent holding the current address of each — and repairs what
- * is wrong. A laptop waking up on a new network, a killed ngrok and a Docker that was
+ * is wrong. A laptop waking up on a new network, a killed cloudflared and a Docker that was
  * never started all end up at the same place.
  */
 async function supervise() {
@@ -650,15 +744,23 @@ async function supervise() {
   } catch {}
   writeFileSync(PID_FILE, String(process.pid));
 
-  // One supervisor and one tunnel per target: end any other, and any ngrok left behind.
-  const stale = readState().ngrokPid;
-  if (isNgrok(stale)) process.kill(stale, "SIGTERM");
+  // A sleeping Mac drops the tunnel and every service; stay awake while this runs.
+  // `-w` ends caffeinate with this process, however it exits.
+  if (IS_MAC) {
+    spawn("caffeinate", caffeinateArgs(process.pid), { stdio: "ignore" })
+      .on("error", (err) => log(`caffeinate: ${err.message}`))
+      .unref();
+  }
+
+  // One supervisor and one tunnel per target: end any other, and any cloudflared left behind.
+  const stale = readState().tunnelPid;
+  if (isTunnel(stale)) process.kill(stale, "SIGTERM");
   const ended = await endStrays(process.pid);
-  if (ended) log(`ended ${ended} stray supervisor/ngrok process(es)`);
+  if (ended) log(`ended ${ended} stray supervisor/cloudflared process(es)`);
 
   let token = readToken();
-  const { agentId, worker } = readState();
-  if (!token || !agentId) {
+  const { worker } = readState();
+  if (!token || !agentIdsOf(readState()).length) {
     log(`not set up: run \`salts-tools ${withTarget("start")}\` in a terminal first`);
     writeState({ lastError: "not set up" });
     process.exit(1);
@@ -670,76 +772,80 @@ async function supervise() {
   const gatewayPort = await portFrom(readState().gatewayPort, GATEWAY_PORT);
   await startGateway(gatewayPort, { token: () => token, routes: () => ports });
   writeState({ gatewayPort });
-  log(`supervisor up (pid ${process.pid}) for agent ${agentId}; gateway on 127.0.0.1:${gatewayPort}`);
+  log(`supervisor up (pid ${process.pid}) for ${agentsLabel(agentIdsOf(readState()))}; gateway on 127.0.0.1:${gatewayPort}`);
 
-  let ngrok = null;
+  let tunnel = null;
   let url = "";
   let publicFailures = 0;
+  let tunnelStartedAt = 0;
   let busy = false;
   // A tick asked for while one runs (a new tunnel address, a manual restart) runs
   // straight after it rather than waiting out the heartbeat.
   let again = false;
 
-  const startNgrok = () => {
+  const startTunnel = () => {
     url = "";
     publicFailures = 0;
+    tunnelStartedAt = Date.now();
     const child = spawn(
-      "ngrok",
-      ["http", `127.0.0.1:${gatewayPort}`, "--log", "stdout", "--log-format", "json"],
-      { stdio: ["ignore", "pipe", "pipe"], windowsHide: true }
+      "cloudflared",
+      ["tunnel", "--no-autoupdate", "--url", `http://127.0.0.1:${gatewayPort}`],
+      { stdio: ["ignore", "ignore", "pipe"], windowsHide: true }
     );
-    ngrok = child;
-    writeState({ ngrokPid: child.pid, url: "" });
-    log(`ngrok started (pid ${child.pid}) -> 127.0.0.1:${gatewayPort}`);
+    tunnel = child;
+    writeState({ tunnelPid: child.pid, url: "" });
+    log(`cloudflared started (pid ${child.pid}) -> 127.0.0.1:${gatewayPort}`);
+    // cloudflared logs to stderr; a quick tunnel's address appears once, in a banner,
+    // before the tunnel is connected. It is only used once connected and resolvable.
+    let pending = "";
     let buf = "";
-    child.stdout.on("data", (chunk) => {
+    const announce = async () => {
+      const host = new URL(pending).host;
+      pending = "";
+      if (!(await resolvable(host))) log(`${host} still does not resolve; using it anyway`);
+      if (tunnel !== child) return;
+      url = `https://${host}`;
+      writeState({ url, lastError: "" });
+      log(`tunnel at ${url}`);
+      tick();
+    };
+    child.stderr.on("data", (chunk) => {
       buf += chunk;
       let nl;
       while ((nl = buf.indexOf("\n")) >= 0) {
         const line = buf.slice(0, nl);
         buf = buf.slice(nl + 1);
-        let entry;
-        try {
-          entry = JSON.parse(line);
-        } catch {
-          continue;
-        }
-        // ngrok logs this again whenever its session is re-established, sometimes on
-        // a new address; either way the newest one is the one to push.
-        if (entry.msg === "started tunnel" && entry.url) {
-          url = String(entry.url).replace(/\/+$/, "");
-          writeState({ url, lastError: "" });
-          log(`tunnel at ${url}`);
-          tick();
-        } else if (entry.lvl === "eror" || entry.lvl === "crit") {
-          const err = entry.err || entry.msg;
-          log(`ngrok: ${err}`);
-          writeState({ lastError: `ngrok: ${err}` });
+        const m = line.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/);
+        if (m && !url) pending = m[0];
+        else if (pending && /Registered tunnel connection/.test(line)) announce();
+        else if (/\s(ERR|FTL)\s/.test(line)) {
+          const err = line.replace(/^\S+\s+(ERR|FTL)\s+/, "").trim();
+          log(`cloudflared: ${err}`);
+          writeState({ lastError: `cloudflared: ${err}` });
         }
       }
     });
-    child.stderr.on("data", (chunk) => log(`ngrok: ${String(chunk).trim()}`));
     child.on("exit", (code, signal) => {
-      if (ngrok === child) {
-        ngrok = null;
+      if (tunnel === child) {
+        tunnel = null;
         url = "";
-        log(`ngrok exited (${signal ?? code})`);
+        log(`cloudflared exited (${signal ?? code})`);
       }
     });
   };
 
-  const stopNgrok = () => {
-    const child = ngrok;
-    ngrok = null;
+  const stopTunnel = () => {
+    const child = tunnel;
+    tunnel = null;
     url = "";
     if (child) child.kill("SIGTERM");
   };
 
-  const restartNgrok = async (why) => {
+  const restartTunnel = async (why) => {
     log(`restarting the tunnel: ${why}`);
-    stopNgrok();
+    stopTunnel();
     await sleep(1500);
-    startNgrok();
+    startTunnel();
   };
 
   /** Bring each service that is on up, and take down each this supervisor ran that is now off. */
@@ -752,7 +858,7 @@ async function supervise() {
           delete ports[name];
           log(`${name}: turned off; stopping it`);
           svc.down();
-          writeSvc(name, { up: false, pushedTo: "", error: "" });
+          writeSvc(name, { up: false, pushedTo: "", agents: {}, error: "" });
         }
         continue;
       }
@@ -760,7 +866,7 @@ async function supervise() {
       delete ports[name];
       writeSvc(name, { up: false });
       try {
-        await ensureDocker(log);
+        if (svc.docker) await ensureDocker(log);
         const port = await svc.up(token);
         ports[name] = port;
         writeSvc(name, { up: true, port, error: "" });
@@ -772,25 +878,41 @@ async function supervise() {
   };
 
   const pushAll = async () => {
-    const { svc = {} } = readState();
+    // Read each time, so agents added with `setup` are told on the next heartbeat.
+    const { svc = {}, ...state } = readState();
+    const agentIds = agentIdsOf(state);
     for (const name of Object.keys(ports)) {
-      if (svc[name]?.pushedTo === url) continue;
-      const status = await push(worker || DEFAULT_WORKER, agentId, token, SERVICES[name].push(url));
+      // Agents that already have this address are not asked again while another refuses.
+      const agents = { ...svc[name]?.agents };
+      if (svc[name]?.pushedTo === url && agentIds.every((id) => agents[id] === url)) continue;
+      let status = 200;
+      let agentId = "";
+      for (const id of agentIds) {
+        if (agents[id] === url) continue;
+        const answer = await push(worker || DEFAULT_WORKER, id, token, SERVICES[name].push(url));
+        if (answer === 200) {
+          agents[id] = url;
+          log(`agent ${id}: ${name} now at ${SERVICES[name].reached(url)}`);
+        } else if (status === 200) {
+          status = answer;
+          agentId = id;
+        }
+      }
+      writeSvc(name, { agents });
       if (status === 200) {
-        writeSvc(name, { pushedTo: url, pushedAt: new Date().toISOString(), pushStatus: 200, error: "" });
-        log(`agent ${agentId}: ${name} now at ${SERVICES[name].reached(url)}`);
+        writeSvc(name, { pushedTo: url, pushedAt: new Date().toISOString(), pushStatus: 200, error: "", failedAgent: "" });
         continue;
       }
       const why =
         status === 401
-          ? `the agent refused the token — paste it into the agent's SearXNG token field, or run \`salts-tools ${withTarget("setup")}\``
+          ? `agent ${agentId} refused the token — paste it into that agent's SearXNG token field, or run \`salts-tools ${withTarget("setup")}\``
           : status === 409
-            ? `the agent already has an MCP server named "${name}" with a different Authorization header — delete it or set it to this token`
+            ? `agent ${agentId} already has an MCP server named "${name}" with a different Authorization header — delete it or set it to this token`
             : status === 0
               ? "could not reach the Worker (offline?)"
               : `the Worker answered ${status}`;
-      writeSvc(name, { error: `push: ${why}`, pushStatus: status });
-      log(`${name}: could not update the agent: ${why}`);
+      writeSvc(name, { error: `push: ${why}`, pushStatus: status, failedAgent: agentId });
+      log(`${name}: could not update agent ${agentId}: ${why}`);
     }
   };
 
@@ -808,18 +930,23 @@ async function supervise() {
         token = current;
         log("token changed; recreating the services");
         for (const name of Object.keys(ports)) delete ports[name];
-        SERVICES.matchmaker.stop();
+        stopChildren();
       }
 
       await services();
 
-      if (!ngrok) return startNgrok();
-      if (!url) return;
+      if (!tunnel) return startTunnel();
+      if (!url) {
+        if (Date.now() - tunnelStartedAt > TUNNEL_READY_MS) {
+          return await restartTunnel(`no reachable address after ${TUNNEL_READY_MS / 1000}s`);
+        }
+        return;
+      }
 
       if (await ok(`${url}/healthz`, token)) {
         publicFailures = 0;
       } else if (++publicFailures >= PUBLIC_FAILURES_BEFORE_RESTART) {
-        return await restartNgrok(`${url} unreachable ${publicFailures} times in a row`);
+        return await restartTunnel(`${url} unreachable ${publicFailures} times in a row`);
       } else {
         log(`${url} unreachable (${publicFailures}/${PUBLIC_FAILURES_BEFORE_RESTART})`);
       }
@@ -839,12 +966,12 @@ async function supervise() {
 
   const shutdown = () => {
     log("supervisor stopping");
-    stopNgrok();
-    SERVICES.matchmaker.stop();
+    stopTunnel();
+    stopChildren();
     try {
       rmSync(PID_FILE);
     } catch {}
-    writeState({ url: "", ngrokPid: 0 });
+    writeState({ url: "", tunnelPid: 0 });
     setTimeout(() => process.exit(0), 500);
   };
   process.on("SIGTERM", shutdown);
@@ -855,9 +982,9 @@ async function supervise() {
     // `salts-tools restart`: a new tunnel, pushed again everywhere.
     if (existsSync(RESTART_FILE)) {
       rmSync(RESTART_FILE, { force: true });
-      stopNgrok();
+      stopTunnel();
       const svc = readState().svc ?? {};
-      for (const name of NAMES) svc[name] = { ...svc[name], pushedTo: "" };
+      for (const name of NAMES) svc[name] = { ...svc[name], pushedTo: "", agents: {} };
       writeState({ svc });
       tick().then(() => log("manual restart done"));
     }
@@ -876,7 +1003,7 @@ async function supervise() {
 
 /**
  * salts-tools was salts-web, which ran SearXNG alone. Its state moves here once: the
- * old supervisor is stopped (a free ngrok account allows one tunnel), the agent and web
+ * old supervisor and its ngrok are stopped, the agent and web
  * port carry over, and a salts-web login item is replaced by this one. The token stays
  * where it was, under the same Keychain entry.
  */
@@ -892,14 +1019,14 @@ async function migrateFromSaltsWeb() {
     if (alive(pid)) process.kill(pid, "SIGKILL");
   }
   const prev = JSON.parse(readFileSync(oldState, "utf8"));
-  if (isNgrok(prev.ngrokPid)) process.kill(prev.ngrokPid, "SIGTERM");
+  if (isProcess(prev.ngrokPid, /ngrok/i)) process.kill(prev.ngrokPid, "SIGTERM");
 
   mkdirSync(HOME, { recursive: true });
   for (const file of ["token", "token.dpapi"]) {
     if (existsSync(path.join(old, file))) copyFileSync(path.join(old, file), path.join(HOME, file));
   }
   writeState({
-    agentId: prev.agentId,
+    agentIds: prev.agentId ? [prev.agentId] : [],
     worker: prev.worker,
     services: ["web"],
     svc: { web: { port: prev.port || 0 } },
@@ -936,10 +1063,28 @@ async function stopSupervisor() {
     if (alive(pid)) process.kill(pid, "SIGKILL");
   }
   const strays = await endStrays();
-  const { ngrokPid, svc } = readState();
-  if (isNgrok(ngrokPid)) process.kill(ngrokPid, "SIGTERM");
+  const { tunnelPid, svc } = readState();
+  if (isTunnel(tunnelPid)) process.kill(tunnelPid, "SIGTERM");
   if (isProcess(svc?.matchmaker?.pid, /recruiter-mcp/i)) process.kill(svc.matchmaker.pid, "SIGTERM");
+  if (isProcess(svc?.analyst?.pid, /analyst-mcp/i)) process.kill(svc.analyst.pid, "SIGTERM");
   return Boolean(pid || strays);
+}
+
+/**
+ * Ask for `wanted` afresh. A supervisor with a tunnel picks them up on the same address;
+ * otherwise a new supervisor starts. Returns its pid and when the ask was made.
+ */
+async function relaunch(pid, wanted) {
+  const since = new Date().toISOString();
+  for (const name of wanted) writeSvc(name, { pushedTo: "", agents: {}, pushStatus: 0, error: "" });
+  if (pid && readState().url) {
+    writeFileSync(RELOAD_FILE, since);
+  } else {
+    await stopSupervisor();
+    writeState({ lastError: "" });
+    pid = spawnSupervisor();
+  }
+  return { pid, since };
 }
 
 /** Wait for the supervisor to get the agent pointed at a live tunnel for `names`, or to fail. */
@@ -953,7 +1098,9 @@ async function waitForPush(pid, since, names, timeoutMs = 300_000) {
     if (names.every(done)) return { ok: true, state: s };
     for (const n of names) {
       const e = svc[n] ?? {};
-      if (e.pushStatus === 401 && e.error?.startsWith("push:")) return { ok: false, state: s, refused: true };
+      if (e.pushStatus === 401 && e.error?.startsWith("push:")) {
+        return { ok: false, state: s, refused: true, agentId: e.failedAgent };
+      }
       // Any other answer from the Worker will not change by waiting (a 404 is a Worker
       // without the route); offline (0) might.
       if (e.pushStatus > 0 && e.pushStatus !== 200 && e.error?.startsWith("push:")) {
@@ -1011,7 +1158,7 @@ WantedBy=default.target
     return;
   }
   const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  // launchd starts with a bare PATH; docker, ngrok and uv live wherever this shell found them.
+  // launchd starts with a bare PATH; docker, cloudflared and uv live wherever this shell found them.
   writeFileSync(
     file,
     `<?xml version="1.0" encoding="UTF-8"?>
@@ -1050,17 +1197,10 @@ function autostartOff({ label, file } = AUTOSTART) {
 }
 
 function showToken(token) {
-  const line = "─".repeat(token.length + 4);
   console.log(`
-${BOLD}Your salts-tools token${OFF} ${YELLOW}(shown this once — it is kept in ${tokenStoreName()})${OFF}
-
-  ┌${line}┐
-  │  ${BOLD}${token}${OFF}  │
-  └${line}┘
-
-In the agent's settings → Capabilities → ${BOLD}Web search${OFF}, paste it into
-${BOLD}SearXNG token${OFF} and save. Leave the Brave key blank, or SearXNG is not used.
-It guards every service salts-tools runs; the URLs fill themselves in.
+${BOLD}Token${OFF}  ${token}
+${DIM}Paste it into each agent: Capabilities → Web search → SearXNG token, then save.
+Leave the Brave key blank. Run \`salts-tools\` to copy it again later.${OFF}
 `);
 }
 
@@ -1079,21 +1219,27 @@ async function setup(rl, { force }) {
     console.log(`${GREEN}✓${OFF} token already in ${tokenStoreName()}`);
   }
 
-  let agentId = state.agentId;
-  if (!agentId || force) {
+  let agentIds = agentIdsOf(state);
+  if (!agentIds.length || force) {
     for (;;) {
-      const answer = (
-        await rl.question(`Agent ID${agentId ? ` ${DIM}[${agentId}]${OFF}` : ""}: `)
-      ).trim();
-      agentId = answer || agentId;
-      if (agentId) break;
+      const answer = await rl.question(
+        `Agent IDs, space separated${agentIds.length ? ` ${DIM}[${agentIds.join(" ")}]${OFF}` : ""}: `
+      );
+      const typed = parseAgentIds(answer);
+      if (typed.length) agentIds = typed;
+      if (agentIds.length) break;
     }
   }
-  writeState({ agentId, worker: process.env.SALTS_TOOLS_WORKER || state.worker || DEFAULT_WORKER });
+  // `agentId` (one agent) is what older versions wrote; the list replaces it.
+  writeState({
+    agentIds,
+    agentId: undefined,
+    worker: process.env.SALTS_TOOLS_WORKER || state.worker || DEFAULT_WORKER,
+  });
 
   if (fresh) {
     showToken(token);
-    await rl.question("Press Enter once it is saved in the agent… ");
+    await rl.question("Press Enter once it is saved in every agent… ");
   }
   return { token, fresh };
 }
@@ -1106,30 +1252,29 @@ function namedServices() {
   return [...new Set(args)];
 }
 
+/**
+ * The headers the matchmaker's paid tools need on the agent's `matchmaker` MCP server,
+ * beside the Authorization salts-tools sets. Caps (USD per call) are the matchmaker's own
+ * suggestions, from its .env.example.
+ */
+const MATCHMAKER_HEADERS = [
+  ["X-OpenRouter-Api-Key", "<your OpenRouter key>", "pays for its model calls"],
+  ["X-Cost-Approved-Resume-Ingestion", "0.01", "one resume, ~$0.002"],
+  ["X-Cost-Approved-Job-Match", "0.10", "one job match, ~$0.01–0.04"],
+  ["X-Cost-Approved-Search", "0.001", "one candidate search, ~free"],
+  ["X-Cost-Approved-Folder-Ingestion", "5.00", "a whole inbox run, ~$0.004 a file"],
+];
+const ANALYST_INBOX = path.join(ANALYST_DIR, "data", "inbox");
+
+/** One line per service and its address; what to set on the agent is in the dashboard. */
 function report(state, names) {
-  console.log(`${GREEN}✓${OFF} tunnel at ${state.url}`);
+  console.log(`${GREEN}✓${OFF} tunnel     ${state.url}`);
   for (const name of names) {
-    console.log(`${GREEN}✓${OFF} ${SERVICES[name].label}: agent ${state.agentId} reaches it at ${SERVICES[name].reached(state.url)}`);
+    console.log(`${GREEN}✓${OFF} ${name.padEnd(10)} ${SERVICES[name].reached(state.url)}`);
   }
-  if (names.includes("matchmaker")) {
-    // Caps (USD per call) are the matchmaker's own suggestions, from its .env.example.
-    const headers = [
-      ["X-OpenRouter-Api-Key", "<your OpenRouter key>", "pays for its model calls"],
-      ["X-Cost-Approved-Resume-Ingestion", "0.01", "one resume, ~$0.002"],
-      ["X-Cost-Approved-Job-Match", "0.10", "one job match, ~$0.01–0.04"],
-      ["X-Cost-Approved-Search", "0.001", "one candidate search, ~free"],
-      ["X-Cost-Approved-Folder-Ingestion", "5.00", "a whole inbox run, ~$0.004 a file"],
-    ];
-    const width = Math.max(...headers.map(([h]) => h.length));
-    console.log(`
-The agent's ${BOLD}matchmaker${OFF} MCP server already has the ${BOLD}Authorization${OFF} header.
-Its paid tools also need these headers. Add them on that server in the agent's
-settings → ${BOLD}MCP servers${OFF} (they are kept when the address changes):
-`);
-    for (const [header, value, note] of headers) {
-      console.log(`  ${header.padEnd(width)}  ${BOLD}${value}${OFF}  ${DIM}${note}${OFF}`);
-    }
-    console.log(`\n${DIM}Caps are the most one call may spend, in US dollars; 0 blocks that tool.${OFF}`);
+  console.log(`${DIM}  live for ${agentsLabel(agentIdsOf(state))}${OFF}`);
+  if (names.some((n) => n !== "web")) {
+    console.log(`${DIM}  run \`salts-tools${SUFFIX ? ` :${TARGET}` : ""}\` and open a service for what to set on the agent${OFF}`);
   }
 }
 
@@ -1146,12 +1291,11 @@ async function askAutostart(rl) {
 async function setupOnly() {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   try {
-    const before = readState().agentId;
+    const before = agentIdsOf(readState()).join(" ");
     // No autostart question here: turning it on runs the login item at once.
     await setup(rl, { force: true });
-    const { agentId } = readState();
-    if (supervisorPid() && agentId !== before) {
-      console.log(`salts-tools is running for agent ${before}; \`salts-tools ${withTarget("stop")}\` and start again to switch.`);
+    if (supervisorPid() && agentIdsOf(readState()).join(" ") !== before) {
+      console.log(`salts-tools is running; ${agentsLabel(agentIdsOf(readState()))} get every address within a minute.`);
     } else if (!supervisorPid()) {
       console.log(`Set up. Start a service with \`salts-tools ${withTarget("start")} <${NAMES.join("|")}>\`.`);
     }
@@ -1179,30 +1323,16 @@ async function start({ interactive }) {
 
   const rl = interactive ? createInterface({ input: process.stdin, output: process.stdout }) : null;
   try {
-    // ngrok with no authtoken cannot open a tunnel at all.
-    if (!ngrokHasAuthtoken()) {
-      if (!rl) {
-        console.error(`${RED}✗${OFF} ngrok has no authtoken — run \`salts-tools ${withTarget("start")}\` in a terminal`);
-        process.exit(1);
-      }
-      console.log("ngrok needs an authtoken: https://dashboard.ngrok.com/get-started/your-authtoken");
-      const authtoken = (await rl.question("ngrok authtoken: ")).trim();
-      const res = run("ngrok", ["config", "add-authtoken", authtoken]);
-      if (res.status !== 0 || !ngrokHasAuthtoken()) {
-        console.error(`${RED}✗${OFF} ngrok did not accept it: ${(res.stderr || res.stdout).trim()}`);
-        process.exit(1);
-      }
-    }
-    console.log(`${GREEN}✓${OFF} ngrok installed and configured`);
+    console.log(`${GREEN}✓${OFF} cloudflared installed`);
 
     // At login this runs unattended and Docker may be minutes away; the supervisor
     // waits for it there, so only a person at the terminal waits for it here.
-    if (rl) {
+    if (rl && usesDocker(services)) {
       await ensureDocker((m) => console.log(`${DIM}  … ${m}${OFF}`));
       console.log(`${GREEN}✓${OFF} Docker running`);
     }
 
-    const firstRun = !readToken() || !readState().agentId;
+    const firstRun = !readToken() || !agentIdsOf(readState()).length;
     if (firstRun && !rl) {
       console.error(`${RED}✗${OFF} not set up yet — run \`salts-tools ${withTarget("start")}\` in a terminal`);
       process.exit(1);
@@ -1216,15 +1346,8 @@ async function start({ interactive }) {
     if (pid) await endStrays(pid);
     const wanted = pid && readState().url ? named : services;
     for (;;) {
-      const since = new Date().toISOString();
-      for (const name of wanted) writeSvc(name, { pushedTo: "", pushStatus: 0, error: "" });
-      if (pid && readState().url) {
-        writeFileSync(RELOAD_FILE, since);
-      } else {
-        await stopSupervisor();
-        writeState({ lastError: "" });
-        pid = spawnSupervisor();
-      }
+      let since;
+      ({ pid, since } = await relaunch(pid, wanted));
       if (!rl) {
         console.log(`supervisor running; log at ${LOG_FILE}`);
         return;
@@ -1240,13 +1363,13 @@ async function start({ interactive }) {
         break;
       }
       if (result.refused) {
-        console.log(`${RED}✗${OFF} the agent refused the token.`);
+        console.log(`${RED}✗${OFF} agent ${result.agentId} refused the token.`);
         const choice = (
-          await rl.question("[r] retry after pasting it in the agent, [n] make a new token, [q] quit: ")
+          await rl.question("[r] retry after pasting it in that agent, [n] make a new token, [q] quit: ")
         ).trim().toLowerCase();
         if (choice === "n") {
           showToken(newToken());
-          await rl.question("Press Enter once it is saved in the agent… ");
+          await rl.question("Press Enter once it is saved in every agent… ");
         } else if (choice !== "r") {
           console.log(`The supervisor keeps retrying in the background; log at ${LOG_FILE}`);
           return;
@@ -1255,19 +1378,8 @@ async function start({ interactive }) {
       }
       const failed = result.pushFailed;
       if (failed && result.state.svc?.[failed]?.pushStatus === 409) {
-        console.log(`
-${RED}✗${OFF} Your agent already has an MCP server called ${BOLD}${failed}${OFF}, set up without your
-  salts-tools token. salts-tools does not change a server it did not set up, so it
-  left that one alone.
-
-  The tunnel is up at ${result.state.url}
-  ("${failed}" will be at ${SERVICES[failed].reached(result.state.url)}).
-
-  To fix it, open the agent's settings → ${BOLD}MCP servers${OFF} and either:
-    • ${BOLD}delete${OFF} "${failed}": salts-tools adds it again, already connected, or
-    • ${BOLD}edit${OFF} "${failed}" and set its ${BOLD}Authorization${OFF} header to your token
-      (choose [t] below to see the exact value).
-`);
+        console.log(`${RED}✗${OFF} agent ${result.state.svc[failed].failedAgent} already has an MCP server "${failed}" that salts-tools did not set up.
+${DIM}  In that agent's MCP servers, delete it (salts-tools re-adds it) or set its Authorization to [t].${OFF}`);
         for (;;) {
           const choice = (
             await rl.question("[r] retry once it is fixed, [t] show the Authorization value, [q] quit: ")
@@ -1308,33 +1420,52 @@ async function stop() {
   // One service, others still on: the tunnel stays, only that service goes.
   if (named.length && rest.length) {
     const [name] = named;
-    writeState({ services: rest });
-    const pid = supervisorPid();
-    if (pid) {
-      writeFileSync(RELOAD_FILE, new Date().toISOString());
-      for (let i = 0; i < 120 && readState().svc?.[name]?.up && alive(pid); i++) await sleep(1000);
-    } else if (dockerUp()) {
-      SERVICES[name].down();
-      writeSvc(name, { up: false, pushedTo: "" });
-    }
-    console.log(`${GREEN}✓${OFF} ${SERVICES[name].label} stopped; still running: ${rest.join(", ")}`);
+    const pid = stopOne(name, rest);
+    for (let i = 0; i < 120 && pid && readState().svc?.[name]?.up && alive(pid); i++) await sleep(1000);
+    console.log(`${GREEN}✓${OFF} ${name} stopped; still running: ${rest.join(", ")}`);
     return;
   }
 
-  // Everything. The list of services is kept, so the next `start` brings them back.
+  const { was, failed } = await stopAll();
+  for (const line of failed) console.log(`${RED}✗${OFF} ${line}`);
+  console.log(was ? `${GREEN}✓${OFF} stopped` : "was not running");
+  if (existsSync(AUTOSTART.file)) console.log(`${DIM}  starts again at next login (autostart is on)${OFF}`);
+}
+
+/**
+ * Turn `name` off, leaving `rest` on. A running supervisor takes it down on its next
+ * pass (its pid is returned to wait on); with none, it is taken down here.
+ */
+function stopOne(name, rest) {
+  writeState({ services: rest });
+  const pid = supervisorPid();
+  if (pid) {
+    writeFileSync(RELOAD_FILE, new Date().toISOString());
+  } else if (!SERVICES[name].docker || dockerUp()) {
+    SERVICES[name].down();
+    writeSvc(name, { up: false, pushedTo: "", agents: {} });
+  }
+  return pid;
+}
+
+/**
+ * Everything: the supervisor, the tunnel and the containers. The list of services is
+ * kept, so the next `start` brings them back. Returns whether anything was running and
+ * a line for each service that would not go down.
+ */
+async function stopAll() {
   const was = await stopSupervisor();
-  console.log(was ? `${GREEN}✓${OFF} supervisor and tunnel stopped` : "supervisor was not running");
+  const failed = [];
   if (dockerUp()) {
     for (const name of NAMES) {
       const res = SERVICES[name].down();
-      if (res.status !== 0) console.log(`${RED}✗${OFF} ${name}: ${res.stderr.trim()}`);
+      if (res.status !== 0) failed.push(`${name}: ${res.stderr.trim()}`);
     }
-    console.log(`${GREEN}✓${OFF} containers stopped`);
   }
   const svc = readState().svc ?? {};
-  for (const name of NAMES) svc[name] = { ...svc[name], up: false, pushedTo: "" };
+  for (const name of NAMES) svc[name] = { ...svc[name], up: false, pushedTo: "", agents: {} };
   writeState({ url: "", svc });
-  if (existsSync(AUTOSTART.file)) console.log(`${DIM}autostart is still on; it starts again at next login${OFF}`);
+  return { was, failed };
 }
 
 /**
@@ -1360,16 +1491,18 @@ function reset() {
   if (supervisorPid() || pidIn(path.join(homeFor("salts-web"), "supervisor.pid"))) {
     throw new Error(`salts-tools is running — \`salts-tools ${withTarget("stop")}\` first`);
   }
+  const done = [];
   const where = tokenStoreName();
-  console.log(deleteToken() ? `${GREEN}✓${OFF} deleted the token from ${where}` : `${DIM}no saved token${OFF}`);
+  if (deleteToken()) done.push(`deleted the token from ${where}`);
   for (const item of [AUTOSTART, autostartFor("salts-web")]) {
     if (!existsSync(item.file)) continue;
     autostartOff(item);
-    console.log(`${GREEN}✓${OFF} removed the login item ${item.file}`);
+    done.push(`removed the login item ${item.file}`);
   }
   for (const dir of [HOME, homeFor("salts-web")]) {
-    if (clearHome(dir)) console.log(`${GREEN}✓${OFF} deleted ${dir}${SUFFIX ? "" : ` ${DIM}(staging kept)${OFF}`}`);
+    if (clearHome(dir)) done.push(`deleted ${dir}${SUFFIX ? "" : " (staging kept)"}`);
   }
+  return done;
 }
 
 async function restart() {
@@ -1378,24 +1511,559 @@ async function restart() {
     console.log("supervisor not running; starting it");
     return await start({ interactive: process.stdin.isTTY });
   }
-  await endStrays(pid); // a stray's session would stop the new tunnel from opening
-  const since = new Date().toISOString();
+  const since = await requestRestart(pid);
   const services = readState().services ?? [];
-  for (const name of services) writeSvc(name, { pushStatus: 0, error: "" });
-  writeState({ lastError: "" });
-  writeFileSync(RESTART_FILE, since);
   console.log(`${DIM}  … restarting the tunnel${OFF}`);
   const result = await waitForPush(pid, since, services, 120_000);
   if (result.ok) report(result.state, services);
   else console.log(`${RED}✗${OFF} ${result.state.lastError || "no new tunnel yet"} — log at ${LOG_FILE}`);
 }
 
-const usage = `usage: salts-tools <start [${NAMES.join("|")}…]|stop [${NAMES.join("|")}]|restart|reset|setup|autostart on|off>[:staging]`;
+/** Ask the running supervisor `pid` for a new tunnel, pushed again everywhere. Returns when. */
+async function requestRestart(pid) {
+  await endStrays(pid); // a stray's session would stop the new tunnel from opening
+  const since = new Date().toISOString();
+  for (const name of readState().services ?? []) writeSvc(name, { pushStatus: 0, error: "" });
+  writeState({ lastError: "" });
+  writeFileSync(RESTART_FILE, since);
+  return since;
+}
+
+// ─── the dashboard ──────────────────────────────────────────────────────────────
+//
+// `salts-tools` with no command, in a terminal. Four tabs, each a list of rows, drawn
+// the way admin-cli draws its own. Everything on screen is read back from state.json
+// once a second, so it follows the supervisor as it works; the keys do what the
+// commands above do, without their questions.
+//
+//   1 Services  each service, whether it is live, and its address; `enter` opens one:
+//               where the agents reach it and what to set on the agent for it
+//   2 Agents    the agents served, and whether each holds every address
+//   3 Settings  the token, start at login, where things live, reset
+//   4 Log       the supervisor's log, newest at the bottom
+
+const TABS = ["Services", "Agents", "Settings", "Log"];
+
+const ui = {
+  tab: 0,
+  pos: { 0: { sel: 0, top: 0 }, 1: { sel: 0, top: 0 }, 2: { sel: 0, top: 0 }, 3: { sel: 0, top: 0, tail: true } },
+  /** The service opened from the Services tab, or "" while the list is showing. */
+  open: "",
+  openPos: { sel: 0, top: 0 },
+  /** Non-null while a value is being typed: `{ label, buffer, submit(text) }`. */
+  edit: null,
+  /** Non-null while a y/n is pending: `{ prompt, run() }`. */
+  confirm: null,
+  status: "",
+  /** Whether the Settings tab shows the token in full. */
+  reveal: false,
+};
+
+const say = (text) => {
+  ui.status = text;
+  render();
+};
+
+/** Put `text` on the clipboard, with whatever this machine has for it. */
+function copy(text) {
+  const tool = IS_MAC
+    ? ["pbcopy", []]
+    : IS_WIN
+      ? ["clip", []]
+      : have("wl-copy")
+        ? ["wl-copy", []]
+        : have("xclip")
+          ? ["xclip", ["-selection", "clipboard"]]
+          : null;
+  return Boolean(tool) && run(tool[0], tool[1], { input: text, windowsHide: true }).status === 0;
+}
+
+function copyToken() {
+  const token = readToken();
+  if (!token) return say("no token yet: add an agent first");
+  if (copy(token)) return say("token copied");
+  ui.reveal = true;
+  ui.tab = 2;
+  say("no clipboard tool found; the token is shown in full here");
+}
+
+/** A running supervisor rereads state.json on its next pass; this makes that now. */
+function nudge() {
+  if (supervisorPid()) writeFileSync(RELOAD_FILE, new Date().toISOString());
+}
+
+function startEdit(label, value, submit) {
+  ui.edit = { label, buffer: value, submit };
+  say("");
+}
+
+function confirm(prompt, run) {
+  ui.confirm = { prompt, run };
+  say("");
+}
+
+function addAgents() {
+  startEdit("agent ids, space separated (in the agent's address, after /a/):", "", (text) => {
+    const added = parseAgentIds(text);
+    if (!added.length) return say("");
+    const state = readState();
+    writeState({
+      agentIds: [...new Set([...agentIdsOf(state), ...added])],
+      agentId: undefined,
+      worker: process.env.SALTS_TOOLS_WORKER || state.worker || DEFAULT_WORKER,
+    });
+    nudge();
+    if (!readToken()) return freshToken();
+    say(`added ${added.join(", ")}${supervisorPid() ? "; sending it every address" : ""}`);
+  });
+}
+
+function removeAgent(id) {
+  confirm(`Stop serving agent ${id}?`, () => {
+    writeState({ agentIds: agentIdsOf(readState()).filter((a) => a !== id), agentId: undefined });
+    say(`removed ${id}`);
+  });
+}
+
+/** A new token, which every agent needs; every address is pushed again with it. */
+function freshToken() {
+  newToken();
+  const svc = readState().svc ?? {};
+  for (const name of NAMES) svc[name] = { ...svc[name], pushedTo: "", agents: {} };
+  writeState({ svc });
+  nudge();
+  ui.reveal = true;
+  ui.tab = 2;
+  ui.pos[2].sel = 0;
+  say("new token: paste it into each agent's Capabilities → Web search → SearXNG token, then save (c copies it)");
+}
+
+/** Whether a service can start yet; if not, opens what is missing. */
+function readyToStart() {
+  if (!agentIdsOf(readState()).length) {
+    ui.tab = 1;
+    addAgents();
+    return false;
+  }
+  if (!readToken()) {
+    freshToken();
+    return false;
+  }
+  return true;
+}
+
+async function turnOn(name) {
+  if (!readyToStart()) return;
+  const pid = supervisorPid();
+  const services = [...new Set([...(pid ? (readState().services ?? []) : []), name])];
+  const problems = missingTools(services);
+  if (problems.length) return say(paint(problems[0], "bad"));
+  say(`starting ${name}…`);
+  writeState({ services });
+  if (pid) await endStrays(pid);
+  await relaunch(pid, pid && readState().url ? [name] : services);
+  say(`starting ${name}; this screen follows it`);
+}
+
+async function turnOff(name) {
+  const rest = (readState().services ?? []).filter((n) => n !== name);
+  if (rest.length) {
+    stopOne(name, rest);
+    return say(`stopping ${name}`);
+  }
+  await stopEverything();
+}
+
+async function stopEverything() {
+  say("stopping…");
+  const { was, failed } = await stopAll();
+  say(failed.length ? paint(failed.join("; "), "bad") : was ? "stopped" : "was not running");
+}
+
+/** Whatever this machine logs in `file`, last lines only: the log can reach a megabyte. */
+function tail(file, bytes = 64 * 1024) {
+  try {
+    const size = statSync(file).size;
+    const len = Math.min(size, bytes);
+    const buf = Buffer.alloc(len);
+    const fd = openSync(file, "r");
+    readSync(fd, buf, 0, len, size - len);
+    closeSync(fd);
+    const lines = buf.toString("utf8").split("\n").filter(Boolean);
+    return len < size ? lines.slice(1) : lines;
+  } catch {
+    return [];
+  }
+}
+
+/** What to set on the agent for each service, beside the address salts-tools sends. */
+function agentSetup(name) {
+  if (name === "web") {
+    return [
+      ["on the agent", "Capabilities → Web search → SearXNG token", "paste the token there (c copies it); leave the Brave key blank, or the agent uses Brave"],
+    ];
+  }
+  if (name === "matchmaker") {
+    return [
+      ["on the agent", "MCP servers → matchmaker → add the headers below", "Authorization is set already; headers stay when the address changes"],
+      ...MATCHMAKER_HEADERS.map(([header, value, note]) => [
+        header,
+        value,
+        `${note}; caps are the most one call may spend in USD, 0 blocks the tool`,
+        header,
+      ]),
+    ];
+  }
+  return [
+    ["on the agent", "Capabilities → File ingest and MCP on", "users can then attach .xlsx and .csv files in the chat"],
+    ["inbox folder", ANALYST_INBOX, "files here are read too; DATA_DIR / INBOX_DIR in local-mcps/analyst-mcp/.env move it", ANALYST_INBOX],
+    ["run_python", "off unless ALLOW_PYTHON=true", "set in local-mcps/analyst-mcp/.env"],
+  ];
+}
+
+/** A row whose `enter` copies `text`. */
+const copyRow = (cells, text, note) => ({
+  cells,
+  note,
+  enter: () => say(copy(text) ? `copied ${text}` : "no clipboard tool found"),
+});
+
+/**
+ * What the current tab shows: its columns, its rows, where the selection is, and the
+ * keys it answers to beyond moving and `enter`.
+ */
+function view() {
+  const s = readState();
+  const running = Boolean(supervisorPid());
+  const agents = agentIdsOf(s);
+  const on = (name) => running && (s.services ?? []).includes(name);
+
+  switch (ui.tab) {
+    case 0: {
+      const name = ui.open;
+      if (name) {
+        const svc = SERVICES[name];
+        const st = serviceStatus(s, name, running, agents);
+        const e = s.svc?.[name] ?? {};
+        const live = on(name) && s.url;
+        return {
+          title: `${name}  ${DIM}${svc.about}${OFF}`,
+          columns: [["", 34], ["", 0]],
+          rows: [
+            { cells: ["status", { text: st.label, tone: st.tone }], note: st.note },
+            live
+              ? copyRow(["address", svc.reached(s.url)], svc.reached(s.url), "where the agents reach it; salts-tools sends each new one")
+              : { cells: ["address", { text: "not running", tone: "off" }] },
+            { cells: ["local port", live && e.port ? `127.0.0.1:${e.port}` : "—"], note: "loopback only; the tunnel reaches it through the token gate" },
+            ...agents.map((id) => ({
+              cells: [
+                `agent ${id}`,
+                live && e.agents?.[id] === s.url
+                  ? { text: "has this address", tone: "good" }
+                  : { text: live ? "not yet" : "—", tone: live ? "busy" : "off" },
+              ],
+            })),
+            ...agentSetup(name).map(([label, value, note, copyText]) =>
+              copyText ? copyRow([label, value], copyText, note) : { cells: [label, value], note }
+            ),
+            copyRow(["log", svc.log], svc.log),
+          ],
+          pos: ui.openPos,
+          hint: `enter copy   s ${on(name) ? "stop" : "start"}   esc back`,
+          keys: {
+            s: () => (on(name) ? turnOff(name) : turnOn(name)),
+            "\x1b": () => {
+              ui.open = "";
+              say("");
+            },
+          },
+        };
+      }
+      return {
+        columns: [["service", 12], ["status", 16], ["address", 0]],
+        rows: NAMES.map((name) => {
+          const st = serviceStatus(s, name, running, agents);
+          return {
+            name,
+            cells: [name, { text: st.label, tone: st.tone }, on(name) && s.url ? SERVICES[name].reached(s.url) : ""],
+            note: st.note || SERVICES[name].about,
+            enter: () => {
+              ui.open = name;
+              ui.openPos = { sel: 0, top: 0 };
+              say("");
+            },
+          };
+        }),
+        pos: ui.pos[0],
+        hint: `enter open   s start/stop${running ? "   r new tunnel   x stop all" : ""}`,
+        keys: {
+          s: (row) => row && (on(row.name) ? turnOff(row.name) : turnOn(row.name)),
+          r: () => {
+            const pid = supervisorPid();
+            if (!pid) return say("nothing running");
+            return requestRestart(pid).then(() => say("opening a new tunnel"));
+          },
+          x: () => running && confirm("Stop every service and the tunnel?", stopEverything),
+        },
+      };
+    }
+
+    case 1:
+      return {
+        columns: [["agent", 40], ["status", 0]],
+        rows: agents.map((id) => {
+          const st = agentStatus(s, id, running);
+          return { id, cells: [id, { text: st.label, tone: st.tone }], note: st.note };
+        }),
+        pos: ui.pos[1],
+        empty: "no agents yet: press a to add one",
+        hint: "a add   x remove",
+        keys: {
+          a: addAgents,
+          x: (row) => row && removeAgent(row.id),
+        },
+      };
+
+    case 2: {
+      const token = readToken();
+      const autostart = existsSync(AUTOSTART.file);
+      return {
+        columns: [["", 18], ["", 0]],
+        rows: [
+          {
+            cells: ["token", token ? (ui.reveal ? token : `${"•".repeat(12)}${token.slice(-4)}`) : { text: "none yet", tone: "off" }],
+            note: "goes in each agent's Capabilities → Web search → SearXNG token; enter shows it, c copies it, n makes a new one",
+            enter: () => {
+              ui.reveal = !ui.reveal;
+              say("");
+            },
+          },
+          {
+            cells: ["start at login", autostart ? { text: "on", tone: "good" } : { text: "off", tone: "off" }],
+            note: "a login item runs `salts-tools start`, which brings back the services that were on",
+            enter: () => {
+              if (autostart) autostartOff();
+              else autostartOn();
+              say(`start at login ${autostart ? "off" : "on"}`);
+            },
+          },
+          { cells: ["worker", s.worker || DEFAULT_WORKER], note: `${TARGET}; SALTS_TOOLS_WORKER, set when adding agents, changes it` },
+          { cells: ["token kept in", tokenStoreName()] },
+          copyRow(["state and logs", HOME], HOME),
+          {
+            cells: ["reset", { text: "forget every agent and the token", tone: "bad" }],
+            note: "back to a first run; the matchmaker's database is kept. Stop everything first",
+            enter: () =>
+              confirm("Forget every agent and the token?", () => {
+                const done = reset();
+                ui.reveal = false;
+                say(done.length ? done.join("; ") : "nothing to reset");
+              }),
+          },
+        ],
+        pos: ui.pos[2],
+        hint: "enter change   n new token",
+        keys: {
+          n: () => readToken() && confirm("Make a new token? Every agent will need it pasted in again.", freshToken),
+        },
+      };
+    }
+
+    default: {
+      const pos = ui.pos[3];
+      const rows = tail(LOG_FILE).map((line) => {
+        const m = line.match(/^\d{4}-(\d\d-\d\dT\d\d:\d\d:\d\d)\S*\s(.*)$/);
+        return { cells: m ? [m[1].replace("T", " "), m[2]] : ["", line] };
+      });
+      if (pos.tail) pos.sel = rows.length - 1;
+      return {
+        columns: [["", 15], ["", 0]],
+        rows,
+        pos,
+        empty: "no log yet",
+      };
+    }
+  }
+}
+
+function render() {
+  const width = Math.max(40, (process.stdout.columns ?? 80) - 1);
+  const size = Math.max(3, (process.stdout.rows ?? 24) - 12);
+  const s = readState();
+  const running = Boolean(supervisorPid());
+  const v = view();
+  const out = [];
+
+  out.push(`${BOLD}salts-tools${OFF} ${DIM}${TARGET} · ${s.worker || DEFAULT_WORKER}${OFF}`);
+  out.push(
+    !running
+      ? paint("  not running: pick a service and press s", "off")
+      : s.url
+        ? paint(`  tunnel ${s.url}`, "good")
+        : paint(`  opening a tunnel…${s.lastError ? `  ${s.lastError}` : ""}`, s.lastError ? "bad" : "busy")
+  );
+  const agents = agentIdsOf(s);
+  const trouble = [
+    NAMES.some((n) => serviceStatus(s, n, running, agents).tone === "bad"),
+    agents.some((id) => agentStatus(s, id, running).tone === "bad"),
+  ];
+  out.push(
+    TABS.map((name, i) => {
+      let label = ` ${i + 1} ${name}`;
+      if (trouble[i]) label += " !";
+      label += " ";
+      return i === ui.tab ? `${INV}${BOLD}${label}${OFF}` : label;
+    }).join(" ")
+  );
+  out.push(`${DIM}${"─".repeat(width)}${OFF}`);
+
+  if (v.title) out.push(`${BOLD}  ${v.title}${OFF}`);
+  if (v.columns.some(([t]) => t)) {
+    out.push(`${DIM}  ${rowText(v.columns.map(([t]) => t), v.columns, width - 2)}${OFF}`);
+  }
+
+  const pos = v.pos;
+  if (!v.rows.length) {
+    out.push(`${DIM}  ${v.empty ?? ""}${OFF}`);
+  } else {
+    follow(pos, v.rows.length, size);
+    v.rows.slice(pos.top, pos.top + size).forEach((row, i) => {
+      const text = `  ${rowText(row.cells, v.columns, width - 2)}`;
+      out.push(pos.top + i === pos.sel ? `${INV}${text}${OFF}` : text);
+    });
+    if (pos.top + size < v.rows.length) out.push(`${DIM}  ↓ more${OFF}`);
+  }
+
+  out.push(`${DIM}${"─".repeat(width)}${OFF}`);
+  if (ui.edit) {
+    // The cursor is drawn rather than moved: the screen is repainted whole on every
+    // change, so a real cursor position would be lost on the next paint.
+    out.push(`  ${BOLD}${ui.edit.label}${OFF} ${ui.edit.buffer}${INV} ${OFF}`);
+    out.push(`${DIM}  enter save   esc cancel${OFF}`);
+  } else if (ui.confirm) {
+    out.push(`  ${BOLD}${ui.confirm.prompt}${OFF}`);
+    out.push(`${DIM}  y confirm   any other key cancel${OFF}`);
+  } else {
+    // Two lines kept for the note, so the hints below do not jump as the selection moves.
+    const note = wrap(v.rows[pos.sel]?.note ?? "", width - 2);
+    for (let i = 0; i < 2; i++) out.push(note[i] ? `${DIM}  ${note[i]}${OFF}` : "");
+    const hints = ["↑/↓ move", v.hint, "c copy token", "←/→ tab", "q quit"].filter(Boolean);
+    out.push(`${DIM}  ${hints.join("   ")}${OFF}`);
+  }
+  if (ui.status) out.push(`  ${ui.status}`);
+
+  process.stdout.write(`\x1b[H\x1b[2J${out.join("\n")}\n`);
+}
+
+/**
+ * The line editor. Deliberately minimal — printable characters, backspace, enter,
+ * esc — because the only thing typed is a few agent ids, usually pasted.
+ */
+async function onEditKey(key) {
+  const edit = ui.edit;
+  if (key === "\x1b") {
+    ui.edit = null;
+    return render();
+  }
+  if (key === "\r" || key === "\n") {
+    ui.edit = null;
+    return await edit.submit(edit.buffer);
+  }
+  if (key === "\x7f" || key === "\b") edit.buffer = edit.buffer.slice(0, -1);
+  else if (key.length === 1 && key >= " ") edit.buffer += key;
+  render();
+}
+
+function quit() {
+  process.stdout.write("\x1b[?25h\x1b[?1049l");
+  if (process.stdin.isTTY) process.stdin.setRawMode(false);
+  if (supervisorPid()) console.log(`salts-tools keeps running in the background. \`salts-tools ${withTarget("stop")}\` stops it.`);
+  process.exit(0);
+}
+
+function switchTab(tab) {
+  ui.tab = (tab + TABS.length) % TABS.length;
+  say("");
+}
+
+async function onKey(key) {
+  if (key === "\u0003") quit();
+  if (ui.edit) return await onEditKey(key);
+  if (ui.confirm) {
+    const { run } = ui.confirm;
+    ui.confirm = null;
+    if (key === "y" || key === "Y") return await run();
+    return say("cancelled");
+  }
+  if (key === "q") quit();
+
+  if (key >= "1" && key <= String(TABS.length)) return switchTab(Number(key) - 1);
+  if (key === "\x1b[C" || key === "\t" || key === "l") return switchTab(ui.tab + 1);
+  if (key === "\x1b[D" || key === "\x1b[Z" || key === "h") return switchTab(ui.tab - 1);
+  if (key === "c") return copyToken();
+
+  const v = view();
+  const row = v.rows[v.pos.sel];
+  if (key === "\x1b[A" || key === "k") {
+    v.pos.sel = Math.max(0, v.pos.sel - 1);
+    v.pos.tail = false;
+  } else if (key === "\x1b[B" || key === "j") {
+    v.pos.sel = Math.max(0, Math.min(v.rows.length - 1, v.pos.sel + 1));
+    v.pos.tail = v.pos.sel === v.rows.length - 1;
+  } else if ((key === "\r" || key === "\n") && row?.enter) {
+    ui.status = "";
+    return await row.enter();
+  } else if (v.keys?.[key]) return await v.keys[key](row);
+  render();
+}
+
+function dashboard() {
+  process.stdout.write("\x1b[?1049h\x1b[?25l");
+  if (!agentIdsOf(readState()).length) {
+    ui.tab = 1;
+    addAgents();
+  } else {
+    render();
+  }
+  process.stdin.setRawMode(true);
+  process.stdin.resume();
+  process.stdin.setEncoding("utf8");
+  process.stdin.on("data", async (chunk) => {
+    for (const key of keys(chunk)) {
+      try {
+        await onKey(key);
+      } catch (err) {
+        say(paint(err.message, "bad"));
+      }
+    }
+  });
+  process.stdout.on("resize", render);
+  process.on("SIGINT", quit);
+  // The supervisor works in the background; repaint so the screen keeps up with it.
+  setInterval(render, 1000);
+}
+
+const usage = `${BOLD}salts-tools${OFF}                 open the dashboard
+${BOLD}salts-tools start${OFF} [service…]  start services (${NAMES.join(", ")})
+${BOLD}salts-tools stop${OFF} [service]    stop one service, or everything
+${BOLD}salts-tools restart${OFF}           open a new tunnel
+${BOLD}salts-tools setup${OFF}             ask for the agent ids again
+${BOLD}salts-tools reset${OFF}             forget the agents and the token
+${BOLD}salts-tools autostart${OFF} on|off  start at login
+
+Add :staging to any of them (\`salts-tools :staging\`, \`start:staging\`) for the staging Worker.`;
 
 try {
   // Not before `reset`: it deletes salts-web's leftovers rather than moving them.
-  if (cmd && cmd !== "_supervise" && cmd !== "reset") await migrateFromSaltsWeb();
+  if (cmd !== "_supervise" && cmd !== "reset") await migrateFromSaltsWeb();
   switch (cmd) {
+    case "":
+      if (!process.stdin.isTTY || !process.stdout.isTTY) {
+        console.log(usage);
+        break;
+      }
+      dashboard();
+      break;
     case "start":
       await start({ interactive: process.stdin.isTTY });
       break;
@@ -1408,21 +2076,27 @@ try {
     case "restart":
       await restart();
       break;
-    case "reset":
-      reset();
+    case "reset": {
+      const done = reset();
+      for (const line of done) console.log(`${GREEN}✓${OFF} ${line}`);
+      if (!done.length) console.log("nothing to reset");
       break;
+    }
     case "autostart":
       if (args[0] === "on") autostartOn();
       else if (args[0] === "off") autostartOff();
-      else throw new Error(usage);
+      else throw new Error(`autostart on|off`);
       console.log(`${GREEN}✓${OFF} autostart ${args[0]}`);
       break;
     case "_supervise":
       await supervise();
       break;
+    case "help":
+      console.log(usage);
+      break;
     default:
       console.log(usage);
-      process.exit(cmd ? 1 : 0);
+      process.exit(1);
   }
 } catch (err) {
   console.error(`${RED}✗${OFF} ${err.message}`);

@@ -75,13 +75,14 @@ function models(value: unknown): MetaSettings["models"] {
   if (!Array.isArray(value)) throw new Error("models must be an array");
   const out: MetaSettings["models"] = [];
   const seen = new Set<string>();
-  for (const entry of value as (string | { id?: unknown; vision?: unknown })[]) {
+  for (const entry of value as (string | { id?: unknown; vision?: unknown; label?: unknown })[]) {
     const id = (typeof entry === "string" ? entry : String(entry?.id ?? "")).trim();
     if (id === "" || seen.has(id)) continue;
     if (!MODEL_ID.test(id)) throw new Error(`not an OpenRouter model id: ${id}`);
     seen.add(id);
     const vision = typeof entry === "string" || entry.vision === undefined ? true : !!entry.vision;
-    out.push({ id, vision });
+    const label = typeof entry === "string" ? "" : String(entry.label ?? "").trim();
+    out.push(label ? { id, vision, label } : { id, vision });
   }
   return out;
 }

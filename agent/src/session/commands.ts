@@ -1,6 +1,9 @@
 import { enabled, mcpServerReady, withMcpAuth } from "../capabilities";
-import type { Command, CommandResult, McpCommand } from "../commands";
+import type { Command, CommandResult, McpCommand, ModelCommand } from "../commands";
+import { modelCatalog, modelNicknames } from "../models";
 import { sessionLimitMessage, type SessionRow } from "../registry";
+import { lockedColumns } from "../validation/meta";
+import { modelOptions } from "../worker/capability-views";
 import { compact } from "./compaction";
 import { spendBlocked } from "./turns";
 import type { SessionHost } from "./types";
@@ -10,7 +13,18 @@ import type { SessionHost } from "./types";
  * (`destroy`), because destroying the object aborts the isolate.
  */
 export async function runCommand(host: SessionHost, command: Command): Promise<CommandResult> {
-  if (typeof command === "object") return await mcpCommand(host, command);
+  if (command === "help") return { text: HELP, destroy: false };
+  if (command === "docs") return linkCommand(host, "/guide", "The user guide");
+  if (command === "settings") {
+    return linkCommand(host, `/a/${host.agentId()}/settings`, "This agent's settings");
+  }
+  if (command === "mcp") return await mcpList(host);
+  if (command === "model") return await modelList(host);
+  if (typeof command === "object") {
+    return "nickname" in command
+      ? await modelCommand(host, command)
+      : await mcpCommand(host, command);
+  }
   // TEMP, remove with `oom`: allocate until the isolate is killed, logging progress.
   if (command === "oom") {
     // Filled byte buffers, which a runtime cannot represent cleverly the way it can strings.
@@ -84,6 +98,89 @@ export async function runCommand(host: SessionHost, command: Command): Promise<C
   };
 }
 
+/** What `!help` says: how sessions work, then every command. */
+export const HELP = [
+  "Each conversation is a session. Your agent only sees the current one, so send `!new` when you change the subject — replies stay cheaper and sharper, and the old session is kept in the browser.",
+  "",
+  "Commands (send one as the whole message):",
+  "`!new` — start a new session, keep the old one",
+  "`!clear` — start a new session, delete the old one",
+  "`!stop` — stop the reply being written",
+  "`!compact` — summarise older messages to make replies cheaper",
+  "`!unstick` — fix a session that stopped responding",
+  "`!delete` — delete this session",
+  "`!model` — list models; `!model <nickname>` switches",
+  "`!mcp` — list connected apps; `!enable-mcp <name>` / `!disable-mcp <name>` switch one",
+  "`!settings` — link to this agent's settings",
+  "`!docs` — link to the user guide",
+  "`!help` — this list",
+].join("\n");
+
+/** The web app's page at `path`, or null when this deployment has no web app set. */
+function appLink(host: SessionHost, path: string): string | null {
+  const base = host.env.APP_URL?.trim().replace(/\/+$/, "");
+  return base ? `${base}${path}` : null;
+}
+
+/** `!docs` / `!settings`: a link to a web app page. */
+function linkCommand(host: SessionHost, path: string, what: string): CommandResult {
+  const url = appLink(host, path);
+  return {
+    text: url ? `${what}: ${url}` : "This deployment has no web app address set.",
+    destroy: false,
+  };
+}
+
+/** `!mcp`: every MCP server on this agent, whether it is on, and the command to flip it. */
+export async function mcpList(host: SessionHost): Promise<CommandResult> {
+  const servers = await host.registry().mcpServers();
+  const page = appLink(host, `/a/${host.agentId()}/capabilities`);
+  const connectHint = page ? `connect it at ${page}` : "connect it from the web UI";
+  if (servers.length === 0) {
+    return {
+      text: `No MCP servers are added to this agent. Add one from the capabilities page${page ? `: ${page}` : "."}`,
+      destroy: false,
+    };
+  }
+  const lines = servers.map((s) => {
+    if (!s.enabled) return `- ${s.name} — off. Send \`!enable-mcp ${s.name}\` to turn it on.`;
+    if (!mcpServerReady(s)) return `- ${s.name} — not connected; ${connectHint}.`;
+    return `- ${s.name} — on. Send \`!disable-mcp ${s.name}\` to turn it off.`;
+  });
+  await host.loadConfig();
+  const off = enabled(host.config(), "mcp")
+    ? ""
+    : "\n\nMCP is switched off for this agent, so none of these are used. Turn it on from the web UI.";
+  return { text: `MCP servers:\n${lines.join("\n")}${off}`, destroy: false };
+}
+
+/** `!model`: the current model, then the offered models' nicknames with the current one marked. */
+export async function modelList(host: SessionHost): Promise<CommandResult> {
+  const settings = await host.settingsNow();
+  const meta = await host.registry().meta();
+  await host.loadConfig();
+  const current = host.config().model;
+  const options = modelOptions(meta.models, modelCatalog(settings));
+  const head = `Current model: ${options.find((m) => m.id === current)?.label ?? current}`;
+  const offered = options.filter((m) => modelNicknames(m.label).length > 0);
+  if (offered.length === 0) {
+    return {
+      text: `${head}\n\nNo model has a nickname. Nicknames are set in brackets in a model's name.`,
+      destroy: false,
+    };
+  }
+  const lines = offered.map(
+    (m) =>
+      `- ${modelNicknames(m.label)
+        .map((n) => `\`${n}\``)
+        .join(", ")} — ${m.label}${m.id === current ? " (current)" : ""}`
+  );
+  const locked = lockedColumns(meta.locked).has("model")
+    ? "\n\nThe model is locked for this agent."
+    : "\n\nSend `!model <nickname>` to switch.";
+  return { text: `${head}\n\nModels:\n${lines.join("\n")}${locked}`, destroy: false };
+}
+
 /**
  * `!compact`: summarise everything but the latest message now. Refused while a reply is
  * being written, and when the month's spend is used up.
@@ -119,6 +216,40 @@ export async function compactCommand(host: SessionHost): Promise<CommandResult> 
       destroy: false,
     };
   }
+}
+
+/**
+ * `!model <nickname>`: switch the agent to the model the settings page offers whose label
+ * carries the nickname in brackets. The agent's model, not just this session's — the same
+ * as picking it on the settings page, and refused where that page could not change it.
+ */
+export async function modelCommand(
+  host: SessionHost,
+  { nickname }: ModelCommand
+): Promise<CommandResult> {
+  const reg = host.registry();
+  const settings = await host.settingsNow();
+  const meta = await reg.meta();
+  if (lockedColumns(meta.locked).has("model")) {
+    return { text: "The model is locked for this agent.", destroy: false };
+  }
+  const offered = modelOptions(meta.models, modelCatalog(settings));
+  const wanted = nickname.toLowerCase();
+  const found = offered.find((m) =>
+    modelNicknames(m.label).some((n) => n.toLowerCase() === wanted)
+  );
+  if (!found) {
+    const known = offered.flatMap((m) => modelNicknames(m.label));
+    return {
+      text: known.length
+        ? `No model has the nickname "${nickname}". Try one of: ${known.join(", ")}.`
+        : `No model has the nickname "${nickname}". Nicknames are set in brackets in a model's name.`,
+      destroy: false,
+    };
+  }
+  await reg.setConfig({ model: found.id }, settings.default_model, settings.config_defaults);
+  await host.loadConfig();
+  return { text: `Switched to ${found.label}.`, destroy: false };
 }
 
 /**
@@ -230,9 +361,11 @@ export async function startOver(
     };
   }
 
-  const opening = discard
-    ? "Starting fresh. This conversation and everything in it has been deleted; anything said here from now on goes to a new session."
-    : "Starting fresh. This conversation is kept and still readable in the browser; anything said here from now on goes to a new session.";
+  const opening =
+    (discard
+      ? "Starting fresh. This conversation and everything in it has been deleted; anything said here from now on goes to a new session."
+      : "Starting fresh. This conversation is kept and still readable in the browser; anything said here from now on goes to a new session.") +
+    " Send `!help` to see every command.";
   if (tasks.length === 0) return { text: opening, destroy: discard };
 
   try {

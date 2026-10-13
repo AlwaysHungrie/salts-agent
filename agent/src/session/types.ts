@@ -16,7 +16,7 @@ import { LiveTurns } from "./live";
  */
 export type Attachment = {
   id: string;
-  kind: "text" | "image" | "pdf";
+  kind: "text" | "image" | "pdf" | "sheet";
   name: string;
   mime: string;
   /** Extracted text for a text file, a transcript for audio, a prompt for an image. */
@@ -110,7 +110,15 @@ export function emptyUsage(): TurnUsage {
  * (approximate; `!stop`/`!unstick` zero it). `stoppedOnPurpose` marks a requested stop
  * until the next question. `scheduled`: WhatsApp owes a 24-hour-window note.
  */
-export type TurnState = { running: number; stoppedOnPurpose: boolean; scheduled: boolean };
+export type TurnState = {
+  running: number;
+  stoppedOnPurpose: boolean;
+  scheduled: boolean;
+  /** Attachments tools saved for the user this turn (drawn images, MCP previews, files). */
+  made: string[];
+  /** Ids of this turn's tool calls that returned a failure rather than throwing one. */
+  failedCalls: string[];
+};
 
 /**
  * What the `session/*` modules may use of a `SessionAgent`. The object builds this from

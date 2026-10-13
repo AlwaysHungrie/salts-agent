@@ -65,14 +65,47 @@ export function prepareOpenRouterRequest(
 }
 
 /**
- * Put an Anthropic cache breakpoint on the last system message (others cache on their
- * own). Tools render before system, so this caches the MCP schemas too, and new messages
- * do not move it — unlike OpenRouter's top-level `cache_control`.
+ * Anthropic cache breakpoints (others cache on their own): one on the last system
+ * message, which caches the tools and MCP schemas that render before it and does not
+ * move as messages arrive — unlike OpenRouter's top-level `cache_control` — and one on
+ * the newest message, for the tool rounds of a turn.
  */
 export function markCacheablePrefix(body: ChatRequestBody): boolean {
   if (!(body.model ?? "").startsWith("anthropic/")) return false;
-  const messages = body.messages;
-  if (!Array.isArray(messages)) return false;
+  if (!Array.isArray(body.messages)) return false;
+  const system = markSystem(body.messages);
+  const latest = markLatest(body.messages);
+  return system || latest;
+}
+
+/**
+ * A second, rolling breakpoint on the newest message. Within one turn every tool round
+ * re-sends the whole conversation (the user's files, every tool result so far); with
+ * this, round N+1 reads rounds 1..N from the cache instead of paying for them again.
+ */
+function markLatest(messages: NonNullable<ChatRequestBody["messages"]>): boolean {
+  const last = [...messages]
+    .reverse()
+    .find(
+      (m) =>
+        m?.role !== "system" &&
+        ((typeof m?.content === "string" && m.content !== "") ||
+          (Array.isArray(m?.content) && m.content.some((part) => part?.type === "text")))
+    );
+  if (!last) return false;
+  if (typeof last.content === "string") {
+    last.content = [{ type: "text", text: last.content, cache_control: CACHE_CONTROL }];
+    return true;
+  }
+  const parts = last.content as ContentPart[];
+  if (parts.some((part) => part?.cache_control)) return false;
+  const text = [...parts].reverse().find((part) => part?.type === "text");
+  if (!text) return false;
+  text.cache_control = CACHE_CONTROL;
+  return true;
+}
+
+function markSystem(messages: NonNullable<ChatRequestBody["messages"]>): boolean {
   // The last system message: what precedes it is prefix, what follows it is not.
   const system = [...messages].reverse().find((m) => m?.role === "system");
   if (!system) return false;

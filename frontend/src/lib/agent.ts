@@ -414,7 +414,7 @@ export type MetaSettings = {
  * images. There is no label — a model in the deployment's catalogue is shown under
  * the name that gives it, and one that is not is shown as the id it is.
  */
-export type ModelChoice = { id: string; vision: boolean };
+export type ModelChoice = { id: string; vision: boolean; label?: string };
 
 export type MetaTunableKey =
   | "model"
@@ -460,7 +460,7 @@ export const EMPTY_META: MetaSettings = {
  */
 export type ClientLimits = {
   max_files_per_message: number;
-  max_upload_bytes: { text: number; pdf: number; image: number; audio: number };
+  max_upload_bytes: { text: number; pdf: number; image: number; audio: number; sheet: number };
 };
 
 /**
@@ -488,7 +488,7 @@ export type SpendState = { usd: number; limit: number; month: string };
 /** A file the user attached, or an image the agent drew, minus the bytes. */
 export type Attachment = {
   id: string;
-  kind: "text" | "image" | "pdf";
+  kind: "text" | "image" | "pdf" | "sheet";
   name: string;
   mime: string;
   bytes: number;

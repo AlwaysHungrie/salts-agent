@@ -4,7 +4,7 @@ import { agentHeaders } from "@/lib/upstream";
 
 export const dynamic = "force-dynamic";
 
-/** Image bytes, streamed through as-is so an <img src> can point at this route. */
+/** A file's bytes, streamed through as-is so an <img src> or a download link can point here. */
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string; fileId: string }> }
@@ -14,13 +14,14 @@ export async function GET(
     `${AGENT_URL}/agents/session-agent/${encodeURIComponent(id)}/files/${encodeURIComponent(fileId)}`,
     { headers: await agentHeaders() }
   );
-  return new Response(res.body, {
-    status: res.status,
-    headers: {
-      "content-type": res.headers.get("content-type") ?? "application/octet-stream",
-      "cache-control": "public, max-age=31536000, immutable",
-    },
-  });
+  const headers: Record<string, string> = {
+    "content-type": res.headers.get("content-type") ?? "application/octet-stream",
+    "cache-control": "public, max-age=31536000, immutable",
+  };
+  // A workbook downloads under its own name rather than opening in the tab.
+  const disposition = res.headers.get("content-disposition");
+  if (disposition) headers["content-disposition"] = disposition;
+  return new Response(res.body, { status: res.status, headers });
 }
 
 export async function DELETE(
