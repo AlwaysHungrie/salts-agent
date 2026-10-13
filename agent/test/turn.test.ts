@@ -817,6 +817,17 @@ describe("a PDF sent to an MCP server that takes uploads", () => {
     expect(await turnFor(token)).toContain("upload 401");
   });
 
+  it("hands the model the exact upload_id when a call that needed a file passed none", async () => {
+    const { sessionId, email } = await withServer("https://mcp.test/files/mcp", [MCP_UPLOAD_TOOL]);
+    await attachPdf(sessionId, email);
+    const token = crypto.randomUUID().slice(0, 8);
+    await (await say(sessionId, email, `!!ingestbare mcp_recruiter_ingest_resume ${token}`)).text();
+
+    expect(await turnFor(token)).toMatch(
+      /pass exactly one of upload_id or inbox_file\\nNo file was passed\. To give this tool a file from this chat, pass upload_id=\\"attachment:[\w-]+\\" for resume\.pdf\./
+    );
+  });
+
   it("tells the model nothing about uploads when no server takes them", async () => {
     const { sessionId, email } = await withServer("https://mcp.test/", MCP_TOOLS);
     await attachPdf(sessionId, email);

@@ -12,7 +12,7 @@ import {
 } from "../capabilities";
 import type { Config } from "../registry";
 import { base64ToBytes } from "../util/bytes";
-import { attachmentsOf, insertAttachment } from "./attachments";
+import { attachmentsOf, insertAttachment, sharedFiles } from "./attachments";
 import { sendVoiceNote } from "./channels";
 import { compactedMessages } from "./compaction";
 import {
@@ -296,6 +296,7 @@ export function toolContext(host: SessionHost, config: Config): ToolContext {
     },
     transcribeAttachment: (id) => transcribeAttachment(host, id),
     uploadAttachment: (server, id) => uploadAttachment(host, server, id),
+    sharedFiles: () => sharedFiles(host),
     sendVoiceNote: (bytes) => sendVoiceNote(host, bytes),
     schedule: async (when, prompt) => {
       const task = await host.scheduleTask(when, prompt);

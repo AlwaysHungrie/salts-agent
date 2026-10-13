@@ -717,6 +717,13 @@ async function mcpMock(request: Request, url: URL): Promise<Response> {
         ],
       });
     }
+    // Like analyst-mcp: a tool that needs a file refuses a call that passed none.
+    if (body.params?.name === MCP_UPLOAD_TOOL.name && !body.params.arguments?.upload_id) {
+      return reply({
+        content: [{ type: "text", text: "pass exactly one of upload_id or inbox_file" }],
+        isError: true,
+      });
+    }
     return reply({ content: [{ type: "text", text: "done" }] });
   }
   // A notification, which carries no id and expects no envelope.
@@ -837,6 +844,12 @@ export async function openrouterMock(request: Request): Promise<Response> {
   if (message.startsWith("!!draw")) {
     if (carriesToolResult(body)) return streamedText("Drew it.");
     return streamedToolCall("generate_image", { prompt: "a mock drawing" });
+  }
+
+  // `!!ingestbare <tool>`: call that tool without the attachment, as a weaker model does.
+  if (message.startsWith("!!ingestbare")) {
+    if (carriesToolResult(body)) return streamedText("Couldn't store it.");
+    return streamedToolCall(message.split(/\s+/)[1], { text: "a resume" });
   }
 
   // `!!ingest <tool>`: hand the attachment the turn names to that tool, as a model would.

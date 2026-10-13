@@ -381,6 +381,8 @@ export type ToolContext = {
   transcribeAttachment: (id: string) => Promise<string>;
   /** Uploads a stored PDF, workbook or CSV attachment to an MCP server; returns its upload id. */
   uploadAttachment: (server: McpServerRow, id: string) => Promise<string>;
+  /** The PDFs, workbooks and CSVs this chat's messages carried, newest first. */
+  sharedFiles: () => { id: string; name: string }[];
   /**
    * Send an Ogg Opus voice note to this session's chat. Throws a reason the model can act
    * on when the channel cannot carry one.
@@ -829,6 +831,12 @@ export function mcpServerReady(server: McpServerRow): boolean {
 /** How the model names an attachment in `upload_id`; swapped for the server's id on call. */
 export const ATTACHMENT_REF = "attachment:";
 
+/** Whether a tool asks for an `upload_id`. */
+function takesUpload(tool: { inputSchema?: { properties?: unknown } }): boolean {
+  const properties = tool.inputSchema?.properties;
+  return typeof properties === "object" && properties !== null && "upload_id" in properties;
+}
+
 /**
  * Whether a server takes uploads at `<base>/uploads`, inferred from a callable tool that
  * asks for an `upload_id`.
@@ -836,11 +844,22 @@ export const ATTACHMENT_REF = "attachment:";
 export function acceptsUploads(server: McpServerRow): boolean {
   if (!mcpServerReady(server)) return false;
   const off = new Set(parseNames(server.disabled_tools));
-  return parseTools(server.tools_json).some((tool) => {
-    if (off.has(tool.name)) return false;
-    const properties = tool.inputSchema?.properties;
-    return typeof properties === "object" && properties !== null && "upload_id" in properties;
-  });
+  return parseTools(server.tools_json).some(
+    (tool) => !off.has(tool.name) && takesUpload(tool)
+  );
+}
+
+/**
+ * The exact `upload_id` for each of the chat's files, added to a failure of a call that
+ * took no file. A weaker model told only "pass upload_id" repeats the call without one;
+ * handed the value, it copies it.
+ */
+function uploadHint(files: { id: string; name: string }[]): string {
+  if (files.length === 0) return "";
+  const each = files
+    .map((f) => `upload_id="${ATTACHMENT_REF}${f.id}" for ${f.name.replace(/[\r\n]/g, " ")}`)
+    .join("; ");
+  return `No file was passed. To give this tool a file from this chat, pass ${each}.`;
 }
 
 /**
@@ -876,6 +895,8 @@ export function mcpToolSpecs(servers: McpServerRow[]): ToolSpec[] {
             // Without this the card would keep advertising a server whose every call
             // is failing, because only a tool sync ever wrote that field.
             await ctx.registry.noteMcpError(server.id, message);
+            const hint = !args.upload_id && takesUpload(tool) ? uploadHint(ctx.sharedFiles()) : "";
+            if (hint) throw new Error(`${message}\n${hint}`);
             throw err;
           }
         },
