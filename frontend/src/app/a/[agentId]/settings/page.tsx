@@ -20,6 +20,7 @@ import type {
 import { formatUsdShort } from "@/lib/format";
 import { useIdentity } from "@/lib/identity";
 import { ApiKeys } from "@/components/ApiKeys";
+import { MetaSettingsDialog } from "@/components/MetaSettings";
 import { cached, keys, remember, revise } from "@/lib/cache";
 
 /**
@@ -61,7 +62,7 @@ function Row({
   children,
 }: {
   title: string;
-  hint: string;
+  hint: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -202,6 +203,10 @@ export default function Settings({
     label?: string;
   } | null>(null);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [metaOpen, setMetaOpen] = useState(false);
+  /** Bumped when the meta dialog closes: what it saved (models, locks) is read back. */
+  const [reloads, setReloads] = useState(0);
+  const isAdmin = !!ownEmail && agent?.admin_email === ownEmail.toLowerCase();
 
   useEffect(() => {
     void (async () => {
@@ -223,7 +228,9 @@ export default function Settings({
       // What was drawn from the cache is replaced only where it has not been edited
       // since: a late read must not undo a change already made on this page.
       setConfig((current) =>
-        current === (held?.config ?? null) ? payload.config : current,
+        reloads > 0 || current === (held?.config ?? null)
+          ? payload.config
+          : current,
       );
       setLocked(new Set(payload.locked ?? []));
       setSpend(payload.spend ?? null);
@@ -248,7 +255,7 @@ export default function Settings({
     })();
     // Only the first render's cache matters here; later ones are this page's own.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agentId]);
+  }, [agentId, reloads]);
 
   // What is saved here is what the other pages of this agent open with next.
   useEffect(() => {
@@ -679,13 +686,52 @@ export default function Settings({
 
             <Row
               title="API key"
-              hint="Use this to get programatic access to your agent."
+              hint={
+                <>
+                  Use this to get programatic access to your agent. Try it in
+                  the{" "}
+                  <a
+                    href="/guide/api-playground"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-ink underline underline-offset-2"
+                  >
+                    API playground
+                  </a>
+                  .
+                </>
+              }
             >
               <ApiKeys agentId={agentId} roles={["user"]} />
             </Row>
+
+            {/* The agent's administrator also sees the meta dialog the home page opens
+                for fleet agents; nobody else could save it. */}
+            {isAdmin && agent && (
+              <Row
+                title="Meta settings"
+                hint="Model list, defaults and locked settings for this agent."
+              >
+                <button
+                  onClick={() => setMetaOpen(true)}
+                  className="border-hairline text-ink hover:bg-canvas-soft h-10 rounded-full border px-5 text-sm font-semibold transition"
+                >
+                  Open meta settings
+                </button>
+              </Row>
+            )}
           </div>
         )}
       </div>
+      {metaOpen && agent && (
+        <MetaSettingsDialog
+          agent={agent}
+          onClose={() => {
+            setMetaOpen(false);
+            setReloads((n) => n + 1);
+          }}
+        />
+      )}
     </div>
   );
 }
