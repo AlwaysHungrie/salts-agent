@@ -69,7 +69,7 @@ Open your agent, go to **Capabilities**, and find **Web search**. If you entered
 2. Paste the token into **SearXNG token** and save.
 3. Leave **Brave Search API key** and **SearXNG URL** empty. salts-tools fills in the URL for you.
 
-Go back to your terminal and press **Enter**. When salts-tools is done, you will see three green ticks, ending with `SearXNG: agent <your-agent-id> can reach it at …`.
+Go back to your terminal and press **Enter**. When salts-tools is done, you will see green ticks for the tunnel and `web`, followed by `live for agent <your-agent-id>`.
 
 Finally, salts-tools asks whether it should start automatically when you log in. We recommend saying yes, otherwise your agent loses web search every time you restart your computer.
 
@@ -85,6 +85,7 @@ If you also want your agent to open search results and read the full page, switc
 
 | Command | What it does |
 |---|---|
+| `salts-tools` | Opens a screen that shows whether search is running and connected to each agent. Use the arrow keys to move, **s** to start or stop, **c** to copy the token, and **q** to quit. |
 | `salts-tools start` | Starts the search engine. |
 | `salts-tools stop` | Stops the search engine. |
 | `salts-tools restart` | Restarts the search engine and reconnects it to your agent. |

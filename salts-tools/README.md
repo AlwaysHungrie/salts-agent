@@ -96,8 +96,8 @@ that server in each agent's settings (they stay when the address changes):
 | `X-Cost-Approved-Search` | `0.001` | one candidate search, ~free |
 | `X-Cost-Approved-Folder-Ingestion` | `5.00` | a whole inbox run, ~$0.004 a file |
 
-Caps are the most one call may spend, in US dollars; `0` blocks that tool. `start`
-prints this list once the matchmaker is connected.
+Caps are the most one call may spend, in US dollars; `0` blocks that tool. The
+dashboard lists them under the matchmaker, and `enter` copies a header's name.
 
 The matchmaker's own `.env` in `local-mcps/matchmaker-mcp` still applies (models,
 `DATA_DIR`, and so on). salts-tools overrides the transport, host, port, token and
@@ -121,10 +121,31 @@ The analyst's own `.env` in `local-mcps/analyst-mcp` still applies (`DATA_DIR`,
 `INBOX_DIR`, `ALLOW_PYTHON`, and so on). salts-tools overrides the transport, host, port
 and token. Its log is `~/.salts-tools/analyst.log`.
 
+## Dashboard
+
+Run `salts-tools` with no command (`salts-tools :staging` for staging) to open a
+full-screen dashboard. It has four tabs and updates every second while the supervisor
+works in the background.
+
+| Tab | Shows | Keys |
+| --- | --- | --- |
+| 1 Services | Each service, its status (`live`, `starting`, `token refused`, …) and its address. `enter` opens a service: its address, which agents have it, and what to set on the agent (the matchmaker's headers, the analyst's inbox folder). | `s` start or stop, `r` new tunnel, `x` stop everything |
+| 2 Agents | Each agent served and whether it holds every address. | `a` add, `x` remove |
+| 3 Settings | The token, start at login, the Worker, where files live, reset. | `enter` change, `n` new token |
+| 4 Log | The supervisor's log, newest at the bottom. | |
+
+On every tab: `↑`/`↓` move, `←`/`→` or `1`–`4` switch tab, `c` copies the token,
+`q` quits. The line under the list explains the selected row; when something is wrong
+it says what to do. On a first run the dashboard opens on the agent-ID prompt and makes
+the token when the first agent is added. Quitting leaves the services running.
+
 ## Commands
+
+The commands do the same things without the screen, for scripts and the login item.
 
 | Command | What it does |
 | --- | --- |
+| `salts-tools` | Opens the dashboard. |
 | `salts-tools start` | Checks the machine, runs the first-run steps if needed, then starts the services that were on last time (`web` if none were). The login item runs this. |
 | `salts-tools start <service>…` | Starts those services only, on the running tunnel if there is one. Services already running keep running; others are not started. |
 | `salts-tools stop <service>` | Turns one service off and stops it. The others and the tunnel keep running. Stopping the last one stops everything. |
@@ -270,9 +291,11 @@ curl -s 'http://localhost:8080/search?q=solana&format=json' | head -c 400
 
 ## Files
 
-- `cli.mjs`: the CLI and the supervisor
+- `cli.mjs`: the CLI, the dashboard and the supervisor
+- `status.mjs`: the status of each service and agent, read from `state.json`
+- `tui.mjs`: the dashboard's drawing and key handling
 - `gateway.mjs`: the token check and path routing in front of every service
-- `test/`: gateway tests (`npm test`)
+- `test/`: tests (`npm test`)
 - `web/docker-compose.yml`: the first-run secret generator, SearXNG (no host port), and
   the token gate on loopback
 - `web/docker-compose.unguarded.yml`: an opt-in override that removes the gate
