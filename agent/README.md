@@ -330,6 +330,11 @@ every sync and put in the system prompt, one section per connected server. Tool
 descriptions say what one call does; the instructions say the order a task takes, which
 weaker models get wrong without them. A server synced before this needs one refresh.
 
+A tool that takes `upload_id`, called without one, that fails is called once more with
+the one PDF, workbook or CSV the user's latest file-carrying message had: some models
+will not copy an id even when handed it. With several such files, the failure instead
+lists `upload_id="attachment:<id>"` for each.
+
 Scheduled tasks use the Agents SDK's own scheduling (`schedule`/`getSchedules`), so they
 survive eviction. A scheduled turn writes into the transcript like any other, and bills
 like any other: the object wakes up to run it.
