@@ -179,14 +179,32 @@ export function capabilityTools(host: SessionHost, config: Config): ToolSet {
       // A failure is returned rather than thrown, so the model reads what went
       // wrong and can correct itself on the next round.
       execute: async (args, { toolCallId }) => {
+        // A weaker model can call one tool with the same arguments round after round,
+        // never reading the result, until the turn's rounds run out. A repeat is refused
+        // as a failure, so three in a row end the turn with an explanation.
+        const call = `${spec.name}(${stableJson(args)})`;
+        if (host.turn.calls.includes(call)) {
+          host.turn.failedCalls.push(toolCallId);
+          return `Tool ${spec.name} failed: it was already called with exactly these arguments in this turn, and its result is above. Do not call it again with the same arguments: use that result and go on to the next step.`;
+        }
         const result = await runTool(spec.name, args as Record<string, unknown>, context, spec);
         // Returned, so the SDK records a result; `failedInARow` needs to know it failed.
         if (!result.ok) host.turn.failedCalls.push(toolCallId);
+        else host.turn.calls.push(call);
         return result.content;
       },
     });
   }
   return tools;
+}
+
+/** JSON with object keys sorted, so the same arguments in another order read the same. */
+function stableJson(value: unknown): string {
+  return JSON.stringify(value, (_, v: unknown) =>
+    v && typeof v === "object" && !Array.isArray(v)
+      ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b)))
+      : v
+  );
 }
 
 /** Tool calls that may fail in a row before the turn is made to stop and say so. */
@@ -235,6 +253,7 @@ export function answerOnLastRound(
   maxSteps: number
 ): { toolChoice: "none"; instructions: string } | undefined {
   if (stepNumber < maxSteps - 1) return undefined;
+  host.turn.outOfRounds = true;
   return {
     toolChoice: "none",
     instructions: `${systemPrompt(host)}\n\nThis is the last step of this turn: do not call any more tools. Answer now with what you have found so far, say plainly what is still left to do, and tell the user they can say "continue" to carry on.`,

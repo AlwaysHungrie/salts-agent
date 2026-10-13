@@ -13,6 +13,7 @@ import {
   replyTo,
 } from "./openrouter-mock";
 import { EMPTY_MCP_SERVER, agentIdOf } from "../src/registry";
+import { chatReply, OUT_OF_ROUNDS } from "../src/session/format";
 import { signedIn } from "./clerk";
 import { SHIPPED } from "./shipped";
 
@@ -209,6 +210,23 @@ describe("tools inside a turn", () => {
       .flatMap((s) => s.tools ?? []);
     expect(tools.length).toBeGreaterThan(0);
     expect(tools.every((t) => !t.ok)).toBe(true);
+  });
+});
+
+describe("a reply as a chat gets it", () => {
+  it("cuts tool calls a model wrote out as text", () => {
+    const leaked = "Here it is.<tool_call>mcp_analyst_breakdown<arg_key>cell</arg_key><arg_value>C93</arg_value></tool_call>";
+    expect(chatReply(leaked, false)).toBe("Here it is.");
+    expect(chatReply("<tool_call>mcp_analyst_breakdown<arg_key>cell</arg_key><arg_va", false)).toBe("");
+  });
+
+  it("says how to go on when the turn ran out of rounds", () => {
+    expect(chatReply("Let me look at the sheet.", true)).toBe(`Let me look at the sheet.\n\n${OUT_OF_ROUNDS}`);
+    expect(chatReply("<tool_call>breakdown", true)).toBe(OUT_OF_ROUNDS);
+    expect(chatReply('Two sections left. Say "continue" to carry on.', true)).toBe(
+      'Two sections left. Say "continue" to carry on.'
+    );
+    expect(chatReply("Done.", false)).toBe("Done.");
   });
 });
 
@@ -445,6 +463,26 @@ describe("!enable-mcp and !disable-mcp", () => {
     const server = await row(agentId);
     expect(server.enabled).toBe(1);
     expect(JSON.parse(server.disabled_tools)).toEqual([]);
+  });
+
+  it("refuses a tool call repeated with the same arguments, without running it", async () => {
+    const { sessionId, email } = await withServer({ enabled: 1, disabled_tools: "[]" });
+    await say(sessionId, email, "!enable-mcp docs");
+    const callsBefore = ((await (await fetch("https://mcp.test/__calls")).json()) as unknown[]).length;
+    const token = crypto.randomUUID().slice(0, 8);
+    await say(sessionId, email, `!!repeat mcp_docs_search_pages ${token}`);
+
+    const calls = ((await (await fetch("https://mcp.test/__calls")).json()) as unknown[]).slice(callsBefore);
+    expect(calls).toHaveLength(1);
+    const requests = (await (
+      await fetch(`https://openrouter.ai/__requests?contains=${token}`)
+    ).json()) as { messages: { role: string; content?: unknown }[] }[];
+    // The fullest request is the turn's last leg (a naming call may come after it).
+    const results = requests
+      .map((r) => r.messages.filter((m) => m.role === "tool"))
+      .reduce((a, b) => (b.length > a.length ? b : a));
+    expect(results).toHaveLength(2);
+    expect(JSON.stringify(results.at(-1))).toContain("already called with exactly these arguments");
   });
 
   it("keeps the server's instructions, and puts them in the model's prompt", async () => {

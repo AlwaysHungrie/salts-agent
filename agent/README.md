@@ -335,6 +335,12 @@ the one PDF, workbook or CSV the user's latest file-carrying message had: some m
 will not copy an id even when handed it. With several such files, the failure instead
 lists `upload_id="attachment:<id>"` for each.
 
+Two guards for models that loop. A tool call repeated in one turn with the same
+arguments as an earlier successful one is not run; it fails with "already called, use
+the result above", so three in a row end the turn with an explanation. A reply bound for
+a chat loses any tool call the model wrote out as text (`<tool_call>…`), and a turn that
+ran out of tool rounds ends with a line saying to send "continue".
+
 Scheduled tasks use the Agents SDK's own scheduling (`schedule`/`getSchedules`), so they
 survive eviction. A scheduled turn writes into the transcript like any other, and bills
 like any other: the object wakes up to run it.
