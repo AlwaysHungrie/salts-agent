@@ -5,6 +5,7 @@ import {
   FAILLOOP_REPLY,
   INVENTED_TOOL,
   MCP_MEDIA_TOOL,
+  MCP_INSTRUCTIONS,
   MCP_TOOLS,
   MCP_UPLOAD_TOOL,
   MOCK_XLSX_TEXT,
@@ -444,6 +445,20 @@ describe("!enable-mcp and !disable-mcp", () => {
     const server = await row(agentId);
     expect(server.enabled).toBe(1);
     expect(JSON.parse(server.disabled_tools)).toEqual([]);
+  });
+
+  it("keeps the server's instructions, and puts them in the model's prompt", async () => {
+    const { sessionId, email, agentId } = await withServer();
+    await say(sessionId, email, "!enable-mcp docs");
+    expect((await row(agentId)).instructions).toBe(MCP_INSTRUCTIONS);
+
+    const token = crypto.randomUUID().slice(0, 8);
+    await say(sessionId, email, `hello ${token}`);
+    const [request] = (await (
+      await fetch(`https://openrouter.ai/__requests?contains=${token}`)
+    ).json()) as { messages: { role: string; content?: unknown }[] }[];
+    const system = JSON.stringify(request.messages.filter((m) => m.role === "system"));
+    expect(system).toContain(`How to use the Docs tools, from that server:\\n\\n${MCP_INSTRUCTIONS}`);
   });
 
   it("disables a server and keeps its tool selection", async () => {

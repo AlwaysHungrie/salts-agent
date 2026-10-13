@@ -68,7 +68,9 @@ How to work:
    result. A column holds one kind of quantity (do not put built-up area beside carpet area). Add a total row only
    when the rows are parts of one whole. Add checks that tie your totals back to the file's own totals. Build
    it with add_section, one call per section: each is shown to the user as an image. The server keeps the draft,
-   so you never repeat earlier sections; add_section with `number` replaces one the user wants changed.
+   so you never repeat earlier sections. To change a section, call add_section with its `number` and the whole
+   section again (title, columns, rows, formats, chart, note): the server never edits part of one.
+   remove_section takes one out.
 6. Only when the user is happy, export_sheet. It returns the .xlsx to the user. The project's file is not changed.
    When the user wants a PDF report or presentation of it instead (or too), export_report prints the same draft as a
    designed slide deck: a cover, key figures, one slide per section, and notes.
@@ -324,8 +326,8 @@ def _file_part(found: store.Book, chars: int) -> str:
 
 
 def _overview(project: store.Project, head: str, first: store.Book | None = None) -> CallToolResult:
-    """The project as the model needs it to work: each file's map (`first` in full, the others shorter), the SQL
-    tables over all of them, and how to work."""
+    """The project as the model needs it to work: each file's map (`first` in full, the others shorter) and the SQL
+    tables over all of them. How to work is the server's instructions, which the client puts in the prompt."""
     books = project.books()
     lines = [head]
     if len(books) > 1:
@@ -338,9 +340,8 @@ def _overview(project: store.Project, head: str, first: store.Book | None = None
         parts = parts[:1] + [f'# Also in this project: {", ".join(repr(b.name) for b in ordered[1:])} '
                              "(switch_to_project shows their maps)"]  # fmt: skip
     key, dbs = _database(project)
-    guide = INSTRUCTIONS[INSTRUCTIONS.index("Projects:") :]
     return _result("\n".join(lines) + "\n\n" + "\n\n".join(parts) + "\n\n## SQL tables (for query)\n"
-                   + sqldb.describe(key, dbs) + "\n\n" + guide)  # fmt: skip
+                   + sqldb.describe(key, dbs))  # fmt: skip
 
 
 @mcp.tool(
@@ -744,7 +745,7 @@ def _numbered(formula: str, n: int) -> str:
 def _remove_section(files: store.Book, draft: dict, number: int | None) -> CallToolResult:
     sections = draft["sections"]
     if number is None or not 1 <= number <= len(sections):
-        raise ToolFailure("bad_number", f"remove needs `number`, 1 to {len(sections)}")
+        raise ToolFailure("bad_number", f"remove_section needs `number`, 1 to {len(sections)}")
     gone = sections.pop(number - 1)
     checks = []
     for c in draft["checks"]:
@@ -767,8 +768,8 @@ def _remove_section(files: store.Book, draft: dict, number: int | None) -> CallT
         "Build a new sheet (dashboard, report, summary) one section at a time. Adds the section to the file's "
         "draft sheet, or replaces section `number` when the user wants it changed, and shows that section to the user "
         "as an image (with its checks). The draft stays on this server: earlier sections never need repeating, and "
-        "export_sheet builds the whole draft. For a whole sheet at once, call it once per section. remove=true with "
-        "`number` takes a section out. " + SPEC_DOC
+        "export_sheet builds the whole draft. For a whole sheet at once, call it once per section. To change a "
+        "section, send it whole again with its `number`: parts of a section are never patched. " + SPEC_DOC
     ),
     annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=False),
 )
@@ -778,10 +779,12 @@ def add_section(
     section: Annotated[
         dict[str, Any] | None,
         # Validated as a dict (the draft keeps what was sent; a bad spec is logged), advertised with every field:
-        # models that fill arguments from the schema send {} for an object whose fields it does not list.
-        WithJsonSchema({"anyOf": [inline_schema(Section), {"type": "null"}]}),
-        Field(description="The section: title, columns, rows, formats, chart, note; not with remove"),
-    ] = None,
+        # models that fill arguments from the schema send {} for an object whose fields it does not list. Advertised
+        # as required and never null: a weaker model reads an optional section as one it may leave out. A null that
+        # arrives anyway gets an error saying what to send.
+        WithJsonSchema(inline_schema(Section)),
+        Field(description="The whole section: title, columns, rows, formats, chart, note"),
+    ],
     number: Annotated[
         int | None, Field(ge=1, description="Replace this section (1-based); leave out to add at the end")
     ] = None,
@@ -790,14 +793,31 @@ def add_section(
         WithJsonSchema({"anyOf": [{"type": "array", "items": inline_schema(Check)}, {"type": "null"}]}),
         Field(description="Checks tying this section to the file's own totals"),
     ] = None,
-    title: Annotated[str | None, Field(description="Title of the whole sheet")] = None,
+    sheet_title: Annotated[
+        str | None, Field(description="Title of the whole sheet, not of this section (that is section.title)")
+    ] = None,
     sheet_name: Annotated[str | None, Field(description="Name of the new sheet (default Dashboard)")] = None,
-    remove: Annotated[bool, Field(description="Take section `number` out of the draft")] = False,
     file: FileName = None,
 ) -> CallToolResult:
     files, _ = workbook(project, file)
     with store.draft_lock(files):
-        return _add_section(files, section, number, checks, title, sheet_name, remove)
+        return _add_section(files, section, number, checks, sheet_title, sheet_name)
+
+
+@mcp.tool(
+    description="Take section `number` out of the draft sheet. Later sections move up one, and their checks with them.",
+    annotations=ToolAnnotations(read_only_hint=False, destructive_hint=True, idempotent_hint=False),
+)
+@tool_handler("remove_section")
+def remove_section(
+    project: ProjectName,
+    number: Annotated[int, Field(ge=1, description="The section to remove (1-based)")],
+    file: FileName = None,
+) -> CallToolResult:
+    files, _ = workbook(project, file)
+    with store.draft_lock(files):
+        draft = store.load_draft(files) or {"sections": [], "checks": []}
+        return _remove_section(files, draft, number)
 
 
 def _add_section(
@@ -807,14 +827,17 @@ def _add_section(
     checks: list[dict[str, Any]] | None,
     title: str | None,
     sheet_name: str | None,
-    remove: bool,
 ) -> CallToolResult:
     draft = store.load_draft(files)
     draft = draft or {"sheet_name": "Dashboard", "title": files.name, "sections": [], "checks": []}
-    if remove:
-        return _remove_section(files, draft, number)
-    if section is None:
-        raise ToolFailure("invalid_spec", "section is required unless remove=true")
+    if not section:
+        which = f"section {number}" if number else "a section"
+        raise ToolFailure(
+            "invalid_spec",
+            f"no section was sent. To add or change {which}, send the whole section in `section`: title, columns, "
+            "rows (and formats, chart, note). The server never edits part of a section, so a change means sending "
+            "all of it again with its `number`. To take one out, use remove_section.",
+        )
     if title:
         draft["title"] = title
     if sheet_name:

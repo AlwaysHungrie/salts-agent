@@ -635,6 +635,9 @@ export const MCP_MEDIA_TOOL = {
   inputSchema: { type: "object", properties: { upload_id: { type: "string" } } },
 };
 
+/** What the server at `/` says, on `initialize`, about using its tools. */
+export const MCP_INSTRUCTIONS = "Search before reading a page.";
+
 /** A 1x1 PNG, and the bytes of the workbook `build_report` returns. */
 export const MOCK_PNG =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
@@ -684,6 +687,7 @@ async function mcpMock(request: Request, url: URL): Promise<Response> {
           protocolVersion: "2025-06-18",
           capabilities: { tools: {} },
           serverInfo: { name: "mock-mcp", version: "1.0" },
+          ...(url.pathname === "/" ? { instructions: MCP_INSTRUCTIONS } : {}),
         },
       }),
       { headers: { "content-type": "application/json", "mcp-session-id": "mock-session" } }

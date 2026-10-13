@@ -63,7 +63,8 @@ picture the user approved are the numbers in the file.
 | `query` | Runs one read-only DuckDB SQL query over every file of the project. It can draw the result as a chart, or return it as an .xlsx or .csv file. |
 | `what_if` | Changes input cells, recalculates the whole file, and reports the outputs before and after. |
 | `breakdown` | Opens a total cell into the items that add up to it exactly; with `groups`, checks every item is in one head and returns the section rows and check. |
-| `add_section` | Adds, replaces (`number`) or removes (`remove`) one section of the draft sheet and shows it as an image. |
+| `add_section` | Adds one section of the draft sheet, or replaces section `number` with the whole section sent again, and shows it as an image. |
+| `remove_section` | Takes section `number` out of the draft; later sections and their checks move up one. |
 | `export_sheet` | Builds the draft into a copy of the file and returns the .xlsx. |
 | `export_report` | Prints the draft as a designed PDF report (16:9 slides) and returns the .pdf. |
 | `create_file` | Makes a new Excel file from rows in `project` (first row bold headings; `=` starts a formula) and returns the .xlsx. |
