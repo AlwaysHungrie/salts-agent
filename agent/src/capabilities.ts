@@ -381,6 +381,10 @@ export type ToolContext = {
   transcribeAttachment: (id: string) => Promise<string>;
   /** Uploads a stored PDF, workbook or CSV attachment to an MCP server; returns its upload id. */
   uploadAttachment: (server: McpServerRow, id: string) => Promise<string>;
+  /** The PDFs, workbooks and CSVs this chat's messages carried, newest first. */
+  sharedFiles: () => { id: string; name: string }[];
+  /** The PDFs, workbooks and CSVs of the latest message that carried any file. */
+  latestFiles: () => { id: string; name: string }[];
   /**
    * Send an Ogg Opus voice note to this session's chat. Throws a reason the model can act
    * on when the channel cannot carry one.
@@ -829,6 +833,12 @@ export function mcpServerReady(server: McpServerRow): boolean {
 /** How the model names an attachment in `upload_id`; swapped for the server's id on call. */
 export const ATTACHMENT_REF = "attachment:";
 
+/** Whether a tool asks for an `upload_id`. */
+function takesUpload(tool: { inputSchema?: { properties?: unknown } }): boolean {
+  const properties = tool.inputSchema?.properties;
+  return typeof properties === "object" && properties !== null && "upload_id" in properties;
+}
+
 /**
  * Whether a server takes uploads at `<base>/uploads`, inferred from a callable tool that
  * asks for an `upload_id`.
@@ -836,11 +846,22 @@ export const ATTACHMENT_REF = "attachment:";
 export function acceptsUploads(server: McpServerRow): boolean {
   if (!mcpServerReady(server)) return false;
   const off = new Set(parseNames(server.disabled_tools));
-  return parseTools(server.tools_json).some((tool) => {
-    if (off.has(tool.name)) return false;
-    const properties = tool.inputSchema?.properties;
-    return typeof properties === "object" && properties !== null && "upload_id" in properties;
-  });
+  return parseTools(server.tools_json).some(
+    (tool) => !off.has(tool.name) && takesUpload(tool)
+  );
+}
+
+/**
+ * The exact `upload_id` for each of the chat's files, added to a failure of a call that
+ * took no file. A weaker model told only "pass upload_id" repeats the call without one;
+ * handed the value, it copies it.
+ */
+function uploadHint(files: { id: string; name: string }[]): string {
+  if (files.length === 0) return "";
+  const each = files
+    .map((f) => `upload_id="${ATTACHMENT_REF}${f.id}" for ${f.name.replace(/[\r\n]/g, " ")}`)
+    .join("; ");
+  return `No file was passed. To give this tool a file from this chat, pass ${each}.`;
 }
 
 /**
@@ -860,6 +881,24 @@ export function mcpToolSpecs(servers: McpServerRow[]): ToolSpec[] {
         description: `[${server.name}] ${tool.description ?? tool.name}`,
         parameters: tool.inputSchema ?? { type: "object", properties: {} },
         async run(args, ctx) {
+          /**
+           * A call that needed a file and was sent none, made again with the one file the
+           * user's latest message carried. Some models will not copy an upload_id even when
+           * handed it; the file they mean is not in doubt. Undefined when it is (several
+           * files, or none), or when the second call fails too.
+           */
+          const withLatestFile = async (sent: Record<string, unknown>) => {
+            const latest = ctx.latestFiles();
+            if (latest.length !== 1) return undefined;
+            try {
+              const id = await ctx.uploadAttachment(server, latest[0].id);
+              return await withMcpAuth(server, ctx.registry, (client) =>
+                client.callTool(tool.name, { ...sent, upload_id: id })
+              );
+            } catch {
+              return undefined;
+            }
+          };
           try {
             // A file goes to a server only when the model hands it to one of its tools.
             const ref = typeof args.upload_id === "string" ? args.upload_id : "";
@@ -867,15 +906,24 @@ export function mcpToolSpecs(servers: McpServerRow[]): ToolSpec[] {
               const id = await ctx.uploadAttachment(server, ref.slice(ATTACHMENT_REF.length));
               args = { ...args, upload_id: id };
             }
-            const result = await withMcpAuth(server, ctx.registry, (client) =>
-              client.callTool(tool.name, args)
-            );
+            const call = (sent: Record<string, unknown>) =>
+              withMcpAuth(server, ctx.registry, (client) => client.callTool(tool.name, sent));
+            let result;
+            try {
+              result = await call(args);
+            } catch (err) {
+              const retried = !args.upload_id && takesUpload(tool) ? await withLatestFile(args) : undefined;
+              if (!retried) throw err;
+              result = retried;
+            }
             return await deliverMcpOutput(result, ctx);
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             // Without this the card would keep advertising a server whose every call
             // is failing, because only a tool sync ever wrote that field.
             await ctx.registry.noteMcpError(server.id, message);
+            const hint = !args.upload_id && takesUpload(tool) ? uploadHint(ctx.sharedFiles()) : "";
+            if (hint) throw new Error(`${message}\n${hint}`);
             throw err;
           }
         },

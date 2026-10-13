@@ -10,6 +10,7 @@ import {
   SPOKEN_TEXT,
   TELEGRAM_FILE_BODY,
   replyTo,
+  TELEGRAM_UNPARSABLE,
 } from "./openrouter-mock";
 
 /**
@@ -146,6 +147,7 @@ async function sentTo(chat: number) {
   return (await res.json()) as {
     chatId: string;
     text: string;
+    parseMode?: string;
     replyTo?: number;
     photo?: string;
     voice?: number;
@@ -190,7 +192,24 @@ describe("a whole round trip", () => {
     await post(hook, update(chat, "!new"));
     const [sent] = await waitForReply(chat);
     expect(sent.text).toContain("Starting fresh");
-    expect(sent.text).toContain("Send `!help` to see every command.");
+    expect(sent.text).toContain("Send <code>!help</code> to see every command.");
+    expect(sent.parseMode).toBe("HTML");
+  });
+
+  it("shows a reply's Markdown as formatting", async () => {
+    const { hook, chat } = await agentFixture();
+    await post(hook, update(chat, "**bold** and `code`"));
+    const [sent] = await waitForReply(chat);
+    expect(sent.parseMode).toBe("HTML");
+    expect(sent.text).toContain("<b>bold</b> and <code>code</code>");
+  });
+
+  it("sends the words as they are when Telegram cannot read the HTML", async () => {
+    const { hook, chat } = await agentFixture();
+    await post(hook, update(chat, `${TELEGRAM_UNPARSABLE} **bold**`));
+    const [sent] = await waitForReply(chat);
+    expect(sent.parseMode).toBeUndefined();
+    expect(sent.text).toContain(`${TELEGRAM_UNPARSABLE} **bold**`);
   });
 
   it("stops a reply that is still being written with !stop", async () => {

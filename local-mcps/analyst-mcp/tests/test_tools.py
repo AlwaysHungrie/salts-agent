@@ -102,13 +102,16 @@ async def test_add_section_advertises_every_field_of_a_section(proj):
     (tool,) = [t for t in await server.mcp.list_tools() if t.name == "add_section"]
     props = tool.input_schema["properties"]
     assert "$ref" not in json.dumps(tool.input_schema)
-    section = props["section"]["anyOf"][0]
+    section = props["section"]
+    assert "section" in tool.input_schema["required"] and "anyOf" not in section
     assert set(section["required"]) == {"title", "columns", "rows"}
     assert {"formats", "chart", "note"} <= set(section["properties"])
-    assert props["section"]["description"].startswith("The section")
+    assert props["section"]["description"].startswith("The whole section")
     check = props["checks"]["anyOf"][0]["items"]
     assert set(check["required"]) == {"label", "left", "right"}
     assert error(await server.add_section(proj, section={}))["code"] == "invalid_spec"
+    missing = error(await server.add_section(proj, section=None, number=1))
+    assert "send the whole section" in missing["message"] and "section 1" in missing["message"]
 
 
 async def test_refused_call_is_logged_with_its_arguments(proj, caplog):
@@ -269,7 +272,7 @@ async def test_breakdown_groups_must_cover_every_item_once(proj):
 async def test_sections_build_a_draft_that_exports(proj):
     area = {"title": "1. Area", "columns": ["Item", "Sq. ft."], "formats": [None, "int"],
             "rows": [["Saleable area", "='Model Sheet'!B1"]]}  # fmt: skip
-    first = await server.add_section(proj, area, title="Project dashboard")
+    first = await server.add_section(proj, area, sheet_title="Project dashboard")
     assert len(first.content) == 2 and "Draft sections now: 1. Area." in text(first)
 
     body = text(await server.breakdown(proj, "'Model Sheet'!B5", {"Building": ["B3"], "Approvals": ["B4"]}))
@@ -285,7 +288,7 @@ async def test_sections_build_a_draft_that_exports(proj):
     area["rows"][0][0] = "Saleable carpet area"
     assert "1. Area | 2. Where the cost goes" in text(await server.add_section(proj, area, number=1))
     assert "1. Area; 2. Where the cost goes" in text(await server.list_projects())
-    removed = await server.add_section(proj, number=1, remove=True)
+    removed = await server.remove_section(proj, number=1)
     assert "Draft sections now: 2. Where the cost goes." in text(removed)
     await server.add_section(proj, area)  # now section 2; the cost check moved to section 1 with its section
 

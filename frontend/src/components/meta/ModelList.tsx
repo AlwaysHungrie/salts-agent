@@ -106,7 +106,7 @@ export function ModelList({
           onChange={(e) => setBlind(e.target.checked)}
           className="accent-ink h-3.5 w-3.5 cursor-pointer"
         />
-        This model cannot be sent images
+        This model cannot see images
       </label>
 
       {missing.length > 0 && (

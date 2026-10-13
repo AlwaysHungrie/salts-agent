@@ -423,6 +423,7 @@ describe("mcp servers", () => {
     oauth_state: "",
     oauth_return_to: "",
     tools_json: "",
+    instructions: "",
     disabled_tools: "",
     tools_synced_at: 0,
     last_error: "",

@@ -25,7 +25,7 @@ from pydantic import Field, ValidationError, WithJsonSchema
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
-from . import authoring, export, pyrun, render, store
+from . import authoring, export, pyrun, render, report, store
 from . import breakdown as bd
 from . import sql as sqldb
 from .auth import BearerAuthMiddleware
@@ -46,37 +46,43 @@ Spreadsheet analyst running on the user's own computer. It opens Excel/CSV files
 runs what-if scenarios, builds new sheets (tables + charts) into a copy of the file, makes new Excel files, and
 edits them. Whenever the user wants an Excel file, use these tools: they send a real .xlsx to the user.
 
-Projects: a project is a named set of files the user works on together ("Dialysis": a rate sheet, the sub-inventory,
-May, June and July data). Every tool takes `project`, its name. Pick the project yourself when the user's words make
-it clear (list_projects shows each project with its files); ask only when you cannot tell. Then stay on it and pass
-its name on every call. When the user says to switch, use switch_to_project and pass the new name from then on.
-Tools that work on one file (read_sheet, what_if, breakdown, add_section, export_sheet, edit_file) take `file` too
-when the project has several. query reads every file of the project at once: a sheet name several files share is one
-stacked table with a `file` column, so totals across files are one query.
+Rules:
+- Every tool takes `project`, the project's name. Pass it on every call.
+- Never call a tool again with the same arguments: its result is already above. Read it and take the next step.
+- Never guess a cell address; look it up (the map from open_file, find, read_sheet or query).
+- Every number in a section is a formula over the file's cells (=Feasibility!C4*10.764), never a typed result.
+- Never write a tool call as text in your reply. Call the tool, or answer in plain words.
+- Keep replies short and in plain words; no cell addresses unless the user asks.
 
-How to work:
-1. Open the file: open_file with the attachment's upload_id (or inbox_file for a file in the inbox folder) and the
-   project it belongs to (a new name makes a new project; leave it out to name the project after the file). It
-   returns a map of every number with the words around it (label, column header, unit) and its cell. Later calls
-   pass the project name; there is no need to open it again.
-2. Find numbers with the map, find, read_sheet or query. Never guess a cell address; look it up.
-3. Answer plain questions directly from the values. Use what_if for "what if X changes" questions.
-4. "Where does the money go", a cost split, any breakdown of a total: use breakdown on the total cell. It lists the
-   items that add up to it exactly; you name a few heads and assign every item; it hands back the table rows.
-5. For a new sheet, dashboard or report: write a spec with one section per thing the user asked for, numbered in
-   their order. Every number in it must be a formula over the file's cells (=Feasibility!C4*10.764), never a typed
-   result. A column holds one kind of quantity (do not put built-up area beside carpet area). Add a total row only
-   when the rows are parts of one whole. Add checks that tie your totals back to the file's own totals. Build
-   it with add_section, one call per section: each is shown to the user as an image. The server keeps the draft,
-   so you never repeat earlier sections; add_section with `number` replaces one the user wants changed.
-6. Only when the user is happy, export_sheet. It returns the .xlsx to the user. The project's file is not changed.
-To make a new Excel file (a plan, a list, a table, an analysis of several files): create_file with the rows. To
-change a file (values, formulas, rows, sheets, bold, colours, number formats): edit_file. Both send the file to the
-user; an edit becomes the file's new version, so its name keeps meaning the latest file.
-When the user asks for something the file does not have (a blank cell, no such figure), say so in your reply
-and in the section ("Not given in the file"); never leave it out silently or make a number up.
+Projects: a project is a named set of files the user works on together ("Dialysis": a rate sheet, May, June and
+July data). Pick it yourself when the user's words make it clear (list_projects shows each project and its files);
+ask only when you cannot tell. switch_to_project when the user says to switch. Tools that work on one file
+(read_sheet, what_if, breakdown, add_section, export_sheet, edit_file) take `file` too when the project has
+several. query reads every file of the project at once (a sheet several files share is one table with a `file`
+column).
+
+Recipes (one call per line, in order):
+- A file was attached: open_file(upload_id=the attachment's upload_id, project=the project's name).
+- A question about the numbers: find or read_sheet (or query), then answer from the values. "What if X changes":
+  what_if.
+- A breakdown section (where the money goes, a cost split, an investment breakdown):
+  1. breakdown(cell=the total) once: it lists the items.
+  2. breakdown(cell=the total, groups=4 to 8 heads, every item in exactly one) once: it returns a section and a check.
+  3. add_section(section=that section with its title numbered and renamed, checks=[that check]).
+  Then tell the user the section is ready. Do not call breakdown on that total again.
+- Any other section: write it (title, columns, rows, formats, chart, note), then add_section(section=...,
+  checks=[checks that tie its totals to the file's own totals]). One section per thing the user asked for, numbered
+  in their order. A column holds one kind of quantity. A total row only when the rows are parts of one whole.
+- Several sections asked for at once: one at a time, each finished (its add_section called) before you start the
+  next. Never collect the data for all of them first.
+- Change a section: add_section(number=N, section=the whole section again, changed). The server never edits part of
+  a section. remove_section(number=N) takes one out.
+- The user is happy and wants the Excel: export_sheet. A PDF report or slides: export_report.
+- A new Excel file (a plan, a list, an analysis of several files): create_file with the rows. Change a file (values,
+  formulas, rows, sheets, formatting): edit_file. Both send the file to the user.
+
+When the file does not have what the user asked for, say so ("Not given in the file"); never make a number up.
 Images reach the user only through add_section or query results; never write an image link yourself.
-Keep replies short and in plain words; the user does not need cell addresses unless they ask.
 """
 
 mcp = MCPServer(name="analyst-mcp", instructions=INSTRUCTIONS, version="0.1.0")
@@ -322,8 +328,8 @@ def _file_part(found: store.Book, chars: int) -> str:
 
 
 def _overview(project: store.Project, head: str, first: store.Book | None = None) -> CallToolResult:
-    """The project as the model needs it to work: each file's map (`first` in full, the others shorter), the SQL
-    tables over all of them, and how to work."""
+    """The project as the model needs it to work: each file's map (`first` in full, the others shorter) and the SQL
+    tables over all of them. How to work is the server's instructions, which the client puts in the prompt."""
     books = project.books()
     lines = [head]
     if len(books) > 1:
@@ -336,9 +342,8 @@ def _overview(project: store.Project, head: str, first: store.Book | None = None
         parts = parts[:1] + [f'# Also in this project: {", ".join(repr(b.name) for b in ordered[1:])} '
                              "(switch_to_project shows their maps)"]  # fmt: skip
     key, dbs = _database(project)
-    guide = INSTRUCTIONS[INSTRUCTIONS.index("Projects:") :]
     return _result("\n".join(lines) + "\n\n" + "\n\n".join(parts) + "\n\n## SQL tables (for query)\n"
-                   + sqldb.describe(key, dbs) + "\n\n" + guide)  # fmt: skip
+                   + sqldb.describe(key, dbs))  # fmt: skip
 
 
 @mcp.tool(
@@ -614,8 +619,8 @@ def breakdown(
         return _result(
             f'{ref} "{label}" = {_with_approx(total, unit)} is the sum of these {len(items)} items:\n\n'
             + _table(["Cell", "Item", "Value"], rows)
-            + "\n\nGroup them into a few heads (4 to 8) the reader will understand, and call breakdown again with "
-            "`groups`. Every item goes in exactly one head."
+            + "\n\nNext call: breakdown with this same `cell` and `groups`: 4 to 8 heads the reader will understand, "
+            "every item in exactly one head."
         )
     heads = bd.assign(book, items, groups, sheet)
     n = len(heads)
@@ -638,7 +643,8 @@ def breakdown(
         + json.dumps(section, ensure_ascii=False)
         + "\n\nIts check:\n"
         + json.dumps(check, ensure_ascii=False)
-        + "\n\nPass both to add_section as they are."
+        + "\n\nNext call: add_section with this section (number its title, rename it as the user asked) and "
+        "checks=[this check]. Do not call breakdown on this total again."
     )
 
 
@@ -742,7 +748,7 @@ def _numbered(formula: str, n: int) -> str:
 def _remove_section(files: store.Book, draft: dict, number: int | None) -> CallToolResult:
     sections = draft["sections"]
     if number is None or not 1 <= number <= len(sections):
-        raise ToolFailure("bad_number", f"remove needs `number`, 1 to {len(sections)}")
+        raise ToolFailure("bad_number", f"remove_section needs `number`, 1 to {len(sections)}")
     gone = sections.pop(number - 1)
     checks = []
     for c in draft["checks"]:
@@ -765,8 +771,8 @@ def _remove_section(files: store.Book, draft: dict, number: int | None) -> CallT
         "Build a new sheet (dashboard, report, summary) one section at a time. Adds the section to the file's "
         "draft sheet, or replaces section `number` when the user wants it changed, and shows that section to the user "
         "as an image (with its checks). The draft stays on this server: earlier sections never need repeating, and "
-        "export_sheet builds the whole draft. For a whole sheet at once, call it once per section. remove=true with "
-        "`number` takes a section out. " + SPEC_DOC
+        "export_sheet builds the whole draft. For a whole sheet at once, call it once per section. To change a "
+        "section, send it whole again with its `number`: parts of a section are never patched. " + SPEC_DOC
     ),
     annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=False),
 )
@@ -776,10 +782,12 @@ def add_section(
     section: Annotated[
         dict[str, Any] | None,
         # Validated as a dict (the draft keeps what was sent; a bad spec is logged), advertised with every field:
-        # models that fill arguments from the schema send {} for an object whose fields it does not list.
-        WithJsonSchema({"anyOf": [inline_schema(Section), {"type": "null"}]}),
-        Field(description="The section: title, columns, rows, formats, chart, note; not with remove"),
-    ] = None,
+        # models that fill arguments from the schema send {} for an object whose fields it does not list. Advertised
+        # as required and never null: a weaker model reads an optional section as one it may leave out. A null that
+        # arrives anyway gets an error saying what to send.
+        WithJsonSchema(inline_schema(Section)),
+        Field(description="The whole section: title, columns, rows, formats, chart, note"),
+    ],
     number: Annotated[
         int | None, Field(ge=1, description="Replace this section (1-based); leave out to add at the end")
     ] = None,
@@ -788,14 +796,31 @@ def add_section(
         WithJsonSchema({"anyOf": [{"type": "array", "items": inline_schema(Check)}, {"type": "null"}]}),
         Field(description="Checks tying this section to the file's own totals"),
     ] = None,
-    title: Annotated[str | None, Field(description="Title of the whole sheet")] = None,
+    sheet_title: Annotated[
+        str | None, Field(description="Title of the whole sheet, not of this section (that is section.title)")
+    ] = None,
     sheet_name: Annotated[str | None, Field(description="Name of the new sheet (default Dashboard)")] = None,
-    remove: Annotated[bool, Field(description="Take section `number` out of the draft")] = False,
     file: FileName = None,
 ) -> CallToolResult:
     files, _ = workbook(project, file)
     with store.draft_lock(files):
-        return _add_section(files, section, number, checks, title, sheet_name, remove)
+        return _add_section(files, section, number, checks, sheet_title, sheet_name)
+
+
+@mcp.tool(
+    description="Take section `number` out of the draft sheet. Later sections move up one, and their checks with them.",
+    annotations=ToolAnnotations(read_only_hint=False, destructive_hint=True, idempotent_hint=False),
+)
+@tool_handler("remove_section")
+def remove_section(
+    project: ProjectName,
+    number: Annotated[int, Field(ge=1, description="The section to remove (1-based)")],
+    file: FileName = None,
+) -> CallToolResult:
+    files, _ = workbook(project, file)
+    with store.draft_lock(files):
+        draft = store.load_draft(files) or {"sections": [], "checks": []}
+        return _remove_section(files, draft, number)
 
 
 def _add_section(
@@ -805,14 +830,17 @@ def _add_section(
     checks: list[dict[str, Any]] | None,
     title: str | None,
     sheet_name: str | None,
-    remove: bool,
 ) -> CallToolResult:
     draft = store.load_draft(files)
     draft = draft or {"sheet_name": "Dashboard", "title": files.name, "sections": [], "checks": []}
-    if remove:
-        return _remove_section(files, draft, number)
-    if section is None:
-        raise ToolFailure("invalid_spec", "section is required unless remove=true")
+    if not section:
+        which = f"section {number}" if number else "a section"
+        raise ToolFailure(
+            "invalid_spec",
+            f"no section was sent. To add or change {which}, send the whole section in `section`: title, columns, "
+            "rows (and formats, chart, note). The server never edits part of a section, so a change means sending "
+            "all of it again with its `number`. To take one out, use remove_section.",
+        )
     if title:
         draft["title"] = title
     if sheet_name:
@@ -892,6 +920,50 @@ def export_sheet(
         f"It contains exactly these sections; tell the user these, no others:\n{contents}"
     )
     return _result(text, files=[(path.name, mime, path.read_bytes())])
+
+
+@mcp.tool(
+    description=(
+        "Print the draft sheet (every section from add_section) as a designed PDF report and send it to the user: a "
+        "16:9 slide deck with a cover, an 'at a glance' slide of key figures, one slide per section (its table beside "
+        "its chart) and a notes slide. Call only after the user approved the sections. Numbers come from the draft "
+        "cells: highlights name a cell as [s2r3c2], and leads, notes and the subtitle write numbers as {s2r3c2}, "
+        "never typed. Keep the words plain, for the user's client: no cell addresses or formula talk."
+    ),
+    annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=False),
+)
+@tool_handler("export_report")
+def export_report(
+    project: ProjectName,
+    report_spec: Annotated[
+        dict[str, Any],
+        WithJsonSchema(inline_schema(report.Report)),
+        Field(description="The report: title, subtitle, kicker, date, facts, highlights, leads, notes, footer"),
+    ],
+    file_name: Annotated[str | None, Field(description="Name for the file, without extension")] = None,
+    file: FileName = None,
+) -> CallToolResult:
+    found, _ = workbook(project, file)
+    spec = store.load_draft(found)
+    if not spec or not spec.get("sections"):
+        raise ToolFailure("no_draft", "the draft has no sections yet: add them with add_section")
+    meta = report.Report.model_validate(report_spec)
+    files, built = _built(found, spec)
+    if not built.all_ok:
+        failing = ", ".join(c.check.label for c in built.checks if not c.ok)
+        raise ToolFailure("checks_failed", f"these checks fail, so nothing was printed: {failing}")
+    if len(meta.leads) > len(built.sections):
+        raise ToolFailure("invalid_spec", f"{len(meta.leads)} leads for {len(built.sections)} sections")
+    page = report.build_html(built, meta)
+    chrome = report.find_chrome(get_settings().chrome_path)
+    stem = file_name or meta.title
+    path = report.print_pdf(page, store.export_path(files, stem, ".pdf"), chrome)
+    contents = "\n".join(f"- {lay.section.title}" for lay in built.sections)
+    text = (
+        f"Printed {path.name}. The PDF was sent to the user and is also saved on this computer at {path}.\n\n"
+        f"Its section slides are exactly these; tell the user these, no others:\n{contents}"
+    )
+    return _result(text, files=[(f"{stem}.pdf", "application/pdf", path.read_bytes())])
 
 
 # ---------------------------------------------------------------------- writing files

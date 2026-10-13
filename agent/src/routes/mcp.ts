@@ -33,6 +33,7 @@ export function mcpView(row: McpServerRow, reveal: boolean): McpServerView {
     oauth_state: _state,
     headers,
     tools_json,
+    instructions: _instructions,
     disabled_tools,
     ...rest
   } = row;

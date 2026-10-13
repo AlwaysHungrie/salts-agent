@@ -3,6 +3,7 @@ import { storageFullMessage } from "../registry";
 import { bytesToBase64, toArrayBuffer } from "../util/bytes";
 import {
   formatMb,
+  isForwardable,
   isPdf,
   isSheet,
   isTextLike,
@@ -291,6 +292,32 @@ export function attachmentsOf(host: SessionHost, messageId: string): Attachment[
     )
     .map((row) => getAttachment(host, row.attachment_id))
     .filter((a): a is Attachment => !!a);
+}
+
+/** How many of the chat's files a failed upload call names; the newest are the likely ones. */
+const SHARED_FILES_SHOWN = 5;
+
+/** The PDFs, workbooks and CSVs messages in this chat carried, newest first. */
+export function sharedFiles(host: SessionHost): Attachment[] {
+  return host
+    .exec<Attachment>(
+      `SELECT * FROM attachments WHERE id IN (SELECT attachment_id FROM message_files) ORDER BY ts DESC`
+    )
+    .filter(isForwardable)
+    .slice(0, SHARED_FILES_SHOWN);
+}
+
+/** The PDFs, workbooks and CSVs of the latest message that carried any file. */
+export function latestFiles(host: SessionHost): Attachment[] {
+  return host
+    .exec<Attachment>(
+      `SELECT a.* FROM attachments a JOIN message_files m ON m.attachment_id = a.id
+       WHERE m.message_id = (
+         SELECT f.message_id FROM message_files f JOIN attachments b ON b.id = f.attachment_id
+         ORDER BY b.ts DESC LIMIT 1
+       )`
+    )
+    .filter(isForwardable);
 }
 
 /** Every image in this session so far, so the ones a turn adds can be told apart. */

@@ -118,6 +118,10 @@ export type TurnState = {
   made: string[];
   /** Ids of this turn's tool calls that returned a failure rather than throwing one. */
   failedCalls: string[];
+  /** This turn's successful tool calls, as name and arguments, so a repeat can be refused. */
+  calls: string[];
+  /** The turn reached its last tool round and was made to answer. */
+  outOfRounds: boolean;
 };
 
 /**

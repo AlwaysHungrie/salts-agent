@@ -5,6 +5,7 @@ import {
   FAILLOOP_REPLY,
   INVENTED_TOOL,
   MCP_MEDIA_TOOL,
+  MCP_INSTRUCTIONS,
   MCP_TOOLS,
   MCP_UPLOAD_TOOL,
   MOCK_XLSX_TEXT,
@@ -12,6 +13,7 @@ import {
   replyTo,
 } from "./openrouter-mock";
 import { EMPTY_MCP_SERVER, agentIdOf } from "../src/registry";
+import { chatReply, OUT_OF_ROUNDS } from "../src/session/format";
 import { signedIn } from "./clerk";
 import { SHIPPED } from "./shipped";
 
@@ -211,13 +213,32 @@ describe("tools inside a turn", () => {
   });
 });
 
+describe("a reply as a chat gets it", () => {
+  it("cuts tool calls a model wrote out as text", () => {
+    const leaked = "Here it is.<tool_call>mcp_analyst_breakdown<arg_key>cell</arg_key><arg_value>C93</arg_value></tool_call>";
+    expect(chatReply(leaked, false)).toBe("Here it is.");
+    expect(chatReply("<tool_call>mcp_analyst_breakdown<arg_key>cell</arg_key><arg_va", false)).toBe("");
+  });
+
+  it("says how to go on when the turn ran out of rounds", () => {
+    expect(chatReply("Let me look at the sheet.", true)).toBe(`Let me look at the sheet.\n\n${OUT_OF_ROUNDS}`);
+    expect(chatReply("<tool_call>breakdown", true)).toBe(OUT_OF_ROUNDS);
+    expect(chatReply('Two sections left. Say "continue" to carry on.', true)).toBe(
+      'Two sections left. Say "continue" to carry on.'
+    );
+    expect(chatReply("Done.", false)).toBe("Done.");
+  });
+});
+
 describe("tool results in later turns", () => {
-  /** The history the model was sent with the message carrying `token`. */
-  async function historyFor(token: string) {
+  /** The history the model was sent with the message carrying `token`, by role, as text. */
+  async function historyFor(token: string, role = "assistant") {
     const [request] = (await (
       await fetch(`https://openrouter.ai/__requests?contains=${token}`)
     ).json()) as { messages: { role: string; content?: unknown }[] }[];
-    return request.messages.filter((m) => m.role === "assistant").map((m) => String(m.content));
+    return request.messages
+      .filter((m) => m.role === role)
+      .map((m) => (typeof m.content === "string" ? m.content : JSON.stringify(m.content)));
   }
 
   it("carries what an earlier reply's tools were given and returned", async () => {
@@ -225,10 +246,18 @@ describe("tool results in later turns", () => {
     await say(sessionId, email, "!!toolcall list it");
     const token = `next-${crypto.randomUUID().slice(0, 8)}`;
     await say(sessionId, email, token);
+    const next = (await historyFor(token, "user")).find((m) => m.includes(token))!;
+    expect(next).toContain("[Record of the tools your previous reply called");
+    expect(next).toContain('- list({\\"path\\":\\"/\\"}) →');
+  });
+
+  it("keeps the record out of the reply, so a model never copies it as text", async () => {
+    const { sessionId, email } = await chatFixture();
+    await say(sessionId, email, "!!toolcall list it");
+    const token = `next-${crypto.randomUUID().slice(0, 8)}`;
+    await say(sessionId, email, token);
     const [earlier] = await historyFor(token);
-    expect(earlier).toContain("I listed the workspace.");
-    expect(earlier).toContain("[Tools this reply used");
-    expect(earlier).toContain('- list({"path":"/"}) →');
+    expect(earlier).toBe("I listed the workspace.");
   });
 
   it("leaves failed calls out", async () => {
@@ -434,6 +463,40 @@ describe("!enable-mcp and !disable-mcp", () => {
     const server = await row(agentId);
     expect(server.enabled).toBe(1);
     expect(JSON.parse(server.disabled_tools)).toEqual([]);
+  });
+
+  it("refuses a tool call repeated with the same arguments, without running it", async () => {
+    const { sessionId, email } = await withServer({ enabled: 1, disabled_tools: "[]" });
+    await say(sessionId, email, "!enable-mcp docs");
+    const callsBefore = ((await (await fetch("https://mcp.test/__calls")).json()) as unknown[]).length;
+    const token = crypto.randomUUID().slice(0, 8);
+    await say(sessionId, email, `!!repeat mcp_docs_search_pages ${token}`);
+
+    const calls = ((await (await fetch("https://mcp.test/__calls")).json()) as unknown[]).slice(callsBefore);
+    expect(calls).toHaveLength(1);
+    const requests = (await (
+      await fetch(`https://openrouter.ai/__requests?contains=${token}`)
+    ).json()) as { messages: { role: string; content?: unknown }[] }[];
+    // The fullest request is the turn's last leg (a naming call may come after it).
+    const results = requests
+      .map((r) => r.messages.filter((m) => m.role === "tool"))
+      .reduce((a, b) => (b.length > a.length ? b : a));
+    expect(results).toHaveLength(2);
+    expect(JSON.stringify(results.at(-1))).toContain("already called with exactly these arguments");
+  });
+
+  it("keeps the server's instructions, and puts them in the model's prompt", async () => {
+    const { sessionId, email, agentId } = await withServer();
+    await say(sessionId, email, "!enable-mcp docs");
+    expect((await row(agentId)).instructions).toBe(MCP_INSTRUCTIONS);
+
+    const token = crypto.randomUUID().slice(0, 8);
+    await say(sessionId, email, `hello ${token}`);
+    const [request] = (await (
+      await fetch(`https://openrouter.ai/__requests?contains=${token}`)
+    ).json()) as { messages: { role: string; content?: unknown }[] }[];
+    const system = JSON.stringify(request.messages.filter((m) => m.role === "system"));
+    expect(system).toContain(`How to use the Docs tools, from that server:\\n\\n${MCP_INSTRUCTIONS}`);
   });
 
   it("disables a server and keeps its tool selection", async () => {
@@ -805,6 +868,33 @@ describe("a PDF sent to an MCP server that takes uploads", () => {
 
     expect((await calls()).slice(callsBefore)).toHaveLength(0);
     expect(await turnFor(token)).toContain("upload 401");
+  });
+
+  it("makes a call that needed a file again with the one file the message carried", async () => {
+    const { sessionId, email } = await withServer("https://mcp.test/files/mcp", [MCP_UPLOAD_TOOL]);
+    const before = (await uploads()).length;
+    const callsBefore = (await calls()).length;
+    await attachPdf(sessionId, email);
+    const token = crypto.randomUUID().slice(0, 8);
+    await (await say(sessionId, email, `!!ingestbare mcp_recruiter_ingest_resume ${token}`)).text();
+
+    const sent = (await uploads()).slice(before);
+    expect(sent).toHaveLength(1);
+    const made = (await calls()).slice(callsBefore);
+    expect(made.map((c) => c.arguments.upload_id)).toEqual([undefined, sent[0].upload_id]);
+    expect(await turnFor(token)).not.toContain("pass exactly one of upload_id");
+  });
+
+  it("hands the model the exact upload_id when it cannot tell which file was meant", async () => {
+    const { sessionId, email } = await withServer("https://mcp.test/files/mcp", [MCP_UPLOAD_TOOL]);
+    await attachPdf(sessionId, email);
+    await attachPdf(sessionId, email);
+    const token = crypto.randomUUID().slice(0, 8);
+    await (await say(sessionId, email, `!!ingestbare mcp_recruiter_ingest_resume ${token}`)).text();
+
+    expect(await turnFor(token)).toMatch(
+      /pass exactly one of upload_id or inbox_file\\nNo file was passed\. To give this tool a file from this chat, pass upload_id=\\"attachment:[\w-]+\\" for resume\.pdf; upload_id=/
+    );
   });
 
   it("tells the model nothing about uploads when no server takes them", async () => {
