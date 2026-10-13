@@ -3,7 +3,7 @@
   "version": "2.0.0",
   "private": true,
   "type": "module",
-  "description": "Local services for a salt-agent (SearXNG web search, the matchmaker MCP server) behind one token-gated ngrok tunnel, with the agent kept pointed at it.",
+  "description": "Local services for a salt-agent (SearXNG web search, the matchmaker MCP server) behind one token-gated cloudflared tunnel, with the agent kept pointed at it.",
   "bin": {
     "salts-tools": "./cli.mjs"
   },

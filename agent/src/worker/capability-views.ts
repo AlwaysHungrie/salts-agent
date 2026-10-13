@@ -9,9 +9,9 @@ import type { DeploymentSettings } from "../settings";
  */
 export function modelOptions(chosen: ModelChoice[], catalog: ModelOption[]): ModelOption[] {
   if (!chosen.length) return catalog;
-  return chosen.map(({ id, vision }) => ({
+  return chosen.map(({ id, vision, label }) => ({
     id,
-    label: catalog.find((m) => m.id === id)?.label ?? id,
+    label: label || (catalog.find((m) => m.id === id)?.label ?? id),
     vision,
   }));
 }
@@ -25,7 +25,8 @@ export function notedCapabilities(list: Capability[], settings: DeploymentSettin
           ...capability,
           note:
             `Markdown, CSV, JSON and code up to ${mb(settings.max_upload_bytes.text)}; ` +
-            `PDFs up to ${mb(settings.max_upload_bytes.pdf)}.`,
+            `PDFs up to ${mb(settings.max_upload_bytes.pdf)}; Excel workbooks up to ` +
+            `${mb(settings.max_upload_bytes.sheet)} for an MCP server that reads them.`,
         }
       : capability
   );

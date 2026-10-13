@@ -208,6 +208,20 @@ export class WhatsApp {
     return sent.messages?.[0]?.id;
   }
 
+  /** Send an uploaded file as a document, under the name it was made with. */
+  async sendDocument(to: string, mediaId: string, filename: string): Promise<string | undefined> {
+    const sent = await this.call<{ messages?: { id: string }[] }>(
+      `${this.phoneNumberId}/messages`,
+      {
+        messaging_product: "whatsapp",
+        to,
+        type: "document",
+        document: { id: mediaId, filename },
+      }
+    );
+    return sent.messages?.[0]?.id;
+  }
+
   /**
    * Fetch a file the user sent: the id resolves to a short-lived CDN URL, which still
    * needs the access token.

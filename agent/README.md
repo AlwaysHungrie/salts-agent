@@ -7,13 +7,16 @@ isolated DOs with their own SQLite database and message history.
 
 Models are served through OpenRouter. Which model a new agent starts on, and which
 models an agent may be switched *between*, are the `default_model` and `models`
-deployment settings below — a JSON array of `{ "id", "label", "vision" }`. `vision` is
+deployment settings below — a JSON array of `{ "id", "label", "vision" }`. Text in
+brackets in a `label` is a nickname: `"DeepSeek V4 Flash (ds)"` is switched to with
+`!model ds`. `vision` is
 false for a model that cannot be sent an image, and leaving it out means it can; it is
 the one thing that cannot be looked up, and getting it wrong means a photo fails at the
 provider instead of at the upload.
 
 Meta settings may go further and name any OpenRouter id at all, with its own answer to
-the same question — see the model list in that dialog.
+the same question and an optional `label` (which carries nicknames the same way) — see
+the model list in that dialog.
 
 ## Deployment settings
 
@@ -267,8 +270,17 @@ Two routes are deliberately outside all of this:
 
 A message that is nothing but a bang command is handled before a turn starts, the same
 in the browser, Telegram and WhatsApp: `!new`, `!clear`, `!delete`, `!stop`, `!unstick`,
-`!compact`, and `!enable-mcp <name>` / `!disable-mcp <name>`. See
-[`src/commands.ts`](src/commands.ts).
+`!compact`, `!enable-mcp <name>` / `!disable-mcp <name>`, and `!model <nickname>`, which
+sets the agent's model to the offered one whose label holds the nickname in brackets
+(refused when meta locks `model`). Bare `!model` names the current model and lists the nicknames and `!mcp` lists the
+agent's MCP servers with the command that flips each. `!help` explains sessions and lists
+every command; `!new` and `!clear` point at it. `!docs` and `!settings` link the user guide
+and the agent's settings page under `APP_URL` (a `var` in `wrangler.jsonc`; unset, they
+say there is none). See [`src/commands.ts`](src/commands.ts).
+
+Each user message reaches the model prefixed with when it was sent (`[Sent YYYY-MM-DD
+HH:MM UTC]`, from the time its turn opened), not today's date in the system prompt: a
+fixed stamp per message keeps earlier turns, and the prompt, identical and cached.
 
 ## Capabilities
 

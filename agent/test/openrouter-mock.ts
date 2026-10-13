@@ -21,6 +21,7 @@
  * - `!!fail500` — the provider answers 500.
  * - `!!fail401` — the provider rejects the key.
  * - `!!toolcall` — the model calls the `list` tool, then answers using its result.
+ * - `!!toolloop` — the model calls `list` again and again until it may no longer call tools.
  *   The second leg is recognised by the tool message the SDK sends back, so the whole
  *   two-step exchange stays deterministic.
  * - `!!schedule` — the model schedules a task a second out, then confirms it. The task
@@ -29,6 +30,10 @@
  *   answered here too, with a token Ogg Opus file.
  * - `!!draw` — the model draws an image, then confirms it. The drawing call is
  *   answered here too, with a one-pixel PNG.
+ * - `!!export <tool>` — the model calls that tool, then answers with a link to the
+ *   workbook its result carried, as a model handing over an export does.
+ * - `!!exportnamed <tool>` — the same, but the answer only names the workbook in bold,
+ *   with no link: a model that forgets to link what it made.
  * - anything else — the model replies `You said: <message>`.
  *
  * A compaction's summary call is recognised by Think's summary prompt and answered
@@ -60,6 +65,9 @@ const tgSent: {
   photo?: string;
   /** Set on a voice note: how many bytes were uploaded. */
   voice?: number;
+  /** Set on a document: the file's name and type. */
+  document?: string;
+  mime?: string;
   caption?: string;
 }[] = [];
 
@@ -106,6 +114,19 @@ async function telegramMock(request: Request, url: URL): Promise<Response> {
       ...(method === "sendPhoto"
         ? { photo: file instanceof File ? file.name : "" }
         : { voice: file instanceof File ? file.size : 0 }),
+    });
+    return json({ ok: true, result: { message_id: tgSent.length } });
+  }
+
+  if (method === "sendDocument") {
+    const form = await request.formData();
+    const file = form.get("document");
+    tgSent.push({
+      chatId: String(form.get("chat_id") ?? ""),
+      text: "",
+      threadId: Number(form.get("message_thread_id")) || undefined,
+      document: file instanceof File ? file.name : "",
+      mime: file instanceof File ? file.type : "",
     });
     return json({ ok: true, result: { message_id: tgSent.length } });
   }
@@ -166,6 +187,9 @@ const graphSent: {
   /** The media id a picture named, and what was written under it. */
   image?: string;
   caption?: string;
+  /** The media id a document named, and the name it was sent under. */
+  document?: string;
+  filename?: string;
 }[] = [];
 
 /** What the Worker has uploaded to Graph's media store, oldest first. */
@@ -264,6 +288,7 @@ async function graphMock(request: Request, url: URL): Promise<Response> {
     text?: { body?: string };
     audio?: { id?: string };
     image?: { id?: string; caption?: string };
+    document?: { id?: string; filename?: string };
     context?: { message_id?: string };
   };
   // A read receipt names no recipient and sends nothing.
@@ -288,6 +313,8 @@ async function graphMock(request: Request, url: URL): Promise<Response> {
     audio: body.audio?.id,
     image: body.image?.id,
     caption: body.image?.caption,
+    document: body.document?.id,
+    filename: body.document?.filename,
   });
   return json({
     messaging_product: "whatsapp",
@@ -349,6 +376,7 @@ type ChatBody = {
   modalities?: string[];
   audio?: { voice?: string; format?: string };
   messages?: { role: string; content?: unknown }[];
+  tool_choice?: unknown;
 };
 
 /**
@@ -371,6 +399,11 @@ const json = (value: unknown, status = 200) =>
 
 /** The last thing the user actually typed, which is where the triggers live. */
 function lastUserMessage(body: ChatBody): string {
+  // The time a message was sent leads it (see `sentAt`); it is not something typed.
+  return lastUserContent(body).replace(/^\[Sent [^\]]* UTC\]\n/, "");
+}
+
+function lastUserContent(body: ChatBody): string {
   const messages = body.messages ?? [];
   for (let i = messages.length - 1; i >= 0; i--) {
     const message = messages[i];
@@ -527,6 +560,12 @@ function streamedText(text: string) {
   ]);
 }
 
+/** What a `!!failloop` model says once it may no longer call tools. */
+export const FAILLOOP_REPLY = "The tool kept failing, so I stopped.";
+
+/** What a `!!toolloop` model says once it may no longer call tools. */
+export const TOOLLOOP_REPLY = "Here is what I found so far.";
+
 /** A streamed tool call, which is how a turn that uses a tool begins. */
 function streamedToolCall(name: string, args: Record<string, unknown>) {
   return stream([
@@ -586,6 +625,21 @@ export const MCP_UPLOAD_TOOL = {
   },
 };
 
+/**
+ * A tool whose answer carries a picture and a workbook besides its words, the way a
+ * spreadsheet server answers. Served at `/media/mcp`, which also takes uploads.
+ */
+export const MCP_MEDIA_TOOL = {
+  name: "build_report",
+  description: "Build a report.",
+  inputSchema: { type: "object", properties: { upload_id: { type: "string" } } },
+};
+
+/** A 1x1 PNG, and the bytes of the workbook `build_report` returns. */
+export const MOCK_PNG =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+export const MOCK_XLSX_TEXT = "PK workbook bytes";
+
 /** What was posted to `/files/uploads`, oldest first. Read at `https://mcp.test/__uploads`. */
 const mcpUploads: { upload_id: string; mime: string; bytes: number; authorization: string }[] = [];
 
@@ -604,7 +658,7 @@ async function mcpMock(request: Request, url: URL): Promise<Response> {
   if (url.pathname === "/__calls") return json(mcpCalls);
   // A server that advertises an upload tool but turns uploads away.
   if (url.pathname === "/refuses/uploads") return json({ error: "unauthorized" }, 401);
-  if (url.pathname === "/files/uploads") {
+  if (url.pathname === "/files/uploads" || url.pathname === "/media/uploads") {
     const upload_id = `up-${mcpUploads.length + 1}`;
     mcpUploads.push({
       upload_id,
@@ -638,6 +692,7 @@ async function mcpMock(request: Request, url: URL): Promise<Response> {
   if (body.method === "tools/list") {
     if (url.pathname === "/files/mcp" || url.pathname === "/refuses/mcp")
       return reply({ tools: [...MCP_TOOLS, MCP_UPLOAD_TOOL] });
+    if (url.pathname === "/media/mcp") return reply({ tools: [MCP_MEDIA_TOOL] });
     return reply({ tools: url.pathname === "/empty" ? [] : MCP_TOOLS });
   }
   if (body.method === "tools/call") {
@@ -646,6 +701,22 @@ async function mcpMock(request: Request, url: URL): Promise<Response> {
       name: body.params?.name ?? "",
       arguments: body.params?.arguments ?? {},
     });
+    if (url.pathname === "/media/mcp") {
+      return reply({
+        content: [
+          { type: "text", text: "Report built." },
+          { type: "image", data: MOCK_PNG, mimeType: "image/png" },
+          {
+            type: "resource",
+            resource: {
+              uri: "file:///Client%20report.xlsx",
+              mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+              blob: btoa(MOCK_XLSX_TEXT),
+            },
+          },
+        ],
+      });
+    }
     return reply({ content: [{ type: "text", text: "done" }] });
   }
   // A notification, which carries no id and expects no envelope.
@@ -773,6 +844,34 @@ export async function openrouterMock(request: Request): Promise<Response> {
     if (carriesToolResult(body)) return streamedText("Stored it.");
     const ref = JSON.stringify(body.messages).match(/attachment:[\w-]+/)?.[0] ?? "";
     return streamedToolCall(message.split(/\s+/)[1], { text: "a resume", upload_id: ref });
+  }
+
+  // `!!exportnamed <tool>`: call that tool, then name the workbook without linking it.
+  if (message.startsWith("!!exportnamed")) {
+    if (carriesToolResult(body)) return streamedText("I exported **Client report.xlsx** for you.");
+    return streamedToolCall(message.split(/\s+/)[1], {});
+  }
+
+  // `!!export <tool>`: call that tool, then link the workbook its result carried.
+  if (message.startsWith("!!export")) {
+    if (carriesToolResult(body)) {
+      const link = JSON.stringify(body.messages).match(/\[[^\]]+\.xlsx\]\([^)]+\)/)?.[0];
+      return streamedText(`Your dashboard is ready: ${link ?? "(no link)"}`);
+    }
+    return streamedToolCall(message.split(/\s+/)[1], {});
+  }
+
+  // `!!failloop <tool>`: a model that repeats one failing call for as long as it is let.
+  // An empty prompt makes `schedule_task` fail; a tool the turn lacks fails in the SDK.
+  if (message.startsWith("!!failloop")) {
+    if (body.tool_choice === "none") return streamedText(FAILLOOP_REPLY);
+    return streamedToolCall(message.split(/\s+/)[1], { prompt: "", when: "1" });
+  }
+
+  // `!!toolloop`: a model that keeps calling a tool that works, for as long as it is let.
+  if (message.startsWith("!!toolloop")) {
+    if (body.tool_choice === "none") return streamedText(TOOLLOOP_REPLY);
+    return streamedToolCall("list", { path: "/" });
   }
 
   if (message.startsWith("!!toolcall")) {

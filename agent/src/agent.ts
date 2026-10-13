@@ -1,6 +1,12 @@
 import { createOpenAI } from "@ai-sdk/openai";
 import { Workspace } from "@cloudflare/shell";
-import { type StepContext, Think, type TurnConfig, type TurnContext } from "@cloudflare/think";
+import {
+  type PrepareStepContext,
+  type StepContext,
+  Think,
+  type TurnConfig,
+  type TurnContext,
+} from "@cloudflare/think";
 import type { Schedule } from "agents";
 import type { UIMessage } from "ai";
 import { enabled, type ScheduledTask } from "./capabilities";
@@ -25,13 +31,20 @@ import {
   removeAttachment,
   serveAttachment,
   serveThumbnail,
+  showMadeFiles,
   storedBytes,
   sweepBucket,
   upload,
 } from "./session/attachments";
 import { channelTurn, deliverToChat } from "./session/channels";
 import { maybeCompact } from "./session/compaction";
-import { capabilityTools, modelMessages, systemPrompt } from "./session/context";
+import {
+  answerOnLastRound,
+  capabilityTools,
+  modelMessages,
+  stopAfterFailures,
+  systemPrompt,
+} from "./session/context";
 import { cacheFileAnnotations } from "./session/documents";
 import { PARSE_CACHE_DIR, publicAttachment } from "./session/files";
 import { describeSchedule, textOf } from "./session/format";
@@ -80,7 +93,13 @@ export class SessionAgent extends Think<Env> {
   private turnUsage: TurnUsage = emptyUsage();
 
   /** What the running turns have done that later code reads; see `TurnState`. */
-  private turn: TurnState = { running: 0, stoppedOnPurpose: false, scheduled: false };
+  private turn: TurnState = {
+    running: 0,
+    stoppedOnPurpose: false,
+    scheduled: false,
+    made: [],
+    failedCalls: [],
+  };
 
   /** The streaming turn, kept so a browser that reloads mid-reply can catch up. */
   private live = new LiveTurns();
@@ -300,6 +319,8 @@ export class SessionAgent extends Think<Env> {
     const config = this.config();
     this.turnUsage = { ...emptyUsage(), started: Date.now() };
     this.turn.scheduled = false;
+    this.turn.made = [];
+    this.turn.failedCalls = [];
     this.turn.running++;
     await maybeCompact(this.host, config);
 
@@ -315,6 +336,17 @@ export class SessionAgent extends Think<Env> {
         : {}),
       messages: await modelMessages(this.host, config),
     };
+  }
+
+  /**
+   * Tools that keep failing end the turn with the model explaining, not more calls; so
+   * does running out of tool rounds.
+   */
+  override beforeStep(ctx: PrepareStepContext) {
+    return (
+      stopAfterFailures(this.host, ctx.steps) ??
+      answerOnLastRound(this.host, ctx.stepNumber, this.maxSteps)
+    );
   }
 
   /** Token counts arrive per step; a turn's cost is their sum. */
@@ -356,6 +388,10 @@ export class SessionAgent extends Think<Env> {
       Date.now(),
       this.turnUsage.peak
     );
+
+    // What tools made for the user reaches them even when the reply never links it: a
+    // turn cut off at its tool-round limit has no reply text at all.
+    showMadeFiles(this.host, result.message.id, textOf(result.message));
 
     // Also banked in the registry, where the monthly ceiling is measured across sessions.
     const spent = turnCost(this.turnUsage);

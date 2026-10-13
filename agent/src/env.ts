@@ -18,6 +18,11 @@ export type Env = {
    * `https://<subdomain>.clerk.accounts.dev`). The only source of identity.
    */
   CLERK_ISSUER?: string;
+  /**
+   * The web app's origin (e.g. `https://salts-agent-app.vercel.app`), for the links
+   * `!docs`, `!settings` and `!mcp` send. Unset, they say there is none.
+   */
+  APP_URL?: string;
   /** Telegram's API host. Only set to stand a local Bot API server in its place. */
   TELEGRAM_API_BASE?: string;
 

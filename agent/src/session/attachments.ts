@@ -1,9 +1,10 @@
-import { enabled } from "../capabilities";
+import { acceptsUploads, enabled } from "../capabilities";
 import { storageFullMessage } from "../registry";
 import { bytesToBase64, toArrayBuffer } from "../util/bytes";
 import {
   formatMb,
   isPdf,
+  isSheet,
   isTextLike,
   PARSE_CACHE_DIR,
   publicAttachment,
@@ -99,12 +100,15 @@ export async function serveAttachment(host: SessionHost, id: string): Promise<Re
   if (!row?.path) return new Response("not found", { status: 404 });
   const stream = await host.workspace.readFileStream(row.path);
   if (!stream) return new Response("not found", { status: 404 });
-  return new Response(stream, {
-    headers: {
-      "content-type": row.mime,
-      "cache-control": "public, max-age=31536000, immutable",
-    },
-  });
+  const headers: Record<string, string> = {
+    "content-type": row.mime,
+    "cache-control": "public, max-age=31536000, immutable",
+  };
+  // A workbook has nothing to show in a tab: it downloads, under its own name.
+  if (row.kind === "sheet") {
+    headers["content-disposition"] = `attachment; filename*=UTF-8''${encodeURIComponent(row.name)}`;
+  }
+  return new Response(stream, { headers });
 }
 
 export async function serveThumbnail(host: SessionHost, id: string): Promise<Response> {
@@ -120,13 +124,14 @@ export async function serveThumbnail(host: SessionHost, id: string): Promise<Res
   });
 }
 
-type UploadKind = "pdf" | "image" | "audio" | "text";
+type UploadKind = "pdf" | "image" | "audio" | "text" | "sheet";
 type UploadResult = { body: unknown; status: number };
 
 const refuse = (error: string, status: number): UploadResult => ({ body: { error }, status });
 
 function uploadKind(mime: string, name: string): UploadKind {
   if (isPdf(mime, name)) return "pdf";
+  if (isSheet(mime, name)) return "sheet";
   if (mime.startsWith("image/")) return "image";
   if (mime.startsWith("audio/") || mime.startsWith("video/")) return "audio";
   return "text";
@@ -161,6 +166,13 @@ async function capabilityRefusal(
   }
   if (!enabled(config, "file_ingest")) {
     return refuse("File ingest is off. Turn it on under Capabilities.", 400);
+  }
+  // The model cannot read a workbook; only an MCP server that takes uploads can.
+  if (kind === "sheet" && !(enabled(config, "mcp") && host.mcpServers().some(acceptsUploads))) {
+    return refuse(
+      `${file.name} is an Excel workbook. Connect an MCP server that reads spreadsheets (such as analyst) under Capabilities to send one.`,
+      415
+    );
   }
   if (kind === "text" && !mime.startsWith("text/") && !isTextLike(mime, file.name)) {
     return refuse(
@@ -208,6 +220,9 @@ export async function upload(host: SessionHost, request: Request): Promise<Uploa
     const text = await file.text();
     await host.workspace.writeFile(path, text, mime);
     attachment = insertAttachment(host, { ...stored, kind: "text", text });
+  } else if (kind === "sheet") {
+    await host.workspace.writeFileBytes(path, await file.arrayBuffer(), mime);
+    attachment = insertAttachment(host, { ...stored, kind: "sheet" });
   } else if (kind === "pdf") {
     await host.workspace.writeFileBytes(path, await file.arrayBuffer(), "application/pdf");
     attachment = insertAttachment(host, {
@@ -245,6 +260,27 @@ export async function readBase64(host: SessionHost, path: string): Promise<strin
   if (!path) return "";
   const bytes = await host.workspace.readFileBytes(path);
   return bytes ? bytesToBase64(toArrayBuffer(bytes)) : "";
+}
+
+/**
+ * Hang the files tools made this turn on the reply, unless its text already shows them
+ * (a Markdown link to `/files/<id>`), so they are shown once either way. Images are
+ * hung only when the reply links none: a reply that links images picked the ones worth
+ * seeing, and the rest are drafts it moved past (an earlier try, a checks table).
+ */
+export function showMadeFiles(host: SessionHost, replyId: string, replyText: string): void {
+  const linked = (id: string) => replyText.includes(`/files/${id}`);
+  const isImage = (id: string) => getAttachment(host, id)?.kind === "image";
+  const picked = host.turn.made.some((id) => isImage(id) && linked(id));
+  for (const id of host.turn.made) {
+    if (linked(id) || (picked && isImage(id))) continue;
+    host.exec(
+      `INSERT OR REPLACE INTO message_files (message_id, attachment_id) VALUES (?, ?)`,
+      replyId,
+      id
+    );
+  }
+  host.turn.made = [];
 }
 
 export function attachmentsOf(host: SessionHost, messageId: string): Attachment[] {

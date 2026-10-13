@@ -2,8 +2,9 @@ import type { ModelChoice, ModelOption } from "@/lib/agent";
 import { useState } from "react";
 
 /**
- * Models an agent may use, each with a "no images" flag that whoever adds it sets.
- * Suggestions are the deployment's models, which bring their own flag.
+ * Models an agent may use, each with a "no images" flag and an optional name that whoever
+ * adds it sets. Brackets in the name are nicknames for `!model`. Suggestions are the
+ * deployment's models, which bring their own flag and name.
  */
 export function ModelList({
   value,
@@ -15,19 +16,22 @@ export function ModelList({
   catalog: ModelOption[];
 }) {
   const [draft, setDraft] = useState("");
+  const [name, setName] = useState("");
   /** Whether the model being typed is one that cannot be sent an image. */
   const [blind, setBlind] = useState(false);
 
-  const add = (id: string, vision: boolean) => {
+  const add = (id: string, vision: boolean, label = "") => {
     const entry = id.trim();
     // A duplicate is a no-op rather than an error: nothing about the list changes.
     if (entry === "" || value.some((m) => m.id === entry)) return;
-    onChange([...value, { id: entry, vision }]);
+    const named = label.trim();
+    onChange([...value, named ? { id: entry, vision, label: named } : { id: entry, vision }]);
   };
 
   const commit = () => {
-    add(draft, !blind);
+    add(draft, !blind, name);
     setDraft("");
+    setName("");
     setBlind(false);
   };
 
@@ -40,8 +44,8 @@ export function ModelList({
       {value.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {value.map((model) => (
-            <span key={model.id} className={chip}>
-              <span className="max-w-[220px] truncate">{model.id}</span>
+            <span key={model.id} className={chip} title={model.id}>
+              <span className="max-w-[220px] truncate">{model.label || model.id}</span>
               {!model.vision && (
                 <span className="text-faint text-[11px]">(no image)</span>
               )}
@@ -70,6 +74,19 @@ export function ModelList({
             if (e.key === "Escape") setDraft("");
           }}
           aria-label="OpenRouter model id"
+          className="bg-field placeholder:text-faint min-w-0 flex-1 rounded-2xl px-4 py-3 text-sm outline-none"
+        />
+        <input
+          value={name}
+          placeholder="Name, e.g. Fast ($)"
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              commit();
+            }
+          }}
+          aria-label="Model name (optional)"
           className="bg-field placeholder:text-faint min-w-0 flex-1 rounded-2xl px-4 py-3 text-sm outline-none"
         />
         <button

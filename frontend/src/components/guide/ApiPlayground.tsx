@@ -38,7 +38,7 @@ type Vars = Record<string, string>;
 const SPEC_FILE = "salt-agent-openapi.json";
 
 const input =
-  "bg-white placeholder:text-faint w-full rounded-lg px-3 py-2 font-mono text-[13px] outline-none focus:ring-2 focus:ring-accent/30";
+  "bg-field placeholder:text-faint w-full rounded-lg px-3 py-2 font-mono text-[13px] outline-none focus:ring-2 focus:ring-accent/30";
 
 export function ApiPlayground({ base }: { base: string }) {
   const [doc, setDoc] = useState<OpenApiDoc | null>(null);

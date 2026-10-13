@@ -9,7 +9,7 @@ import type { ModelOption } from "./models";
  */
 
 /** The attachment kinds a ceiling is set for. */
-export const UPLOAD_KINDS = ["text", "pdf", "image", "audio"] as const;
+export const UPLOAD_KINDS = ["text", "pdf", "image", "audio", "sheet"] as const;
 
 /** Attachment ceilings, per kind. */
 export type UploadLimits = Record<(typeof UPLOAD_KINDS)[number], number>;
@@ -145,7 +145,7 @@ export const SETTINGS_FIELDS: readonly SettingsField[] = [
   {
     key: "max_upload_bytes",
     kind: "json",
-    doc: "attachment ceiling per kind: text, pdf, image, audio",
+    doc: "attachment ceiling per kind: text, pdf, image, audio, sheet (xlsx)",
     group: "limit",
   },
   INT("max_thumbnail_bytes", 1, 100_000_000_000, "largest bytes a PDF thumbnail may take"),

@@ -6,12 +6,42 @@
 // TEMP — `oom` is a probe for the 128 MB isolate limit, not a feature. Remove it, and
 // its branch in `runCommand`, once the behaviour it exposes has been seen.
 export type Command =
-  "unstick" | "delete" | "new" | "clear" | "stop" | "compact" | "oom" | McpCommand;
+  | "unstick"
+  | "delete"
+  | "new"
+  | "clear"
+  | "stop"
+  | "compact"
+  | "oom"
+  | "help"
+  | "docs"
+  | "settings"
+  | "mcp"
+  | "model"
+  | McpCommand
+  | ModelCommand;
 
-/** `!enable-mcp <name>` / `!disable-mcp <name>`: the one command that takes an argument. */
+/** `!enable-mcp <name>` / `!disable-mcp <name>`. */
 export type McpCommand = { mcp: "enable" | "disable"; server: string };
 
-const COMMANDS = ["unstick", "delete", "new", "clear", "stop", "compact", "oom"] as const;
+/** `!model <nickname>`: switch to the offered model whose label carries it in brackets. */
+export type ModelCommand = { nickname: string };
+
+/** Bare `!mcp` and `!model` list what there is; with an argument they act (see below). */
+const COMMANDS = [
+  "unstick",
+  "delete",
+  "new",
+  "clear",
+  "stop",
+  "compact",
+  "oom",
+  "help",
+  "docs",
+  "settings",
+  "mcp",
+  "model",
+] as const;
 
 /**
  * A command's reply, and whether the session is finished. `destroy` depends on context:
@@ -27,6 +57,8 @@ export function parseCommand(text: string): Command | null {
   const bare = text.replace(/@[A-Za-z0-9_]{3,}/g, " ").trim();
   const mcp = bare.match(/^!(enable|disable)-mcp\s+(.+)$/i);
   if (mcp) return { mcp: mcp[1].toLowerCase() as McpCommand["mcp"], server: mcp[2].trim() };
+  const model = bare.match(/^!model\s+(.+)$/i);
+  if (model) return { nickname: model[1].trim() };
   const found = COMMANDS.find((c) => bare.toLowerCase() === `!${c}`);
   return found ?? null;
 }

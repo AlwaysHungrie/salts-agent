@@ -1,5 +1,12 @@
 import type { Attachment } from "@/lib/agent";
-import { Download, FileText, FileType2, Mic, X } from "lucide-react";
+import {
+  Download,
+  FileSpreadsheet,
+  FileText,
+  FileType2,
+  Mic,
+  X,
+} from "lucide-react";
 import { VoiceNote } from "./VoiceNote";
 import { FADE, fileUrl, isAudio, thumbUrl } from "./files";
 
@@ -51,6 +58,12 @@ export function AttachmentStrip({
               <Mic size={13} strokeWidth={1.75} className="shrink-0" />
             ) : a.kind === "pdf" ? (
               <FileType2 size={13} strokeWidth={1.75} className="shrink-0" />
+            ) : a.kind === "sheet" ? (
+              <FileSpreadsheet
+                size={13}
+                strokeWidth={1.75}
+                className="shrink-0"
+              />
             ) : (
               <FileText size={13} strokeWidth={1.75} className="shrink-0" />
             )}

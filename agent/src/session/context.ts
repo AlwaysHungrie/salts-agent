@@ -22,8 +22,8 @@ import {
   parsedDocuments,
   uploadAttachment,
 } from "./documents";
-import { uploadPath } from "./files";
-import { inWords, textOf } from "./format";
+import { isPdf, isSheet, isTextLike, safeName, uploadPath } from "./files";
+import { inWords, textOf, toolNotesOf } from "./format";
 import { transcribeAttachment } from "./transcribe";
 import type { SessionHost } from "./types";
 
@@ -78,6 +78,11 @@ export function systemPrompt(host: SessionHost): string {
         .join(", ")}.`
     );
   }
+  // Said once here rather than as today's date, which would change the prompt and break
+  // the cache every day: the time travels on each message instead (see `sentAt`).
+  parts.push(
+    "Each user message starts with when it was sent, in UTC, like [Sent 2026-01-31 14:05 UTC]. Use it as the current date and time."
+  );
   parts.push(
     "Files the user attaches are written to the workspace under uploads/, and every message names the ones it carries. Open one with the read tool when the question is about it."
   );
@@ -95,13 +100,17 @@ export async function modelMessages(host: SessionHost, config: Config): Promise<
 
   const messages: ModelMessage[] = [];
   for (const message of kept) {
-    const text = message.id.startsWith(COMPACTION_PREFIX)
+    let text = message.id.startsWith(COMPACTION_PREFIX)
       ? `${SUMMARY_PREAMBLE}\n\n${textOf(message)}`
       : textOf(message);
     if (message.role === "assistant") {
-      if (text.trim()) messages.push({ role: "assistant", content: text });
+      const notes = toolNotesOf(message);
+      const content = notes ? `${text}\n\n${notes}`.trim() : text;
+      if (content.trim()) messages.push({ role: "assistant", content });
       continue;
     }
+    const stamp = sentAt(host, message.id);
+    if (stamp) text = `${stamp}\n${text}`;
     const attachments = attachmentsOf(host, message.id);
     // Parsed on the first turn that needs it, the way a clip is transcribed on the
     // first turn that needs its words.
@@ -127,6 +136,21 @@ export async function modelMessages(host: SessionHost, config: Config): Promise<
 }
 
 /**
+ * When a user message was sent, as `[Sent YYYY-MM-DD HH:MM UTC]`, from the time its turn
+ * opened. Fixed per message, so earlier turns render the same and stay cached. Empty for
+ * a message with no recorded time (a compaction summary).
+ */
+export function sentAt(host: SessionHost, messageId: string): string {
+  const ts = host.exec<{ ts: number }>(
+    `SELECT ts FROM usage WHERE message_id = ?`,
+    messageId
+  )[0]?.ts;
+  if (!ts) return "";
+  const iso = new Date(ts).toISOString();
+  return `[Sent ${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC]`;
+}
+
+/**
  * The capability and MCP tools, wrapped for the AI SDK with their JSON Schema as-is.
  * They sit beside Think's own workspace tools.
  */
@@ -144,11 +168,67 @@ export function capabilityTools(host: SessionHost, config: Config): ToolSet {
       inputSchema: jsonSchema(spec.parameters as never),
       // A failure is returned rather than thrown, so the model reads what went
       // wrong and can correct itself on the next round.
-      execute: async (args) =>
-        (await runTool(spec.name, args as Record<string, unknown>, context, spec)).content,
+      execute: async (args, { toolCallId }) => {
+        const result = await runTool(spec.name, args as Record<string, unknown>, context, spec);
+        // Returned, so the SDK records a result; `failedInARow` needs to know it failed.
+        if (!result.ok) host.turn.failedCalls.push(toolCallId);
+        return result.content;
+      },
     });
   }
   return tools;
+}
+
+/** Tool calls that may fail in a row before the turn is made to stop and say so. */
+export const MAX_FAILED_TOOL_CALLS = 3;
+
+/** The parts of an AI SDK step this reads. */
+type StepParts = { content: readonly { type: string; toolCallId?: string }[] };
+
+/**
+ * How many of the turn's latest tool calls failed one after another: an error the SDK
+ * recorded (an unknown tool, bad input) or a failure one of our tools returned.
+ */
+export function failedInARow(host: SessionHost, steps: readonly StepParts[]): number {
+  let run = 0;
+  for (const part of steps.flatMap((s) => s.content)) {
+    if (part.type === "tool-error") run++;
+    else if (part.type === "tool-result")
+      run = host.turn.failedCalls.includes(part.toolCallId ?? "") ? run + 1 : 0;
+  }
+  return run;
+}
+
+/**
+ * Once tools have failed `MAX_FAILED_TOOL_CALLS` times running, the next step may not call
+ * any: a model repeating one mistake otherwise spends every tool round and answers nothing.
+ */
+export function stopAfterFailures(
+  host: SessionHost,
+  steps: readonly StepParts[]
+): { toolChoice: "none"; instructions: string } | undefined {
+  const failed = failedInARow(host, steps);
+  if (failed < MAX_FAILED_TOOL_CALLS) return undefined;
+  return {
+    toolChoice: "none",
+    instructions: `${systemPrompt(host)}\n\n${failed} tool calls in a row have failed. Do not call any more tools this turn. Tell the user, briefly and in plain words, what you were trying to do and what went wrong (the errors the tools returned), and ask how they want to proceed.`,
+  };
+}
+
+/**
+ * The turn's last tool round may not call tools. The SDK ends a turn when its rounds run
+ * out, and a model still calling tools then has done the work and answered nothing.
+ */
+export function answerOnLastRound(
+  host: SessionHost,
+  stepNumber: number,
+  maxSteps: number
+): { toolChoice: "none"; instructions: string } | undefined {
+  if (stepNumber < maxSteps - 1) return undefined;
+  return {
+    toolChoice: "none",
+    instructions: `${systemPrompt(host)}\n\nThis is the last step of this turn: do not call any more tools. Answer now with what you have found so far, say plainly what is still left to do, and tell the user they can say "continue" to carry on.`,
+  };
 }
 
 export function toolContext(host: SessionHost, config: Config): ToolContext {
@@ -177,6 +257,37 @@ export function toolContext(host: SessionHost, config: Config): ToolContext {
       });
       // Marked used straight away: it belongs to the reply, not to the next turn.
       host.exec(`UPDATE attachments SET used = 1 WHERE id = ?`, id);
+      host.turn.made.push(id);
+      return `/agents/session-agent/${encodeURIComponent(host.name())}/files/${id}`;
+    },
+    saveFile: async (bytes, name, mime) => {
+      const fileName = safeName(name);
+      const settings = host.settings();
+      const sheet = isSheet(mime, fileName);
+      const pdf = !sheet && isPdf(mime, fileName);
+      const text = !sheet && !pdf && (mime.startsWith("text/") || isTextLike(mime, fileName));
+      if (!sheet && !pdf && !text) throw new Error(`${mime} files cannot be kept in the chat`);
+      const limit = settings.max_upload_bytes[sheet ? "sheet" : pdf ? "pdf" : "text"];
+      if (bytes.byteLength > limit) throw new Error(`it is larger than the ${limit} byte limit`);
+      if (bytes.byteLength > (await host.registry().storageRoom(settings.max_agent_bytes))) {
+        throw new Error("the agent's file storage is full");
+      }
+      const id = crypto.randomUUID().slice(0, 12);
+      const path = uploadPath(id, fileName);
+      await host.workspace.writeFileBytes(path, bytes, mime);
+      insertAttachment(host, {
+        id,
+        kind: sheet ? "sheet" : pdf ? "pdf" : "text",
+        name: fileName,
+        mime,
+        text: text ? new TextDecoder().decode(bytes).slice(0, settings.max_upload_bytes.text) : "",
+        path,
+        thumb_path: "",
+        bytes: bytes.byteLength,
+      });
+      // Like a drawn image: it belongs to the reply, not to the next turn.
+      host.exec(`UPDATE attachments SET used = 1 WHERE id = ?`, id);
+      host.turn.made.push(id);
       return `/agents/session-agent/${encodeURIComponent(host.name())}/files/${id}`;
     },
     transcribeAttachment: (id) => transcribeAttachment(host, id),

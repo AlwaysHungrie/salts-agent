@@ -153,7 +153,9 @@ const tunable = z
 
 export const MetaSettingsSchema = z
   .object({
-    models: z.array(z.object({ id: z.string(), vision: z.boolean() })),
+    models: z.array(
+      z.object({ id: z.string(), vision: z.boolean(), label: z.string().optional() })
+    ),
     defaults: tunable,
     locked: z.array(z.string()),
     capabilities: z.record(
@@ -247,7 +249,7 @@ pin<Same<z.infer<typeof McpServerSchema>, McpServerView>>();
 export const AttachmentSchema = z
   .object({
     id: z.string(),
-    kind: z.enum(["text", "image", "pdf"]),
+    kind: z.enum(["text", "image", "pdf", "sheet"]),
     name: z.string(),
     mime: z.string(),
     bytes: z.number(),
