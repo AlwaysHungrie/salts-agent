@@ -95,6 +95,10 @@ function failed(call: { state?: string; output?: unknown }, name: string): boole
  * sent replies as text only, so without this a model forgets the ids and cells a tool
  * gave it and spends the next turn guessing or looking them up again. Failed calls are
  * left out: what went wrong was already said.
+ *
+ * It travels on the next user message, never inside the reply: a weaker model reads its
+ * own past replies as the shape of a reply, and copies a list of calls into its answer
+ * as text ("→ Sent the file") instead of calling the tool.
  */
 export function toolNotesOf(message: UIMessage): string {
   const lines: string[] = [];
@@ -120,7 +124,7 @@ export function toolNotesOf(message: UIMessage): string {
     used += line.length;
   }
   if (lines.length === 0) return "";
-  return `[Tools this reply used, results shortened. Reuse the ids and cells they gave rather than looking them up again.]\n${lines.join("\n")}`;
+  return `[Record of the tools your previous reply called, results shortened. Reuse the ids and cells they gave rather than looking them up again. This is a record, not a way to act: to do any of it again, call the tool. Never write calls like these in a reply.]\n${lines.join("\n")}`;
 }
 
 /**

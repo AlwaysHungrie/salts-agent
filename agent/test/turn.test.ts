@@ -212,12 +212,14 @@ describe("tools inside a turn", () => {
 });
 
 describe("tool results in later turns", () => {
-  /** The history the model was sent with the message carrying `token`. */
-  async function historyFor(token: string) {
+  /** The history the model was sent with the message carrying `token`, by role, as text. */
+  async function historyFor(token: string, role = "assistant") {
     const [request] = (await (
       await fetch(`https://openrouter.ai/__requests?contains=${token}`)
     ).json()) as { messages: { role: string; content?: unknown }[] }[];
-    return request.messages.filter((m) => m.role === "assistant").map((m) => String(m.content));
+    return request.messages
+      .filter((m) => m.role === role)
+      .map((m) => (typeof m.content === "string" ? m.content : JSON.stringify(m.content)));
   }
 
   it("carries what an earlier reply's tools were given and returned", async () => {
@@ -225,10 +227,18 @@ describe("tool results in later turns", () => {
     await say(sessionId, email, "!!toolcall list it");
     const token = `next-${crypto.randomUUID().slice(0, 8)}`;
     await say(sessionId, email, token);
+    const next = (await historyFor(token, "user")).find((m) => m.includes(token))!;
+    expect(next).toContain("[Record of the tools your previous reply called");
+    expect(next).toContain('- list({\\"path\\":\\"/\\"}) →');
+  });
+
+  it("keeps the record out of the reply, so a model never copies it as text", async () => {
+    const { sessionId, email } = await chatFixture();
+    await say(sessionId, email, "!!toolcall list it");
+    const token = `next-${crypto.randomUUID().slice(0, 8)}`;
+    await say(sessionId, email, token);
     const [earlier] = await historyFor(token);
-    expect(earlier).toContain("I listed the workspace.");
-    expect(earlier).toContain("[Tools this reply used");
-    expect(earlier).toContain('- list({"path":"/"}) →');
+    expect(earlier).toBe("I listed the workspace.");
   });
 
   it("leaves failed calls out", async () => {
