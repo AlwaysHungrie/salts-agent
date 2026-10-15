@@ -559,7 +559,16 @@ const SERVICES = {
       this.stop();
       return { status: 0, stdout: "", stderr: "" };
     },
-    push: (tunnel) => ({ route: "mcp", body: { name: "matchmaker", url: `${tunnel}/matchmaker/mcp` } }),
+    // Its headers go on empty, so the user only fills in their values; a Worker older than
+    // that ignores them.
+    push: (tunnel) => ({
+      route: "mcp",
+      body: {
+        name: "matchmaker",
+        url: `${tunnel}/matchmaker/mcp`,
+        headers: MATCHMAKER_HEADERS.map(([header]) => header),
+      },
+    }),
     reached: (tunnel) => `${tunnel}/matchmaker/mcp`,
   },
 

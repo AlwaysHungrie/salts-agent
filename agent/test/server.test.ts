@@ -702,6 +702,45 @@ describe("salts-tools pointing an MCP server at the tunnel", () => {
     expect(server.headers["X-OpenRouter-Api-Key"]).toBe("sk-or-test");
   });
 
+  it("adds the named headers empty, and keeps values already set", async () => {
+    const { member, id } = await agentWithToken();
+    const headers = ["X-OpenRouter-Api-Key", "Tool-Call-Max-Charge"];
+    await point(id, { name: "matchmaker", url: "https://mcp.test/mcp", headers });
+    let [server] = await servers(member, id);
+    expect(server.headers).toEqual({
+      Authorization: `Bearer ${TOKEN}`,
+      "X-OpenRouter-Api-Key": "",
+      "Tool-Call-Max-Charge": "",
+    });
+    const list = (await (await SELF.fetch(`${BASE}/api/agents/${id}/mcp`, as(member))).json()) as {
+      servers: { id: string }[];
+    };
+    await SELF.fetch(
+      `${BASE}/api/agents/${id}/mcp/${list.servers[0].id}`,
+      as(member, {
+        method: "PATCH",
+        body: JSON.stringify({
+          headers: { Authorization: `Bearer ${TOKEN}`, "x-openrouter-api-key": "sk-or-test" },
+        }),
+      })
+    );
+    await point(id, { name: "matchmaker", url: "https://mcp.test/mcp", headers });
+    [server] = await servers(member, id);
+    expect(server.headers).toEqual({
+      Authorization: `Bearer ${TOKEN}`,
+      "x-openrouter-api-key": "sk-or-test",
+      "Tool-Call-Max-Charge": "",
+    });
+  });
+
+  it("refuses seeded headers that are not plain names, or that name Authorization", async () => {
+    const { id } = await agentWithToken();
+    const url = "https://mcp.test/mcp";
+    for (const headers of [["Authorization"], ["bad name"], "X-Key", new Array(9).fill("X-A")]) {
+      expect((await point(id, { name: "matchmaker", url, headers })).status).toBe(400);
+    }
+  });
+
   it("leaves a same-named server alone when it does not use this token", async () => {
     const { member, id } = await agentWithToken();
     await SELF.fetch(
