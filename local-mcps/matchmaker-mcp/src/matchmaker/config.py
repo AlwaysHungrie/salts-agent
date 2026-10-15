@@ -28,10 +28,19 @@ class Settings(BaseSettings):
     embed_dim: int = 1536
     embed_timeout_seconds: float = 30.0
 
-    # Judging a page: a stronger model reads each candidate's full documents, a few per call.
-    judge_model: str = Field("openai/gpt-5-mini", validation_alias=AliasChoices("MM_JUDGE_MODEL"))
-    judge_reasoning_effort: str = "medium"
-    judge_batch: int = 5
+    # Judging a page: a model that takes temperature 0 reads each candidate's full documents, one per call, so a
+    # candidate's answers do not depend on who else is on the page. Reasoning models refuse a temperature. Chosen on
+    # the benchmark: gemini-2.5-flash gave the same order run to run (rank agreement 0.998; gpt-4.1-mini 0.94,
+    # gpt-5-mini 0.84) and the best order. ~$0.10 per page of 50.
+    judge_model: str = Field("google/gemini-2.5-flash", validation_alias=AliasChoices("MM_JUDGE_MODEL"))
+    judge_reasoning_effort: str | None = None
+    judge_temperature: float | None = 0.0
+    judge_seed: int | None = 7
+    judge_batch: int = 1
+    # The job's core (role type, core work, must-haves) decides every check, so a reasoning model reads it, once
+    # per job.
+    core_model: str = Field("openai/gpt-5-mini", validation_alias=AliasChoices("MM_CORE_MODEL"))
+    core_reasoning_effort: str = "medium"
 
     page_size: int = 50
     # Reciprocal rank fusion constant: rank r in either list adds 1 / (rrf_k + r).

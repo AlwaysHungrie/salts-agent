@@ -58,8 +58,24 @@ One embedding call (none when searching with the posting itself), no chat call.
 4. Pages of 50 with `next_offset`. Each candidate carries their profile and both ranks.
 
 The query is the posting, or a query the agent writes: the role and its other titles, the must-have skills and
-their other names. The agent then reads each page against the job and tells the admin who fits, who partly fits
-and how closely, and who does not.
+their other names. The same person filed twice (same email or phone, or resumes sharing half their word 5-grams)
+is listed once.
+
+### Judge a page
+
+1. The job's core is read once per job by `gpt-5-mini` (reasoning) and kept as `jobs/<id>/core.json`: role type
+   and core work (no product names), 3-5 must-haves that separate a fit from a near miss (the role-defining
+   experience first), years needed.
+2. Each candidate on the page is checked alone by `gemini-2.5-flash` at temperature 0, from their full
+   documents: evidence first, then yes / maybe / no for core work, same role type, latest role is core work,
+   seniority, and each must-have; plus years of core work. "yes" only when the written evidence shows all of it.
+3. The score is computed in code: core work 30, years of core work against years needed 15, role type 15,
+   latest role 10, seniority 5, must-haves 25 (first counts double); then 85% that and 15% the search place
+   (100 for first in the pool, 0 for last). No ceilings: one flipped answer moves a score by its own points.
+4. The page is ordered by score, ties by name. The next page is judged when asked for.
+
+Measured on the benchmark job: the same page judged twice ranks the same (Spearman 0.993, same top 10);
+gpt-4.1-mini gave 0.94 and gpt-5-mini 0.84 with a worse order. About $0.10 per page of 50.
 
 The index is in memory and rebuilt when any person's files change (checked by modification time on every search).
 
@@ -70,6 +86,7 @@ The index is in memory and rebuilt when any person's files change (checked by mo
 | Add a document | 1 chat + 1 embedding, ~$0.001 |
 | Post a job | 1 embedding |
 | Find candidates, next page | 1 embedding with an agent query, else none |
+| Judge a page of 50 | 1 job-core call per job, 50 judge calls, ~$0.10 |
 
 ## Evaluation
 
@@ -80,5 +97,6 @@ alone, hybrid on the posting, hybrid on a written query, and both hybrids with a
 ## Build steps
 
 1. **Core and evaluation** (this). People, jobs, search as a library.
-2. **Server.** MCP tools (`add_document`, `get_person`, `delete_person`, `post_job`, `find_candidates`), uploads.
+2. **Server.** MCP tools (`add_document`, `get_person`, `delete_person`, `post_job`, `find_candidates`,
+   `judge_page`), uploads.
 3. **Clean up.** Remove `recruiter_mcp`, update README, usage guide, salts-tools text.

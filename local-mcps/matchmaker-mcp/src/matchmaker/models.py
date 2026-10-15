@@ -46,18 +46,25 @@ class JobCore(LLMModel):
     role_type: str = Field(description="The kind of role in a few words: 'ML platform engineer', 'Staff accountant'")
     core_work: str = Field(description="1-2 sentences: the work this person does every day, not the tools")
     must_haves: list[str] = Field(description="3-6 things a candidate cannot do the job without, each short")
+    years_needed: float | None = Field(description="Years of experience the posting asks for; null if it does not say")
 
 
 class MustHaveCheck(LLMModel):
     must_have: str
+    evidence: str = Field(description="The fact from their documents that shows it, in a few words; 'none' if none")
     answer: Answer
 
 
 class CandidateCheck(LLMModel):
     id: str
     candidate_role_type: str = Field(description="The kind of role this candidate's own work is, in a few words")
-    same_role_type: Answer
+    core_work_evidence: str = Field(description="The roles and facts that show the core work, in a few words; "
+                                                "'none' if none")
     core_work: Answer = Field(description="Has their actual work been the job's core work?")
+    core_work_years: float = Field(description="Years they spent doing the core work; 0 if none")
+    same_role_type: Answer
+    latest_role_core: Answer = Field(description="Is their latest role the job's core work?")
+    level_fit: Answer = Field(description="Is their seniority right for the job?")
     must_haves: list[MustHaveCheck] = Field(description="Every must-have, in the order given")
     reason: str = Field(description="One sentence")
 
@@ -112,11 +119,18 @@ class Page(BaseModel):
 
 
 class JudgedCandidate(Candidate):
-    score: int | None = Field(description="0-100 from the checks; null if the judge gave no answer for them")
+    score: float | None = Field(description="0-100: the checks (85%) and the search place (15%); null if the judge "
+                                            "gave no answer for them")
+    check_score: float | None = Field(None, description="0-100 from the judge's answers alone")
+    search_score: float | None = Field(None, description="0-100 from the place in the whole ranked pool")
     candidate_role_type: str | None = None
     same_role_type: Answer | None = None
     core_work: Answer | None = None
+    core_work_years: float | None = None
+    latest_role_core: Answer | None = None
+    level_fit: Answer | None = None
     must_haves: dict[str, Answer] = Field(default_factory=dict)
+    evidence: dict[str, str] = Field(default_factory=dict, description="Per check, what the judge based it on")
     reason: str | None = None
 
 

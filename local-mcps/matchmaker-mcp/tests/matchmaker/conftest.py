@@ -2,7 +2,8 @@
 
 Test documents use a tiny line format the fake LLM reads:
   Name: / Email: / Headline: / Location: / Relocate: yes|likely|unlikely|no / Years: 6 / Skill: Python
-and, for the fake judge: Core: yes|maybe|no / Role: yes|maybe|no / Musts: yes,maybe,no
+and, for the fake judge: Core: / Role: / Recent: / Level: (yes|maybe|no) / Musts: yes,maybe,no /
+  CoreYears: 2
 """
 
 import hashlib
@@ -65,7 +66,7 @@ class FakeJudge(FakeLLM):
 
     def _job_core(self, user):
         return {"role_type": "Backend engineer", "core_work": "Builds services.",
-                "must_haves": ["Services in production", "Python", "Postgres"]}
+                "must_haves": ["Services in production", "Python", "Postgres"], "years_needed": 4}
 
     def _checks(self, user):
         out = []
@@ -74,8 +75,11 @@ class FakeJudge(FakeLLM):
                 continue
             musts = (_last(body, "Musts") or "no,no,no").split(",")
             out.append({"id": cid, "candidate_role_type": _last(body, "Headline") or "?",
+                        "core_work_evidence": "fake", "core_work_years": float(_last(body, "CoreYears") or 4),
                         "same_role_type": _last(body, "Role") or "no", "core_work": _last(body, "Core") or "no",
-                        "must_haves": [{"must_have": f"m{n}", "answer": a} for n, a in enumerate(musts)],
+                        "latest_role_core": _last(body, "Recent") or "yes", "level_fit": _last(body, "Level") or "yes",
+                        "must_haves": [{"must_have": f"m{n}", "evidence": "fake", "answer": a}
+                                       for n, a in enumerate(musts)],
                         "reason": "fake"})
         return {"candidates": out}
 
@@ -110,6 +114,7 @@ def svc():
     s._llm = FakeLLM()
     s._embedder = FakeEmbedder(64)
     s._judge = FakeJudge()
+    s._core_reader = s._judge  # the fake answers both
     return s
 
 

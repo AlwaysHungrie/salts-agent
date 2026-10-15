@@ -6,7 +6,7 @@ from matchmaker import billing
 from matchmaker.documents import read_text
 from matchmaker.errors import ToolFailure
 from matchmaker.jobs import find_candidates, post_job
-from matchmaker.judge import judge_page, score
+from matchmaker.judge import check_score, judge_page, score, search_score
 from matchmaker.models import Profile
 from matchmaker.people import add_document, delete_person, get_person, render_profile
 from matchmaker.search import duplicate_groups, fuse, search
@@ -239,12 +239,23 @@ async def test_blank_names_written_by_the_model_are_stored_as_none(svc):
 # ------------------------------------------------------------------ judging a page
 
 
-def test_score_comes_from_the_checks_with_caps():
-    assert score("yes", "yes", ["yes", "yes"]) == 100
-    assert score("maybe", "yes", ["yes", "maybe"]) == 68  # 25 + 20 + 22.5
-    assert score("no", "yes", ["yes", "yes"]) == 49  # not the core work: under 50 whatever else
-    assert score("yes", "no", ["yes", "yes"]) == 39  # a different kind of role
-    assert score("yes", "yes", []) == 100
+def test_check_score_weights_the_first_must_have_twice_and_counts_years():
+    full = ("yes", 5.0, 5.0, "yes", "yes", "yes")
+    assert check_score(*full, ["yes", "yes", "yes"]) == 100
+    assert check_score(*full, []) == 100
+    # the first must-have alone weighs as much as the other two together: 25 * 2/4 off either way
+    assert check_score(*full, ["yes", "no", "no"]) == check_score(*full, ["no", "yes", "yes"]) == 87.5
+    # years against the years needed: 2 of 4 is half the 15 points; past the need counts as full
+    assert check_score("yes", 2.0, 4.0, "yes", "yes", "yes", ["yes"]) == 92.5
+    assert check_score("yes", 9.0, 4.0, "yes", "yes", "yes", ["yes"]) == 100
+    assert check_score("yes", 1.5, None, "yes", "yes", "yes", ["yes"]) == 92.5  # no need given: 3 years
+    assert check_score("no", 9.0, 4.0, "yes", "yes", "yes", ["yes"]) == 55  # no core work: its years count 0
+
+
+def test_search_place_breaks_ties():
+    assert search_score(1, 477) == 100 and search_score(477, 477) == 0 and search_score(1, 1) == 100
+    assert score(60, search_score(2, 100)) > score(60, search_score(40, 100))
+    assert score(80, 40) == 74.0
 
 
 async def test_judging_orders_the_page_by_score_then_name(svc):
@@ -261,12 +272,18 @@ async def test_judging_orders_the_page_by_score_then_name(svc):
     job = await post_job(svc, "Backend engineer, Python and Postgres")
     page = await find_candidates(svc, job.job_id, limit=6)
     judged = await judge_page(svc, job.job_id, page)
-    assert [(c.name, c.score) for c in judged.candidates] == [
-        ("Sam F", 100), ("Amy B", 95), ("Zoe A", 95), ("Max C", 49), ("Kim D", 45), ("Lee E", 39)]
-    kim = judged.candidates[4]
+    by_name = {c.name: c for c in judged.candidates}
+    assert [c.name for c in judged.candidates][0] == "Sam F"
+    assert [c.name for c in judged.candidates][-3:] == ["Lee E", "Kim D", "Max C"]
+    for c in judged.candidates:  # the score is the checks and the search place, as stored with it
+        assert c.search_score == round(search_score(c.position, page.total), 1)
+    amy, zoe = by_name["Amy B"], by_name["Zoe A"]
+    assert amy.check_score == zoe.check_score  # same answers: the search place decides
+    assert (amy.score > zoe.score) == (amy.position < zoe.position)
+    kim = by_name["Kim D"]
     assert kim.must_haves == {"Services in production": "yes", "Python": "no", "Postgres": "no"}  # unanswered: no
     assert judged.must_haves == ["Services in production", "Python", "Postgres"]
-    assert svc.judge.calls == ["job_core", "checks", "checks"]  # 6 candidates in batches of 5
+    assert svc.judge.calls == ["job_core"] + ["checks"] * 6  # one candidate per call
     await judge_page(svc, job.job_id, page)
     assert svc.judge.calls.count("job_core") == 1  # kept with the job
 
@@ -279,7 +296,7 @@ async def test_a_candidate_the_judge_leaves_out_is_asked_again_then_listed_last(
     judged = await judge_page(svc, job.job_id, await find_candidates(svc, job.job_id))
     assert [c.person_id for c in judged.candidates] == [b.person_id, a.person_id]
     assert judged.candidates[-1].score is None
-    assert svc.judge.calls == ["job_core", "checks", "checks"]  # the missing one asked once more
+    assert svc.judge.calls == ["job_core", "checks", "checks", "checks"]  # the missing one asked once more
 
 
 # ------------------------------------------------------------------ the caller's key, never the server's
