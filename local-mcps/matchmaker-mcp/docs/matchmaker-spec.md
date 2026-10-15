@@ -100,19 +100,21 @@ alone, hybrid on the posting, hybrid on a written query, and both hybrids with a
 1. **Core and evaluation.** People, jobs, search and judging as a library. Done.
 2. **Server** (`matchmaker-mcp`, `src/matchmaker/server.py`). Done; salts-tools runs it as `matchmaker`.
    Tools: `add_document` (upload_id or text), `add_note` (a fact about a person; it wins over the documents and
-   is read by the profile, search and the judge), `get_person`, `get_person_files_link` (a signed browser link to the
+   is read by the profile, search and the judge), `get_person`, `get_person_files_link` (a browser link to the
    person's files), `delete_person`, `post_job`, `list_jobs`,
    `find_candidates` (search, then the page judged), `search_people` (unjudged), `ping`, and bulk ingest:
-   `get_upload_link` (a signed browser link to an upload page that writes into the inbox; the inbox folder when the
+   `get_upload_link` (a browser link to an upload page that writes into the inbox; the inbox folder when the
    caller did not come through the salts-tools gateway), `ingest_inbox` (a background run, each file a new
    person's resume; files added before and unchanged are skipped by path, size and modification time, text
    already on file costs nothing, failures retried up to 3 times; the whole run must fit Tool-Call-Max-Charge),
    `get_ingest_status`, `export_people` / `export_jobs` (exports.py: a zip with people.csv or jobs.csv and every
-   person's or job's files under DATA_DIR/exports/, handed over as a signed download link; exports older than a
+   person's or job's files under DATA_DIR/exports/, handed over as a download link; exports older than a
    link's lifetime are pruned when the next is made), `reset_server` (wipes DATA_DIR and the inbox; the first call
    returns a one-time code, valid 10 minutes and spent by any attempt, that the user must type back for the second
    call to delete; refused while an inbox run is going). `scripts/export_hf_resumes.py FOLDER` writes the benchmark's resumes as text files. `POST /uploads` takes
    PDF, DOCX or text bytes and returns an upload_id; `/healthz` is open, so is `/share/<token>…` (links.py: the token
-   is HMAC-signed with a key from MCP_AUTH_TOKEN and expires after `MM_LINK_TTL_HOURS`, 24 by default; the public
+   is 20 random characters recorded in DATA_DIR/links.json with what it opens, its expiry (`MM_LINK_TTL_HOURS`, 24
+   by default) and a fingerprint of MCP_AUTH_TOKEN; short because models mangle long tokens when they copy a URL into
+   a reply, as a signed token once lost its expiry segment; the public
    address comes from the gateway's X-Forwarded-* headers), everything else needs the bearer token.
 3. **Clean up.** Remove `recruiter_mcp`, its migrations, Postgres and docker-compose, update the package README.

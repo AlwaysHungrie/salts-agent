@@ -13,7 +13,7 @@ The CLI:
 
 - runs each service bound to `127.0.0.1` only
 - runs a gateway on loopback that routes by the first path segment and refuses anything
-  without the token, except a service's signed share links (`/<service>/share/…`)
+  without the token, except a service's share links (`/<service>/share/…`)
 - opens one cloudflared tunnel to the gateway, so every service shares its address
 - writes each service's address into the agent
 - rebuilds the tunnel and updates the agent whenever the tunnel drops or moves
@@ -221,9 +221,10 @@ the Docker wait and leaves it to the supervisor, so login is never held up.
   check the same token again.
 - The one exception is a `GET` or `POST` to `/<service>/share/…`: a link the matchmaker
   hands out for the user to open in a browser (a person's files, the bulk upload page).
-  The link carries its own HMAC signature, keyed from the token, and expires (24 hours by
-  default, `MM_LINK_TTL_HOURS`). The matchmaker checks it; SearXNG and the analyst still
-  refuse the path without the token. Replacing the token voids every link.
+  The link is a random 20-character code the matchmaker records with what it opens and
+  when it expires (24 hours by default, `MM_LINK_TTL_HOURS`). The matchmaker checks it;
+  SearXNG and the analyst still refuse the path without the token. Replacing the token
+  voids every link.
 - The gateway sends each request on with a loopback `Host`, which the matchmaker's MCP
   library requires, and the address it came in on as `X-Forwarded-Host`, `-Proto` and
   `-Prefix`, so the matchmaker can write links to itself.

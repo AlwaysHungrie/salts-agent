@@ -60,7 +60,9 @@ mcp = MCPServer(
         "details. When the user asks for someone's resume or files, call get_person_files_link and give them the "
         "link; do not paste the files into the chat. delete_person only after the user confirms. "
         "export_people and export_jobs give a download link to everything (a spreadsheet plus the files). "
-        "reset_server wipes all data: only when the user asks, and only with the code they type back."
+        "reset_server wipes all data: only when the user asks, and only with the code they type back. "
+        "Every link these tools return must reach the user exactly as given: paste the full URL as plain text, "
+        "character for character; do not shorten it or hide it behind link text."
     ),
     version="0.2.0",
 )
@@ -232,7 +234,7 @@ class FilesLink(BaseModel):
     description=(
         "A link the user opens in their browser to see and download a person's files: the original resume and "
         "cover letter, their text, the notes and the profile. Use it whenever the user asks for someone's resume, "
-        "CV or files, and give them message_for_user. The link works for a day. Free."
+        "CV or files, and give them message_for_user with the URL unchanged. The link works for a day. Free."
     ),
     annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False),
 )
@@ -363,7 +365,8 @@ _runs = bulk.Runs()
 @mcp.tool(
     description=(
         "Start of bulk ingest: a link to an upload page the user opens in their browser to send many resumes at "
-        "once, into the server's inbox, and what the inbox holds now. Give the user message_for_user, then wait "
+        "once, into the server's inbox, and what the inbox holds now. Give the user message_for_user with the URL "
+        "unchanged, then wait "
         "until they say the upload is done before calling ingest_inbox. Never ask the user where their files "
         "are. Free."
     ),
@@ -459,7 +462,7 @@ def _export_link(svc: Services, ctx: Context | None, made: tuple, what: str) -> 
     description=(
         "Export every person: a download link to a zip with people.csv (one row each: contact details and profile) "
         "and each person's files (resume, cover letter, their text, notes, profile). Give the user "
-        "message_for_user. Free."
+        "message_for_user with the URL unchanged. Free."
     ),
     annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False),
 )
@@ -472,7 +475,8 @@ async def export_people(ctx: Context | None = None) -> ExportLink:
 @mcp.tool(
     description=(
         "Export every posted job: a download link to a zip with jobs.csv (one row each: title, date, what the job "
-        "is and its must-haves) and each posting's full text. Give the user message_for_user. Free."
+        "is and its must-haves) and each posting's full text. Give the user message_for_user with the URL unchanged. "
+        "Free."
     ),
     annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False),
 )
@@ -575,8 +579,7 @@ async def share_page(request: Request) -> Response:
     opened = links.read_token(svc.settings, token)
     if opened is None:
         return _gone()
-    kind, target = opened
-    expires = links.expiry(token)
+    kind, target, expires = opened
     if kind == links.EXPORT:
         path = exports.export_file(svc, target)
         if path is None:

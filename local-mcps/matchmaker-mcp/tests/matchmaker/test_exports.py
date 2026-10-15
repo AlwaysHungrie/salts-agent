@@ -52,7 +52,7 @@ async def test_people_and_jobs_export_as_a_download(mm):
     browser = TestClient(server.build_http_app())
 
     got = await server.export_people(ctx=ctx())
-    assert got.count == 2 and got.url.startswith("https://abc.trycloudflare.com/matchmaker/share/export-")
+    assert got.count == 2 and got.url.startswith("https://abc.trycloudflare.com/matchmaker/share/")
     assert got.url in got.message_for_user
     res = browser.get(path_of(got.url))
     assert res.status_code == 200 and res.headers["content-type"] == "application/zip"
@@ -75,10 +75,9 @@ async def test_people_and_jobs_export_as_a_download(mm):
     assert z.read(f"{row['folder_in_zip']}/job.md").decode().startswith("Backend engineer")
 
     token = path_of(got.url).removeprefix("/share/")
-    kind, export_id = links.read_token(mm.settings, token)
-    assert kind == links.EXPORT
+    assert links.read_token(mm.settings, token)[0] == links.EXPORT
     forged = links.make_token(mm.settings, links.EXPORT, "f" * 32)[0]
-    assert browser.get(f"/share/{forged}").status_code == 404  # signed, but no such export
+    assert browser.get(f"/share/{forged}").status_code == 404  # a real link, but no such export
 
 
 async def test_export_without_the_tunnel_gives_the_path(mm):

@@ -4,7 +4,7 @@
 //
 // Nothing gets past without `Authorization: Bearer <token>`, except a share link
 // (`/<service>/share/…`): it opens in a browser, which has no token, and carries its own
-// signature that the service checks. Every service checks the token again behind the
+// unguessable code that the service checks. Every service checks the token again behind the
 // gateway, so a service without share links still refuses one.
 //
 // The header is passed on unchanged, with the address the request came in on
@@ -19,7 +19,7 @@ function sameSecret(a, b) {
   return timingSafeEqual(digest(a), digest(b));
 }
 
-/** A signed link a service hands out to open in a browser; see the top of this file. */
+/** A link a service hands out to open in a browser; see the top of this file. */
 const SHARE = /^\/[a-z0-9-]+\/share\//;
 
 /** https behind the tunnel (cloudflared says so, or the Host is not this machine), http on loopback. */
