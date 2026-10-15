@@ -42,6 +42,13 @@ class Settings(BaseSettings):
     core_model: str = Field("openai/gpt-5-mini", validation_alias=AliasChoices("MM_CORE_MODEL"))
     core_reasoning_effort: str = "medium"
 
+    # MCP transport. salts-tools runs it over HTTP with these set; stdio refuses paid tools (no key header).
+    mcp_transport: Literal["stdio", "http"] = "stdio"
+    mcp_host: str = "127.0.0.1"
+    mcp_port: int = 8000
+    mcp_auth_token: str | None = None
+    max_file_bytes: int = 10 * 1024 * 1024
+
     page_size: int = 50
     # Reciprocal rank fusion constant: rank r in either list adds 1 / (rrf_k + r).
     rrf_k: int = 60

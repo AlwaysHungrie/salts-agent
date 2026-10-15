@@ -26,7 +26,7 @@ This guide will help you install salts-tools, connect it to your agent and start
 
    Otherwise, download it from [Cloudflare's downloads page](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/).
 
-3. If you want **web** or **matchmaker**, install [Docker Desktop](https://www.docker.com/products/docker-desktop/). If you already use OrbStack or Colima, those work too. You do not need to start Docker yourself, since salts-tools starts it when it is needed. On Linux you can use Docker Engine instead; we recommend starting it with `sudo systemctl enable --now docker` and adding yourself to the `docker` group, so salts-tools can use it without asking for your password.
+3. If you want **web**, install [Docker Desktop](https://www.docker.com/products/docker-desktop/). If you already use OrbStack or Colima, those work too. You do not need to start Docker yourself, since salts-tools starts it when it is needed. On Linux you can use Docker Engine instead; we recommend starting it with `sudo systemctl enable --now docker` and adding yourself to the `docker` group, so salts-tools can use it without asking for your password.
 4. If you want **matchmaker** or **analyst**, install [uv](https://docs.astral.sh/uv/getting-started/installation/). salts-tools uses it to set these tools up the first time you start them.
 
 If you only want the spreadsheet analyst, you can skip Docker.

@@ -49,3 +49,11 @@ async def find_candidates(svc: Services, job_id: str, query: str | None = None, 
         return await search(svc, query, offset, limit)
     text = (folder / "job.md").read_text(encoding="utf-8")
     return await search(svc, text, offset, limit, query_vector=np.load(folder / "embedding.npy").tolist())
+
+
+def list_jobs(svc: Services) -> list[JobResult]:
+    """Every posted job, newest first."""
+    root = svc.settings.data_dir / "jobs"
+    folders = [f for f in root.iterdir() if (f / "job.json").is_file()] if root.is_dir() else []
+    folders.sort(key=lambda f: (f / "job.json").stat().st_mtime, reverse=True)
+    return [JobResult(**json.loads((f / "job.json").read_text(encoding="utf-8"))) for f in folders]

@@ -32,7 +32,7 @@ Use the arrow keys or the numbers **1** to **4** to move around, **c** to copy y
 | `salts-tools restart` | Gets a fresh address and reconnects every agent. |
 | `salts-tools setup` | Asks the setup questions again, for example to add or remove agents. Enter the full list of agent IDs each time. |
 | `salts-tools autostart on` | Starts salts-tools when you log in. Use `off` to turn this off. |
-| `salts-tools reset` | Forgets your token and agents, so you can start again from scratch. Run `salts-tools stop` first. The matchmaker's candidates are kept. |
+| `salts-tools reset` | Forgets your token and agents, so you can start again from scratch. Run `salts-tools stop` first. The matchmaker's people and jobs are kept. |
 
 ## Making a new token
 

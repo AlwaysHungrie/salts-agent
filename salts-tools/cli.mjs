@@ -141,7 +141,6 @@ const DOCKER_WAIT_MS = 180_000;
 const GATEWAY_PORT = 8080;
 const WEB_PORT = 8180;
 const MATCHMAKER_PORT = 8280;
-const MATCHMAKER_PG_PORT = 5432;
 const ANALYST_PORT = 8380;
 
 const GREEN = "\x1b[32m";
@@ -467,16 +466,14 @@ const webEnv = (token = "unused", port = WEB_PORT) => ({
 const webPort = () => publishedPort(WEB_DIR, WEB_PROJECT, "caddy", 8081, webEnv());
 
 const MATCHMAKER_DIR = path.join(here, "..", "local-mcps", "matchmaker-mcp");
-// The folder's own name, so a database made by running it by hand is the one used.
-const MATCHMAKER_PROJECT = `matchmaker-mcp${SUFFIX}`;
 const ANALYST_DIR = path.join(here, "..", "local-mcps", "analyst-mcp");
 const ANALYST_BIN = IS_WIN
   ? path.join(ANALYST_DIR, ".venv", "Scripts", "analyst-mcp.exe")
   : path.join(ANALYST_DIR, ".venv", "bin", "analyst-mcp");
 
 const MATCHMAKER_BIN = IS_WIN
-  ? path.join(MATCHMAKER_DIR, ".venv", "Scripts", "recruiter-mcp.exe")
-  : path.join(MATCHMAKER_DIR, ".venv", "bin", "recruiter-mcp");
+  ? path.join(MATCHMAKER_DIR, ".venv", "Scripts", "matchmaker-mcp.exe")
+  : path.join(MATCHMAKER_DIR, ".venv", "bin", "matchmaker-mcp");
 
 /**
  * Each service: how to bring it up on loopback (returning its port), whether it answers
@@ -511,35 +508,22 @@ const SERVICES = {
 
   matchmaker: {
     label: "matchmaker MCP",
-    about: "resume ingestion and job matching (Postgres in Docker, uv)",
+    about: "resumes, cover letters and job matching (uv, no Docker)",
     log: MATCHMAKER_LOG,
-    docker: true,
+    docker: false,
     uv: true,
     child: null,
     healthy: (port) => ok(`http://127.0.0.1:${port}/healthz`),
     async up(token) {
-      let pgPort = publishedPort(MATCHMAKER_DIR, MATCHMAKER_PROJECT, "postgres", 5432);
-      if (!pgPort) {
-        pgPort = await portFrom(readState().svc?.matchmaker?.pgPort, MATCHMAKER_PG_PORT);
-        log(`matchmaker: postgres up on port ${pgPort}`);
-        const res = compose(MATCHMAKER_DIR, MATCHMAKER_PROJECT, ["up", "-d", "--wait"], {
-          MM_PG_PORT: String(pgPort),
-        });
-        if (res.status !== 0) {
-          throw new Error(`matchmaker: docker compose up failed: ${(res.stderr || res.stdout).trim()}`);
-        }
-      }
-      writeSvc("matchmaker", { pgPort });
       if (!existsSync(MATCHMAKER_BIN)) {
         log("matchmaker: uv sync");
         const res = run("uv", ["sync", "--frozen"], { cwd: MATCHMAKER_DIR, timeout: 600_000 });
         if (res.status !== 0) throw new Error(`matchmaker: uv sync failed: ${(res.stderr || res.stdout).trim()}`);
       }
-
       this.stop();
       const port = await portFrom(readState().svc?.matchmaker?.port, MATCHMAKER_PORT);
       const out = openSync(MATCHMAKER_LOG, "a");
-      // Its own .env still applies (DATA_DIR, models, …); these win over it.
+      // Its own .env still applies (MM_DATA_DIR, models, …); these win over it.
       const child = spawn(MATCHMAKER_BIN, [], {
         cwd: MATCHMAKER_DIR,
         stdio: ["ignore", out, out],
@@ -550,7 +534,6 @@ const SERVICES = {
           MCP_HOST: "127.0.0.1",
           MCP_PORT: String(port),
           MCP_AUTH_TOKEN: token,
-          DATABASE_URL: `postgresql://recruiter:recruiter@127.0.0.1:${pgPort}/recruiter`,
         },
       });
       this.child = child;
@@ -560,23 +543,21 @@ const SERVICES = {
       });
       writeSvc("matchmaker", { pid: child.pid });
       log(`matchmaker started (pid ${child.pid}) on port ${port}; log at ${MATCHMAKER_LOG}`);
-      // Pending migrations run before it starts answering.
-      if (!(await waitUntil(() => this.healthy(port), 90))) {
+      if (!(await waitUntil(() => this.healthy(port), 60))) {
         throw new Error(`matchmaker did not answer on port ${port} — see ${MATCHMAKER_LOG}`);
       }
       return port;
     },
-    /** The server process only; the database stays up. */
     stop() {
       if (this.child) this.child.kill("SIGTERM");
       this.child = null;
-      // One left behind by a supervisor killed hard.
+      // One left behind by a supervisor killed hard (recruiter-mcp: the server before this one).
       const stale = readState().svc?.matchmaker?.pid;
-      if (isProcess(stale, /recruiter-mcp/i)) process.kill(stale, "SIGTERM");
+      if (isProcess(stale, /matchmaker-mcp|recruiter-mcp/i)) process.kill(stale, "SIGTERM");
     },
     down() {
       this.stop();
-      return compose(MATCHMAKER_DIR, MATCHMAKER_PROJECT, ["down"]);
+      return { status: 0, stdout: "", stderr: "" };
     },
     push: (tunnel) => ({ route: "mcp", body: { name: "matchmaker", url: `${tunnel}/matchmaker/mcp` } }),
     reached: (tunnel) => `${tunnel}/matchmaker/mcp`,
@@ -1254,15 +1235,11 @@ function namedServices() {
 
 /**
  * The headers the matchmaker's paid tools need on the agent's `matchmaker` MCP server,
- * beside the Authorization salts-tools sets. Caps (USD per call) are the matchmaker's own
- * suggestions, from its .env.example.
+ * beside the Authorization salts-tools sets. The cap (USD per tool call) is optional.
  */
 const MATCHMAKER_HEADERS = [
   ["X-OpenRouter-Api-Key", "<your OpenRouter key>", "pays for its model calls"],
-  ["X-Cost-Approved-Resume-Ingestion", "0.01", "one resume, ~$0.002"],
-  ["X-Cost-Approved-Job-Match", "0.10", "one job match, ~$0.01–0.04"],
-  ["X-Cost-Approved-Search", "0.001", "one candidate search, ~free"],
-  ["X-Cost-Approved-Folder-Ingestion", "5.00", "a whole inbox run, ~$0.004 a file"],
+  ["Tool-Call-Max-Charge", "0.25", "most one call may spend; a judged page of 50 is ~$0.10"],
 ];
 const ANALYST_INBOX = path.join(ANALYST_DIR, "data", "inbox");
 
@@ -1484,8 +1461,8 @@ function clearHome(dir) {
 
 /**
  * Back to a first run, as on a machine that never ran salts-tools (or salts-web): the
- * token, the state, the logs, the login item and salts-web's leftovers all go. Docker
- * volumes (the matchmaker's database) are kept.
+ * token, the state, the logs, the login item and salts-web's leftovers all go. The
+ * matchmaker's people and jobs (files in local-mcps/matchmaker-mcp) are kept.
  */
 function reset() {
   if (supervisorPid() || pidIn(path.join(homeFor("salts-web"), "supervisor.pid"))) {
@@ -1852,7 +1829,7 @@ function view() {
           copyRow(["state and logs", HOME], HOME),
           {
             cells: ["reset", { text: "forget every agent and the token", tone: "bad" }],
-            note: "back to a first run; the matchmaker's database is kept. Stop everything first",
+            note: "back to a first run; the matchmaker's people and jobs are kept. Stop everything first",
             enter: () =>
               confirm("Forget every agent and the token?", () => {
                 const done = reset();
