@@ -1,5 +1,5 @@
 """Signed browser links, for a user in a chat app who cannot reach this computer's disk: a person's files to open or
-download, and an upload page that drops resumes into the bulk inbox.
+download, an export to download, and an upload page that drops resumes into the bulk inbox.
 
 A link is `<public base>/share/<token>`. The token names what it opens and when it expires, signed with a key derived
 from MCP_AUTH_TOKEN; the salts-tools gateway lets `/share/` through without the bearer header and this module checks
@@ -20,8 +20,8 @@ from .documents import SUFFIXES
 from .errors import ToolFailure
 from .uploads import _kind
 
-FILES, UPLOAD = "files", "upload"
-_TOKEN = re.compile(r"(files|upload)-([0-9a-f]{32}|inbox)-(\d{1,12})-([0-9a-f]{32})")
+FILES, UPLOAD, EXPORT = "files", "upload", "export"
+_TOKEN = re.compile(r"(files|upload|export)-([0-9a-f]{32}|inbox)-(\d{1,12})-([0-9a-f]{32})")
 # What a person's folder holds that is theirs to read: the originals, their text, notes and the profile.
 _HIDDEN = {"person.json", "embedding.npy"}
 _KIND_OF_SUFFIX = {".pdf": "pdf", ".docx": "docx", ".txt": "txt", ".md": "txt"}
@@ -41,7 +41,7 @@ def _sign(settings: Settings, body: str) -> str:
 
 
 def make_token(settings: Settings, kind: str, target: str, now: float | None = None) -> tuple[str, datetime]:
-    """(token, expires_at). `target` is a person_id for FILES, "inbox" for UPLOAD."""
+    """(token, expires_at). `target` is a person_id for FILES, an export_id for EXPORT, "inbox" for UPLOAD."""
     exp = int((now if now is not None else time.time()) + settings.link_ttl_hours * 3600)
     body = f"{kind}-{target}-{exp}"
     return f"{body}-{_sign(settings, body)}", datetime.fromtimestamp(exp, UTC)
@@ -189,14 +189,14 @@ def page(title: str, body: str, script: str = "") -> str:
             f"</head><body><main>{body}</main>{f'<script>{script}</script>' if script else ''}</body></html>")
 
 
-def _size(n: int) -> str:
+def size_label(n: int) -> str:
     return f"{n / 1024 / 1024:.1f} MB" if n >= 1024 * 1024 else f"{max(1, round(n / 1024))} KB"
 
 
 def files_page(token: str, name: str | None, headline: str, files: list[Path], expires: datetime) -> str:
     rows = "".join(
         f"<li><a class='name' href='{html.escape(token)}/f/{html.escape(f.name)}'>{html.escape(f.name)}</a>"
-        f"<span class='meta'>{_size(f.stat().st_size)}</span></li>" for f in files)
+        f"<span class='meta'>{size_label(f.stat().st_size)}</span></li>" for f in files)
     return page(f"{name or 'Candidate'}: files", (
         f"<h1>{html.escape(name or 'Candidate')}</h1><p class='sub'>{html.escape(headline)}</p>"
         f"<ul>{rows or '<li>No files on record.</li>'}</ul>"

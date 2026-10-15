@@ -107,7 +107,11 @@ alone, hybrid on the posting, hybrid on a written query, and both hybrids with a
    caller did not come through the salts-tools gateway), `ingest_inbox` (a background run, each file a new
    person's resume; files added before and unchanged are skipped by path, size and modification time, text
    already on file costs nothing, failures retried up to 3 times; the whole run must fit Tool-Call-Max-Charge),
-   `get_ingest_status`. `scripts/export_hf_resumes.py FOLDER` writes the benchmark's resumes as text files. `POST /uploads` takes
+   `get_ingest_status`, `export_people` / `export_jobs` (exports.py: a zip with people.csv or jobs.csv and every
+   person's or job's files under DATA_DIR/exports/, handed over as a signed download link; exports older than a
+   link's lifetime are pruned when the next is made), `reset_server` (wipes DATA_DIR and the inbox; the first call
+   returns a one-time code, valid 10 minutes and spent by any attempt, that the user must type back for the second
+   call to delete; refused while an inbox run is going). `scripts/export_hf_resumes.py FOLDER` writes the benchmark's resumes as text files. `POST /uploads` takes
    PDF, DOCX or text bytes and returns an upload_id; `/healthz` is open, so is `/share/<token>…` (links.py: the token
    is HMAC-signed with a key from MCP_AUTH_TOKEN and expires after `MM_LINK_TTL_HOURS`, 24 by default; the public
    address comes from the gateway's X-Forwarded-* headers), everything else needs the bearer token.
