@@ -4,14 +4,15 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 
 class BearerAuthMiddleware:
-    """Rejects HTTP requests without `Authorization: Bearer <token>`. `/healthz` is exempt."""
+    """Rejects HTTP requests without `Authorization: Bearer <token>`. `/healthz` is exempt, and so is `/share/`: a
+    browser opening a share link has no token, and the link carries its own signature (see links.py)."""
 
     def __init__(self, app: ASGIApp, token: str) -> None:
         self.app = app
         self.expected = f"Bearer {token}".encode()
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http" or scope["path"] == "/healthz":
+        if scope["type"] != "http" or scope["path"] == "/healthz" or scope["path"].startswith("/share/"):
             await self.app(scope, receive, send)
             return
         header = dict(scope["headers"]).get(b"authorization", b"")

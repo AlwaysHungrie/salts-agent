@@ -100,11 +100,15 @@ alone, hybrid on the posting, hybrid on a written query, and both hybrids with a
 1. **Core and evaluation.** People, jobs, search and judging as a library. Done.
 2. **Server** (`matchmaker-mcp`, `src/matchmaker/server.py`). Done; salts-tools runs it as `matchmaker`.
    Tools: `add_document` (upload_id or text), `add_note` (a fact about a person; it wins over the documents and
-   is read by the profile, search and the judge), `get_person`, `delete_person`, `post_job`, `list_jobs`,
+   is read by the profile, search and the judge), `get_person`, `get_person_files_link` (a signed browser link to the
+   person's files), `delete_person`, `post_job`, `list_jobs`,
    `find_candidates` (search, then the page judged), `search_people` (unjudged), `ping`, and bulk ingest:
-   `get_inbox_folder` (the folder the agent hands the user), `ingest_inbox` (a background run, each file a new
+   `get_upload_link` (a signed browser link to an upload page that writes into the inbox; the inbox folder when the
+   caller did not come through the salts-tools gateway), `ingest_inbox` (a background run, each file a new
    person's resume; files added before and unchanged are skipped by path, size and modification time, text
    already on file costs nothing, failures retried up to 3 times; the whole run must fit Tool-Call-Max-Charge),
    `get_ingest_status`. `scripts/export_hf_resumes.py FOLDER` writes the benchmark's resumes as text files. `POST /uploads` takes
-   PDF, DOCX or text bytes and returns an upload_id; `/healthz` is open, everything else needs the bearer token.
+   PDF, DOCX or text bytes and returns an upload_id; `/healthz` is open, so is `/share/<token>…` (links.py: the token
+   is HMAC-signed with a key from MCP_AUTH_TOKEN and expires after `MM_LINK_TTL_HOURS`, 24 by default; the public
+   address comes from the gateway's X-Forwarded-* headers), everything else needs the bearer token.
 3. **Clean up.** Remove `recruiter_mcp`, its migrations, Postgres and docker-compose, update the package README.

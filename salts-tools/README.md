@@ -13,7 +13,7 @@ The CLI:
 
 - runs each service bound to `127.0.0.1` only
 - runs a gateway on loopback that routes by the first path segment and refuses anything
-  without the token
+  without the token, except a service's signed share links (`/<service>/share/…`)
 - opens one cloudflared tunnel to the gateway, so every service shares its address
 - writes each service's address into the agent
 - rebuilds the tunnel and updates the agent whenever the tunnel drops or moves
@@ -219,8 +219,14 @@ the Docker wait and leaves it to the supervisor, so login is never held up.
 - The gateway refuses any request without `Authorization: Bearer <token>` (compared in
   constant time) and passes the header on, so SearXNG's Caddy gate and the matchmaker
   check the same token again.
+- The one exception is a `GET` or `POST` to `/<service>/share/…`: a link the matchmaker
+  hands out for the user to open in a browser (a person's files, the bulk upload page).
+  The link carries its own HMAC signature, keyed from the token, and expires (24 hours by
+  default, `MM_LINK_TTL_HOURS`). The matchmaker checks it; SearXNG and the analyst still
+  refuse the path without the token. Replacing the token voids every link.
 - The gateway sends each request on with a loopback `Host`, which the matchmaker's MCP
-  library requires.
+  library requires, and the address it came in on as `X-Forwarded-Host`, `-Proto` and
+  `-Prefix`, so the matchmaker can write links to itself.
 - Whoever holds the token can search through your SearXNG, call the matchmaker's tools,
   and point the agent's SearXNG URL and `matchmaker` server elsewhere. Keep it in the
   secret store and the agent's settings only.
@@ -301,7 +307,7 @@ curl -s 'http://localhost:8080/search?q=solana&format=json' | head -c 400
 - `cli.mjs`: the CLI, the dashboard and the supervisor
 - `status.mjs`: the status of each service and agent, read from `state.json`
 - `tui.mjs`: the dashboard's drawing and key handling
-- `gateway.mjs`: the token check and path routing in front of every service
+- `gateway.mjs`: the token check (and the share-link exception) and path routing in front of every service
 - `test/`: tests (`npm test`)
 - `web/docker-compose.yml`: the first-run secret generator, SearXNG (no host port), and
   the token gate on loopback

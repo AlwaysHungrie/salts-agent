@@ -44,11 +44,19 @@ Try it by sending your agent a few resumes, and then paste in a job description 
 
 Anything you tell your agent about a person, such as "Asha is open to moving to Berlin" or "Ravi is available from March", goes into that person's notes in the matchmaker. Notes are kept with their resume, they count for more than the resume, and searches and job matches read them. A later note replaces an earlier one that says something different.
 
+## Getting someone's resume
+
+Ask your agent for a person's files, for example "send me Amir Soto's resume". Your agent replies with a link. Open it in your browser to see everything the matchmaker holds for that person: their original resume and cover letter, the text read from them, your notes and their profile. Click a file to open or download it.
+
+Each link works for 24 hours and only opens that one person's files. Anyone you forward it to can open it too, so share it only with people who should see the resume.
+
 ## Adding many resumes at once
 
-Ask your agent to add a batch of resumes, for example "I want to add a folder of resumes". Your agent gives you a folder on your computer. Put your resume files in it (PDF, Word `.docx` or text files; folders inside it are fine), and then tell your agent you are done. The matchmaker reads them in the background, and your agent tells you how it is going.
+Ask your agent to add a batch of resumes, for example "I want to add a folder of resumes". Your agent replies with a link to an upload page. Open it in your browser, choose your files or a whole folder (PDF, Word `.docx` or text files, up to 10 MB each), and wait until the page says it is done. Then tell your agent you are done. The matchmaker reads them in the background, and your agent tells you how it is going.
 
-Each resume costs about $0.001 to read, so 500 resumes cost about $0.50. If your `Tool-Call-Max-Charge` is lower than that, your agent tells you the amount to raise it to. Files you have already added are skipped, so you can keep adding new files to the same folder and ask again.
+The upload link works for 24 hours. If it runs out, ask your agent for a new one.
+
+Each resume costs about $0.001 to read, so 500 resumes cost about $0.50. If your `Tool-Call-Max-Charge` is lower than that, your agent tells you the amount to raise it to. Files you have already added are skipped, so you can upload more later and ask again.
 
 As with every MCP server, keep only the tools you use switched on, since each one makes every reply a little more expensive. See [Must read: Managing costs and MCP tools](/guide/mcp-costs).
 
