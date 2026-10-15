@@ -43,10 +43,17 @@ class LLM(Protocol):
         ...
 
 
+_DEFAULT = object()
+
+
 class OpenRouterLLM:
-    def __init__(self, settings: Settings, api_key: str, model: str | None = None) -> None:
+    def __init__(self, settings: Settings, api_key: str, model: str | None = None, *, reasoning_effort=_DEFAULT,
+                 temperature: float | None = None, seed: int | None = None) -> None:
+        """`reasoning_effort` None sends no reasoning setting (models without one); `temperature` and `seed` are
+        sent only when set (reasoning models refuse a temperature)."""
         self.model = model or settings.llm_model
-        self.reasoning_effort = settings.llm_reasoning_effort
+        self.reasoning_effort = settings.llm_reasoning_effort if reasoning_effort is _DEFAULT else reasoning_effort
+        self.temperature, self.seed = temperature, seed
         self.deadline = deadline(settings.llm_timeout_seconds)
         # max_retries gives 2 retries with exponential backoff on 429/5xx/timeouts.
         self.client = AsyncOpenAI(
@@ -83,10 +90,16 @@ class OpenRouterLLM:
         }
         if effort:
             extra["reasoning"] = {"effort": effort}
+        sampling: dict = {}
+        if self.temperature is not None:
+            sampling["temperature"] = self.temperature
+        if self.seed is not None:
+            sampling["seed"] = self.seed
         ensure_budget()
         resp = await within(self.client.chat.completions.create(
             model=self.model,
             messages=messages,
+            **sampling,
             response_format={
                 "type": "json_schema",
                 "json_schema": {"name": name, "strict": True, "schema": schema.model_json_schema()},
@@ -110,7 +123,7 @@ class OpenRouterLLM:
         return content or ""
 
 
-def create_llm(settings: Settings, api_key: str, model: str | None = None) -> LLM:
+def create_llm(settings: Settings, api_key: str, model: str | None = None, **options) -> LLM:
     if settings.llm_provider == "openrouter":
-        return OpenRouterLLM(settings, api_key, model)
+        return OpenRouterLLM(settings, api_key, model, **options)
     raise ToolFailure("config_error", f"unknown LLM_PROVIDER {settings.llm_provider}")

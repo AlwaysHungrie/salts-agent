@@ -21,6 +21,7 @@ class Services:
     _llm: LLM | None = field(default=None, repr=False)
     _embedder: Embedder | None = field(default=None, repr=False)
     _judge: LLM | None = field(default=None, repr=False)
+    _core_reader: LLM | None = field(default=None, repr=False)
     _keyed: dict[str, dict[str, Any]] = field(default_factory=dict, repr=False)
     # The search index, rebuilt when a person's files change (see search.Index).
     index: Any = field(default=None, repr=False)
@@ -48,8 +49,16 @@ class Services:
 
     @property
     def judge(self) -> LLM:
-        """Job cores and page judging, on judge_model."""
-        return self._client("_judge", lambda settings, key: create_llm(settings, key, settings.judge_model))
+        """Page judging, on judge_model."""
+        return self._client("_judge", lambda settings, key: create_llm(
+            settings, key, settings.judge_model, reasoning_effort=settings.judge_reasoning_effort,
+            temperature=settings.judge_temperature, seed=settings.judge_seed))
+
+    @property
+    def core_reader(self) -> LLM:
+        """Reads a job's core once, on core_model."""
+        return self._client("_core_reader", lambda settings, key: create_llm(
+            settings, key, settings.core_model, reasoning_effort=settings.core_reasoning_effort))
 
     @property
     def embedder(self) -> Embedder:
