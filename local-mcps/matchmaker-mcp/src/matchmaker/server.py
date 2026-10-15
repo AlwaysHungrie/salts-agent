@@ -1,6 +1,7 @@
 """The matchmaker as an MCP server: people (resumes, cover letters) and jobs as folders, hybrid search, pages judged
 against the job. Over HTTP (salts-tools) every model call uses the caller's X-OpenRouter-Api-Key header."""
 
+import asyncio
 import functools
 import json
 import logging
@@ -15,7 +16,7 @@ from pydantic import BaseModel, Field
 from starlette.requests import Request
 from starlette.responses import FileResponse, HTMLResponse, JSONResponse, Response
 
-from . import billing, bulk, links, people
+from . import billing, bulk, exports, links, people
 from . import jobs as job_store
 from .auth import BearerAuthMiddleware
 from .config import get_settings
@@ -57,7 +58,9 @@ mcp = MCPServer(
         "call ingest_inbox and report progress with get_ingest_status. "
         "search_people browses the pool without a job, unjudged. get_person gives a full profile with contact "
         "details. When the user asks for someone's resume or files, call get_person_files_link and give them the "
-        "link; do not paste the files into the chat. delete_person only after the user confirms."
+        "link; do not paste the files into the chat. delete_person only after the user confirms. "
+        "export_people and export_jobs give a download link to everything (a spreadsheet plus the files). "
+        "reset_server wipes all data: only when the user asks, and only with the code they type back."
     ),
     version="0.2.0",
 )
@@ -429,6 +432,102 @@ async def get_ingest_status(run_id: Annotated[str | None, Field(description="Fro
                         cost_usd=round(run.cost_usd, 4), failures=run.failures[:20])
 
 
+class ExportLink(BaseModel):
+    message_for_user: str = Field(description="Pass this on to the user")
+    url: str | None = Field(description="Downloads the zip; null when links are unavailable (see path)")
+    expires_at: str | None = None
+    path: str = Field(description="The zip on the matchmaker's computer")
+    count: int = Field(description="People or jobs in the export")
+    size_bytes: int
+
+
+def _export_link(svc: Services, ctx: Context | None, made: tuple, what: str) -> ExportLink:
+    export_id, path, count = made
+    size = path.stat().st_size
+    link = links.link(svc.settings, ctx.headers if ctx is not None else None, links.EXPORT, export_id)
+    if link is None:
+        return ExportLink(message_for_user=f"The export of {count} {what} is at {path} on the matchmaker's computer.",
+                          url=None, path=str(path), count=count, size_bytes=size)
+    url, expires = link
+    return ExportLink(message_for_user=f"Download all {count} {what} ({links.size_label(size)}, a zip with a "
+                                       f"spreadsheet and their files): {url} (the link works for "
+                                       f"{svc.settings.link_ttl_hours} hours).",
+                      url=url, expires_at=expires.isoformat(), path=str(path), count=count, size_bytes=size)
+
+
+@mcp.tool(
+    description=(
+        "Export every person: a download link to a zip with people.csv (one row each: contact details and profile) "
+        "and each person's files (resume, cover letter, their text, notes, profile). Give the user "
+        "message_for_user. Free."
+    ),
+    annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False),
+)
+@tool_handler("export_people")
+async def export_people(ctx: Context | None = None) -> ExportLink:
+    svc = services()
+    return _export_link(svc, ctx, await asyncio.to_thread(exports.export_people, svc), "people")
+
+
+@mcp.tool(
+    description=(
+        "Export every posted job: a download link to a zip with jobs.csv (one row each: title, date, what the job "
+        "is and its must-haves) and each posting's full text. Give the user message_for_user. Free."
+    ),
+    annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False),
+)
+@tool_handler("export_jobs")
+async def export_jobs(ctx: Context | None = None) -> ExportLink:
+    svc = services()
+    return _export_link(svc, ctx, await asyncio.to_thread(exports.export_jobs, svc), "jobs")
+
+
+class ResetResult(BaseModel):
+    status: Literal["confirmation_needed", "wiped", "wrong_code"]
+    message_for_user: str = Field(description="Pass this on to the user, word for word")
+    people: int
+    jobs: int
+    inbox_files: int
+
+
+_reset_codes = exports.ResetCodes()
+
+
+@mcp.tool(
+    description=(
+        "Wipe ALL data: every person and their files, every job, the inbox and exports. Cannot be undone. Only when "
+        "the user asks for it. First call without confirmation_code: it returns a one-time code; give the user "
+        "message_for_user word for word and stop. Call again with confirmation_code only when the user's own "
+        "latest message contains that code; never fill it in yourself. The code works once, for 10 minutes."
+    ),
+    annotations=ToolAnnotations(read_only_hint=False, destructive_hint=True),
+)
+@tool_handler("reset_server")
+async def reset_server(
+    confirmation_code: Annotated[str | None, Field(description="The code exactly as the user typed it")] = None,
+) -> ResetResult:
+    svc = services()
+    inbox = bulk.inbox_dir(svc)
+    held = exports.holdings(svc, inbox)
+    counts = {"people": held.people, "jobs": held.jobs, "inbox_files": held.inbox_files}
+    if not confirmation_code:
+        code = _reset_codes.issue()
+        return ResetResult(status="confirmation_needed", **counts, message_for_user=(
+            f"This permanently deletes everything the matchmaker holds: {held.people} people with their resumes, "
+            f"cover letters and notes, {held.jobs} jobs, and {held.inbox_files} files in the upload inbox. It cannot "
+            f"be undone. If you want a copy first, ask me to export people and jobs. To go ahead, reply with: "
+            f"RESET {code} (the code works once, for 10 minutes)."))
+    bulk.require_idle(_runs)
+    if not _reset_codes.redeem(confirmation_code):
+        return ResetResult(status="wrong_code", **counts, message_for_user=(
+            "That code is wrong or has expired, so nothing was deleted. Ask me to reset again for a new code."))
+    exports.wipe(svc, inbox)
+    log.info("server reset: people=%d jobs=%d inbox_files=%d", held.people, held.jobs, held.inbox_files)
+    return ResetResult(status="wiped", **counts, message_for_user=(
+        f"Done: deleted {held.people} people, {held.jobs} jobs and {held.inbox_files} inbox files. The matchmaker "
+        f"is empty."))
+
+
 # ---------------------------------------------------------------- transports
 
 
@@ -478,6 +577,12 @@ async def share_page(request: Request) -> Response:
         return _gone()
     kind, target = opened
     expires = links.expiry(token)
+    if kind == links.EXPORT:
+        path = exports.export_file(svc, target)
+        if path is None:
+            return _gone()
+        log.info("export served id=%s", target)
+        return FileResponse(path, media_type="application/zip", filename=path.name, headers=links.PAGE_HEADERS)
     if kind == links.UPLOAD:
         return HTMLResponse(links.upload_page(expires, svc.settings.max_file_bytes), headers=links.PAGE_HEADERS)
     folder = people.person_dir(svc, target)

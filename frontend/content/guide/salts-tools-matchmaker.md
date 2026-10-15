@@ -58,6 +58,14 @@ The upload link works for 24 hours. If it runs out, ask your agent for a new one
 
 Each resume costs about $0.001 to read, so 500 resumes cost about $0.50. If your `Tool-Call-Max-Charge` is lower than that, your agent tells you the amount to raise it to. Files you have already added are skipped, so you can upload more later and ask again.
 
+## Exporting everyone
+
+Ask your agent to "export all people" or "export all jobs", and it replies with a download link. People come as a zip with a spreadsheet (`people.csv`, one row per person with their contact details and profile) and a folder for each person with their resume, cover letter, notes and profile. Jobs come as a zip with `jobs.csv` and the full text of each posting. Like every link from the matchmaker, it works for 24 hours.
+
+## Starting again from empty
+
+To delete everything the matchmaker holds, ask your agent to "reset the matchmaker". This removes every person and their files, every job and anything waiting in the upload inbox, and it cannot be undone. Your agent first tells you what would be deleted and gives you a code such as `RESET 4F7K2Q`. Nothing is deleted until you reply with that code yourself. The code works once, for 10 minutes. We recommend exporting people and jobs first if you might want them later.
+
 As with every MCP server, keep only the tools you use switched on, since each one makes every reply a little more expensive. See [Must read: Managing costs and MCP tools](/guide/mcp-costs).
 
 ## Footnotes
