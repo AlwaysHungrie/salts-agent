@@ -40,6 +40,7 @@ class Profile(LLMModel):
                                           "first, including ones the work clearly implies")
     summary: str = Field(description="3-5 sentences, factual: what they do, at what level, in which domain, notable "
                                      "results")
+    notes: list[str] = Field(description="Every fact from the admin's notes, short, newest wording; [] without notes")
 
 
 class JobCore(LLMModel):
@@ -89,7 +90,7 @@ class Person(BaseModel):
     name: str | None
     email: str | None
     phone: str | None
-    documents: list[str] = Field(description="Kinds on file: resume, cover_letter")
+    documents: list[str] = Field(description="Kinds on file: resume, cover_letter, notes")
     profile: str = Field(description="profile.md: the facts recruiters check, skills and summary")
     folder: str
 

@@ -8,7 +8,7 @@ from matchmaker.errors import ToolFailure
 from matchmaker.jobs import find_candidates, post_job
 from matchmaker.judge import check_score, judge_page, score, search_score
 from matchmaker.models import Profile
-from matchmaker.people import add_document, delete_person, get_person, render_profile
+from matchmaker.people import add_document, add_note, delete_person, get_person, render_profile
 from matchmaker.search import duplicate_groups, fuse, search
 
 from .conftest import resume
@@ -98,6 +98,32 @@ async def test_a_new_resume_replaces_the_old_one_and_the_same_text_is_no_model_c
     assert "Playwright" in (folder / "resume.txt").read_text(encoding="utf-8")
 
 
+async def test_notes_are_kept_dated_read_with_the_documents_and_searchable(svc):
+    r = await add_document(svc, text=resume("Asha Rao", "Backend engineer", "Python"))
+    await add_document(svc, text=resume("Bo C", "Designer", "Figma"))
+    await add_note(svc, r.person_id, "Open to relocating   to Berlin")
+    await add_note(svc, r.person_id, "Single, open to dating")
+    folder = svc.settings.data_dir / "people" / r.person_id
+    notes = (folder / "notes.txt").read_text(encoding="utf-8").splitlines()
+    assert len(notes) == 2 and notes[0].endswith("] Open to relocating to Berlin") and notes[0].startswith("[20")
+    prompt = svc.llm.prompts[-1]
+    assert '<document kind="resume">' in prompt and '<document kind="notes">' in prompt
+    p = get_person(svc, r.person_id)
+    assert p.documents == ["resume", "notes"]
+    assert "- Notes: Open to relocating to Berlin; Single, open to dating" in p.profile
+    assert (await search(svc, "single dating", limit=2)).candidates[0].person_id == r.person_id
+    # a new resume replaces the old one, and the notes stay
+    await add_document(svc, text=resume("Asha Rao", "Staff engineer", "Go"), person_id=r.person_id)
+    assert "Single, open to dating" in get_person(svc, r.person_id).profile
+    for pid, text, code in [(r.person_id, "  ", "invalid_input"), ("0" * 32, "x", "not_found")]:
+        with pytest.raises(ToolFailure) as e:
+            await add_note(svc, pid, text)
+        assert e.value.code == code
+    with pytest.raises(ToolFailure) as e:
+        await add_document(svc, "notes", text="x", person_id=r.person_id)  # notes only through add_note
+    assert e.value.code == "invalid_input"
+
+
 async def test_bad_input_is_refused_and_nothing_is_written(svc):
     for kwargs, code in [({"text": "  "}, "invalid_input"), ({"kind": "notes", "text": "x"}, "invalid_input"),
                          ({"text": "x", "person_id": "../../etc"}, "invalid_input"),
@@ -129,7 +155,8 @@ def test_profile_shows_relocation_reason_and_skips_unknowns():
     p = Profile(name="X", email=None, phone=None, headline="Nurse", current_title=None, seniority="senior",
                 location=None, open_to_relocate="likely", relocation_note="moved for work before", work_mode=None,
                 years_experience=None, work_authorization="likely UK, UK training and roles", notice_period=None,
-                languages=[], education=None, industries=["Healthcare"], skills=["ICU care"], summary="ICU nurse.")
+                languages=[], education=None, industries=["Healthcare"], skills=["ICU care"], summary="ICU nurse.",
+                notes=[])
     md = render_profile(p)
     assert md.startswith("# Nurse\n")
     assert "- Open to relocate: likely (moved for work before)" in md

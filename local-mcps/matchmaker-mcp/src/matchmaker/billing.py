@@ -31,9 +31,11 @@ class CostRule:
 # searching is one embedding; finding candidates also judges the page, one judge_model call per candidate.
 COST_RULES = {
     "add_document": CostRule(0.001, "adding a document"),
+    "add_note": CostRule(0.001, "adding a note"),
     "post_job": CostRule(0.00002, "posting a job"),
     "find_candidates": CostRule(0.12, "finding and judging a page of candidates"),
     "search_people": CostRule(0.00002, "searching people"),
+    "ingest_inbox": CostRule(0.001, "reading the inbox"),  # per file
 }
 
 # Errors that stop a whole operation (retrying the next file or candidate would fail the same way).

@@ -53,6 +53,7 @@ class FakeLLM:
             "work_authorization": None, "notice_period": None, "languages": [], "education": None,
             "industries": [], "skills": list(dict.fromkeys(_fields(user, "Skill"))),
             "summary": f"Works as {headline}.",
+            "notes": re.findall(r"^\[\d{4}-\d\d-\d\d\] (.+)$", user, re.M),
         }
 
 

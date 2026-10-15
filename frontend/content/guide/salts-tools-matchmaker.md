@@ -40,6 +40,16 @@ If you remove the **matchmaker** server itself, salts-tools leaves it removed. T
 
 Try it by sending your agent a few resumes, and then paste in a job description and ask who fits best. Your agent shows you the best people first, with what each one has and lacks for the job. Ask for more when you want the next 50.
 
+## Telling it more about someone
+
+Anything you tell your agent about a person, such as "Asha is open to moving to Berlin" or "Ravi is available from March", goes into that person's notes in the matchmaker. Notes are kept with their resume, they count for more than the resume, and searches and job matches read them. A later note replaces an earlier one that says something different.
+
+## Adding many resumes at once
+
+Ask your agent to add a batch of resumes, for example "I want to add a folder of resumes". Your agent gives you a folder on your computer. Put your resume files in it (PDF, Word `.docx` or text files; folders inside it are fine), and then tell your agent you are done. The matchmaker reads them in the background, and your agent tells you how it is going.
+
+Each resume costs about $0.001 to read, so 500 resumes cost about $0.50. If your `Tool-Call-Max-Charge` is lower than that, your agent tells you the amount to raise it to. Files you have already added are skipped, so you can keep adding new files to the same folder and ask again.
+
 As with every MCP server, keep only the tools you use switched on, since each one makes every reply a little more expensive. See [Must read: Managing costs and MCP tools](/guide/mcp-costs).
 
 ## Footnotes
