@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
-from . import billing, people
+from . import billing, bulk, people
 from . import jobs as job_store
 from .auth import BearerAuthMiddleware
 from .config import get_settings
@@ -52,6 +52,9 @@ mcp = MCPServer(
         "a score, the checks behind it and a reason. Tell the user who fits, who partly fits and what they lack, "
         "from those reasons. The next page (offset = next_offset) is judged when asked for and costs about the "
         "same again (~$0.10), so offer it rather than fetching it. "
+        "Many resumes at once: call get_inbox_folder and give the user the folder it returns; tell them to put "
+        "their resumes there and to tell you when they are done. Never ask where their files are. Then call "
+        "ingest_inbox and report progress with get_ingest_status. "
         "search_people browses the pool without a job, unjudged. get_person gives a full profile with contact "
         "details. delete_person only after the user confirms."
     ),
@@ -189,6 +192,24 @@ async def add_document(
     return await people.add_document(svc, kind, text=text, file_path=path, person_id=person_id)
 
 
+@mcp.tool(
+    description=(
+        "Add what the user tells you about a person to their notes: any fact not in their documents (\"open to "
+        "relocating to Berlin\", \"single, open to dating\", \"available from March\"). Notes are kept and dated, "
+        "win over the resume, and are read by search and matching, so use this rather than your own memory. Find "
+        "the person first (search_people by name). ~$0.001."
+    ),
+    annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False),
+)
+@tool_handler("add_note")
+async def add_note(
+    person_id: Annotated[str, Field(description="The person the note is about")],
+    text: Annotated[str, Field(description="The fact, as the user said it")],
+    ctx: Context | None = None,
+) -> PersonResult:
+    return await people.add_note(services(), person_id, text)
+
+
 @mcp.tool(description="A person's full profile, contact details and which documents are on file.",
           annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False))
 @tool_handler("get_person")
@@ -265,6 +286,100 @@ async def search_people(
     page = await search(svc, query, offset)
     return MatchPage(job_id=None, total=page.total, offset=page.offset, next_offset=page.next_offset,
                      matches=[_match(svc, c.position, c, False) for c in page.candidates])
+
+
+class InboxInfo(BaseModel):
+    message_for_user: str = Field(description="Pass this on to the user")
+    folder: str = Field(description="The inbox, a folder on the user's computer")
+    files: int = Field(description="Resume files in it now")
+    new: int = Field(description="Files the next ingest_inbox would read")
+    already_added: int
+    gave_up: int = Field(description="Files that failed every attempt; changing the file tries it again")
+    estimated_cost_usd: float
+
+
+class IngestStarted(BaseModel):
+    status: Literal["started", "nothing_new", "no_files"]
+    run_id: str | None = None
+    to_process: int
+    estimated_cost_usd: float
+
+
+class IngestStatus(BaseModel):
+    run_id: str
+    state: Literal["running", "finished", "stopped"]
+    stopped_reason: str | None = Field(description="Why the run stopped early, e.g. the key ran out of credit")
+    files: int
+    to_process: int
+    processed: int
+    counts: dict[str, int] = Field(description="added, duplicate (already someone's resume), failed")
+    cost_usd: float
+    failures: list[dict] = Field(description="Files that failed, with the reason; the next run tries them again")
+
+
+_runs = bulk.Runs()
+
+
+@mcp.tool(
+    description=(
+        "Start of bulk ingest: the server's inbox folder on the user's computer and what is in it. Give the user "
+        "message_for_user, then wait until they say the files are in before calling ingest_inbox. Never ask the "
+        "user where their files are. Free."
+    ),
+    annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False),
+)
+@tool_handler("get_inbox_folder")
+async def get_inbox_folder() -> InboxInfo:
+    sc = bulk.scan(services())
+    new, cost = len(sc["todo"]), round(len(sc["todo"]) * bulk.PER_FILE_USD, 4)
+    message = (f"Put the resumes you want to add in {sc['folder']} (PDF, Word .docx or text files; subfolders "
+               f"are fine), then tell me and I'll add them.")
+    if new:
+        message += f" There are already {new} new file(s) there (about ${cost:.2f} to read)."
+    return InboxInfo(message_for_user=message, folder=str(sc["folder"]), files=len(sc["files"]), new=new,
+                     already_added=sc["already_added"], gave_up=sc["gave_up"], estimated_cost_usd=cost)
+
+
+@mcp.tool(
+    description=(
+        "Add every new resume in the inbox (see get_inbox_folder), each as a new person. Call only after the user "
+        "has put their files there and said so. Files added before and unchanged are skipped; a file whose text "
+        "is already someone's resume costs nothing. Runs in the background and returns at once: report progress "
+        "with get_ingest_status every 30-60 s. ~$0.001 a file. Calling again retries files that failed."
+    ),
+    annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=True),
+)
+@tool_handler("ingest_inbox")
+async def ingest_inbox(ctx: Context | None = None) -> IngestStarted:
+    svc = services()
+    bulk.require_idle(_runs)
+    sc = bulk.scan(svc)
+    cost = round(len(sc["todo"]) * bulk.PER_FILE_USD, 4)
+    if not sc["files"]:
+        return IngestStarted(status="no_files", to_process=0, estimated_cost_usd=0)
+    if not sc["todo"]:
+        return IngestStarted(status="nothing_new", to_process=0, estimated_cost_usd=0)
+    billing.require_within(cost, f"{len(sc['todo'])} files at ~${bulk.PER_FILE_USD} each")
+    svc.llm, svc.embedder  # noqa: B018 - fails now, not in the background, without a key
+    run = _runs.start(svc, sc["folder"], sc["files"], sc["todo"])
+    log.info("inbox run %s started files=%d to_process=%d", run.run_id, len(sc["files"]), len(sc["todo"]))
+    return IngestStarted(status="started", run_id=run.run_id, to_process=len(sc["todo"]), estimated_cost_usd=cost)
+
+
+@mcp.tool(
+    description="Progress of the inbox run started by ingest_inbox: files done, counts, cost, failures. Omit run_id "
+                "for the latest run.",
+    annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False),
+)
+@tool_handler("get_ingest_status")
+async def get_ingest_status(run_id: Annotated[str | None, Field(description="From ingest_inbox")] = None,
+                            ) -> IngestStatus:
+    run = _runs.runs.get(run_id) if run_id else _runs.latest
+    if run is None:
+        raise ToolFailure("not_found", "no inbox run with that id since the server started")
+    return IngestStatus(run_id=run.run_id, state=run.state, stopped_reason=run.stopped_reason, files=run.total_files,
+                        to_process=run.to_process, processed=run.processed, counts=dict(run.counts),
+                        cost_usd=round(run.cost_usd, 4), failures=run.failures[:20])
 
 
 # ---------------------------------------------------------------- transports

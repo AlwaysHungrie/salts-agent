@@ -1,6 +1,7 @@
-"""People are folders: DATA_DIR/people/<person_id>/ holds each original file, its text, the profile the server
-writes (profile.md, no contact details), person.json and the profile's embedding. Adding a document rewrites the
-profile from all of the person's documents in one model call."""
+"""People are folders: DATA_DIR/people/<person_id>/ holds each original file, its text, the admin's notes
+(notes.txt, added to, never replaced), the profile the server writes (profile.md, no contact details), person.json
+and the profile's embedding. Adding a document or a note rewrites the profile from all of the person's documents
+in one model call."""
 
 import hashlib
 import json
@@ -8,6 +9,7 @@ import logging
 import re
 import shutil
 import uuid
+from datetime import date
 from pathlib import Path
 
 import numpy as np
@@ -20,7 +22,8 @@ from .services import Services
 
 log = logging.getLogger(__name__)
 
-KINDS = ("resume", "cover_letter")
+DOC_KINDS = ("resume", "cover_letter")  # one of each, a new one replaces the old
+KINDS = (*DOC_KINDS, "notes")  # every text a profile, search and the judge read
 _ID = re.compile(r"[0-9a-f]{32}")
 _BLANK = {"", "null", "none", "unknown", "n/a", "na", "-"}  # what models write for a missing name or contact
 
@@ -53,6 +56,7 @@ def render_profile(p: Profile) -> str:
         line("Work authorization", p.work_authorization), line("Notice period", p.notice_period),
         line("Languages", ", ".join(p.languages)), line("Education", p.education),
         line("Industries", ", ".join(p.industries)), line("Skills", ", ".join(p.skills)),
+        line("Notes", "; ".join(p.notes)),
     ]
     return "\n".join([f"# {p.headline}", "", *[f for f in facts if f], "", p.summary.strip()]) + "\n"
 
@@ -76,8 +80,8 @@ async def add_document(svc: Services, kind: str = "resume", *, text: str | None 
     """A resume or cover letter for a new person, or for `person_id` (replacing their earlier one of that kind).
     Send the file (`file_path`: PDF, DOCX, TXT, MD), its text, or both; the file's own text wins when it has one,
     and `text` is used for a file with none (a scanned PDF), whose original is still kept."""
-    if kind not in KINDS:
-        raise ToolFailure("invalid_input", f"kind must be one of {', '.join(KINDS)}")
+    if kind not in DOC_KINDS:
+        raise ToolFailure("invalid_input", f"kind must be one of {', '.join(DOC_KINDS)}")
     source = Path(file_path) if file_path else None
     if source is not None:
         try:
@@ -102,13 +106,8 @@ async def add_document(svc: Services, kind: str = "resume", *, text: str | None 
         folder = person_dir(svc, person_id)
         meta = {"person_id": person_id, "documents": {}}
 
-    docs = {k: (folder / f"{k}.txt").read_text(encoding="utf-8") for k in meta["documents"] if k != kind}
-    docs[kind] = text
-    documents = "\n\n".join(f'<document kind="{k}">\n{docs[k]}\n</document>' for k in KINDS if k in docs)
-    system, user = render("profile", documents=documents)
-    profile = await svc.llm.structured(system, user, Profile, name="person_profile")
-    profile_md = render_profile(profile)
-    [vec] = await svc.embedder.embed([profile_md])
+    docs = _texts(folder, meta, skip=kind) | {kind: text}
+    profile, profile_md, vec = await _profile(svc, docs)
 
     # Every model call is done: only now does anything reach the disk.
     original = f"{kind}{source.suffix.lower()}" if source is not None else None
@@ -120,18 +119,56 @@ async def add_document(svc: Services, kind: str = "resume", *, text: str | None 
         shutil.copyfile(source, folder / (original + ".tmp"))
         (folder / (original + ".tmp")).replace(folder / original)
     _write(folder / f"{kind}.txt", text)
+    status = "updated" if meta["documents"] else "created"
+    meta["documents"][kind] = {"sha256": sha, "original": original}
+    _save(folder, meta, profile, profile_md, vec)
+    log.info("person %s %s (%s)", person_id, status, kind)
+    return _result(meta, folder, status)
+
+
+async def add_note(svc: Services, person_id: str, text: str) -> PersonResult:
+    """The admin's own fact about a person ("open to relocating to Berlin", "single, open to dating"), dated and
+    added to their notes. Notes win over the documents when the profile is rewritten."""
+    text = " ".join(text.split())
+    if not text:
+        raise ToolFailure("invalid_input", "the note is empty")
+    folder = person_dir(svc, person_id)
+    if not (folder / "person.json").is_file():
+        raise ToolFailure("not_found", "no person with that id")
+    meta = _meta(folder)
+    notes_file = folder / "notes.txt"
+    earlier = notes_file.read_text(encoding="utf-8").rstrip() if notes_file.is_file() else ""
+    notes = (earlier + "\n" if earlier else "") + f"[{date.today().isoformat()}] {text}\n"
+    profile, profile_md, vec = await _profile(svc, _texts(folder, meta, skip="notes") | {"notes": notes})
+    _write(notes_file, notes)
+    meta["documents"]["notes"] = {"sha256": hashlib.sha256(notes.encode("utf-8")).hexdigest(), "original": None}
+    _save(folder, meta, profile, profile_md, vec)
+    log.info("person %s note added", person_id)
+    return _result(meta, folder, "updated")
+
+
+def _texts(folder: Path, meta: dict, skip: str) -> dict[str, str]:
+    return {k: (folder / f"{k}.txt").read_text(encoding="utf-8") for k in meta["documents"] if k != skip}
+
+
+async def _profile(svc: Services, docs: dict[str, str]) -> tuple[Profile, str, list[float]]:
+    documents = "\n\n".join(f'<document kind="{k}">\n{docs[k]}\n</document>' for k in KINDS if k in docs)
+    system, user = render("profile", documents=documents)
+    profile = await svc.llm.structured(system, user, Profile, name="person_profile")
+    profile_md = render_profile(profile)
+    [vec] = await svc.embedder.embed([profile_md])
+    return profile, profile_md, vec
+
+
+def _save(folder: Path, meta: dict, profile: Profile, profile_md: str, vec: list[float]) -> None:
     _write(folder / "profile.md", profile_md)
     buf = folder / "embedding.npy.tmp"
     with buf.open("wb") as f:
         np.save(f, np.asarray(vec, dtype=np.float32))
     buf.replace(folder / "embedding.npy")
-    status = "updated" if meta["documents"] else "created"
     meta.update(name=_clean(profile.name), email=_clean(profile.email), phone=_clean(profile.phone),
                 profile=profile.model_dump(exclude={"name", "email", "phone"}))
-    meta["documents"][kind] = {"sha256": sha, "original": original}
     _write(folder / "person.json", json.dumps(meta, indent=1, ensure_ascii=False))
-    log.info("person %s %s (%s)", person_id, status, kind)
-    return _result(meta, folder, status)
 
 
 def _result(meta: dict, folder: Path, status: str) -> PersonResult:

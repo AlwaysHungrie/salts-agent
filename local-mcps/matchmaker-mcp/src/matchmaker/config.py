@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     # MM_ names while the recruiter server (DATA_DIR, LLM_MODEL) shares this .env.
     # Everything lives in files: DATA_DIR/people/<person_id>/ and DATA_DIR/jobs/<job_id>/. No database.
     data_dir: Path = Field(Path("./data/matchmaker"), validation_alias=AliasChoices("MM_DATA_DIR"))
+    # The bulk inbox the agent hands the user (DATA_DIR/inbox when unset).
+    inbox_dir: Path | None = Field(None, validation_alias=AliasChoices("MM_INBOX_DIR"))
 
     # OpenRouter (OpenAI-compatible) for chat + embeddings. There is deliberately no API key setting: every model
     # call uses the caller's key from the X-OpenRouter-Api-Key header, never one of the server's own.
