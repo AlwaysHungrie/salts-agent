@@ -13,9 +13,9 @@ from mcp.server.mcpserver import Context, MCPServer
 from mcp_types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import BaseModel, Field
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import FileResponse, HTMLResponse, JSONResponse, Response
 
-from . import billing, bulk, people
+from . import billing, bulk, links, people
 from . import jobs as job_store
 from .auth import BearerAuthMiddleware
 from .config import get_settings
@@ -52,11 +52,12 @@ mcp = MCPServer(
         "a score, the checks behind it and a reason. Tell the user who fits, who partly fits and what they lack, "
         "from those reasons. The next page (offset = next_offset) is judged when asked for and costs about the "
         "same again (~$0.10), so offer it rather than fetching it. "
-        "Many resumes at once: call get_inbox_folder and give the user the folder it returns; tell them to put "
-        "their resumes there and to tell you when they are done. Never ask where their files are. Then call "
-        "ingest_inbox and report progress with get_ingest_status. "
+        "Many resumes at once: call get_upload_link and give the user message_for_user (a link to an upload page "
+        "in their browser); tell them to tell you when the upload is done. Never ask where their files are. Then "
+        "call ingest_inbox and report progress with get_ingest_status. "
         "search_people browses the pool without a job, unjudged. get_person gives a full profile with contact "
-        "details. delete_person only after the user confirms."
+        "details. When the user asks for someone's resume or files, call get_person_files_link and give them the "
+        "link; do not paste the files into the chat. delete_person only after the user confirms."
     ),
     version="0.2.0",
 )
@@ -217,6 +218,40 @@ async def get_person(person_id: Annotated[str, Field(description="From add_docum
     return people.get_person(services(), person_id)
 
 
+class FilesLink(BaseModel):
+    message_for_user: str = Field(description="Pass this on to the user")
+    url: str | None = Field(description="Opens the person's files in a browser; null when links are unavailable")
+    expires_at: str | None = None
+    files: list[str] = Field(description="What the link shows")
+
+
+@mcp.tool(
+    description=(
+        "A link the user opens in their browser to see and download a person's files: the original resume and "
+        "cover letter, their text, the notes and the profile. Use it whenever the user asks for someone's resume, "
+        "CV or files, and give them message_for_user. The link works for a day. Free."
+    ),
+    annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False),
+)
+@tool_handler("get_person_files_link")
+async def get_person_files_link(
+    person_id: Annotated[str, Field(description="From add_document or a result")],
+    ctx: Context | None = None,
+) -> FilesLink:
+    svc = services()
+    person = people.get_person(svc, person_id)
+    files = [f.name for f in links.person_files(people.person_dir(svc, person_id))]
+    who = person.name or "this person"
+    made = links.link(svc.settings, ctx.headers if ctx is not None else None, links.FILES, person_id)
+    if made is None:
+        return FilesLink(message_for_user=f"The files for {who} are in {person.folder} on the matchmaker's "
+                                          f"computer.", url=None, files=files)
+    url, expires = made
+    return FilesLink(message_for_user=f"Files for {who}: {url} (the link works for "
+                                      f"{svc.settings.link_ttl_hours} hours).",
+                     url=url, expires_at=expires.isoformat(), files=files)
+
+
 @mcp.tool(description="Permanently delete a person and all their files. Confirm with the user first.",
           annotations=ToolAnnotations(read_only_hint=False, destructive_hint=True))
 @tool_handler("delete_person")
@@ -290,7 +325,9 @@ async def search_people(
 
 class InboxInfo(BaseModel):
     message_for_user: str = Field(description="Pass this on to the user")
-    folder: str = Field(description="The inbox, a folder on the user's computer")
+    url: str | None = Field(description="The upload page; null when links are unavailable (use the folder)")
+    expires_at: str | None = None
+    folder: str = Field(description="The inbox, a folder on the matchmaker's computer")
     files: int = Field(description="Resume files in it now")
     new: int = Field(description="Files the next ingest_inbox would read")
     already_added: int
@@ -322,28 +359,38 @@ _runs = bulk.Runs()
 
 @mcp.tool(
     description=(
-        "Start of bulk ingest: the server's inbox folder on the user's computer and what is in it. Give the user "
-        "message_for_user, then wait until they say the files are in before calling ingest_inbox. Never ask the "
-        "user where their files are. Free."
+        "Start of bulk ingest: a link to an upload page the user opens in their browser to send many resumes at "
+        "once, into the server's inbox, and what the inbox holds now. Give the user message_for_user, then wait "
+        "until they say the upload is done before calling ingest_inbox. Never ask the user where their files "
+        "are. Free."
     ),
     annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False),
 )
-@tool_handler("get_inbox_folder")
-async def get_inbox_folder() -> InboxInfo:
-    sc = bulk.scan(services())
+@tool_handler("get_upload_link")
+async def get_upload_link(ctx: Context | None = None) -> InboxInfo:
+    svc = services()
+    sc = bulk.scan(svc)
     new, cost = len(sc["todo"]), round(len(sc["todo"]) * bulk.PER_FILE_USD, 4)
-    message = (f"Put the resumes you want to add in {sc['folder']} (PDF, Word .docx or text files; subfolders "
-               f"are fine), then tell me and I'll add them.")
+    made = links.link(svc.settings, ctx.headers if ctx is not None else None, links.UPLOAD, "inbox")
+    url, expires = made or (None, None)
+    if url:
+        message = (f"Upload the resumes you want to add here: {url} (PDF, Word .docx or text files; you can pick "
+                   f"many files or a whole folder; the link works for {svc.settings.link_ttl_hours} hours). Tell "
+                   f"me when the upload has finished and I'll add them.")
+    else:
+        message = (f"Put the resumes you want to add in {sc['folder']} (PDF, Word .docx or text files; subfolders "
+                   f"are fine), then tell me and I'll add them.")
     if new:
-        message += f" There are already {new} new file(s) there (about ${cost:.2f} to read)."
-    return InboxInfo(message_for_user=message, folder=str(sc["folder"]), files=len(sc["files"]), new=new,
-                     already_added=sc["already_added"], gave_up=sc["gave_up"], estimated_cost_usd=cost)
+        message += f" There are already {new} new file(s) waiting (about ${cost:.2f} to read)."
+    return InboxInfo(message_for_user=message, url=url, expires_at=expires.isoformat() if expires else None,
+                     folder=str(sc["folder"]), files=len(sc["files"]), new=new, already_added=sc["already_added"],
+                     gave_up=sc["gave_up"], estimated_cost_usd=cost)
 
 
 @mcp.tool(
     description=(
-        "Add every new resume in the inbox (see get_inbox_folder), each as a new person. Call only after the user "
-        "has put their files there and said so. Files added before and unchanged are skipped; a file whose text "
+        "Add every new resume in the inbox (see get_upload_link), each as a new person. Call only after the user "
+        "has uploaded their files and said so. Files added before and unchanged are skipped; a file whose text "
         "is already someone's resume costs nothing. Runs in the background and returns at once: report progress "
         "with get_ingest_status every 30-60 s. ~$0.001 a file. Calling again retries files that failed."
     ),
@@ -390,25 +437,88 @@ async def healthz(_: Request) -> JSONResponse:
     return JSONResponse({"ok": True})
 
 
+async def _read_body(request: Request, limit: int) -> bytes:
+    if int(request.headers.get("content-length") or 0) > limit:
+        raise ToolFailure("file_too_large", f"file exceeds {limit // (1024 * 1024)} MB")
+    body = bytearray()
+    async for chunk in request.stream():
+        body += chunk
+        if len(body) > limit:
+            raise ToolFailure("file_too_large", f"file exceeds {limit // (1024 * 1024)} MB")
+    return bytes(body)
+
+
 @mcp.custom_route("/uploads", methods=["POST"])
 async def upload(request: Request) -> JSONResponse:
     """Raw file bytes in, upload_id out, for agent apps whose model sees an attachment but cannot reproduce its
     bytes. Behind the same bearer auth as /mcp."""
     settings = get_settings()
     try:
-        limit = settings.max_file_bytes
-        if int(request.headers.get("content-length") or 0) > limit:
-            raise ToolFailure("file_too_large", f"file exceeds {limit // (1024 * 1024)} MB")
-        body = bytearray()
-        async for chunk in request.stream():
-            body += chunk
-            if len(body) > limit:
-                raise ToolFailure("file_too_large", f"file exceeds {limit // (1024 * 1024)} MB")
-        upload_id, kind = save_upload(settings, bytes(body))
+        body = await _read_body(request, settings.max_file_bytes)
+        upload_id, kind = save_upload(settings, body)
     except ToolFailure as e:
         return JSONResponse({"error": {"code": e.code, "message": e.message}}, status_code=400)
     log.info("upload stored kind=%s size=%d", kind, len(body))
     return JSONResponse({"upload_id": upload_id, "size_bytes": len(body), "kind": kind})
+
+
+# Share links (links.py): opened in a browser with no bearer token; the signed token in the path is the check.
+
+
+def _gone() -> HTMLResponse:
+    return HTMLResponse(links.gone_page(), status_code=404, headers=links.PAGE_HEADERS)
+
+
+@mcp.custom_route("/share/{token}", methods=["GET"])
+async def share_page(request: Request) -> Response:
+    svc = services()
+    token = request.path_params["token"]
+    opened = links.read_token(svc.settings, token)
+    if opened is None:
+        return _gone()
+    kind, target = opened
+    expires = links.expiry(token)
+    if kind == links.UPLOAD:
+        return HTMLResponse(links.upload_page(expires, svc.settings.max_file_bytes), headers=links.PAGE_HEADERS)
+    folder = people.person_dir(svc, target)
+    if not (folder / "person.json").is_file():
+        return _gone()
+    person = people.get_person(svc, target)
+    headline = json.loads((folder / "person.json").read_text(encoding="utf-8"))["profile"].get("headline") or ""
+    return HTMLResponse(links.files_page(token, person.name, headline, links.person_files(folder), expires),
+                        headers=links.PAGE_HEADERS)
+
+
+@mcp.custom_route("/share/{token}/f/{name}", methods=["GET"])
+async def share_file(request: Request) -> Response:
+    svc = services()
+    opened = links.read_token(svc.settings, request.path_params["token"])
+    if opened is None or opened[0] != links.FILES:
+        return _gone()
+    path = links.person_file(people.person_dir(svc, opened[1]), request.path_params["name"])
+    if path is None:
+        return _gone()
+    log.info("share file served person=%s", opened[1])
+    media = links.MEDIA_TYPES.get(path.suffix.lower(), "application/octet-stream")
+    inline = path.suffix.lower() != ".docx"
+    return FileResponse(path, media_type=media, filename=path.name, headers=links.PAGE_HEADERS,
+                        content_disposition_type="inline" if inline else "attachment")
+
+
+@mcp.custom_route("/share/{token}/upload", methods=["POST"])
+async def share_upload(request: Request) -> JSONResponse:
+    svc = services()
+    opened = links.read_token(svc.settings, request.path_params["token"])
+    if opened is None or opened[0] != links.UPLOAD:
+        return JSONResponse({"error": {"code": "link_expired", "message": "link expired; ask for a new one"}},
+                            status_code=404)
+    try:
+        body = await _read_body(request, svc.settings.max_file_bytes)
+        path, new = links.save_to_inbox(bulk.inbox_dir(svc), request.query_params.get("name") or "", body)
+    except ToolFailure as e:
+        return JSONResponse({"error": {"code": e.code, "message": e.message}}, status_code=400)
+    log.info("share upload stored new=%s size=%d", new, len(body))
+    return JSONResponse({"new": new, "name": path.name})
 
 
 def build_http_app():

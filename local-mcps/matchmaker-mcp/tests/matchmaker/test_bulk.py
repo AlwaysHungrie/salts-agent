@@ -29,7 +29,7 @@ async def finish():
 
 
 async def test_the_inbox_is_read_once_and_duplicates_cost_nothing(mm):
-    info = await server.get_inbox_folder()
+    info = await server.get_upload_link()
     inbox = mm.settings.data_dir / "inbox"
     assert info.folder == str(inbox.resolve()) and info.files == 0 and str(inbox.resolve()) in info.message_for_user
     assert (await server.ingest_inbox(ctx=ctx())).status == "no_files"
@@ -40,7 +40,7 @@ async def test_the_inbox_is_read_once_and_duplicates_cost_nothing(mm):
     (inbox / "copy-of-a.txt").write_text(resume("Asha R", "Backend engineer", "Python"), encoding="utf-8")
     (inbox / "notes.xlsx").write_bytes(b"ignored")
     (inbox / ".hidden.txt").write_text("ignored", encoding="utf-8")
-    assert (await server.get_inbox_folder()).new == 3
+    assert (await server.get_upload_link()).new == 3
 
     started = await server.ingest_inbox(ctx=ctx())
     assert started.status == "started" and started.to_process == 3
@@ -66,7 +66,7 @@ async def test_failures_are_retried_and_a_bad_key_stops_the_run(mm):
         assert (await server.ingest_inbox(ctx=ctx())).to_process == 1
         await finish()
     assert (await server.ingest_inbox(ctx=ctx())).status == "nothing_new"
-    assert (await server.get_inbox_folder()).gave_up == 1
+    assert (await server.get_upload_link()).gave_up == 1
     ledger = json.loads((mm.settings.data_dir / "inbox.json").read_text())
     assert ledger[str(inbox / "empty.txt")]["attempts"] == bulk.MAX_ATTEMPTS
 

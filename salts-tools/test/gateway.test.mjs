@@ -7,7 +7,18 @@ import { startGateway } from "../gateway.mjs";
 function echo() {
   const server = http.createServer((req, res) => {
     res.writeHead(200, { "content-type": "application/json" });
-    res.end(JSON.stringify({ path: req.url, host: req.headers.host, auth: req.headers.authorization }));
+    res.end(
+      JSON.stringify({
+        path: req.url,
+        host: req.headers.host,
+        auth: req.headers.authorization,
+        forwarded: [
+          req.headers["x-forwarded-proto"],
+          req.headers["x-forwarded-host"],
+          req.headers["x-forwarded-prefix"],
+        ],
+      })
+    );
   });
   return new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve(server)));
 }
@@ -43,6 +54,36 @@ describe("gateway", () => {
     assert.equal(body.path, "/search?q=a&format=json");
     assert.equal(body.host, `127.0.0.1:${web.address().port}`);
     assert.equal(body.auth, `Bearer ${TOKEN}`);
+  });
+
+  it("tells the service the address the request came in on", async () => {
+    const body = await (await get("/web/search")).json();
+    assert.deepEqual(body.forwarded, ["http", `127.0.0.1:${gateway.address().port}`, "/web"]);
+    // fetch will not send another Host, so this one goes by hand, as cloudflared's would arrive.
+    const tunnelled = await new Promise((resolve, reject) => {
+      const req = http.get(
+        `${base}/web/search`,
+        { headers: { authorization: `Bearer ${TOKEN}`, host: "abc.trycloudflare.com" } },
+        (res) => {
+          let text = "";
+          res.on("data", (c) => (text += c));
+          res.on("end", () => resolve(JSON.parse(text)));
+        }
+      );
+      req.on("error", reject);
+    });
+    assert.deepEqual(tunnelled.forwarded, ["https", "abc.trycloudflare.com", "/web"]);
+  });
+
+  it("lets a share link through without the token, for the service to check", async () => {
+    const res = await get("/web/share/abc/f/cv.pdf", "");
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).path, "/share/abc/f/cv.pdf");
+    assert.equal((await get("/web/shared", "")).status, 401);
+    assert.equal((await get("/web/x/share/abc", "")).status, 401);
+    assert.equal((await get("/web/share/../search", "")).status, 401);
+    const put = await fetch(`${base}/web/share/abc`, { method: "PUT" });
+    assert.equal(put.status, 401);
   });
 
   it("404s a service that is not running", async () => {

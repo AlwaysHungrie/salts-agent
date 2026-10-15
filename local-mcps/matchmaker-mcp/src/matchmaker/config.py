@@ -50,6 +50,8 @@ class Settings(BaseSettings):
     mcp_port: int = 8000
     mcp_auth_token: str | None = None
     max_file_bytes: int = 10 * 1024 * 1024
+    # How long a browser link (a person's files, the upload page) works.
+    link_ttl_hours: int = Field(24, validation_alias=AliasChoices("MM_LINK_TTL_HOURS"))
 
     page_size: int = 50
     # Reciprocal rank fusion constant: rank r in either list adds 1 / (rrf_k + r).
