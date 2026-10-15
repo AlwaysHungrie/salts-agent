@@ -61,7 +61,8 @@ salts-tools start web
    and that Docker is running. Starts Docker if it is not.
 2. Generates a token if the OS secret store does not already hold one.
 3. Asks for the agent IDs, space separated. One salts-tools serves as many agents as you
-   list, and each of them gets every service.
+   list, and each of them gets every service unless you choose otherwise in the dashboard
+   (Agents tab, `enter` on an agent).
 4. Shows the token **once**. Paste it into each agent's settings under Capabilities →
    **Web search** → **SearXNG token**, then save. Leave the Brave key blank. When a
    Brave key is set, the agent uses Brave and ignores SearXNG. This one token guards
@@ -132,7 +133,7 @@ works in the background.
 | Tab | Shows | Keys |
 | --- | --- | --- |
 | 1 Services | Each service, its status (`live`, `starting`, `token refused`, …) and its address. `enter` opens a service: its address, which agents have it, and what to set on the agent (the matchmaker's headers, the analyst's inbox folder). | `s` start or stop, `r` new tunnel, `x` stop everything |
-| 2 Agents | Each agent served and whether it holds every address. | `a` add, `x` remove |
+| 2 Agents | Each agent served and whether it holds the address of every service set for it. `enter` opens an agent: each service is `on` or `off` for that agent only. An agent never chosen for gets every service. | `a` add, `x` remove; inside an agent `enter`/`space` switch a service |
 | 3 Settings | The token, start at login, the Worker, where files live, reset. | `enter` change, `n` new token |
 | 4 Log | The supervisor's log, newest at the bottom. | |
 
@@ -237,7 +238,7 @@ the Docker wait and leaves it to the supervisor, so login is never held up.
   | Linux without a keyring (headless) | `~/.salts-tools/token`, mode `0600` |
   | Windows | `%USERPROFILE%\.salts-tools\token.dpapi`, encrypted with DPAPI for the current user |
 
-- **State**: `~/.salts-tools/state.json` holds the agent IDs, Worker URL, which services
+- **State**: `~/.salts-tools/state.json` holds the agent IDs, the services chosen for each agent, Worker URL, which services
   are on, their ports, and the tunnel address. It contains no secrets.
 - **Logs**: `~/.salts-tools/supervisor.log`, `~/.salts-tools/matchmaker.log`,
   `~/.salts-tools/analyst.log`.

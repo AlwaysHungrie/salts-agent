@@ -14,7 +14,7 @@ Run `salts-tools` on its own to open a screen that shows what is running and whe
 | Tab | What it shows |
 |---|---|
 | **1 Services** | Each tool and whether it is `live`. Press **Enter** on a tool to see what to set on your agent for it. Press **s** to start or stop a tool. |
-| **2 Agents** | Each agent salts-tools serves and whether it is `connected`. Press **a** to add an agent and **x** to remove one. |
+| **2 Agents** | Each agent salts-tools serves and whether it is `connected`. Press **a** to add an agent and **x** to remove one. Press **Enter** on an agent to choose which tools it gets: **Enter** switches a tool on or off for that agent only. |
 | **3 Settings** | Your token, whether salts-tools starts at login, and where its files live. Press **n** to make a new token. |
 | **4 Log** | What salts-tools has been doing, newest at the bottom. |
 

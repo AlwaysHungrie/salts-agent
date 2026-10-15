@@ -1,14 +1,17 @@
 // What the dashboard says about each service and agent, worked out from state.json
 // alone: the supervisor writes its progress there, and this reads it back.
 
+import { servesAgent } from "./agents.mjs";
+
 /**
  * One service as `{ label, tone, note }`: a short word for its row, its colour
  * (good | busy | bad | off) and one line saying what is happening or what to do.
- * `running` is whether the supervisor is alive; `agents` the agent ids served.
+ * `running` is whether the supervisor is alive; `agents` the agent ids it is sent to.
  */
 export function serviceStatus(state, name, running, agents) {
   const e = state.svc?.[name] ?? {};
   if (!running || !(state.services ?? []).includes(name)) return { label: "off", tone: "off", note: "" };
+  if (!agents.length) return { label: "no agents", tone: "off", note: "no agent is set to use it: switch it on for one in Agents" };
   if (e.error?.startsWith("push:")) {
     const agent = e.failedAgent;
     if (e.pushStatus === 401) {
@@ -52,7 +55,7 @@ export function serviceStatus(state, name, running, agents) {
  * service that is on, and if not, which service is stuck on it and why.
  */
 export function agentStatus(state, id, running) {
-  const on = running ? (state.services ?? []) : [];
+  const on = running ? (state.services ?? []).filter((name) => servesAgent(state, id, name)) : [];
   if (!on.length) return { label: "nothing running", tone: "off", note: "" };
   const svc = state.svc ?? {};
   for (const name of on) {

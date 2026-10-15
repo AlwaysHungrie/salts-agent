@@ -83,3 +83,16 @@ test("an agent where the user removed a server is not waited on", () => {
   assert.equal(agent.label, "connected");
   assert.match(agent.note, /removed here: matchmaker/);
 });
+
+test("a service no agent is set to use says so, and an agent ignores services not set for it", () => {
+  const state = {
+    services: ["web", "matchmaker"],
+    url: URL,
+    agentServices: { b: ["web"] },
+    svc: { web: live({ a: URL, b: URL }), matchmaker: live({ a: URL }) },
+  };
+  assert.equal(serviceStatus(state, "matchmaker", true, []).label, "no agents");
+  const b = agentStatus(state, "b", true);
+  assert.equal(b.label, "connected");
+  assert.equal(b.note, "has web");
+});
