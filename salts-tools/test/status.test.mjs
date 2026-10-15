@@ -67,3 +67,19 @@ test("only the agent that refused is marked as refusing", () => {
   assert.equal(agentStatus(state, "a", true).label, "connected");
   assert.equal(agentStatus(state, "b", true).label, "token refused");
 });
+
+test("an agent where the user removed a server is not waited on", () => {
+  const removedIn = (ids) => ({
+    services: ["web", "matchmaker"],
+    url: URL,
+    svc: {
+      web: live({ a: URL, b: URL }),
+      matchmaker: { ...live({ a: URL }), removed: Object.fromEntries(ids.map((id) => [id, true])) },
+    },
+  });
+  assert.equal(serviceStatus(removedIn(["b"]), "matchmaker", true, ["a", "b"]).label, "live");
+  assert.equal(serviceStatus(removedIn(["a", "b"]), "matchmaker", true, ["a", "b"]).label, "removed");
+  const agent = agentStatus(removedIn(["b"]), "b", true);
+  assert.equal(agent.label, "connected");
+  assert.match(agent.note, /removed here: matchmaker/);
+});

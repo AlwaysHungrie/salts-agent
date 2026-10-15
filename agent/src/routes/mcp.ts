@@ -19,6 +19,7 @@ import { readConfig } from "../worker/stores";
 import { type AgentCall, AgentParams, agentRoute } from "./agent";
 import { redirectUri, startMcpOauth } from "./mcp-oauth";
 import { recommendMcpTools } from "./mcp-recommend";
+import { rememberRemoval } from "./searxng";
 
 /**
  * A server as the browser may see it: tokens stay in the Worker. Header values go back
@@ -220,6 +221,8 @@ export function mcpRoutes(app: ApiApp) {
   app.openapi(deleteServerRoute, async (c) => {
     const call = mcpCall(c.var.call);
     if (!(await call.manages())) throw refused();
+    const row = await call.reg.mcpServer(c.req.valid("param").serverId);
+    if (row) await rememberRemoval(call.env, call.reg, row);
     await call.reg.removeMcpServer(c.req.valid("param").serverId);
     return c.json({ ok: true }, 200);
   });
@@ -302,6 +305,8 @@ async function addServer({ reg, manages }: McpCall, body: Record<string, unknown
     enabled: patch.enabled ?? 1,
   };
   await reg.addMcpServer(row);
+  // Added back by hand: salts-tools may repoint it again.
+  await reg.clearMcpRemoved(row.name);
   // OAuth has nothing to list until the user approves it.
   const synced = row.auth === "oauth" ? row : await syncMcpTools(reg, row);
   return { server: mcpView(synced, true) };

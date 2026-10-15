@@ -340,6 +340,9 @@ export function validateSettingsPatch(input: unknown, current: StoredSettings): 
           if (entry.icon !== undefined) out.icon = svgIcon(entry.icon, `mcp_catalog[${i}].icon`);
           if (entry.letter !== undefined) out.letter = String(entry.letter).trim().slice(0, 1);
           if (entry.color !== undefined) out.color = String(entry.color).trim();
+          if (entry.headers !== undefined) {
+            out.headers = catalogHeaders(entry.headers, `mcp_catalog[${i}].headers`);
+          }
           return out;
         });
         break;
@@ -547,6 +550,26 @@ export function svgIcon(value: unknown, name: string): string {
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
   return SVG_DATA_URL + btoa(binary);
+}
+
+/**
+ * An MCP template's starting headers: up to eight plain header names, each with a string
+ * value (a placeholder such as `Bearer API-KEY` for the user to replace).
+ */
+export function catalogHeaders(value: unknown, name: string): Record<string, string> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new SettingsError(`${name} must be an object of header names to values`);
+  }
+  const entries = Object.entries(value);
+  if (entries.length > 8) throw new SettingsError(`${name} may name at most 8 headers`);
+  const out: Record<string, string> = {};
+  for (const [key, v] of entries) {
+    if (!/^[A-Za-z0-9-]{1,64}$/.test(key) || typeof v !== "string") {
+      throw new SettingsError(`${name} must map plain header names to strings`);
+    }
+    out[key] = v.slice(0, 500);
+  }
+  return out;
 }
 
 /** Refuse an icon past the deployment's `max_icon_bytes`, counted as SVG bytes. */

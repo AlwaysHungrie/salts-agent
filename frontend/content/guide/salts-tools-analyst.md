@@ -26,6 +26,8 @@ Open your agent and go to **Capabilities**.
 1. Switch on **File ingest**, so you can attach files in the chat.
 2. Switch on **MCP servers**. You will find a new server called **analyst** there, already connected with your token.
 
+If you remove the **analyst** server, salts-tools leaves it removed. To bring it back, click the **analyst** icon at the top of **MCP servers**, replace `SALTS-TOOLS-TOKEN` with your token and click **Add**. salts-tools fills in the real address within a minute.
+
 ## You are done
 
 Attach an .xlsx or .csv file in the chat and ask your agent a question about it.

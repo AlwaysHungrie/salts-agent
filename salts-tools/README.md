@@ -95,6 +95,11 @@ never changes a value you set:
 
 The dashboard lists them under the matchmaker, and `enter` copies a header's name.
 
+If you remove the `matchmaker` server in an agent, salts-tools does not add it back; the
+dashboard shows it as removed there. To use it again, add it in the agent from the
+**matchmaker** template tile with `Authorization: Bearer <token>`; salts-tools repoints it
+to the tunnel within 30 seconds. The same holds for `analyst`.
+
 The matchmaker's own `.env` in `local-mcps/matchmaker-mcp` still applies (`MM_DATA_DIR`,
 models, and so on). salts-tools overrides the transport, host, port and token. People and
 jobs are folders under `local-mcps/matchmaker-mcp/data/matchmaker`. Its log is
@@ -200,7 +205,9 @@ token; an agent with no token saved cannot be updated this way.
   server, missing ones are added empty and set values are kept. An existing
   server of that name is repointed only if its `Authorization` is already this token;
   otherwise the Worker answers 409 and changes nothing, so the token can never redirect
-  an MCP server (and the headers it carries) that you set up some other way.
+  an MCP server (and the headers it carries) that you set up some other way. When the user
+  removed a server that carried this token, the Worker answers 410 and does not recreate it
+  until the user adds a server of that name again.
 
 At login, the login item runs `salts-tools start` without a terminal. That start skips
 the Docker wait and leaves it to the supervisor, so login is never held up.

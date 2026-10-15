@@ -36,9 +36,13 @@ export function serviceStatus(state, name, running, agents) {
   if (e.error) return { label: "failing", tone: "bad", note: e.error };
   if (!e.up) return { label: "starting", tone: "busy", note: "starting up; the first run installs packages and can take minutes" };
   if (!state.url) return { label: "opening tunnel", tone: "busy", note: "waiting for cloudflared to hand out an address" };
-  const done = agents.filter((id) => e.agents?.[id] === state.url).length;
-  if (done < agents.length) {
-    return { label: `connecting ${done}/${agents.length}`, tone: "busy", note: "sending the address to the agents" };
+  const served = agents.filter((id) => !e.removed?.[id]);
+  if (agents.length && !served.length) {
+    return { label: "removed", tone: "off", note: "removed in every agent; add it back there to use it" };
+  }
+  const done = served.filter((id) => e.agents?.[id] === state.url).length;
+  if (done < served.length) {
+    return { label: `connecting ${done}/${served.length}`, tone: "busy", note: "sending the address to the agents" };
   }
   return { label: "live", tone: "good", note: "" };
 }
@@ -65,11 +69,17 @@ export function agentStatus(state, id, running) {
       };
     }
   }
-  const connected = on.filter((name) => state.url && svc[name]?.agents?.[id] === state.url);
-  if (connected.length === on.length) return { label: "connected", tone: "good", note: `has ${on.join(", ")}` };
+  // A server the user removed in this agent is theirs to add back; it does not count.
+  const removed = on.filter((name) => svc[name]?.removed?.[id]);
+  const wanted = on.filter((name) => !removed.includes(name));
+  const gone = removed.length ? `; removed here: ${removed.join(", ")}` : "";
+  const connected = wanted.filter((name) => state.url && svc[name]?.agents?.[id] === state.url);
+  if (connected.length === wanted.length) {
+    return { label: "connected", tone: "good", note: `has ${connected.join(", ") || "nothing"}${gone}` };
+  }
   return {
-    label: `connecting ${connected.length}/${on.length}`,
+    label: `connecting ${connected.length}/${wanted.length}`,
     tone: "busy",
-    note: connected.length ? `has ${connected.join(", ")}` : "",
+    note: (connected.length ? `has ${connected.join(", ")}` : "") + gone,
   };
 }

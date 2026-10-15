@@ -3,7 +3,7 @@ import { type McpServerRow, parseHeaders } from "../mcp";
 import { EMPTY_MCP_SERVER } from "../registry";
 import { readJson } from "../worker/http";
 import { syncMcpTools } from "../worker/integrations";
-import { directory, readConfig, registry, writeConfig } from "../worker/stores";
+import { directory, type Registry, readConfig, registry, writeConfig } from "../worker/stores";
 
 /** Equal strings, compared in time that does not depend on where they first differ. */
 export async function sameSecret(a: string, b: string): Promise<boolean> {
@@ -69,6 +69,15 @@ async function trustsToken(row: McpServerRow, token: string): Promise<boolean> {
   );
 }
 
+/**
+ * Called as the user removes a server: one salts-tools set up (its `Authorization` is the
+ * agent's SearXNG token) is remembered, so the next push does not add it back.
+ */
+export async function rememberRemoval(env: Env, reg: Registry, row: McpServerRow): Promise<void> {
+  const token = (await readConfig(env, reg)).searxng_token.trim();
+  if (token && (await trustsToken(row, token))) await reg.markMcpRemoved(row.name);
+}
+
 const HEADER_NAME = /^[A-Za-z0-9-]{1,64}$/;
 const MAX_SEEDED_HEADERS = 8;
 
@@ -95,8 +104,8 @@ function withEmpty(headers: Record<string, string>, names: string[]): Record<str
 
 /**
  * Point one of the agent's MCP servers at a local server behind the salts-tools tunnel,
- * with the SearXNG token as proof. A server of that name is created when there is none,
- * authenticated with the same token. An existing one is repointed only when its saved
+ * with the SearXNG token as proof. A server of that name is created when there is none
+ * (unless the user removed it: 410), authenticated with the same token. An existing one is repointed only when its saved
  * `Authorization` is that token, so the token never redirects a server (and the headers
  * it carries) that was set up for anything else. `headers` names headers to add empty
  * when missing, so the user only fills in their values; values already set are kept.
@@ -139,6 +148,12 @@ export async function handleSearxngMcp(
   }
 
   const existing = (await reg.mcpServers()).find((s) => s.name.toLowerCase() === name);
+  if (!existing && (await reg.mcpRemoved(name))) {
+    return Response.json(
+      { error: `MCP server "${name}" was removed in this agent; it is not added back` },
+      { status: 410 }
+    );
+  }
   if (!existing) {
     const row: McpServerRow = {
       ...EMPTY_MCP_SERVER,

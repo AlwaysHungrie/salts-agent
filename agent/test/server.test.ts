@@ -702,6 +702,73 @@ describe("salts-tools pointing an MCP server at the tunnel", () => {
     expect(server.headers["X-OpenRouter-Api-Key"]).toBe("sk-or-test");
   });
 
+  it("leaves a server the user turned off turned off", async () => {
+    const { member, id } = await agentWithToken();
+    await point(id, { name: "matchmaker", url: "https://mcp.test/old/mcp" });
+    const list = (await (await SELF.fetch(`${BASE}/api/agents/${id}/mcp`, as(member))).json()) as {
+      servers: { id: string }[];
+    };
+    await SELF.fetch(
+      `${BASE}/api/agents/${id}/mcp/${list.servers[0].id}`,
+      as(member, { method: "PATCH", body: JSON.stringify({ enabled: false }) })
+    );
+    await point(id, { name: "matchmaker", url: "https://mcp.test/new/mcp", headers: ["X-Key"] });
+    const [server] = (await servers(member, id)) as (View & { enabled: number | boolean })[];
+    expect(server.url).toBe("https://mcp.test/new/mcp");
+    expect(Number(server.enabled)).toBe(0);
+    expect(server.tools).toEqual([]);
+  });
+
+  it("does not add back a server the user removed, until they add it again", async () => {
+    const { member, id } = await agentWithToken();
+    await point(id, { name: "matchmaker", url: "https://mcp.test/mcp" });
+    const list = (await (await SELF.fetch(`${BASE}/api/agents/${id}/mcp`, as(member))).json()) as {
+      servers: { id: string }[];
+    };
+    await SELF.fetch(
+      `${BASE}/api/agents/${id}/mcp/${list.servers[0].id}`,
+      as(member, { method: "DELETE" })
+    );
+    expect((await point(id, { name: "matchmaker", url: "https://mcp.test/mcp" })).status).toBe(410);
+    expect(await servers(member, id)).toEqual([]);
+
+    await SELF.fetch(
+      `${BASE}/api/agents/${id}/mcp`,
+      as(member, {
+        method: "POST",
+        body: JSON.stringify({
+          name: "matchmaker",
+          url: "https://your-tunnel.example/matchmaker/mcp",
+          auth: "headers",
+          headers: { Authorization: `Bearer ${TOKEN}` },
+        }),
+      })
+    );
+    expect((await point(id, { name: "matchmaker", url: "https://mcp.test/new/mcp" })).status).toBe(
+      200
+    );
+    expect((await servers(member, id))[0].url).toBe("https://mcp.test/new/mcp");
+  });
+
+  it("still adds a server back when the removed one was not salts-tools'", async () => {
+    const { member, id } = await agentWithToken();
+    const res = await SELF.fetch(
+      `${BASE}/api/agents/${id}/mcp`,
+      as(member, {
+        method: "POST",
+        body: JSON.stringify({
+          name: "matchmaker",
+          url: "https://mcp.test/theirs/mcp",
+          auth: "headers",
+          headers: { Authorization: "Bearer someone-else" },
+        }),
+      })
+    );
+    const { server } = (await res.json()) as { server: { id: string } };
+    await SELF.fetch(`${BASE}/api/agents/${id}/mcp/${server.id}`, as(member, { method: "DELETE" }));
+    expect((await point(id, { name: "matchmaker", url: "https://mcp.test/mcp" })).status).toBe(200);
+  });
+
   it("adds the named headers empty, and keeps values already set", async () => {
     const { member, id } = await agentWithToken();
     const headers = ["X-OpenRouter-Api-Key", "Tool-Call-Max-Charge"];

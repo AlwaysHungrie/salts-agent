@@ -34,6 +34,8 @@ The limit is optional, and we recommend it. Reading one resume costs about $0.00
 
 If you removed a header, salts-tools adds it back empty the next time it reconnects, and it never changes a value you have set.
 
+If you remove the **matchmaker** server itself, salts-tools leaves it removed. To bring it back, click the **matchmaker** icon at the top of **MCP servers**, replace `SALTS-TOOLS-TOKEN` with your token and click **Add**. salts-tools fills in the real address within a minute.
+
 ## You are done
 
 Try it by sending your agent a few resumes, and then paste in a job description and ask who fits best. Your agent shows you the best people first, with what each one has and lacks for the job. Ask for more when you want the next 50.
