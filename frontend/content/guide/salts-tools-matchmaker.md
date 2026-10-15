@@ -23,7 +23,7 @@ Once it is live, open your agent's **Capabilities** page and look under **MCP se
 
 ## 2. Add your key and spending limit
 
-The matchmaker pays for its model calls with your OpenRouter key. Click the **matchmaker** card to open it, click **+ Add header** for each row below, enter the **Header name** and **Header value**, and then click **Save headers**.
+The matchmaker pays for its model calls with your OpenRouter key. Click the **matchmaker** card to open it. salts-tools has already added both headers below with empty values, so you only fill in each **Header value** and then click **Save headers**.
 
 | Header name | Value we recommend | What it covers |
 |---|---|---|
@@ -32,7 +32,7 @@ The matchmaker pays for its model calls with your OpenRouter key. Click the **ma
 
 The limit is optional, and we recommend it. Reading one resume costs about $0.001, and checking a page of 50 candidates against a job costs about $0.10. A request that would cost more than your limit is stopped before it spends anything, and your agent tells you what to raise. You only need to add these once, since they stay in place when salts-tools reconnects.
 
-You do not have to type these out by hand. In the salts-tools screen, open **matchmaker** on the **Services** tab and press **Enter** on a header to copy its name.
+If you removed a header, salts-tools adds it back empty the next time it reconnects, and it never changes a value you have set.
 
 ## You are done
 

@@ -84,8 +84,9 @@ change. It runs `uv sync` the first time, starts the server (`matchmaker-mcp`) o
 loopback with the token as its `MCP_AUTH_TOKEN`, and tells the agent.
 
 The agent gets an MCP server named `matchmaker`, with `Authorization: Bearer <token>`
-already set. The tools that call a model also need these headers, which you add once on
-that server in each agent's settings (they stay when the address changes):
+already set, and the headers below added with empty values. Fill in their values once
+on that server in each agent's settings; salts-tools adds a missing one back empty and
+never changes a value you set:
 
 | Header | Suggested value | Covers |
 | --- | --- | --- |
@@ -193,8 +194,10 @@ token; an agent with no token saved cannot be updated this way.
 
 - `web`: `POST /searxng/:agentId/url { url }`. The only setting it changes is
   `searxng_url`.
-- `matchmaker`: `POST /searxng/:agentId/mcp { name, url }`. Creates the MCP server
-  `matchmaker` if the agent has none, with the token as its `Authorization`. An existing
+- `matchmaker`: `POST /searxng/:agentId/mcp { name, url, headers }`. Creates the MCP server
+  `matchmaker` if the agent has none, with the token as its `Authorization` and each name
+  in `headers` (`X-OpenRouter-Api-Key`, `Tool-Call-Max-Charge`) added empty; on an existing
+  server, missing ones are added empty and set values are kept. An existing
   server of that name is repointed only if its `Authorization` is already this token;
   otherwise the Worker answers 409 and changes nothing, so the token can never redirect
   an MCP server (and the headers it carries) that you set up some other way.
