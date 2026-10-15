@@ -1,3 +1,4 @@
+import json
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
@@ -38,19 +39,21 @@ def path_of(url: str) -> str:
     return url.removeprefix("https://abc.trycloudflare.com/matchmaker")
 
 
-def test_a_token_opens_only_what_it_was_signed_for(mm):
+def test_a_token_is_short_and_opens_only_what_it_was_made_for(mm):
     s = mm.settings
     pid = "a" * 32
     token, expires = links.make_token(s, links.FILES, pid, now=1_000)
+    assert len(token) == 20 and token.isalnum()  # short, so a model copies it whole
     assert expires == datetime.fromtimestamp(1_000 + 24 * 3600, UTC)
-    assert links.read_token(s, token, now=2_000) == (links.FILES, pid)
+    assert links.read_token(s, token, now=2_000) == (links.FILES, pid, expires)
     assert links.read_token(s, token, now=1_000 + 24 * 3600 + 1) is None  # expired
-    assert links.read_token(s, token.replace("a" * 32, "b" * 32), now=2_000) is None  # another person
-    assert links.read_token(s, token[:-1] + ("0" if token[-1] != "0" else "1"), now=2_000) is None
+    assert links.read_token(s, token[:-1] + ("a" if token[-1] != "a" else "b"), now=2_000) is None
+    assert links.read_token(s, token[:19], now=2_000) is None
     other = s.model_copy(update={"mcp_auth_token": "t" * 64})  # salts-tools token replaced: every link void
     assert links.read_token(other, token, now=2_000) is None
-    forged = f"upload-{pid}-99999999999"
-    assert links.read_token(s, f"{forged}-{links._sign(s, forged)}", now=2_000) is None
+    later, _ = links.make_token(s, links.UPLOAD, "inbox", now=1_000 + 24 * 3600 + 5)
+    assert token not in json.loads((s.data_dir / "links.json").read_text())  # expired records are dropped
+    assert links.read_token(s, later, now=1_000 + 24 * 3600 + 10)[0] == links.UPLOAD
 
 
 def test_the_public_address_comes_from_the_gateway():
@@ -65,7 +68,7 @@ async def test_a_person_s_files_open_in_a_browser(mm, browser):
     added = await server.add_document(kind="resume", text=resume("Amir Soto", "Automation engineer", "SCADA"),
                                       ctx=ctx())
     got = await server.get_person_files_link(person_id=added.person_id, ctx=ctx())
-    assert got.url.startswith("https://abc.trycloudflare.com/matchmaker/share/files-")
+    assert got.url.startswith("https://abc.trycloudflare.com/matchmaker/share/")
     assert got.url in got.message_for_user and "resume.txt" in got.files and "person.json" not in got.files
 
     page = browser.get(path_of(got.url))
@@ -75,7 +78,7 @@ async def test_a_person_s_files_open_in_a_browser(mm, browser):
     assert file.status_code == 200 and file.text.startswith("Name: Amir Soto")
     for hidden in ("person.json", "embedding.npy", "..%2Fperson.json"):
         assert browser.get(path_of(got.url) + f"/f/{hidden}").status_code == 404
-    assert browser.get("/share/files-" + "a" * 32 + "-9999999999-" + "0" * 32).status_code == 404
+    assert browser.get("/share/" + "a" * 20).status_code == 404
     assert browser.post(path_of(got.url) + "/upload?name=x.txt", content=b"hi").status_code == 404
     assert browser.post("/mcp").status_code == 401  # the rest still needs the bearer token
 
@@ -92,7 +95,7 @@ async def test_without_the_tunnel_the_folder_is_given_instead(mm):
 
 async def test_resumes_uploaded_in_a_browser_land_in_the_inbox(mm, browser):
     info = await server.get_upload_link(ctx=ctx())
-    assert info.url.startswith("https://abc.trycloudflare.com/matchmaker/share/upload-inbox-")
+    assert info.url.startswith("https://abc.trycloudflare.com/matchmaker/share/")
     assert info.url in info.message_for_user
     url = path_of(info.url)
     page = browser.get(url)

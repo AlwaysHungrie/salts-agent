@@ -1,15 +1,18 @@
-"""Signed browser links, for a user in a chat app who cannot reach this computer's disk: a person's files to open or
+"""Browser links, for a user in a chat app who cannot reach this computer's disk: a person's files to open or
 download, an export to download, and an upload page that drops resumes into the bulk inbox.
 
-A link is `<public base>/share/<token>`. The token names what it opens and when it expires, signed with a key derived
-from MCP_AUTH_TOKEN; the salts-tools gateway lets `/share/` through without the bearer header and this module checks
-the signature instead. Replacing the salts-tools token voids every link. The public base comes from the
+A link is `<public base>/share/<token>`: 20 random letters and digits, recorded in DATA_DIR/links.json with what it
+opens and when it expires. Short on purpose: the agent's model copies the URL into its reply, and models drop or
+change parts of long tokens (a signed token lost its expiry that way). The salts-tools gateway lets `/share/`
+through without the bearer header and this module checks the record instead. Each record keeps a fingerprint of
+MCP_AUTH_TOKEN, so replacing the salts-tools token voids every link. The public base comes from the
 X-Forwarded-Host / X-Forwarded-Prefix headers the gateway adds, so links follow the tunnel's current address."""
 
 import hashlib
-import hmac
 import html
+import json
 import re
+import secrets
 import time
 from collections.abc import Mapping
 from datetime import UTC, datetime
@@ -21,7 +24,8 @@ from .errors import ToolFailure
 from .uploads import _kind
 
 FILES, UPLOAD, EXPORT = "files", "upload", "export"
-_TOKEN = re.compile(r"(files|upload|export)-([0-9a-f]{32}|inbox)-(\d{1,12})-([0-9a-f]{32})")
+_ALPHABET = "abcdefghijkmnpqrstuvwxyz23456789"  # no l/1/o/0 to misread
+_TOKEN = re.compile(rf"[{_ALPHABET}]{{20}}")
 # What a person's folder holds that is theirs to read: the originals, their text, notes and the profile.
 _HIDDEN = {"person.json", "embedding.npy"}
 _KIND_OF_SUFFIX = {".pdf": "pdf", ".docx": "docx", ".txt": "txt", ".md": "txt"}
@@ -30,41 +34,49 @@ MEDIA_TYPES = {".pdf": "application/pdf", ".txt": "text/plain; charset=utf-8", "
 _UNSAFE = re.compile(r'[\x00-\x1f<>:"/\\|?*]')
 
 
-def _key(settings: Settings) -> bytes:
+def _fingerprint(settings: Settings) -> str:
     if not settings.mcp_auth_token:
         raise ToolFailure("no_public_address", "links need the server running under salts-tools")
-    return hmac.new(settings.mcp_auth_token.encode(), b"matchmaker share links", hashlib.sha256).digest()
+    return hashlib.sha256(b"matchmaker share links " + settings.mcp_auth_token.encode()).hexdigest()[:16]
 
 
-def _sign(settings: Settings, body: str) -> str:
-    return hmac.new(_key(settings), body.encode(), hashlib.sha256).hexdigest()[:32]
+def _store(settings: Settings) -> Path:
+    return settings.data_dir / "links.json"
+
+
+def _read(settings: Settings) -> dict:
+    try:
+        return json.loads(_store(settings).read_text(encoding="utf-8"))
+    except (FileNotFoundError, ValueError):
+        return {}
 
 
 def make_token(settings: Settings, kind: str, target: str, now: float | None = None) -> tuple[str, datetime]:
-    """(token, expires_at). `target` is a person_id for FILES, an export_id for EXPORT, "inbox" for UPLOAD."""
-    exp = int((now if now is not None else time.time()) + settings.link_ttl_hours * 3600)
-    body = f"{kind}-{target}-{exp}"
-    return f"{body}-{_sign(settings, body)}", datetime.fromtimestamp(exp, UTC)
+    """(token, expires_at). `target` is a person_id for FILES, an export_id for EXPORT, "inbox" for UPLOAD.
+    Expired records are dropped on the way."""
+    now = now if now is not None else time.time()
+    exp = int(now + settings.link_ttl_hours * 3600)
+    token = "".join(secrets.choice(_ALPHABET) for _ in range(20))
+    records = {t: r for t, r in _read(settings).items() if r["exp"] >= now}
+    records[token] = {"kind": kind, "target": target, "exp": exp, "key": _fingerprint(settings)}
+    path = _store(settings)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(records, indent=1), encoding="utf-8")
+    tmp.replace(path)
+    return token, datetime.fromtimestamp(exp, UTC)
 
 
-def read_token(settings: Settings, token: str, now: float | None = None) -> tuple[str, str] | None:
-    """(kind, target) for a valid, unexpired token; None otherwise."""
-    m = _TOKEN.fullmatch(token or "")
-    if not m or not settings.mcp_auth_token:
+def read_token(settings: Settings, token: str, now: float | None = None) -> tuple[str, str, datetime] | None:
+    """(kind, target, expires_at) for a known, unexpired token made under the current salts-tools token."""
+    if not _TOKEN.fullmatch(token or "") or not settings.mcp_auth_token:
         return None
-    kind, target, exp, sig = m.groups()
-    if not hmac.compare_digest(sig, _sign(settings, f"{kind}-{target}-{exp}")):
+    record = _read(settings).get(token)
+    if record is None or record["exp"] < (now if now is not None else time.time()):
         return None
-    if int(exp) < (now if now is not None else time.time()):
+    if not secrets.compare_digest(record["key"], _fingerprint(settings)):
         return None
-    if (kind == UPLOAD) != (target == "inbox"):
-        return None
-    return kind, target
-
-
-def expiry(token: str) -> datetime:
-    """When a token read_token accepted runs out."""
-    return datetime.fromtimestamp(int(token.split("-")[2]), UTC)
+    return record["kind"], record["target"], datetime.fromtimestamp(record["exp"], UTC)
 
 
 def public_base(headers: Mapping[str, str] | None) -> str | None:
