@@ -74,12 +74,17 @@ def _meta(folder: Path) -> dict:
 async def add_document(svc: Services, kind: str = "resume", *, text: str | None = None,
                        file_path: str | Path | None = None, person_id: str | None = None) -> PersonResult:
     """A resume or cover letter for a new person, or for `person_id` (replacing their earlier one of that kind).
-    Send the file (`file_path`: PDF, DOCX, TXT, MD), its text, or both; the file's own text wins when it has one."""
+    Send the file (`file_path`: PDF, DOCX, TXT, MD), its text, or both; the file's own text wins when it has one,
+    and `text` is used for a file with none (a scanned PDF), whose original is still kept."""
     if kind not in KINDS:
         raise ToolFailure("invalid_input", f"kind must be one of {', '.join(KINDS)}")
     source = Path(file_path) if file_path else None
     if source is not None:
-        text = read_text(source)
+        try:
+            text = read_text(source)
+        except ToolFailure as e:
+            if not (e.code == "invalid_input" and source.is_file() and (text or "").strip()):
+                raise
     text = (text or "").strip()
     if not text:
         raise ToolFailure("invalid_input", "the document has no text")

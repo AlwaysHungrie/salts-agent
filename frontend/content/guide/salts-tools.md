@@ -16,7 +16,7 @@ salts-tools can run three tools, and you can switch on as many of them as you li
 | Tool | What it gives your agent |
 |---|---|
 | **web** | Free web search, using a private search engine called SearXNG. There is no account to make and no bill for searches. See [Set up web search](/guide/web-search). |
-| **matchmaker** | Reads resumes and matches candidates to job descriptions, for recruiters. See [Add the matchmaker](/guide/salts-tools-matchmaker). |
+| **matchmaker** | Reads resumes and cover letters and finds the best people for a job, for recruiters. See [Add the matchmaker](/guide/salts-tools-matchmaker). |
 | **analyst** | Reads Excel and CSV files sent in the chat, answers questions about them, and builds new sheets with tables and charts. See [Add the spreadsheet analyst](/guide/salts-tools-analyst). |
 
 One salts-tools can serve several agents at once, and every agent you connect gets every tool you switch on.

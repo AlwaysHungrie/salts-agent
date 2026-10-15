@@ -96,7 +96,9 @@ alone, hybrid on the posting, hybrid on a written query, and both hybrids with a
 
 ## Build steps
 
-1. **Core and evaluation** (this). People, jobs, search as a library.
-2. **Server.** MCP tools (`add_document`, `get_person`, `delete_person`, `post_job`, `find_candidates`,
-   `judge_page`), uploads.
-3. **Clean up.** Remove `recruiter_mcp`, update README, usage guide, salts-tools text.
+1. **Core and evaluation.** People, jobs, search and judging as a library. Done.
+2. **Server** (`matchmaker-mcp`, `src/matchmaker/server.py`). Done; salts-tools runs it as `matchmaker`.
+   Tools: `add_document` (upload_id or text), `get_person`, `delete_person`, `post_job`, `list_jobs`,
+   `find_candidates` (search, then the page judged), `search_people` (unjudged), `ping`. `POST /uploads` takes
+   PDF, DOCX or text bytes and returns an upload_id; `/healthz` is open, everything else needs the bearer token.
+3. **Clean up.** Remove `recruiter_mcp`, its migrations, Postgres and docker-compose, update the package README.

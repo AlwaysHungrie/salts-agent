@@ -28,12 +28,12 @@ class CostRule:
 
 
 # Paid tools: they need the caller's key. Adding a document is one chat call and one embedding; posting a job and
-# finding candidates are one embedding each; judging a page is one call per judge_batch candidates (judge_model).
+# searching is one embedding; finding candidates also judges the page, one judge_model call per candidate.
 COST_RULES = {
     "add_document": CostRule(0.001, "adding a document"),
     "post_job": CostRule(0.00002, "posting a job"),
-    "find_candidates": CostRule(0.00002, "finding candidates"),
-    "judge_page": CostRule(0.06, "judging a page of candidates"),
+    "find_candidates": CostRule(0.12, "finding and judging a page of candidates"),
+    "search_people": CostRule(0.00002, "searching people"),
 }
 
 # Errors that stop a whole operation (retrying the next file or candidate would fail the same way).

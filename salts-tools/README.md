@@ -6,7 +6,7 @@ internet through a single cloudflared quick tunnel (free, no account):
 | Service | What it is | The agent reaches it at |
 | --- | --- | --- |
 | `web` | [SearXNG](https://github.com/searxng/searxng), a self-hosted metasearch engine (Google, Bing, DuckDuckGo, Brave, Wikipedia and about 70 others, merged, over a JSON API). No account, no API key, no per-query bill. | **SearXNG URL** setting: `<tunnel>/web` |
-| `matchmaker` | [local-mcps/matchmaker-mcp](../local-mcps/matchmaker-mcp/README.md): resume ingestion and job matching as an MCP server, with Postgres in Docker. | MCP server named `matchmaker`: `<tunnel>/matchmaker/mcp` |
+| `matchmaker` | [local-mcps/matchmaker-mcp](../local-mcps/matchmaker-mcp/docs/matchmaker-spec.md): resumes and cover letters in, the best people for a job out, as an MCP server. Files on disk, no Docker. | MCP server named `matchmaker`: `<tunnel>/matchmaker/mcp` |
 | `analyst` | [local-mcps/analyst-mcp](../local-mcps/analyst-mcp/README.md): Excel and CSV analysis as an MCP server. It reads workbooks sent in the chat, answers questions about them, previews tables and charts, and returns built workbooks. It needs no Docker. | MCP server named `analyst`: `<tunnel>/analyst/mcp` |
 
 The CLI:
@@ -24,8 +24,8 @@ It runs on macOS, Linux and Windows. It was called salts-web; see
 
 ## Requirements
 
-- Docker with the compose plugin, for `web` and `matchmaker`. `analyst` alone does
-  not need Docker. Docker does not need to start at login.
+- Docker with the compose plugin, for `web`. `matchmaker` and `analyst` do not
+  need Docker. Docker does not need to start at login.
   - macOS: Docker Desktop, OrbStack or Colima. salts-tools starts it when it is not running.
   - Windows: Docker Desktop. salts-tools starts it when it is not running.
   - Linux: Docker Engine, Docker Desktop or Colima. salts-tools starts Docker Desktop and
@@ -57,8 +57,8 @@ You can also run it without linking: `node salts-tools/cli.mjs <command>`.
 salts-tools start web
 ```
 
-1. Checks that Docker and cloudflared are installed (and uv, for `matchmaker`), and that
-   Docker is running. Starts Docker if it is not.
+1. Checks that Docker and cloudflared are installed (and uv, for `matchmaker` and `analyst`),
+   and that Docker is running. Starts Docker if it is not.
 2. Generates a token if the OS secret store does not already hold one.
 3. Asks for the agent IDs, space separated. One salts-tools serves as many agents as you
    list, and each of them gets every service.
@@ -80,9 +80,8 @@ salts-tools start matchmaker
 ```
 
 With salts-tools already running, this joins the same tunnel, so the address does not
-change. It starts Postgres (`docker compose` in `local-mcps/matchmaker-mcp`), runs
-`uv sync` the first time, starts the server on loopback with the token as its
-`MCP_AUTH_TOKEN`, and tells the agent.
+change. It runs `uv sync` the first time, starts the server (`matchmaker-mcp`) on
+loopback with the token as its `MCP_AUTH_TOKEN`, and tells the agent.
 
 The agent gets an MCP server named `matchmaker`, with `Authorization: Bearer <token>`
 already set. The tools that call a model also need these headers, which you add once on
@@ -91,17 +90,14 @@ that server in each agent's settings (they stay when the address changes):
 | Header | Suggested value | Covers |
 | --- | --- | --- |
 | `X-OpenRouter-Api-Key` | your OpenRouter key | pays for its model calls |
-| `X-Cost-Approved-Resume-Ingestion` | `0.01` | one resume, ~$0.002 |
-| `X-Cost-Approved-Job-Match` | `0.10` | one job match, ~$0.01–0.04 |
-| `X-Cost-Approved-Search` | `0.001` | one candidate search, ~free |
-| `X-Cost-Approved-Folder-Ingestion` | `5.00` | a whole inbox run, ~$0.004 a file |
+| `Tool-Call-Max-Charge` | `0.25` | optional: the most one call may spend, in US dollars (a resume ~$0.001, a judged page of 50 ~$0.10) |
 
-Caps are the most one call may spend, in US dollars; `0` blocks that tool. The
-dashboard lists them under the matchmaker, and `enter` copies a header's name.
+The dashboard lists them under the matchmaker, and `enter` copies a header's name.
 
-The matchmaker's own `.env` in `local-mcps/matchmaker-mcp` still applies (models,
-`DATA_DIR`, and so on). salts-tools overrides the transport, host, port, token and
-database URL. Its log is `~/.salts-tools/matchmaker.log`.
+The matchmaker's own `.env` in `local-mcps/matchmaker-mcp` still applies (`MM_DATA_DIR`,
+models, and so on). salts-tools overrides the transport, host, port and token. People and
+jobs are folders under `local-mcps/matchmaker-mcp/data/matchmaker`. Its log is
+`~/.salts-tools/matchmaker.log`.
 
 ## Adding the analyst
 
@@ -151,7 +147,7 @@ The commands do the same things without the screen, for scripts and the login it
 | `salts-tools stop <service>` | Turns one service off and stops it. The others and the tunnel keep running. Stopping the last one stops everything. |
 | `salts-tools stop` | Stops the supervisor, the tunnel and the containers. The next `start` brings back the same services. |
 | `salts-tools restart` | Opens a new tunnel and sends its addresses to every agent. |
-| `salts-tools reset` | Back to a first run: deletes the token, `~/.salts-tools` (state and logs), the login item and any salts-web leftovers. Keeps the matchmaker's database. Stop salts-tools first. |
+| `salts-tools reset` | Back to a first run: deletes the token, `~/.salts-tools` (state and logs), the login item and any salts-web leftovers. Keeps the matchmaker's people and jobs. Stop salts-tools first. |
 | `salts-tools setup` | Runs the first-run questions again, for example to add or remove agents. Starts nothing; a running salts-tools sends its addresses to newly listed agents within 30 seconds. |
 | `salts-tools autostart on` / `off` | Adds or removes the login item. See [Where things live](#where-things-live). |
 

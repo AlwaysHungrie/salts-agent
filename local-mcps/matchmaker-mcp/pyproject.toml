@@ -31,6 +31,7 @@ dev = [
 [project.scripts]
 recruiter-mcp = "recruiter_mcp.server:main"
 recruiter-mcp-migrate = "recruiter_mcp.migrate:main"
+matchmaker-mcp = "matchmaker.server:main"
 
 [build-system]
 requires = ["hatchling"]
