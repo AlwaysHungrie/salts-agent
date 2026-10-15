@@ -135,6 +135,7 @@ export const McpCatalogEntrySchema = z
     icon: z.string().optional(),
     letter: z.string().optional(),
     color: z.string().optional(),
+    headers: z.record(z.string(), z.string()).optional(),
   })
   .openapi("McpCatalogEntry");
 pin<Same<z.infer<typeof McpCatalogEntrySchema>, McpCatalogEntry>>();

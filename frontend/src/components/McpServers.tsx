@@ -409,7 +409,7 @@ function AddServer({
   const [name, setName] = useState(preset?.name ?? "");
   const [url, setUrl] = useState(preset?.url ?? "");
   const [auth, setAuth] = useState<McpAuth>(preset?.auth ?? "oauth");
-  const [pairs, setPairs] = useState<HeaderPair[]>([{ key: "", value: "" }]);
+  const [pairs, setPairs] = useState<HeaderPair[]>(pairsFrom(preset?.headers ?? {}));
 
   const reset = () => {
     setName("");

@@ -310,6 +310,8 @@ export type McpCatalogEntry = {
   icon?: string;
   letter?: string;
   color?: string;
+  /** Headers the add form starts with; values are placeholders to replace. */
+  headers?: Record<string, string>;
 };
 
 /** One tool an MCP server advertises. */

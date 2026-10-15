@@ -12,6 +12,8 @@ export type McpPreset = {
   name: string;
   url: string;
   auth: McpAuth;
+  /** Headers the form starts with, for the user to fill in. */
+  headers: Record<string, string>;
   /** The provider's mark, drawn at 24×24. */
   logo: React.ReactNode;
 };
@@ -27,6 +29,7 @@ export function toPreset(entry: McpCatalogEntry): McpPreset {
     name: entry.name,
     url: entry.url,
     auth: entry.auth,
+    headers: entry.headers ?? {},
     logo: entry.icon ? (
       // A plain <img>, not next/image: the icon is a data URL with nothing to optimise,
       // and <img> is what keeps any script inside the SVG from running.

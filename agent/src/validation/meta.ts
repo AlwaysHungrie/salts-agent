@@ -10,7 +10,7 @@ import {
   type MetaSettings,
   type MetaTunableKey,
 } from "../registry";
-import { checkIconSize, type DeploymentSettings, svgIcon } from "../settings";
+import { catalogHeaders, checkIconSize, type DeploymentSettings, svgIcon } from "../settings";
 import { CAPABILITY_FIELDS, CORE_SECRETS, MODEL_ID, validateConfig } from "./config";
 import { validateMcpBody } from "./mcp";
 
@@ -293,6 +293,10 @@ export function validateCatalogEntry(entry: unknown): McpCatalogEntry {
     icon: raw.icon === undefined ? undefined : svgIcon(raw.icon, `MCP template ${text("id")} icon`),
     letter: optional("letter"),
     color: optional("color"),
+    headers:
+      raw.headers === undefined
+        ? undefined
+        : catalogHeaders(raw.headers, `MCP template ${text("id")} headers`),
   };
 }
 

@@ -14,9 +14,12 @@ import {
 import { loadConfigRow, patchConfigRow, readMeta, writeMeta } from "./agent-config";
 import {
   addMcpServer,
+  clearMcpRemoved,
   getMcpServer,
   getMcpServerByState,
   listMcpServers,
+  markMcpRemoved,
+  mcpRemoved,
   noteMcpError,
   performRefresh,
   removeMcpServer,
@@ -122,6 +125,22 @@ export class SessionRegistry extends DurableObject {
   removeMcpServer(id: string) {
     this.ensureSchema();
     return removeMcpServer(this.ctx.storage, id);
+  }
+
+  /** A salts-tools server the user removed: its push may not add it back. */
+  markMcpRemoved(name: string) {
+    this.ensureSchema();
+    markMcpRemoved(this.ctx.storage, name);
+  }
+
+  mcpRemoved(name: string): boolean {
+    this.ensureSchema();
+    return mcpRemoved(this.ctx.storage, name);
+  }
+
+  clearMcpRemoved(name: string) {
+    this.ensureSchema();
+    clearMcpRemoved(this.ctx.storage, name);
   }
 
   /**

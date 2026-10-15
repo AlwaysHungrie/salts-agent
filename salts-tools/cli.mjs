@@ -874,6 +874,9 @@ async function supervise() {
     for (const name of Object.keys(ports)) {
       // Agents that already have this address are not asked again while another refuses.
       const agents = { ...svc[name]?.agents };
+      // Agents where the user removed this server: asked again each heartbeat (410 until
+      // they add it back themselves), never counted as a failure.
+      const removed = { ...svc[name]?.removed };
       if (svc[name]?.pushedTo === url && agentIds.every((id) => agents[id] === url)) continue;
       let status = 200;
       let agentId = "";
@@ -882,13 +885,17 @@ async function supervise() {
         const answer = await push(worker || DEFAULT_WORKER, id, token, SERVICES[name].push(url));
         if (answer === 200) {
           agents[id] = url;
+          delete removed[id];
           log(`agent ${id}: ${name} now at ${SERVICES[name].reached(url)}`);
+        } else if (answer === 410) {
+          if (!removed[id]) log(`agent ${id}: ${name} was removed there; not adding it back`);
+          removed[id] = true;
         } else if (status === 200) {
           status = answer;
           agentId = id;
         }
       }
-      writeSvc(name, { agents });
+      writeSvc(name, { agents, removed });
       if (status === 200) {
         writeSvc(name, { pushedTo: url, pushedAt: new Date().toISOString(), pushStatus: 200, error: "", failedAgent: "" });
         continue;

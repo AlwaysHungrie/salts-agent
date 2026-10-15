@@ -178,6 +178,8 @@ export type McpCatalogEntry = {
   /** Placeholder mark: this letter on this colour. Both optional — the name's first letter does. */
   letter?: string;
   color?: string;
+  /** Headers the add form starts with; values are placeholders to replace (`Bearer API-KEY`). */
+  headers?: Record<string, string>;
 };
 
 /**
