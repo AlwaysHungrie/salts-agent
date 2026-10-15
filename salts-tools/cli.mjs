@@ -66,7 +66,7 @@ import os from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
-import { agentIdsOf, agentsLabel, parseAgentIds } from "./agents.mjs";
+import { agentIdsOf, agentsFor, agentsLabel, parseAgentIds, servesAgent, toggleService } from "./agents.mjs";
 import { startGateway } from "./gateway.mjs";
 import { caffeinateArgs, orphanTunnels, parseProcessList, supervisorsOf } from "./procs.mjs";
 import { agentStatus, serviceStatus } from "./status.mjs";
@@ -870,8 +870,9 @@ async function supervise() {
   const pushAll = async () => {
     // Read each time, so agents added with `setup` are told on the next heartbeat.
     const { svc = {}, ...state } = readState();
-    const agentIds = agentIdsOf(state);
     for (const name of Object.keys(ports)) {
+      // Only the agents set to use this service; one switched off for it is left alone.
+      const agentIds = agentsFor(state, name);
       // Agents that already have this address are not asked again while another refuses.
       const agents = { ...svc[name]?.agents };
       // Agents where the user removed this server: asked again each heartbeat (410 until
@@ -1543,6 +1544,9 @@ const ui = {
   /** The service opened from the Services tab, or "" while the list is showing. */
   open: "",
   openPos: { sel: 0, top: 0 },
+  /** The agent opened from the Agents tab, or "" while the list is showing. */
+  openAgent: "",
+  openAgentPos: { sel: 0, top: 0 },
   /** Non-null while a value is being typed: `{ label, buffer, submit(text) }`. */
   edit: null,
   /** Non-null while a y/n is pending: `{ prompt, run() }`. */
@@ -1611,9 +1615,23 @@ function addAgents() {
   });
 }
 
+/** Switch one service on or off for one agent; the others keep theirs. */
+function toggleAgentService(id, name) {
+  const state = readState();
+  const on = !servesAgent(state, id, name);
+  writeState({ agentServices: toggleService(state, id, name, NAMES) });
+  nudge();
+  say(
+    on
+      ? `${name} on for ${id}${supervisorPid() ? "; sending it the address" : ""}`
+      : `${name} off for ${id}: no longer sent its address (remove or switch the server off in the agent to stop using it)`
+  );
+}
+
 function removeAgent(id) {
   confirm(`Stop serving agent ${id}?`, () => {
-    writeState({ agentIds: agentIdsOf(readState()).filter((a) => a !== id), agentId: undefined });
+    const { [id]: _, ...agentServices } = readState().agentServices ?? {};
+    writeState({ agentIds: agentIdsOf(readState()).filter((a) => a !== id), agentId: undefined, agentServices });
     say(`removed ${id}`);
   });
 }
@@ -1736,7 +1754,7 @@ function view() {
       const name = ui.open;
       if (name) {
         const svc = SERVICES[name];
-        const st = serviceStatus(s, name, running, agents);
+        const st = serviceStatus(s, name, running, agentsFor(s, name));
         const e = s.svc?.[name] ?? {};
         const live = on(name) && s.url;
         return {
@@ -1751,7 +1769,9 @@ function view() {
             ...agents.map((id) => ({
               cells: [
                 `agent ${id}`,
-                live && e.agents?.[id] === s.url
+                !servesAgent(s, id, name)
+                  ? { text: "off for this agent", tone: "off" }
+                  : live && e.agents?.[id] === s.url
                   ? { text: "has this address", tone: "good" }
                   : { text: live ? "not yet" : "—", tone: live ? "busy" : "off" },
               ],
@@ -1775,7 +1795,7 @@ function view() {
       return {
         columns: [["service", 12], ["status", 16], ["address", 0]],
         rows: NAMES.map((name) => {
-          const st = serviceStatus(s, name, running, agents);
+          const st = serviceStatus(s, name, running, agentsFor(s, name));
           return {
             name,
             cells: [name, { text: st.label, tone: st.tone }, on(name) && s.url ? SERVICES[name].reached(s.url) : ""],
@@ -1801,21 +1821,61 @@ function view() {
       };
     }
 
-    case 1:
+    case 1: {
+      const id = ui.openAgent;
+      if (id && agents.includes(id)) {
+        const toggle = (row) => row && toggleAgentService(id, row.name);
+        return {
+          title: `agent ${id}`,
+          columns: [["service", 12], ["for this agent", 18], ["", 0]],
+          rows: NAMES.map((name) => {
+            const chosen = servesAgent(s, id, name);
+            const e = s.svc?.[name] ?? {};
+            const state = !chosen ? "" : !on(name) ? "service not running" : e.removed?.[id] ? "removed in the agent" : e.agents?.[id] === s.url ? "has the address" : "not yet";
+            return {
+              name,
+              cells: [name, chosen ? { text: "on", tone: "good" } : { text: "off", tone: "off" }, state],
+              note: chosen
+                ? `this agent gets ${name}'s address; enter switches it off for this agent only`
+                : `this agent is not sent ${name}'s address; enter switches it on for this agent only`,
+              enter: () => toggle({ name }),
+            };
+          }),
+          pos: ui.openAgentPos,
+          hint: "enter switch on/off   esc back",
+          keys: {
+            " ": toggle,
+            "\x1b": () => {
+              ui.openAgent = "";
+              say("");
+            },
+          },
+        };
+      }
       return {
         columns: [["agent", 40], ["status", 0]],
         rows: agents.map((id) => {
           const st = agentStatus(s, id, running);
-          return { id, cells: [id, { text: st.label, tone: st.tone }], note: st.note };
+          return {
+            id,
+            cells: [id, { text: st.label, tone: st.tone }],
+            note: st.note,
+            enter: () => {
+              ui.openAgent = id;
+              ui.openAgentPos = { sel: 0, top: 0 };
+              say("");
+            },
+          };
         }),
         pos: ui.pos[1],
         empty: "no agents yet: press a to add one",
-        hint: "a add   x remove",
+        hint: "enter choose services   a add   x remove",
         keys: {
           a: addAgents,
           x: (row) => row && removeAgent(row.id),
         },
       };
+    }
 
     case 2: {
       const token = readToken();
@@ -1897,7 +1957,7 @@ function render() {
   );
   const agents = agentIdsOf(s);
   const trouble = [
-    NAMES.some((n) => serviceStatus(s, n, running, agents).tone === "bad"),
+    NAMES.some((n) => serviceStatus(s, n, running, agentsFor(s, n)).tone === "bad"),
     agents.some((id) => agentStatus(s, id, running).tone === "bad"),
   ];
   out.push(

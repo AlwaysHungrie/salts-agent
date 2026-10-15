@@ -19,7 +19,7 @@ salts-tools can run three tools, and you can switch on as many of them as you li
 | **matchmaker** | Reads resumes and cover letters and finds the best people for a job, for recruiters. See [Add the matchmaker](/guide/salts-tools-matchmaker). |
 | **analyst** | Reads Excel and CSV files sent in the chat, answers questions about them, and builds new sheets with tables and charts. See [Add the spreadsheet analyst](/guide/salts-tools-analyst). |
 
-One salts-tools can serve several agents at once, and every agent you connect gets every tool you switch on.
+One salts-tools can serve several agents at once. Every agent you connect gets every tool you switch on, unless you choose the tools for an agent in the dashboard's **Agents** tab.
 
 ## What you need
 
