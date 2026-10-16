@@ -19,8 +19,12 @@ import { formatDate } from "@/lib/format";
 const SEARCH_DEBOUNCE_MS = 200;
 /** How long a row has to be held before it starts a selection. */
 const LONG_PRESS_MS = 500;
-/** Past this much movement a held row is being scrolled, not pressed. */
-const PRESS_SLOP = 8;
+/**
+ * Past this much movement a held row is being scrolled, not pressed. Looser for a
+ * mouse: a finger pressing a trackpad drifts a few pixels while it holds, and there
+ * is no scroll for a mouse drag to be mistaken for.
+ */
+const PRESS_SLOP = { touch: 8, mouse: 24 };
 
 export function Sidebar({
   agentId,
@@ -83,6 +87,7 @@ export function Sidebar({
     timer: ReturnType<typeof setTimeout>;
     x: number;
     y: number;
+    slop: number;
   } | null>(null);
   const longPressed = useRef(false);
   // Filtering trails the keystrokes, so a fast typist re-renders the list once
@@ -146,6 +151,7 @@ export function Sidebar({
     press.current = {
       x: e.clientX,
       y: e.clientY,
+      slop: e.pointerType === "mouse" ? PRESS_SLOP.mouse : PRESS_SLOP.touch,
       timer: setTimeout(() => {
         press.current = null;
         longPressed.current = true;
@@ -159,9 +165,21 @@ export function Sidebar({
   const movePress = (e: React.PointerEvent) => {
     const held = press.current;
     if (!held) return;
-    if (Math.hypot(e.clientX - held.x, e.clientY - held.y) > PRESS_SLOP)
+    if (Math.hypot(e.clientX - held.x, e.clientY - held.y) > held.slop)
       cancelPress();
   };
+
+  // A hold ends wherever the button is let go — off the row included — rather than
+  // the moment the pointer strays over its edge.
+  useEffect(() => {
+    const end = () => cancelPress();
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+    return () => {
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+    };
+  }, []);
 
   const visible = useMemo(() => {
     const needle = debounced.trim().toLowerCase();
@@ -314,9 +332,6 @@ export function Sidebar({
                 key={s.id}
                 onPointerDown={(e) => startPress(s.id, e)}
                 onPointerMove={movePress}
-                onPointerUp={cancelPress}
-                onPointerLeave={cancelPress}
-                onPointerCancel={cancelPress}
                 // A held row on a phone would otherwise open the browser's own menu.
                 onContextMenu={(e) => {
                   if (longPressed.current || picked) e.preventDefault();
@@ -328,13 +343,14 @@ export function Sidebar({
                 }`}
               >
                 <button
-                  onClick={() => {
+                  onClick={(e) => {
                     // The click that ends a long press is the press, not a pick.
                     if (longPressed.current) {
                       longPressed.current = false;
                       return;
                     }
-                    if (picked) {
+                    // Cmd, Ctrl or Shift picks on a desktop, the way a file list does.
+                    if (picked || e.metaKey || e.ctrlKey || e.shiftKey) {
                       toggle(s.id);
                       return;
                     }
