@@ -199,10 +199,7 @@ export default function Capabilities({
           >
             Settings
           </Link>
-          . Run free web search, the matchmaker and the spreadsheet analyst on
-          your own computer with{" "}
-          <code className="text-ink">npx salts-tools</code>.
-          <SaltsToolsInfo />
+          .
         </p>
 
         {error && (
@@ -236,6 +233,16 @@ export default function Capabilities({
                 // MCP is the one section the user builds out themselves, so it is
                 // marked the way the Telegram section is, in ember.
                 tint={capability.id === "mcp" ? EMBER : undefined}
+                summaryExtra={
+                  capability.id === "mcp" && (
+                    <>
+                      Run free web search, the matchmaker and the spreadsheet
+                      analyst on your own computer with{" "}
+                      <code className="text-ink">npx salts-tools</code>.
+                      <SaltsToolsInfo />
+                    </>
+                  )
+                }
               >
                 {/* MCP is configured by the servers themselves, not by fields. */}
                 {capability.id === "mcp" && <McpServers agentId={agentId} />}

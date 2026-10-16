@@ -358,6 +358,7 @@ export function CapabilitySection({
   blocked = false,
   blockedNote,
   tint,
+  summaryExtra,
   children,
 }: {
   capability: Capability;
@@ -378,6 +379,8 @@ export function CapabilitySection({
    * the canvas, so its inputs are outlined to stay legible.
    */
   tint?: string;
+  /** More for the line under the label, after the capability's own summary. */
+  summaryExtra?: React.ReactNode;
   /**
    * An editor of the capability's own, shown under its fields. Some capabilities are
    * configured by more than a list of values — MCP is a set of servers, not settings.
@@ -413,6 +416,7 @@ export function CapabilitySection({
           </h2>
           <p className="text-muted mt-1 text-sm font-light leading-[1.43]">
             {capability.summary}
+            {summaryExtra && <> {summaryExtra}</>}
           </p>
         </div>
         {!capability.alwaysOn && (

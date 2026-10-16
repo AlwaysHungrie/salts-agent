@@ -18,14 +18,13 @@ export type McpPreset = {
   logo: React.ReactNode;
   /** One line on what the server does. */
   description: string;
-  /** Fills the whole tile, in place of the plain canvas. */
-  tile?: string;
 };
 
-/** The salt mark (the app icon's four squares), in white, for a filled tile. */
-function SaltMark() {
+/** The salt app icon, with a catalogue entry's letter in its colour at the centre. */
+function SaltMark({ letter, color }: { letter: string; color: string }) {
   return (
-    <svg aria-hidden="true" width={26} height={26} viewBox="8 8 16 16">
+    <svg aria-hidden="true" width={32} height={32} viewBox="0 0 32 32">
+      <rect width="32" height="32" rx="10" fill="#141414" />
       <rect x="9.5" y="9.5" width="5" height="5" rx="1.5" fill="#fff" />
       <rect
         x="17.5"
@@ -46,6 +45,20 @@ function SaltMark() {
         fillOpacity="0.45"
       />
       <rect x="17.5" y="17.5" width="5" height="5" rx="1.5" fill="#fff" />
+      <text
+        x="16"
+        y="16"
+        textAnchor="middle"
+        dominantBaseline="central"
+        fontSize="11"
+        fontWeight="800"
+        fill={color}
+        stroke="#141414"
+        strokeWidth="2"
+        paintOrder="stroke"
+      >
+        {letter}
+      </text>
     </svg>
   );
 }
@@ -63,7 +76,6 @@ export function toPreset(entry: McpCatalogEntry): McpPreset {
     auth: entry.auth,
     headers: entry.headers ?? {},
     description: entry.description ?? "",
-    tile: !entry.icon && entry.color ? entry.color : undefined,
     logo: entry.icon ? (
       // A plain <img>, not next/image: the icon is a data URL with nothing to optimise,
       // and <img> is what keeps any script inside the SVG from running.
@@ -77,7 +89,7 @@ export function toPreset(entry: McpCatalogEntry): McpPreset {
         className="h-[26px] w-[26px]"
       />
     ) : entry.color ? (
-      <SaltMark />
+      <SaltMark letter={letter} color={entry.color} />
     ) : (
       <span
         aria-hidden="true"
@@ -234,7 +246,6 @@ export function McpPresetStrip({
                 onPick(preset);
               }}
               className="bg-canvas border-hairline text-ink hover:border-ink flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border transition"
-              style={preset.tile ? { background: preset.tile } : undefined}
             >
               {preset.logo}
             </button>
