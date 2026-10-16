@@ -11,13 +11,13 @@ This guide will help you start the analyst and connect it to your agent. You wil
 
 ## 1. Switch the analyst on
 
-Open the [salts-tools page](/salts-tools) and switch on **Spreadsheet analyst** for your agent. The first start takes a minute or two while salts-tools sets the analyst up on your computer. Your agent then has a new MCP server called **analyst**, already connected.
+Run `npx salts-tools`, open your agent in the **Agents** tab and switch on **Spreadsheet analyst**. The first time salts-tools starts, it takes a minute or two to set the analyst up on your computer. Your agent then has a new MCP server called **analyst**, already connected.
 
 ## 2. Switch on files and MCP servers
 
-The analyst needs **File ingest**, so you can attach files in the chat, and **MCP servers** switched on for your agent. If either is off, the salts-tools page shows it under your agent with a **Turn on** button.
+The analyst needs **File ingest**, so you can attach files in the chat, and **MCP servers** switched on for your agent. If either is off, your agent in the salts-tools screen shows it as **to do**: press **Enter** on it to switch it on.
 
-If you delete the **analyst** server from your agent, salts-tools switches the analyst off for that agent. To bring it back, switch it on again on the salts-tools page.
+If you delete the **analyst** server from your agent, salts-tools switches the analyst off for that agent. To bring it back, switch it on again in the salts-tools screen.
 
 ## You are done
 

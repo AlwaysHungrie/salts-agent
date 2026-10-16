@@ -97,7 +97,6 @@ if (!TARGETS[TARGET]) {
 const { worker: DEFAULT_WORKER, suffix: SUFFIX } = TARGETS[TARGET];
 /** The Salts site, where computers are paired and tools switched on per agent. */
 const APP = (process.env.SALTS_TOOLS_APP || TARGETS[TARGET].app).replace(/\/+$/, "");
-const TOOLS_PAGE = `${APP}/salts-tools`;
 /** The Worker reported to: the one this computer was paired with, unless overridden. */
 const workerUrl = () => process.env.SALTS_TOOLS_WORKER || readState().worker || DEFAULT_WORKER;
 /** The command again, with this target's suffix, for re-invoking the CLI. */
@@ -857,18 +856,24 @@ async function supervise() {
     startTunnel();
   };
 
-  /** Bring each service that is on up, and take down each this supervisor ran that is now off. */
+  /** What stops each service running here, by name; read again every heartbeat. */
+  let missing = {};
+
+  /**
+   * Every service runs whenever this machine can run it, whether or not an agent uses it
+   * yet, so switching one on for an agent works straight away. One that cannot (Docker or
+   * uv missing) is reported as such.
+   */
   const services = async () => {
-    const on = new Set(readState().services ?? []);
+    missing = Object.fromEntries(NAMES.map((name) => [name, toolMissing(name)]).filter(([, m]) => m));
     for (const name of NAMES) {
       const svc = SERVICES[name];
-      if (!on.has(name)) {
+      if (missing[name]) {
         if (ports[name]) {
           delete ports[name];
-          log(`${name}: turned off; stopping it`);
           svc.down();
-          writeSvc(name, { up: false, error: "" });
         }
+        writeSvc(name, { up: false, error: "" });
         continue;
       }
       if (ports[name] && (await svc.healthy(ports[name], token))) continue;
@@ -893,8 +898,7 @@ async function supervise() {
    */
   const reportIn = async () => {
     const state = readState();
-    const missing = Object.fromEntries(NAMES.map((name) => [name, toolMissing(name)]).filter(([, m]) => m));
-    const tools = toolsReport(SERVICES, { wanted: state.services ?? [], missing, svc: state.svc ?? {}, ports });
+    const tools = toolsReport(SERVICES, { wanted: NAMES, missing, svc: state.svc ?? {}, ports });
     writeState({ tools });
     const { status, body } = await call(worker, "/salts/computer", {
       method: "PUT",
@@ -1236,7 +1240,7 @@ function summary(s) {
   for (const [name, tool] of Object.entries(s.tools ?? {})) {
     if (tool.state === "missing") console.log(`${DIM}  ${name} can't run here yet: ${tool.detail}${OFF}`);
   }
-  console.log(`  Switch tools on for each agent at ${BOLD}${TOOLS_PAGE}${OFF}`);
+  console.log(`  Choose agents and tools in the dashboard: ${BOLD}${SELF}${SUFFIX ? ` :${TARGET}` : ""}${OFF}, tab 2 Agents`);
 }
 
 async function askAutostart(rl) {
@@ -1250,7 +1254,7 @@ async function askAutostart(rl) {
 
 /** Connected (pairing first if not) and running, reporting to Salts. */
 async function start({ interactive }) {
-  if (args.length) console.log(`${DIM}Tools are switched on per agent at ${TOOLS_PAGE} now.${OFF}`);
+  if (args.length) console.log(`${DIM}Every tool runs whenever it can; choose them per agent in the dashboard.${OFF}`);
   const cloudflared = cloudflaredMissing();
   if (cloudflared) {
     console.error(`${RED}✗${OFF} ${cloudflared}`);
@@ -1288,7 +1292,7 @@ async function start({ interactive }) {
 }
 
 async function stop() {
-  if (args.length) throw new Error(`switch a tool off for an agent at ${TOOLS_PAGE}; \`stop\` alone stops everything`);
+  if (args.length) throw new Error("switch a tool off for an agent in the dashboard (Agents tab); `stop` alone stops everything");
   const { was, failed } = await stopAll();
   for (const line of failed) console.log(`${RED}✗${OFF} ${line}`);
   console.log(was ? `${GREEN}✓${OFF} stopped` : "was not running");
@@ -1330,6 +1334,24 @@ function clearHome(dir) {
 }
 
 /**
+ * Unpair: stop, and have Salts take this computer's tools off every agent and forget it.
+ * The secrets and state stay, so pairing again reuses the gateway token. A line saying
+ * what happened.
+ */
+async function disconnect() {
+  const credential = readCredential();
+  if (!credential) return "not connected";
+  if (supervisorPid()) await stopAll();
+  const { status } = await call(workerUrl(), "/salts/computer", { method: "DELETE", credential });
+  if (status !== 200 && status !== 401) {
+    throw new Error(`could not reach Salts (${status || "offline"}); still connected — try again`);
+  }
+  deleteSecret(SECRETS.credential);
+  writeState({ unpaired: false, agents: [], services: [], computer: undefined, reportedAt: undefined });
+  return status === 200 ? "disconnected; its tools are off every agent" : "this computer was already disconnected";
+}
+
+/**
  * Back to a first run, as on a machine that never ran salts-tools (or salts-web): stopped,
  * disconnected from Salts (which takes its tools off every agent), and the secrets, state,
  * logs, login item and salts-web's leftovers gone. The matchmaker's people and jobs and
@@ -1352,7 +1374,7 @@ async function reset() {
         ? "disconnected this computer from Salts"
         : status === 401
           ? "this computer was already disconnected"
-          : `could not reach Salts (${status || "offline"}); disconnect it at ${TOOLS_PAGE}`
+          : `could not reach Salts (${status || "offline"}); it stays paired there until you pair again`
     );
   }
   const where = tokenStoreName();
@@ -1395,13 +1417,14 @@ async function requestRestart(pid) {
 // ─── the dashboard ──────────────────────────────────────────────────────────────
 //
 // `salts-tools` with no command, in a terminal. Four tabs, each a list of rows, drawn
-// the way admin-cli draws its own. Everything on screen is read back from state.json
-// once a second, so it follows the supervisor as it works. Agents and tools are chosen
-// on the Salts site; this shows what it said and what is running.
+// the way admin-cli draws its own. The site is only for pairing; everything else is here.
 //
-//   1 Services  each service, whether it is live, and its address; `enter` opens one
-//   2 Agents    the agents this computer serves, with the tools on for each
-//   3 Settings  the connection, start at login, where things live, reset
+//   1 Services  each service and whether it is live, live but not in use, or in error;
+//               `enter` opens one: its address, port, files and log. Display only.
+//   2 Agents    every agent the user is a member of; `enter` opens one: a switch per
+//               tool, what is left to do before they work (done from here), and
+//               stopping serving it
+//   3 Settings  the connection, start at login, where things live, disconnect, reset
 //   4 Log       the supervisor's log, newest at the bottom
 
 const TABS = ["Services", "Agents", "Settings", "Log"];
@@ -1412,6 +1435,14 @@ const ui = {
   /** The service opened from the Services tab, or "" while the list is showing. */
   open: "",
   openPos: { sel: 0, top: 0 },
+  /** The agent opened from the Agents tab, or "" while the list is showing. */
+  openAgent: "",
+  openAgentPos: { sel: 0, top: 0 },
+  /** The user's agents as the Worker last listed them, or null before the first answer. */
+  agents: null,
+  agentsError: "",
+  /** Non-null while a value is being typed: `{ label, buffer, secret, submit(text) }`. */
+  edit: null,
   /** Non-null while a y/n is pending: `{ prompt, run() }`. */
   confirm: null,
   status: "",
@@ -1441,8 +1472,9 @@ function confirm(prompt, run) {
   say("");
 }
 
-function openToolsPage() {
-  say(openBrowser(TOOLS_PAGE) ? `opened ${TOOLS_PAGE}` : `open ${TOOLS_PAGE} in your browser`);
+function startEdit(label, { secret = false } = {}, submit) {
+  ui.edit = { label, buffer: "", secret, submit };
+  say("");
 }
 
 async function startFromDashboard() {
@@ -1457,6 +1489,92 @@ async function stopEverything() {
   const { was, failed } = await stopAll();
   say(failed.length ? paint(failed.join("; "), "bad") : was ? "stopped" : "was not running");
 }
+
+/** Ask the Worker about this computer's agents, with its credential. */
+async function agentCall(path, method = "GET", body) {
+  const credential = readCredential();
+  if (!credential) throw new Error("not connected: quit (q) and run salts-tools again to connect");
+  const res = await call(workerUrl(), `/salts/computer/agents${path}`, { method, body, credential });
+  if (res.status === 401) throw new Error("this computer was disconnected: quit (q) and run salts-tools again");
+  if (res.status !== 200) throw new Error(res.status === 0 ? "could not reach Salts (offline?)" : res.body.error || `Salts answered ${res.status}`);
+  return res.body;
+}
+
+/** Fetch the agent list again; the screen shows the last one meanwhile. */
+async function loadAgents() {
+  try {
+    ui.agents = (await agentCall("")).agents;
+    ui.agentsError = "";
+  } catch (err) {
+    ui.agentsError = err.message;
+  }
+  render();
+}
+
+/** One agent changed: take its new state into the list, and have the supervisor report now. */
+function updated(agent) {
+  if (agent?.id) ui.agents = (ui.agents ?? []).map((a) => (a.id === agent.id ? agent : a));
+  if (supervisorPid()) writeFileSync(RELOAD_FILE, new Date().toISOString());
+}
+
+async function toggleTool(agent, name) {
+  const on = agent.tools.includes(name);
+  const tools = on ? agent.tools.filter((t) => t !== name) : [...agent.tools, name];
+  say(`${on ? "switching off" : "switching on"} ${SERVICES[name].label} for ${agent.name}…`);
+  updated(await agentCall(`/${encodeURIComponent(agent.id)}`, "PUT", { tools }));
+  say(`${SERVICES[name].label} ${on ? "off" : "on"} for ${agent.name}`);
+}
+
+function stopServing(agent) {
+  confirm(`Stop serving ${agent.name}? Its tools are taken off it.`, async () => {
+    updated(await agentCall(`/${encodeURIComponent(agent.id)}`, "DELETE"));
+    say(`no longer serving ${agent.name}`);
+  });
+}
+
+/** Do one thing left to do on an agent, or say how. */
+async function doTodo(agent, todo) {
+  const label = SERVICES[todo.tool]?.label ?? todo.tool;
+  if (todo.kind === "capability") {
+    updated(await agentCall(`/${encodeURIComponent(agent.id)}/capability`, "POST", { flag: todo.flag }));
+    return say(`${todo.label} switched on for ${agent.name}`);
+  }
+  if (todo.kind === "headers") {
+    const [header] = todo.headers;
+    return startEdit(`${label}: ${header}`, { secret: true }, async (value) => {
+      if (!value.trim()) return say("");
+      updated(
+        await agentCall(`/${encodeURIComponent(agent.id)}/headers`, "PUT", {
+          tool: todo.tool,
+          headers: { [header]: value },
+        })
+      );
+      say(`${header} saved on ${agent.name}'s ${todo.tool} server`);
+    });
+  }
+  say(todoNote(todo, label));
+}
+
+/** One thing left to do, as a short line and what `enter` does about it. */
+function todoText(todo) {
+  const label = SERVICES[todo.tool]?.label ?? todo.tool;
+  switch (todo.kind) {
+    case "capability":
+      return [`${label} needs ${todo.label} on`, "enter switches it on"];
+    case "headers":
+      return [`${label} needs ${todo.headers.join(", ")}`, "enter types it in; it is saved on the agent, never shown"];
+    case "brave":
+      return [`${label}: a Brave key is set, so Brave is used`, "remove the Brave key in the agent's Capabilities to use this computer"];
+    case "disabled":
+      return [`${label}'s MCP server is switched off`, "switch it on in the agent's Capabilities"];
+    case "name_taken":
+      return [`another MCP server is called ${todo.tool}`, `delete it in the agent's Capabilities and this computer's ${todo.tool} is added`];
+    default:
+      return [`${label} can't be added`, "this agent's MCP servers are set by its admin"];
+  }
+}
+
+const todoNote = (todo) => todoText(todo)[1];
 
 /** Whatever this machine logs in `file`, last lines only: the log can reach a megabyte. */
 function tail(file, bytes = 64 * 1024) {
@@ -1474,22 +1592,19 @@ function tail(file, bytes = 64 * 1024) {
   }
 }
 
-/** What to set up for a service beyond what Salts does itself. */
-function serviceSetup(name) {
-  if (name === "web") {
-    return [["on the agent", "nothing", "Salts sets the agent's SearXNG URL; a Brave key on the agent takes over from it"]];
-  }
+/** Where a service keeps what it keeps, beyond its address. */
+function serviceFiles(name) {
   if (name === "matchmaker") {
+    const data = path.join(MATCHMAKER_DIR, "data", "matchmaker");
+    return [["people and jobs", data, "MM_DATA_DIR in its .env moves it", data]];
+  }
+  if (name === "analyst") {
     return [
-      ["on the agent", `fill in its headers at ${TOOLS_PAGE}`, "Authorization is set already; headers stay when the address changes"],
-      ...MATCHMAKER_HEADERS.map(([header, value, note]) => [header, value, note, header]),
-      ["people and jobs", path.join(MATCHMAKER_DIR, "data", "matchmaker"), "MM_DATA_DIR in its .env moves it", path.join(MATCHMAKER_DIR, "data", "matchmaker")],
+      ["inbox folder", ANALYST_INBOX, `files here are read too; DATA_DIR / INBOX_DIR in ${path.join(ANALYST_DIR, ".env")} move it`, ANALYST_INBOX],
+      ["run_python", "off unless ALLOW_PYTHON=true", `set in ${path.join(ANALYST_DIR, ".env")}`],
     ];
   }
-  return [
-    ["inbox folder", ANALYST_INBOX, `files here are read too; DATA_DIR / INBOX_DIR in ${path.join(ANALYST_DIR, ".env")} move it`, ANALYST_INBOX],
-    ["run_python", "off unless ALLOW_PYTHON=true", `set in ${path.join(ANALYST_DIR, ".env")}`],
-  ];
+  return [];
 }
 
 const ANALYST_INBOX = path.join(ANALYST_DIR, "data", "inbox");
@@ -1501,6 +1616,11 @@ const copyRow = (cells, text, note) => ({
   enter: () => say(copy(text) ? `copied ${text}` : "no clipboard tool found"),
 });
 
+const back = (key) => () => {
+  ui[key] = "";
+  say("");
+};
+
 /**
  * What the current tab shows: its columns, its rows, where the selection is, and the
  * keys it answers to beyond moving and `enter`.
@@ -1508,46 +1628,41 @@ const copyRow = (cells, text, note) => ({
 function view() {
   const s = readState();
   const running = Boolean(supervisorPid());
-  const live = (name) => running && (s.services ?? []).includes(name) && s.url;
+  const live = (name) => running && s.svc?.[name]?.up && s.url;
 
   switch (ui.tab) {
     case 0: {
       const name = ui.open;
       if (name) {
         const svc = SERVICES[name];
-        const st = serviceStatus(s, name, running, TOOLS_PAGE);
+        const st = serviceStatus(s, name, running);
         const e = s.svc?.[name] ?? {};
+        const users = (s.agents ?? []).filter((a) => a.tools.includes(name)).map((a) => a.name);
         return {
           title: `${svc.label}  ${DIM}${svc.about}${OFF}`,
           columns: [["", 20], ["", 0]],
           rows: [
             { cells: ["status", { text: st.label, tone: st.tone }], note: st.note },
+            { cells: ["used by", users.length ? users.join(", ") : { text: "no agent", tone: "off" }], note: "switch it on for an agent in the Agents tab" },
             live(name)
               ? copyRow(["address", svc.reached(s.url)], svc.reached(s.url), "where the agents reach it; Salts is told each new one")
               : { cells: ["address", { text: "not running", tone: "off" }] },
             { cells: ["local port", live(name) && e.port ? `127.0.0.1:${e.port}` : "—"], note: "loopback only; the tunnel reaches it through the token gate" },
-            ...serviceSetup(name).map(([label, value, note, copyText]) =>
+            ...serviceFiles(name).map(([label, value, note, copyText]) =>
               copyText ? copyRow([label, value], copyText, note) : { cells: [label, value], note }
             ),
             copyRow(["log", svc.log], svc.log),
           ],
           pos: ui.openPos,
-          hint: "enter copy   o choose agents   esc back",
-          keys: {
-            o: openToolsPage,
-            "\x1b": () => {
-              ui.open = "";
-              say("");
-            },
-          },
+          hint: "enter copy   esc back",
+          keys: { "\x1b": back("open") },
         };
       }
       return {
-        columns: [["service", 22], ["status", 16], ["address", 0]],
+        columns: [["service", 22], ["status", 20], ["address", 0]],
         rows: NAMES.map((name) => {
-          const st = serviceStatus(s, name, running, TOOLS_PAGE);
+          const st = serviceStatus(s, name, running);
           return {
-            name,
             cells: [SERVICES[name].label, { text: st.label, tone: st.tone }, live(name) ? SERVICES[name].reached(s.url) : ""],
             note: st.note || SERVICES[name].about,
             enter: () => {
@@ -1558,10 +1673,9 @@ function view() {
           };
         }),
         pos: ui.pos[0],
-        hint: running ? "enter open   o choose agents   r new tunnel   x stop all" : "enter open   s start",
+        hint: running ? "enter details   r new tunnel   x stop all" : "enter details   s start",
         keys: {
           s: () => (running ? say("already running") : startFromDashboard()),
-          o: openToolsPage,
           r: () => {
             const pid = supervisorPid();
             if (!pid) return say("nothing running");
@@ -1573,18 +1687,57 @@ function view() {
     }
 
     case 1: {
-      const agents = s.agents ?? [];
+      const agents = ui.agents ?? [];
+      const agent = agents.find((a) => a.id === ui.openAgent);
+      if (agent) {
+        const rows = NAMES.map((name) => {
+          const on = agent.tools.includes(name);
+          const st = serviceStatus(s, name, running);
+          return {
+            cells: [SERVICES[name].label, on ? { text: "on", tone: "good" } : { text: "off", tone: "off" }],
+            note: `enter switches ${SERVICES[name].label} ${on ? "off" : "on"} for ${agent.name}${st.tone === "bad" ? ` (${st.note})` : ""}`,
+            enter: () => toggleTool(agent, name),
+          };
+        });
+        for (const todo of agent.todos) {
+          const [text, note] = todoText(todo);
+          rows.push({ cells: ["to do", { text, tone: "bad" }], note, enter: () => doTodo(agent, todo) });
+        }
+        if (agent.linked) {
+          rows.push({
+            cells: ["", { text: "stop serving this agent", tone: "off" }],
+            note: "takes every tool off this agent",
+            enter: () => stopServing(agent),
+          });
+        }
+        return {
+          title: agent.name,
+          columns: [["", 22], ["", 0]],
+          rows,
+          pos: ui.openAgentPos,
+          hint: "enter switch / do   esc back",
+          keys: { "\x1b": back("openAgent") },
+        };
+      }
       return {
         columns: [["agent", 32], ["tools on", 0]],
         rows: agents.map((a) => ({
-          cells: [a.name, a.tools.length ? { text: a.tools.join(", "), tone: "good" } : { text: "none", tone: "off" }],
-          note: "enter opens the Salts site, where tools are switched on per agent",
-          enter: openToolsPage,
+          cells: [
+            a.name,
+            a.tools.length
+              ? { text: `${a.tools.map((t) => SERVICES[t]?.label ?? t).join(", ")}${a.todos.length ? `  (${a.todos.length} to do)` : ""}`, tone: a.todos.length ? "busy" : "good" }
+              : { text: "—", tone: "off" },
+          ],
+          note: a.todos.length ? `${todoText(a.todos[0])[0]}: enter to fix` : "enter to choose its tools",
+          enter: () => {
+            ui.openAgent = a.id;
+            ui.openAgentPos = { sel: 0, top: 0 };
+            say("");
+          },
         })),
         pos: ui.pos[1],
-        empty: "no agents yet: press a to choose them on the Salts site",
-        hint: "enter/a choose agents and tools",
-        keys: { a: openToolsPage },
+        empty: ui.agentsError || (ui.agents ? "you have no agents yet: create one on the Salts site" : "loading your agents…"),
+        hint: "enter choose tools",
       };
     }
 
@@ -1598,7 +1751,6 @@ function view() {
             cells: ["connection", { text: `${conn.label}${s.computer?.name ? ` as ${s.computer.name}` : ""}`, tone: conn.tone }],
             note: conn.note,
           },
-          { cells: ["agents and tools", TOOLS_PAGE], note: "enter opens it", enter: openToolsPage },
           {
             cells: ["start at login", autostart ? { text: "on", tone: "good" } : { text: "off", tone: "off" }],
             note: "a login item runs `salts-tools start`, which brings everything back",
@@ -1612,8 +1764,16 @@ function view() {
           { cells: ["secrets kept in", tokenStoreName()] },
           copyRow(["state and logs", HOME], HOME),
           {
+            cells: ["disconnect", { text: "unpair this computer", tone: "bad" }],
+            note: "stops everything and takes its tools off every agent; run salts-tools again to pair",
+            enter: () =>
+              confirm("Disconnect this computer from Salts?", async () => {
+                say(`${await disconnect()} — quit and run salts-tools again to connect`);
+              }),
+          },
+          {
             cells: ["reset", { text: "disconnect and forget everything", tone: "bad" }],
-            note: "stops everything, takes its tools off every agent, back to a first run; data is kept",
+            note: "as disconnect, and deletes the secrets, state, logs and login item; data is kept",
             enter: () =>
               confirm("Stop, disconnect this computer and forget everything?", async () => {
                 const done = await reset();
@@ -1663,8 +1823,8 @@ function render() {
           : paint(`  opening a tunnel…${s.lastError ? `  ${s.lastError}` : ""}`, s.lastError ? "bad" : "busy")
   );
   const trouble = [
-    NAMES.some((n) => serviceStatus(s, n, running, TOOLS_PAGE).tone === "bad"),
-    false,
+    NAMES.some((n) => serviceStatus(s, n, running).tone === "bad"),
+    (ui.agents ?? []).some((a) => a.todos.length),
     conn.tone === "bad",
   ];
   out.push(
@@ -1695,7 +1855,14 @@ function render() {
   }
 
   out.push(`${DIM}${"─".repeat(width)}${OFF}`);
-  if (ui.confirm) {
+  if (ui.edit) {
+    // The cursor is drawn rather than moved: the screen is repainted whole on every
+    // change, so a real cursor position would be lost on the next paint. A secret is
+    // shown as dots.
+    const shown = ui.edit.secret ? "•".repeat(ui.edit.buffer.length) : ui.edit.buffer;
+    out.push(`  ${BOLD}${ui.edit.label}${OFF} ${shown}${INV} ${OFF}`);
+    out.push(`${DIM}  enter save   esc cancel${OFF}`);
+  } else if (ui.confirm) {
     out.push(`  ${BOLD}${ui.confirm.prompt}${OFF}`);
     out.push(`${DIM}  y confirm   any other key cancel${OFF}`);
   } else {
@@ -1708,6 +1875,22 @@ function render() {
   if (ui.status) out.push(`  ${ui.status}`);
 
   process.stdout.write(`\x1b[H\x1b[2J${out.join("\n")}\n`);
+}
+
+/** The line editor: printable characters, backspace, enter, esc. Pasting works. */
+async function onEditKey(key) {
+  const edit = ui.edit;
+  if (key === "\x1b") {
+    ui.edit = null;
+    return say("");
+  }
+  if (key === "\r" || key === "\n") {
+    ui.edit = null;
+    return await edit.submit(edit.buffer);
+  }
+  if (key === "\x7f" || key === "\b") edit.buffer = edit.buffer.slice(0, -1);
+  else if (key.length === 1 && key >= " ") edit.buffer += key;
+  render();
 }
 
 function quit() {
@@ -1724,6 +1907,7 @@ function switchTab(tab) {
 
 async function onKey(key) {
   if (key === "\u0003") quit();
+  if (ui.edit) return await onEditKey(key);
   if (ui.confirm) {
     const { run } = ui.confirm;
     ui.confirm = null;
@@ -1751,9 +1935,14 @@ async function onKey(key) {
   render();
 }
 
-function dashboard() {
+/** The dashboard, opening on `tab` (the Agents tab after a first pairing). */
+function dashboard(tab = 0) {
+  ui.tab = tab;
   process.stdout.write("\x1b[?1049h\x1b[?25l");
   render();
+  void loadAgents();
+  // Agents and what is left to do change on the site and in other terminals too.
+  setInterval(() => void loadAgents(), 15_000);
   process.stdin.setRawMode(true);
   process.stdin.resume();
   process.stdin.setEncoding("utf8");
@@ -1776,10 +1965,11 @@ const usage = `${BOLD}salts-tools${OFF}                 start if needed, then th
 ${BOLD}salts-tools start${OFF}           connect this computer (first run) and start
 ${BOLD}salts-tools stop${OFF}            stop everything
 ${BOLD}salts-tools restart${OFF}         open a new tunnel
-${BOLD}salts-tools reset${OFF}           disconnect this computer and forget everything
+${BOLD}salts-tools disconnect${OFF}      unpair this computer; its tools come off every agent
+${BOLD}salts-tools reset${OFF}           disconnect and forget everything
 ${BOLD}salts-tools autostart${OFF} on|off  start at login
 
-Agents and tools are chosen at ${TOOLS_PAGE}.
+Agents and tools are chosen in the dashboard; the Salts site is only for pairing.
 Add :staging to any of them (\`salts-tools :staging\`, \`start:staging\`) for staging.`;
 
 try {
@@ -1791,19 +1981,25 @@ try {
         console.log(usage);
         break;
       }
-      // Connected and running first, so the dashboard has something to show.
-      if (!readCredential() || readState().unpaired || !supervisorPid()) {
-        if (!(await start({ interactive: true }))) break;
-        await sleep(1500);
+      // Connected and running first, so the dashboard has something to show. Straight
+      // after pairing, it opens on the agents to choose.
+      {
+        const pairing = !readCredential() || readState().unpaired;
+        if (pairing || !supervisorPid()) {
+          if (!(await start({ interactive: true }))) break;
+          await sleep(1500);
+        }
+        dashboard(pairing ? 1 : 0);
       }
-      dashboard();
       break;
     case "start":
       await start({ interactive: process.stdin.isTTY });
       break;
     case "setup":
-      console.log(`Agents are chosen at ${TOOLS_PAGE} now.`);
-      openBrowser(TOOLS_PAGE);
+      console.log(`Agents and tools are chosen in the dashboard: \`${SELF}${SUFFIX ? ` :${TARGET}` : ""}\`, tab 2 Agents.`);
+      break;
+    case "disconnect":
+      console.log(`${GREEN}✓${OFF} ${await disconnect()}`);
       break;
     case "stop":
       await stop();

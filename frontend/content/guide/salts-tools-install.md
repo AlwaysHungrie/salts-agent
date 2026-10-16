@@ -43,18 +43,13 @@ In your terminal, run:
 npx salts-tools
 ```
 
-salts-tools checks that cloudflared is installed, then shows a short code and opens this site in your browser.
-
-1. Check that the code on the page matches the one in your terminal.
-2. Tick the agents this computer should serve, and click **Connect**.
-
-Your terminal carries on by itself. There is nothing to copy or paste.
+salts-tools checks that cloudflared is installed, then shows a short code and opens this site in your browser. Check that the code on the page matches the one in your terminal, and click **Connect**. That is the only step in the browser, and there is nothing to copy or paste.
 
 ## 4. Choose your tools
 
-After you connect, click **Choose tools**, or open the [salts-tools page](/salts-tools) at any time. You will see your computer and each agent it serves. Switch on the tools you want for each agent. salts-tools starts them on your computer and connects them to that agent within a few seconds.
+Back in your terminal, salts-tools opens its screen on the **Agents** tab, which lists every agent you have. Pick an agent with the arrow keys and press **Enter**, then press **Enter** on each tool you want for it. salts-tools connects it to that agent within a few seconds. Press **Esc** to go back to the list.
 
-If a tool needs something more, the page says so under the agent, with a button to fix it. For example, the analyst needs **File ingest** switched on, and the matchmaker needs your OpenRouter key. If something is missing on your computer, such as Docker for web search, the page tells you what to install.
+If a tool needs something more, the agent shows it as **to do**: press **Enter** on it to fix it. For example, the analyst needs **File ingest** switched on, which salts-tools does for you, and the matchmaker needs your OpenRouter key, which you type in right there. If something is missing on your computer, such as Docker for web search, the **Services** tab shows that tool as `error` and says what to install.
 
 ## 5. Start at login
 
@@ -62,6 +57,6 @@ Finally, salts-tools asks in the terminal whether it should start automatically 
 
 ## You are done
 
-Your computer is connected. To give another agent these tools, choose it under **Use this computer for another agent** on the [salts-tools page](/salts-tools).
+Your computer is connected. To give another agent these tools, open it in the **Agents** tab and switch them on.
 
 Next, read [Everyday use](/guide/salts-tools-everyday) to learn the salts-tools screen and the commands you will use day to day.
