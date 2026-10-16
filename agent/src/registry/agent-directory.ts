@@ -39,6 +39,24 @@ import {
   removeFleetMeta,
   setFleetMeta,
 } from "./directory-listing";
+import {
+  approvePairing,
+  type ComputerLink,
+  type ComputerRow,
+  computer,
+  computersOf,
+  linksOf,
+  linksOfAgent,
+  markSynced,
+  type PairingPoll,
+  pairing,
+  pollPairing,
+  removeComputer,
+  removeLink,
+  reportComputer,
+  setLink,
+  startPairing,
+} from "./directory-computers";
 import { AGENT_DIRECTORY_MIGRATIONS, migrateMembership } from "./directory-schema";
 import {
   clearSettings,
@@ -296,6 +314,7 @@ export class AgentDirectory extends DurableObject {
 
   remove(id: string) {
     this.ensureSchema();
+    this.ctx.storage.sql.exec(`DELETE FROM salts_links WHERE agent_id = ?`, id);
     return removeAgent(this.ctx.storage, id);
   }
 
@@ -327,5 +346,72 @@ export class AgentDirectory extends DurableObject {
   approveBusinessRequest(id: string): { email: string; agent_limit: number } | undefined {
     this.ensureSchema();
     return approveBusinessRequest(this.ctx.storage, id);
+  }
+
+  // ─── salts-tools computers (see directory-computers.ts) ─────────────────────────
+
+  startPairing(p: Parameters<typeof startPairing>[1]): boolean {
+    this.ensureSchema();
+    return startPairing(this.ctx.storage, p);
+  }
+
+  pairing(userCode: string, now: number): { name: string; approved: boolean } | undefined {
+    this.ensureSchema();
+    return pairing(this.ctx.storage, userCode, now);
+  }
+
+  approvePairing(userCode: string, now: number, c: Parameters<typeof approvePairing>[3]): boolean {
+    this.ensureSchema();
+    return approvePairing(this.ctx.storage, userCode, now, c);
+  }
+
+  pollPairing(deviceHash: string, now: number): PairingPoll {
+    this.ensureSchema();
+    return pollPairing(this.ctx.storage, deviceHash, now);
+  }
+
+  computer(id: string): ComputerRow | undefined {
+    this.ensureSchema();
+    return computer(this.ctx.storage, id);
+  }
+
+  computersOf(email: string): ComputerRow[] {
+    this.ensureSchema();
+    return computersOf(this.ctx.storage, email);
+  }
+
+  reportComputer(id: string, r: Parameters<typeof reportComputer>[2]) {
+    this.ensureSchema();
+    return reportComputer(this.ctx.storage, id, r);
+  }
+
+  computerLinks(computerId: string): ComputerLink[] {
+    this.ensureSchema();
+    return linksOf(this.ctx.storage, computerId);
+  }
+
+  agentComputerLinks(agentId: string): ComputerLink[] {
+    this.ensureSchema();
+    return linksOfAgent(this.ctx.storage, agentId);
+  }
+
+  setComputerLink(computerId: string, agentId: string, tools: string[]) {
+    this.ensureSchema();
+    return setLink(this.ctx.storage, computerId, agentId, tools);
+  }
+
+  markComputerLinkSynced(computerId: string, agentId: string, synced: string) {
+    this.ensureSchema();
+    return markSynced(this.ctx.storage, computerId, agentId, synced);
+  }
+
+  removeComputerLink(computerId: string, agentId: string) {
+    this.ensureSchema();
+    return removeLink(this.ctx.storage, computerId, agentId);
+  }
+
+  removeComputer(id: string) {
+    this.ensureSchema();
+    return removeComputer(this.ctx.storage, id);
   }
 }

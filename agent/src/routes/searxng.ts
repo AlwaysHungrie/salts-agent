@@ -59,7 +59,7 @@ export async function handleSearxngUrl(
 }
 
 /** Whether a server's saved `Authorization` header is exactly this bearer token. */
-async function trustsToken(row: McpServerRow, token: string): Promise<boolean> {
+export async function trustsToken(row: McpServerRow, token: string): Promise<boolean> {
   const headers = parseHeaders(row.headers);
   const key = Object.keys(headers).find((k) => k.toLowerCase() === "authorization");
   return (
@@ -78,7 +78,7 @@ export async function rememberRemoval(env: Env, reg: Registry, row: McpServerRow
   if (token && (await trustsToken(row, token))) await reg.markMcpRemoved(row.name);
 }
 
-const HEADER_NAME = /^[A-Za-z0-9-]{1,64}$/;
+export const HEADER_NAME = /^[A-Za-z0-9-]{1,64}$/;
 const MAX_SEEDED_HEADERS = 8;
 
 /**
@@ -90,12 +90,16 @@ function seededHeaders(raw: unknown): string[] | undefined {
   if (raw === undefined) return [];
   if (!Array.isArray(raw) || raw.length > MAX_SEEDED_HEADERS) return undefined;
   const names = raw.map((n) => (typeof n === "string" ? n.trim() : ""));
-  if (names.some((n) => !HEADER_NAME.test(n) || n.toLowerCase() === "authorization")) return undefined;
+  if (names.some((n) => !HEADER_NAME.test(n) || n.toLowerCase() === "authorization"))
+    return undefined;
   return names;
 }
 
 /** `headers` with each of `names` it lacks (in any case) added empty; values it has stay. */
-function withEmpty(headers: Record<string, string>, names: string[]): Record<string, string> {
+export function withEmpty(
+  headers: Record<string, string>,
+  names: string[]
+): Record<string, string> {
   const have = new Set(Object.keys(headers).map((k) => k.toLowerCase()));
   const out = { ...headers };
   for (const name of names) if (!have.has(name.toLowerCase())) out[name] = "";

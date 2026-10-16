@@ -7,6 +7,7 @@ import { handleAgents } from "./routes/agents";
 import { handleFleets } from "./routes/fleets";
 import { ROUTE_INDEX } from "./routes/index-page";
 import { handleOauthCallback } from "./routes/mcp-oauth";
+import { handleSaltsBrowser, handleSaltsMachine } from "./routes/salts";
 import { handleSearxngMcp, handleSearxngUrl } from "./routes/searxng";
 import { handleWebhook } from "./routes/telegram";
 import { handleWhatsappWebhook } from "./routes/whatsapp";
@@ -137,6 +138,11 @@ async function channelRoute(
   ) {
     return await handleWhatsappWebhook(request, env, ctx, url, third);
   }
+  // salts-tools computers pair and report here; a device code or credential is the proof.
+  if (first === "salts") {
+    const handled = await handleSaltsMachine(request, env, segments);
+    if (handled) return handled;
+  }
   // salts-tools posts its tunnel URLs here; the agent's SearXNG token is the proof.
   if (method === "POST" && first === "searxng" && second && third === "url" && !segments[3]) {
     return await handleSearxngUrl(request, env, decodeURIComponent(second));
@@ -173,7 +179,9 @@ export default {
           ? await handleFleets(request, env, url, segments)
           : segments[1] === "agents"
             ? await handleAgents(request, env, url, segments)
-            : undefined;
+            : segments[1] === "salts"
+              ? await handleSaltsBrowser(request, env, segments)
+              : undefined;
       if (handled) return handled;
     }
 
