@@ -44,12 +44,22 @@ It runs on macOS, Linux and Windows. It was called salts-web; see
 
 ## Install
 
+Nothing to install: run it with `npx salts-tools <command>`. npx fetches the package from
+npm the first time. The package carries the matchmaker and analyst sources, which it
+installs into `~/.salts-tools/mcps/<name>` (their `.venv`, `.env` and `data` live there and
+are kept when a new version is installed over them). The login item runs it through npx too.
+
+From a clone of this repo, `npm link` in `salts-tools` puts `salts-tools` on your PATH,
+or run `node salts-tools/cli.mjs <command>`. A clone runs the MCP servers in place from
+`local-mcps/`.
+
+### Publishing
+
 ```bash
 cd salts-tools
-npm link          # puts `salts-tools` on your PATH
+npm version minor   # a new version makes every npx install copy the MCP servers again
+npm publish         # prepack copies local-mcps/{matchmaker,analyst}-mcp into mcps/
 ```
-
-You can also run it without linking: `node salts-tools/cli.mjs <command>`.
 
 ## First run
 
@@ -103,7 +113,8 @@ to the tunnel within 30 seconds. The same holds for `analyst`.
 
 The matchmaker's own `.env` in `local-mcps/matchmaker-mcp` still applies (`MM_DATA_DIR`,
 models, and so on). salts-tools overrides the transport, host, port and token. People and
-jobs are folders under `local-mcps/matchmaker-mcp/data/matchmaker`. Its log is
+jobs are folders under `data/matchmaker` in its folder (`local-mcps/matchmaker-mcp` in a clone,
+`~/.salts-tools/mcps/matchmaker-mcp` from npm). Its log is
 `~/.salts-tools/matchmaker.log`.
 
 ## Adding the analyst
@@ -309,6 +320,8 @@ curl -s 'http://localhost:8080/search?q=solana&format=json' | head -c 400
 - `status.mjs`: the status of each service and agent, read from `state.json`
 - `tui.mjs`: the dashboard's drawing and key handling
 - `gateway.mjs`: the token check (and the share-link exception) and path routing in front of every service
+- `mcps.mjs`: where each MCP server runs from (the repo, or its installed copy from npm) and the login item's command
+- `scripts/bundle-mcps.mjs`: copies the MCP servers into the package on `npm pack`/`npm publish`
 - `test/`: tests (`npm test`)
 - `web/docker-compose.yml`: the first-run secret generator, SearXNG (no host port), and
   the token gate on loopback

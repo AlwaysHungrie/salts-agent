@@ -1,14 +1,28 @@
 {
   "name": "salts-tools",
-  "version": "2.0.0",
-  "private": true,
+  "version": "2.1.0",
   "type": "module",
-  "description": "Local services for a salt-agent (SearXNG web search, the matchmaker MCP server) behind one token-gated cloudflared tunnel, with the agent kept pointed at it.",
-  "bin": {
-    "salts-tools": "./cli.mjs"
+  "description": "Run free web search, the matchmaker and the spreadsheet analyst for a Salts agent on your own computer, behind one token-gated cloudflared tunnel.",
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AlwaysHungrie/salts-agent.git",
+    "directory": "salts-tools"
   },
+  "bin": {
+    "salts-tools": "cli.mjs"
+  },
+  "files": [
+    "*.mjs",
+    "web/",
+    "!web/.env",
+    "mcps/",
+    "README.md"
+  ],
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "prepack": "node scripts/bundle-mcps.mjs",
+    "postpack": "node scripts/bundle-mcps.mjs clean"
   },
   "engines": {
     "node": ">=20"

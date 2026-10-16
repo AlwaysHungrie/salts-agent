@@ -14,7 +14,7 @@ This guide will help you start the analyst and connect it to your agent. You wil
 In your terminal, run:
 
 ```
-salts-tools start analyst
+npx salts-tools start analyst
 ```
 
 The first start takes a minute or two while salts-tools sets the analyst up. If salts-tools is already running another tool, the analyst joins it and nothing else changes.

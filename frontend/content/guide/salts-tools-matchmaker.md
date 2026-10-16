@@ -14,7 +14,7 @@ This guide will help you start the matchmaker and connect it to your agent. You 
 In your terminal, run:
 
 ```
-salts-tools start matchmaker
+npx salts-tools start matchmaker
 ```
 
 The first start takes a minute or two, because salts-tools sets up everything the matchmaker needs. If salts-tools is already running another tool, the matchmaker joins it and nothing else changes.
