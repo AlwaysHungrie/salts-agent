@@ -94,12 +94,11 @@ export function SessionHeader({
 
   return (
     <header className="border-hairline-soft bg-canvas border-b">
-      {/* One compact row on a phone; the roomier layout from md up. */}
-      <div className="flex items-center gap-2 px-4 py-2.5 md:flex-wrap md:items-end md:gap-x-10 md:gap-y-4 md:px-8 md:pt-6 md:pb-5">
+      <div className="flex flex-wrap items-end gap-x-10 gap-y-4 px-5 pt-5 pb-4 md:px-8 md:pt-6 md:pb-5">
         <button
           onClick={onOpenSidebar}
           aria-label="Open sessions"
-          className="text-ink hover:bg-canvas-soft -ml-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition md:hidden"
+          className="text-ink hover:bg-canvas-soft -ml-1 mb-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition md:hidden"
         >
           <Menu size={20} strokeWidth={1.75} />
         </button>
@@ -146,23 +145,27 @@ export function SessionHeader({
           ) : (
             <div className="group flex items-center gap-2">
               <button
-                onClick={startRename}
+                // On a phone only the pencil renames, so a tap on the title is not one.
+                onClick={() => {
+                  if (window.matchMedia("(min-width: 768px)").matches)
+                    setEditing(true);
+                }}
                 title="Rename session"
-                className="min-w-0 truncate text-left text-base font-[650] leading-tight md:text-2xl"
+                className="min-w-0 truncate text-left text-xl font-[650] leading-tight md:text-2xl"
               >
                 {title}
               </button>
               <button
                 onClick={startRename}
                 aria-label="Rename session"
-                className="text-muted hover:bg-canvas-soft hover:text-ink hidden h-7 w-7 shrink-0 items-center justify-center rounded-full transition md:flex md:opacity-0 md:group-hover:opacity-100"
+                className="text-muted hover:bg-canvas-soft hover:text-ink flex h-7 w-7 shrink-0 items-center justify-center rounded-full opacity-100 transition md:opacity-0 md:group-hover:opacity-100"
               >
                 <Pencil size={14} strokeWidth={1.75} />
               </button>
             </div>
           )}
           {/* A phone has no room for the usage column, so it takes the date's line. */}
-          <div className="text-muted tnum truncate text-xs font-light leading-[1.43] md:hidden">
+          <div className="text-muted tnum truncate text-sm font-light leading-[1.43] md:hidden">
             {formatUsdShort(summary?.llm.cost_usd)} ·{" "}
             {formatCountShort(summary?.messages ?? 0)} msgs
           </div>
