@@ -18,43 +18,51 @@ export type McpPreset = {
   logo: React.ReactNode;
   /** One line on what the server does. */
   description: string;
+  /** Fills the whole tile, in place of the plain canvas, when the logo is drawn on it. */
+  tile?: string;
 };
 
-/** The salt app icon, with a catalogue entry's letter in its colour at the centre. */
+/** The salt app icon's background, which a salt mark's whole tile is filled with. */
+const SALT_TILE = "#141414";
+
+/**
+ * The salt app icon's four squares, drawn on a tile already filled with its black, with
+ * a catalogue entry's letter at the centre: white, outlined in the entry's colour.
+ */
 function SaltMark({ letter, color }: { letter: string; color: string }) {
   return (
-    <svg aria-hidden="true" width={32} height={32} viewBox="0 0 32 32">
-      <rect width="32" height="32" rx="10" fill="#141414" />
-      <rect x="9.5" y="9.5" width="5" height="5" rx="1.5" fill="#fff" />
+    <svg aria-hidden="true" width={46} height={46} viewBox="0 0 32 32">
+      <rect x="6.5" y="6.5" width="8" height="8" rx="2.2" fill="#fff" />
       <rect
         x="17.5"
-        y="9.5"
-        width="5"
-        height="5"
-        rx="1.5"
+        y="6.5"
+        width="8"
+        height="8"
+        rx="2.2"
         fill="#fff"
         fillOpacity="0.45"
       />
       <rect
-        x="9.5"
+        x="6.5"
         y="17.5"
-        width="5"
-        height="5"
-        rx="1.5"
+        width="8"
+        height="8"
+        rx="2.2"
         fill="#fff"
         fillOpacity="0.45"
       />
-      <rect x="17.5" y="17.5" width="5" height="5" rx="1.5" fill="#fff" />
+      <rect x="17.5" y="17.5" width="8" height="8" rx="2.2" fill="#fff" />
       <text
         x="16"
-        y="16"
+        y="16.8"
         textAnchor="middle"
         dominantBaseline="central"
-        fontSize="11"
-        fontWeight="800"
-        fill={color}
-        stroke="#141414"
-        strokeWidth="2"
+        fontSize="17"
+        fontWeight="900"
+        fill="#fff"
+        stroke={color}
+        strokeWidth="3"
+        strokeLinejoin="round"
         paintOrder="stroke"
       >
         {letter}
@@ -76,6 +84,7 @@ export function toPreset(entry: McpCatalogEntry): McpPreset {
     auth: entry.auth,
     headers: entry.headers ?? {},
     description: entry.description ?? "",
+    tile: !entry.icon && entry.color ? SALT_TILE : undefined,
     logo: entry.icon ? (
       // A plain <img>, not next/image: the icon is a data URL with nothing to optimise,
       // and <img> is what keeps any script inside the SVG from running.
@@ -246,6 +255,11 @@ export function McpPresetStrip({
                 onPick(preset);
               }}
               className="bg-canvas border-hairline text-ink hover:border-ink flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border transition"
+              style={
+                preset.tile
+                  ? { background: preset.tile, borderColor: preset.tile }
+                  : undefined
+              }
             >
               {preset.logo}
             </button>
