@@ -1,5 +1,6 @@
 import { enabled, mcpServerReady, withMcpAuth } from "../capabilities";
-import type { Command, CommandResult, McpCommand, ModelCommand } from "../commands";
+import type { Command, CommandResult, DocsCommand, McpCommand, ModelCommand } from "../commands";
+import { guideBody, guideIndex, guidePage } from "../guide";
 import { modelCatalog, modelNicknames } from "../models";
 import { sessionLimitMessage, type SessionRow } from "../registry";
 import { lockedColumns } from "../validation/meta";
@@ -14,13 +15,14 @@ import type { SessionHost } from "./types";
  */
 export async function runCommand(host: SessionHost, command: Command): Promise<CommandResult> {
   if (command === "help") return { text: HELP, destroy: false };
-  if (command === "docs") return linkCommand(host, "/guide", "The user guide");
+  if (command === "docs") return docsIndex(host);
   if (command === "settings") {
     return linkCommand(host, `/a/${host.agentId()}/settings`, "This agent's settings");
   }
   if (command === "mcp") return await mcpList(host);
   if (command === "model") return await modelList(host);
   if (typeof command === "object") {
+    if ("page" in command) return docsPage(host, command);
     return "nickname" in command
       ? await modelCommand(host, command)
       : await mcpCommand(host, command);
@@ -112,7 +114,7 @@ export const HELP = [
   "`!model` — list models; `!model <nickname>` switches",
   "`!mcp` — list connected apps; `!enable-mcp <name>` / `!disable-mcp <name>` switch one",
   "`!settings` — link to this agent's settings",
-  "`!docs` — link to the user guide",
+  "`!docs` — list the user guide's pages; `!docs <page>` shows one",
   "`!help` — this list",
 ].join("\n");
 
@@ -122,7 +124,30 @@ function appLink(host: SessionHost, path: string): string | null {
   return base ? `${base}${path}` : null;
 }
 
-/** `!docs` / `!settings`: a link to a web app page. */
+/** `!docs`: the guide's address, then every page with the command that shows it. */
+function docsIndex(host: SessionHost): CommandResult {
+  const url = appLink(host, "/guide");
+  return {
+    text:
+      `${url ? `The user guide: ${url}\n\n` : ""}Send \`!docs <page>\` to read a page here.\n\n` +
+      guideIndex(),
+    destroy: false,
+  };
+}
+
+/** `!docs <page>`: one guide page's markdown, links made absolute. */
+function docsPage(host: SessionHost, { page }: DocsCommand): CommandResult {
+  const found = guidePage(page);
+  if (!found) {
+    return {
+      text: `No guide page named "${page}". Send \`!docs\` to list them.`,
+      destroy: false,
+    };
+  }
+  return { text: guideBody(found, appLink(host, "")), destroy: false };
+}
+
+/** `!settings`: a link to a web app page. */
 function linkCommand(host: SessionHost, path: string, what: string): CommandResult {
   const url = appLink(host, path);
   return {

@@ -274,9 +274,23 @@ in the browser, Telegram and WhatsApp: `!new`, `!clear`, `!delete`, `!stop`, `!u
 sets the agent's model to the offered one whose label holds the nickname in brackets
 (refused when meta locks `model`). Bare `!model` names the current model and lists the nicknames and `!mcp` lists the
 agent's MCP servers with the command that flips each. `!help` explains sessions and lists
-every command; `!new` and `!clear` point at it. `!docs` and `!settings` link the user guide
-and the agent's settings page under `APP_URL` (a `var` in `wrangler.jsonc`; unset, they
-say there is none). See [`src/commands.ts`](src/commands.ts).
+every command; `!new` and `!clear` point at it. `!settings` links the agent's settings page
+under `APP_URL` (a `var` in `wrangler.jsonc`; unset, it says there is none). `!docs` lists
+the user guide's pages (and links it under `APP_URL`); `!docs <page>` sends one page's
+markdown. See [`src/commands.ts`](src/commands.ts).
+
+The guide is bundled from `frontend/content/guide/*.md` into `src/guide.json` by
+`scripts/guide.mjs`, which `npm run dev|typecheck|test` run first; the JSON is generated and
+not committed.
+
+The model can run the same commands through the always-on `run_command` tool
+([`src/session/command-tool.ts`](src/session/command-tool.ts)): `docs`, `help`, `settings`
+(link plus model and MCP lists), `mcp`, `enable-mcp`/`disable-mcp`, `model`, and `new`,
+`clear`, `compact`. Its description is the only thing the model is told about Salts itself:
+it reads the guide on demand, so nothing is added to the system prompt. `new`, `clear` and
+`compact` change the session the turn runs in, so they are queued on the turn and run once
+the reply is out (appended to it in the browser, a separate message in a chat); a turn that
+fails or is stopped drops them. `stop`, `unstick`, `delete` and `oom` are not offered.
 
 Each user message reaches the model prefixed with when it was sent (`[Sent YYYY-MM-DD
 HH:MM UTC]`, from the time its turn opened), not today's date in the system prompt: a

@@ -270,6 +270,17 @@ describe("a whole round trip", () => {
     }
   });
 
+  it("runs a !new the model asked for after its reply, as its own message", async () => {
+    const { hook, chat } = await agentFixture();
+    const before = (await post(hook, update(chat, "!!command new"))).headers.get("x-session");
+    const [announced, done] = await waitForReply(chat, 2);
+    expect(announced.text).toContain("Queued");
+    expect(done.text).toContain("Starting fresh");
+
+    const after = (await post(hook, update(chat, "again"))).headers.get("x-session");
+    expect(after).not.toBe(before);
+  });
+
   it("refuses an update that is not signed with the bot's secret", async () => {
     const { hook, chat } = await agentFixture();
     const res = await SELF.fetch(hook, {

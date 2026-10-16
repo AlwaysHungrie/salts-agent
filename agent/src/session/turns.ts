@@ -2,6 +2,7 @@ import { type UIMessage } from "ai";
 import { type Command, parseCommand } from "../commands";
 import { turnCost } from "../openrouter";
 import { attachmentsOf, claimed } from "./attachments";
+import { runQueuedCommand } from "./command-tool";
 import { runCommand } from "./commands";
 import { isAudioAttachment, publicAttachment } from "./files";
 import { reportable, textOf } from "./format";
@@ -122,7 +123,11 @@ export async function runChat(host: SessionHost, message: string, retry = false)
   if (blocked) return { body: { reply: blocked }, turn: { cost_usd: 0, llm_ms: 0 } };
   const userMessage = await openTurn(host, message, retry);
   const result = await host.runTurn({ input: [userMessage] });
-  const reply = result.status === "completed" ? textOf(result.message as unknown as UIMessage) : "";
+  const said = result.status === "completed" ? textOf(result.message as unknown as UIMessage) : "";
+  // A command the model queued (`!new`, `!clear`, `!compact`) runs now and says so after it.
+  const queued = await runQueuedCommand(host, result.status === "completed");
+  if (queued?.destroy) host.ctx.waitUntil(host.finishDelete());
+  const reply = queued ? `${said}\n\n${queued.text}` : said;
   const usage = host.exec<{ cost_usd: number; ms: number }>(
     `SELECT cost_usd, ms FROM usage WHERE message_id = ?`,
     result.message?.id ?? ""
@@ -157,6 +162,8 @@ export async function streamChat(
   // a reloaded browser can attach another.
   host.live.start();
   const previousReply = host.live.lastReplyId;
+  let destroy = false;
+  let failed = false;
   const turn = (async () => {
     try {
       await host.runTurn({
@@ -192,11 +199,18 @@ export async function streamChat(
           },
           onDone: () => {},
           onError: (error: string) => {
+            failed = true;
             host.live.emit({ type: "error", error: reportable(error, host.name()) });
           },
         },
       });
 
+      // A command the model queued (`!new`, `!clear`, `!compact`) runs now and says so after it.
+      const queued = await runQueuedCommand(host, !failed);
+      if (queued) {
+        host.live.emit({ type: "delta", text: `\n\n${queued.text}` });
+        destroy = queued.destroy;
+      }
       // Files hung on the reply at its end (see showMadeFiles), for the browser to draw now.
       const reply = host.live.lastReplyId;
       const files = reply && reply !== previousReply ? attachmentsOf(host, reply) : [];
@@ -215,6 +229,7 @@ export async function streamChat(
     } finally {
       host.live.emit({ type: "done" });
       host.live.end();
+      if (destroy) await host.finishDelete();
     }
   })();
   // The object stays resident — and billable — until the turn is done, whether or
