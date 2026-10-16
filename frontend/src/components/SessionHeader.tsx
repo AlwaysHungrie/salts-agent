@@ -16,7 +16,9 @@ function Stat({
 }) {
   return (
     <div className="min-w-0 text-right">
-      {label && <div className="text-faint text-xs leading-[1.33]">{label}</div>}
+      {label && (
+        <div className="text-faint text-xs leading-[1.33]">{label}</div>
+      )}
       <div className="text-ink tnum text-xl font-[650] leading-[1.3]">
         {value}
       </div>
@@ -51,6 +53,8 @@ export function SessionHeader({
   onOpenSidebar: () => void;
 }) {
   const [editing, setEditing] = useState(false);
+  /** The rename dialog, which is how a phone renames: the header has no room to edit in. */
+  const [renaming, setRenaming] = useState(false);
   const [value, setValue] = useState(title);
   const input = useRef<HTMLInputElement>(null);
 
@@ -60,8 +64,18 @@ export function SessionHeader({
   if (title !== prevTitle) {
     setPrevTitle(title);
     setEditing(false);
+    setRenaming(false);
     setValue(title);
   }
+
+  /** Inline on a wide screen; in a dialog on a phone. */
+  const startRename = () => {
+    if (window.matchMedia("(min-width: 768px)").matches) setEditing(true);
+    else {
+      setValue(title);
+      setRenaming(true);
+    }
+  };
 
   useEffect(() => {
     if (editing) input.current?.select();
@@ -70,6 +84,7 @@ export function SessionHeader({
   const commit = async () => {
     const next = value.trim();
     setEditing(false);
+    setRenaming(false);
     if (!next || next === title) {
       setValue(title);
       return;
@@ -79,11 +94,12 @@ export function SessionHeader({
 
   return (
     <header className="border-hairline-soft bg-canvas border-b">
-      <div className="flex flex-wrap items-end gap-x-10 gap-y-4 px-5 pt-5 pb-4 md:px-8 md:pt-6 md:pb-5">
+      {/* One compact row on a phone; the roomier layout from md up. */}
+      <div className="flex items-center gap-2 px-4 py-2.5 md:flex-wrap md:items-end md:gap-x-10 md:gap-y-4 md:px-8 md:pt-6 md:pb-5">
         <button
           onClick={onOpenSidebar}
           aria-label="Open sessions"
-          className="text-ink hover:bg-canvas-soft -ml-1 mb-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition md:hidden"
+          className="text-ink hover:bg-canvas-soft -ml-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition md:hidden"
         >
           <Menu size={20} strokeWidth={1.75} />
         </button>
@@ -130,22 +146,27 @@ export function SessionHeader({
           ) : (
             <div className="group flex items-center gap-2">
               <button
-                onClick={() => setEditing(true)}
+                onClick={startRename}
                 title="Rename session"
-                className="min-w-0 truncate text-left text-xl font-[650] leading-tight md:text-2xl"
+                className="min-w-0 truncate text-left text-base font-[650] leading-tight md:text-2xl"
               >
                 {title}
               </button>
               <button
-                onClick={() => setEditing(true)}
+                onClick={startRename}
                 aria-label="Rename session"
-                className="text-muted hover:bg-canvas-soft hover:text-ink flex h-7 w-7 shrink-0 items-center justify-center rounded-full opacity-100 transition md:opacity-0 md:group-hover:opacity-100"
+                className="text-muted hover:bg-canvas-soft hover:text-ink hidden h-7 w-7 shrink-0 items-center justify-center rounded-full transition md:flex md:opacity-0 md:group-hover:opacity-100"
               >
                 <Pencil size={14} strokeWidth={1.75} />
               </button>
             </div>
           )}
-          <div className="text-muted truncate text-sm font-light leading-[1.43]">
+          {/* A phone has no room for the usage column, so it takes the date's line. */}
+          <div className="text-muted tnum truncate text-xs font-light leading-[1.43] md:hidden">
+            {formatUsdShort(summary?.llm.cost_usd)} ·{" "}
+            {formatCountShort(summary?.messages ?? 0)} msgs
+          </div>
+          <div className="text-muted hidden truncate text-sm font-light leading-[1.43] md:block">
             {formatDate(createdAt)}
           </div>
         </div>
@@ -160,6 +181,58 @@ export function SessionHeader({
           />
         </div>
       </div>
+
+      {renaming && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-5">
+          <button
+            onClick={() => setRenaming(false)}
+            aria-label="Cancel rename"
+            className="absolute inset-0 bg-black/40"
+          />
+          <form
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="rename-title"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void commit();
+            }}
+            className="border-hairline bg-canvas relative w-full max-w-sm rounded-[20px] border p-6 shadow-xl"
+          >
+            <h2
+              id="rename-title"
+              className="text-ink text-lg font-[650] leading-[1.35]"
+            >
+              Rename session
+            </h2>
+            <input
+              autoFocus
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              onFocus={(e) => e.currentTarget.select()}
+              onKeyDown={(e) => e.key === "Escape" && setRenaming(false)}
+              aria-label="Session title"
+              className="bg-field text-ink mt-4 w-full rounded-2xl px-4 py-3 text-sm outline-none"
+            />
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setRenaming(false)}
+                className="border-hairline text-ink hover:bg-canvas-soft rounded-full border px-4 py-2 text-sm font-medium transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={!value.trim()}
+                className="bg-ink text-on-primary rounded-full px-4 py-2 text-sm font-medium transition hover:opacity-85 disabled:opacity-40"
+              >
+                Save
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </header>
   );
 }
