@@ -31,17 +31,9 @@ This guide will help you install salts-tools, connect it to your agent and start
 
 If you only want the spreadsheet analyst, you can skip Docker.
 
-## 2. Download salts-tools
+## 2. Get salts-tools
 
-In your terminal, run these three commands one at a time:
-
-```
-git clone https://github.com/AlwaysHungrie/salts-agent.git
-cd salts-agent/salts-tools
-npm link
-```
-
-The last command lets you type `salts-tools` from any folder.
+There is nothing else to download. Node.js comes with `npx`, which fetches salts-tools the first time you run it, so every command in these guides starts with `npx salts-tools`.
 
 ## 3. Start salts-tools
 
@@ -54,7 +46,7 @@ https://salts-agent-app.vercel.app/a/<your-agent-id>
 Then start salts-tools with the tool you want first. For web search, run:
 
 ```
-salts-tools start web
+npx salts-tools start web
 ```
 
 Use `matchmaker` or `analyst` in place of `web` to start one of those instead. salts-tools checks that everything from step 1 is installed, and then asks you a few questions:
@@ -75,10 +67,10 @@ Go back to your terminal and press **Enter**. salts-tools starts your tool and c
 
 ## 5. Start at login
 
-Finally, salts-tools asks whether it should start automatically when you log in. We recommend saying yes, otherwise your agent loses its tools every time you restart your computer. You can change this later with `salts-tools autostart on` or `off`.
+Finally, salts-tools asks whether it should start automatically when you log in. We recommend saying yes, otherwise your agent loses its tools every time you restart your computer. You can change this later with `npx salts-tools autostart on` or `off`.
 
 ## You are done
 
-Your first tool is running. To add another one, run `salts-tools start` followed by its name, for example `salts-tools start analyst`. It joins the one that is already running, so you do not have to set anything up again.
+Your first tool is running. To add another one, run `npx salts-tools start` followed by its name, for example `npx salts-tools start analyst`. It joins the one that is already running, so you do not have to set anything up again.
 
 Next, read [Everyday use](/guide/salts-tools-everyday) to learn the salts-tools screen and the commands you will use day to day.

@@ -68,12 +68,18 @@ import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import { agentIdsOf, agentsFor, agentsLabel, parseAgentIds, servesAgent, toggleService } from "./agents.mjs";
 import { startGateway } from "./gateway.mjs";
+import { installMcp, launchArgs, mcpSource, viaNpx } from "./mcps.mjs";
 import { caffeinateArgs, orphanTunnels, parseProcessList, supervisorsOf } from "./procs.mjs";
 import { agentStatus, serviceStatus } from "./status.mjs";
 import { BOLD, DIM, INV, OFF, follow, keys, paint, rowText, wrap } from "./tui.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const CLI = fileURLToPath(import.meta.url);
+const VERSION = JSON.parse(readFileSync(path.join(here, "package.json"), "utf8")).version;
+/** How the user runs this CLI, for the commands it tells them to run. */
+const SELF = viaNpx(CLI) ? "npx salts-tools" : "salts-tools";
+/** The login item's program and arguments, before the command. */
+const LAUNCH = launchArgs({ cli: CLI, execPath: process.execPath, platform: process.platform });
 
 const [command = "", ...args] = process.argv.slice(2);
 const [cmd, TARGET = "production"] = command.split(":");
@@ -465,8 +471,24 @@ const webEnv = (token = "unused", port = WEB_PORT) => ({
 });
 const webPort = () => publishedPort(WEB_DIR, WEB_PROJECT, "caddy", 8081, webEnv());
 
-const MATCHMAKER_DIR = path.join(here, "..", "local-mcps", "matchmaker-mcp");
-const ANALYST_DIR = path.join(here, "..", "local-mcps", "analyst-mcp");
+/** Installed copies of packaged MCP servers: shared by every target, as the repo's are. */
+const MCP_ROOT = path.join(os.homedir(), ".salts-tools", "mcps");
+const MATCHMAKER_SRC = mcpSource(here, "matchmaker-mcp", MCP_ROOT);
+const ANALYST_SRC = mcpSource(here, "analyst-mcp", MCP_ROOT);
+const MATCHMAKER_DIR = MATCHMAKER_SRC.dir;
+const ANALYST_DIR = ANALYST_SRC.dir;
+
+/**
+ * Make `src` ready to run as `bin`: install the packaged copy when this version has not
+ * been, then `uv sync` when that changed anything or there is no environment yet.
+ */
+function readyMcp(name, src, bin) {
+  const fresh = src.bundled ? installMcp(src.bundled, src.dir, VERSION) : false;
+  if (!fresh && existsSync(bin)) return;
+  log(`${name}: uv sync`);
+  const res = run("uv", ["sync", "--frozen"], { cwd: src.dir, timeout: 600_000 });
+  if (res.status !== 0) throw new Error(`${name}: uv sync failed: ${(res.stderr || res.stdout).trim()}`);
+}
 const ANALYST_BIN = IS_WIN
   ? path.join(ANALYST_DIR, ".venv", "Scripts", "analyst-mcp.exe")
   : path.join(ANALYST_DIR, ".venv", "bin", "analyst-mcp");
@@ -515,11 +537,7 @@ const SERVICES = {
     child: null,
     healthy: (port) => ok(`http://127.0.0.1:${port}/healthz`),
     async up(token) {
-      if (!existsSync(MATCHMAKER_BIN)) {
-        log("matchmaker: uv sync");
-        const res = run("uv", ["sync", "--frozen"], { cwd: MATCHMAKER_DIR, timeout: 600_000 });
-        if (res.status !== 0) throw new Error(`matchmaker: uv sync failed: ${(res.stderr || res.stdout).trim()}`);
-      }
+      readyMcp("matchmaker", MATCHMAKER_SRC, MATCHMAKER_BIN);
       this.stop();
       const port = await portFrom(readState().svc?.matchmaker?.port, MATCHMAKER_PORT);
       const out = openSync(MATCHMAKER_LOG, "a");
@@ -581,11 +599,7 @@ const SERVICES = {
     child: null,
     healthy: (port) => ok(`http://127.0.0.1:${port}/healthz`),
     async up(token) {
-      if (!existsSync(ANALYST_BIN)) {
-        log("analyst: uv sync");
-        const res = run("uv", ["sync", "--frozen"], { cwd: ANALYST_DIR, timeout: 600_000 });
-        if (res.status !== 0) throw new Error(`analyst: uv sync failed: ${(res.stderr || res.stdout).trim()}`);
-      }
+      readyMcp("analyst", ANALYST_SRC, ANALYST_BIN);
       this.stop();
       const port = await portFrom(readState().svc?.analyst?.port, ANALYST_PORT);
       const out = openSync(ANALYST_LOG, "a");
@@ -751,7 +765,7 @@ async function supervise() {
   let token = readToken();
   const { worker } = readState();
   if (!token || !agentIdsOf(readState()).length) {
-    log(`not set up: run \`salts-tools ${withTarget("start")}\` in a terminal first`);
+    log(`not set up: run \`${SELF} ${withTarget("start")}\` in a terminal first`);
     writeState({ lastError: "not set up" });
     process.exit(1);
   }
@@ -903,7 +917,7 @@ async function supervise() {
       }
       const why =
         status === 401
-          ? `agent ${agentId} refused the token — paste it into that agent's SearXNG token field, or run \`salts-tools ${withTarget("setup")}\``
+          ? `agent ${agentId} refused the token — paste it into that agent's SearXNG token field, or run \`${SELF} ${withTarget("setup")}\``
           : status === 409
             ? `agent ${agentId} already has an MCP server named "${name}" with a different Authorization header — delete it or set it to this token`
             : status === 0
@@ -1124,7 +1138,7 @@ function autostartOn({ label, file } = AUTOSTART) {
     // A script in the Startup folder; `start /min` so no console window stays open.
     writeFileSync(
       file,
-      `@echo off\r\nstart "salts-tools" /min "${process.execPath}" "${CLI}" ${withTarget("start")}\r\n`
+      `@echo off\r\nstart "salts-tools" /min ${LAUNCH.map((a) => `"${a}"`).join(" ")} ${withTarget("start")}\r\n`
     );
     return;
   }
@@ -1142,7 +1156,7 @@ Description=salts-tools (${TARGET})
 Type=oneshot
 RemainAfterExit=yes
 Environment=${q(`PATH=${process.env.PATH ?? "/usr/bin:/bin"}`)}
-ExecStart=${q(process.execPath)} ${q(CLI)} ${withTarget("start")}
+ExecStart=${LAUNCH.map(q).join(" ")} ${withTarget("start")}
 StandardOutput=append:${LOG_FILE}
 StandardError=append:${LOG_FILE}
 
@@ -1166,9 +1180,7 @@ WantedBy=default.target
   <key>Label</key><string>${label}</string>
   <key>ProgramArguments</key>
   <array>
-    <string>${esc(process.execPath)}</string>
-    <string>${esc(CLI)}</string>
-    <string>${withTarget("start")}</string>
+${LAUNCH.map((a) => `    <string>${esc(a)}</string>\n`).join("")}    <string>${withTarget("start")}</string>
   </array>
   <key>EnvironmentVariables</key>
   <dict><key>PATH</key><string>${esc(process.env.PATH ?? "/usr/bin:/bin")}</string></dict>
@@ -1277,7 +1289,7 @@ async function askAutostart(rl) {
   const yes = (await rl.question("Start salts-tools automatically when you log in? [Y/n] ")).trim().toLowerCase();
   if (yes === "" || yes === "y" || yes === "yes") {
     autostartOn();
-    console.log(`${GREEN}✓${OFF} will start at login (undo with \`salts-tools ${withTarget("autostart")} off\`)`);
+    console.log(`${GREEN}✓${OFF} will start at login (undo with \`${SELF} ${withTarget("autostart")} off\`)`);
   }
 }
 
@@ -1291,7 +1303,7 @@ async function setupOnly() {
     if (supervisorPid() && agentIdsOf(readState()).join(" ") !== before) {
       console.log(`salts-tools is running; ${agentsLabel(agentIdsOf(readState()))} get every address within a minute.`);
     } else if (!supervisorPid()) {
-      console.log(`Set up. Start a service with \`salts-tools ${withTarget("start")} <${NAMES.join("|")}>\`.`);
+      console.log(`Set up. Start a service with \`${SELF} ${withTarget("start")} <${NAMES.join("|")}>\`.`);
     }
   } finally {
     rl.close();
@@ -1328,7 +1340,7 @@ async function start({ interactive }) {
 
     const firstRun = !readToken() || !agentIdsOf(readState()).length;
     if (firstRun && !rl) {
-      console.error(`${RED}✗${OFF} not set up yet — run \`salts-tools ${withTarget("start")}\` in a terminal`);
+      console.error(`${RED}✗${OFF} not set up yet — run \`${SELF} ${withTarget("start")}\` in a terminal`);
       process.exit(1);
     }
     let fresh = false;
@@ -1483,7 +1495,7 @@ function clearHome(dir) {
  */
 function reset() {
   if (supervisorPid() || pidIn(path.join(homeFor("salts-web"), "supervisor.pid"))) {
-    throw new Error(`salts-tools is running — \`salts-tools ${withTarget("stop")}\` first`);
+    throw new Error(`salts-tools is running — \`${SELF} ${withTarget("stop")}\` first`);
   }
   const done = [];
   const where = tokenStoreName();
@@ -1727,8 +1739,8 @@ function agentSetup(name) {
   }
   return [
     ["on the agent", "Capabilities → File ingest and MCP on", "users can then attach .xlsx and .csv files in the chat"],
-    ["inbox folder", ANALYST_INBOX, "files here are read too; DATA_DIR / INBOX_DIR in local-mcps/analyst-mcp/.env move it", ANALYST_INBOX],
-    ["run_python", "off unless ALLOW_PYTHON=true", "set in local-mcps/analyst-mcp/.env"],
+    ["inbox folder", ANALYST_INBOX, `files here are read too; DATA_DIR / INBOX_DIR in ${path.join(ANALYST_DIR, ".env")} move it`, ANALYST_INBOX],
+    ["run_python", "off unless ALLOW_PYTHON=true", `set in ${path.join(ANALYST_DIR, ".env")}`],
   ];
 }
 
@@ -1905,9 +1917,10 @@ function view() {
           copyRow(["state and logs", HOME], HOME),
           {
             cells: ["reset", { text: "forget every agent and the token", tone: "bad" }],
-            note: "back to a first run; the matchmaker's people and jobs are kept. Stop everything first",
+            note: "stops everything, then back to a first run; the matchmaker's people and jobs are kept",
             enter: () =>
-              confirm("Forget every agent and the token?", () => {
+              confirm("Stop everything and forget every agent and the token?", async () => {
+                if (supervisorPid()) await stopEverything();
                 const done = reset();
                 ui.reveal = false;
                 say(done.length ? done.join("; ") : "nothing to reset");
@@ -2030,7 +2043,7 @@ async function onEditKey(key) {
 function quit() {
   process.stdout.write("\x1b[?25h\x1b[?1049l");
   if (process.stdin.isTTY) process.stdin.setRawMode(false);
-  if (supervisorPid()) console.log(`salts-tools keeps running in the background. \`salts-tools ${withTarget("stop")}\` stops it.`);
+  if (supervisorPid()) console.log(`salts-tools keeps running in the background. \`${SELF} ${withTarget("stop")}\` stops it.`);
   process.exit(0);
 }
 
