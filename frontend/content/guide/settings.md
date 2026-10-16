@@ -42,7 +42,7 @@ We recommend leaving all four as they are until you have a reason to change them
 
 ## OpenRouter
 
-The OpenRouter API key that pays for your agent's replies. Your agent cannot reply without one. Once you paste a key, the page checks it and tells you whether it is valid. See [Get an OpenRouter API key](/guide/openrouter).
+The OpenRouter API key that pays for your agent's replies. Your agent cannot reply without one. Choose a key from your OpenRouter wallet by its nickname, or click **Wallet** to add one. See [Get an OpenRouter API key](/guide/openrouter).
 
 ## Name
 

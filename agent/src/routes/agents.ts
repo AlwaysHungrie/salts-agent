@@ -171,16 +171,21 @@ async function createAgents(request: Request, env: Env, url: URL): Promise<Respo
   }
   if (!allowed) return jsonError("at least one email is required", 400);
 
-  // The top-level key is the older shape of this call; the dialog sends it in `meta`.
-  const key = (body.openrouter_api_key ?? meta?.defaults.openrouter_api_key ?? "")
-    .trim()
-    .slice(0, 1000);
-  const openrouter = key ? await checkOpenrouterKey(key) : undefined;
-  if (openrouter && !openrouter.ok) return jsonError(openrouter.error, 400);
-
   // The creator administers the agent; with no caller, the first listed address does.
   const newId = AGENT_ID();
   const admin = (await callerEmail(request, env)) || (splitEmails(allowed)[0] ?? "");
+
+  // A key picked from the wallet must be the creator's; it was checked when it was added.
+  const walletKeyId = meta?.defaults.openrouter_key_id ?? "";
+  if (walletKeyId && !(await dir.walletKey(admin, walletKeyId))) {
+    return jsonError("That key is not in your OpenRouter wallet.", 400);
+  }
+  // The top-level key is the older shape of this call; the dialog sends it in `meta`.
+  const key = walletKeyId
+    ? ""
+    : (body.openrouter_api_key ?? meta?.defaults.openrouter_api_key ?? "").trim().slice(0, 1000);
+  const openrouter = key ? await checkOpenrouterKey(key) : undefined;
+  if (openrouter && !openrouter.ok) return jsonError(openrouter.error, 400);
 
   // A whole fleet is charged against the ceiling at once.
   const fleetName = (body.fleet_name ?? "").trim().slice(0, 60);

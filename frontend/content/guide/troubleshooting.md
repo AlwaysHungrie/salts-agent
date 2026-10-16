@@ -14,7 +14,7 @@ If your agent is replying in the browser, you can also just ask it what is wrong
 
 | If the reply says | Do this |
 |---|---|
-| "OpenRouter API key is missing" | Your agent has no key to pay for replies. Paste one into **OpenRouter** in your agent's **Settings**. See [Get an OpenRouter API key](/guide/openrouter). |
+| "OpenRouter API key is missing" | Your agent has no key to pay for replies. Choose one under **OpenRouter** in your agent's **Settings**. If you removed a key from your wallet, every agent that used it needs a new one. See [Get an OpenRouter API key](/guide/openrouter). |
 | "The provider rejected the call for credits or quota" | Your OpenRouter account is out of credit, or your key has reached its credit limit. Buy more credit on OpenRouter, or raise the limit on your key. |
 | "The provider is rate limiting this key" | Too many requests were sent in a short time. Wait a minute and try again, or pick a different model in **Settings**. |
 | "That turn was too large for the model's context" | The conversation has grown longer than the model can read. Send `!compact`, or start a new conversation with `!new`. |

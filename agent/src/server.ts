@@ -10,6 +10,7 @@ import { handleOauthCallback } from "./routes/mcp-oauth";
 import { handleSaltsBrowser, handleSaltsMachine } from "./routes/salts";
 import { handleSearxngMcp, handleSearxngUrl } from "./routes/searxng";
 import { handleWebhook } from "./routes/telegram";
+import { handleWallet } from "./routes/wallet";
 import { handleWhatsappWebhook } from "./routes/whatsapp";
 import { deploymentSettings, SettingsIncompleteError } from "./settings";
 import {
@@ -181,7 +182,9 @@ export default {
             ? await handleAgents(request, env, url, segments)
             : segments[1] === "salts"
               ? await handleSaltsBrowser(request, env, segments)
-              : undefined;
+              : segments[1] === "wallet"
+                ? await handleWallet(request, env, segments)
+                : undefined;
       if (handled) return handled;
     }
 

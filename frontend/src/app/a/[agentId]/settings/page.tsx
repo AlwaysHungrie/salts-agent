@@ -6,13 +6,11 @@ import { ArrowLeft, Check, ExternalLink } from "lucide-react";
 import {
   CapabilitySection,
   ChipList,
-  Field,
   SaveButton,
 } from "@/components/CapabilitySection";
 import type {
   AgentRow,
   Capability,
-  CapabilityField,
   Config,
   ModelOption,
   ReasoningEffort,
@@ -21,21 +19,9 @@ import type {
 import { formatUsdShort } from "@/lib/format";
 import { useIdentity } from "@/lib/identity";
 import { ApiKeys } from "@/components/ApiKeys";
+import { WalletKeyPicker } from "@/components/wallet/WalletKeyPicker";
 import { MetaSettingsDialog } from "@/components/MetaSettings";
 import { cached, keys, remember, revise } from "@/lib/cache";
-
-/**
- * The OpenRouter key is not a capability's credential — it is what every model call
- * is billed to, so the agent has one of its own and one agent's spend never lands on
- * another's. Described here in the shape `Field` already knows how to draw, so a
- * pasted key behaves exactly like every other secret on the capabilities page.
- */
-const OPENROUTER_KEY: CapabilityField = {
-  key: "openrouter_api_key",
-  secret: true,
-  required: true,
-  placeholder: "sk-or-v1-…",
-};
 
 const REASONING: { id: ReasoningEffort; label: string; hint: string }[] = [
   { id: "off", label: "Off", hint: "Answers right away. Cheapest." },
@@ -197,12 +183,6 @@ export default function Settings({
   );
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  /** What OpenRouter said about the key that was last pasted. Cleared on the next save. */
-  const [keyCheck, setKeyCheck] = useState<{
-    ok: boolean;
-    error?: string;
-    label?: string;
-  } | null>(null);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** A debounced patch not sent yet: shown as unsaved, and sent if the page is left. */
   const pending = useRef<Partial<Config> | null>(null);
@@ -340,7 +320,6 @@ export default function Settings({
     if (seq === sent.current) setSaving(false);
     const payload = (await res.json().catch(() => null)) as {
       config: Config;
-      openrouter?: { ok: boolean; error?: string; label?: string };
       /** The WhatsApp account subscription the Worker makes on every save. */
       whatsapp?: { ok: boolean; error?: string };
       error?: string;
@@ -357,8 +336,6 @@ export default function Settings({
     // so keystrokes since — and any later save's answer — stay on top of it.
     if (seq === sent.current)
       setConfig({ ...payload.config, ...pending.current });
-    // Only a save that carried a new key gets a verdict; the rest leave it alone.
-    if (payload.openrouter) setKeyCheck(payload.openrouter);
     // The settings saved either way, but without the subscription no message is ever
     // delivered — so a refusal is said here rather than discovered as silence.
     if (payload.whatsapp && !payload.whatsapp.ok) {
@@ -678,28 +655,14 @@ export default function Settings({
                 title="OpenRouter"
                 hint="Your agent cannot function without this."
               >
-                <Field
-                  field={OPENROUTER_KEY}
-                  value={config.openrouter_api_key}
-                  onChange={(v) => {
-                    setKeyCheck(null);
-                    set({ openrouter_api_key: v });
-                  }}
+                <WalletKeyPicker
+                  value={config.openrouter_key_id}
+                  hasKey={!!config.openrouter_api_key}
+                  onChange={(id) => set({ openrouter_key_id: id })}
                 />
-                {keyCheck && (
-                  <p
-                    className={`mt-2 text-xs leading-[1.33] ${
-                      keyCheck.ok ? "text-muted" : "text-ink"
-                    }`}
-                  >
-                    {keyCheck.ok
-                      ? `This key${keyCheck.label ? ` (${keyCheck.label})` : ""} is valid.`
-                      : "Invalid key"}
-                  </p>
-                )}
-                {!config.openrouter_api_key && !keyCheck && (
+                {!config.openrouter_api_key && (
                   <p className="text-faint mt-2 text-xs leading-[1.33]">
-                    A valid Openrouter API key is required.
+                    Pick a key from your OpenRouter wallet.
                   </p>
                 )}
               </Row>

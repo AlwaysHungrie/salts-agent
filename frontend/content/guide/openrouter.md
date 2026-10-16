@@ -26,6 +26,12 @@ While creating the key, you should also set a credit limit. This is the most you
 
 Once the key is created, copy it and keep it somewhere safe. It starts with `sk-or-v1-`, and OpenRouter will only show it to you once.
 
-## 4. Add the key to your agent
+## 4. Add the key to your wallet
 
-When you create your agent, paste the key into the **OpenRouter API key** field. If you already have an agent, open its **Settings**, scroll to the **OpenRouter** section, paste the key there and save.
+On the Salts home page, click **OpenRouter wallet** in the top right corner. Paste the key at the bottom and click **Add key**. Salts checks the key with OpenRouter before keeping it, and gives it a nickname, such as "Amber Falcon", so you can tell your keys apart.
+
+Your wallet holds every key you add, and shows how much credit each one has left. You can see or remove a key from there at any time. Removing a key also takes it away from every agent that uses it.
+
+## 5. Pick the key for your agent
+
+When you create your agent, choose the key by its nickname from the **OpenRouter key** dropdown. If you already have an agent, open its **Settings**, scroll to the **OpenRouter** section and choose the key there. You can also open your wallet from the **Wallet** button next to the dropdown.

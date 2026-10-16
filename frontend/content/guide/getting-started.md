@@ -19,7 +19,7 @@ Click **Create a new Agent**.
 1. Enter a name for your agent. You can always change it later.
 2. Leave **Create a fleet of agents** unchecked. Fleets are for creating agents for other people, and are explained in [What is a fleet](/guide/fleets).
 3. Click **Next**.
-4. Paste your OpenRouter API key. You can also leave it empty and add it later from your agent's settings.
+4. Choose your OpenRouter key by its nickname. If the list is empty, click **Wallet** and add your key there first. You can also leave it empty and choose a key later from your agent's settings.
 5. Click **Create**.
 
 Your agent now shows up in the list on the home page. Click it to open it.

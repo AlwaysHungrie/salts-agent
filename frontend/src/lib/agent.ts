@@ -219,6 +219,8 @@ export type Config = {
    * agent's spend and rate limits are its own. Blank falls back to the Worker's key.
    */
   openrouter_api_key: string;
+  /** The wallet key `openrouter_api_key` was picked from, by id. Blank for a pasted key. */
+  openrouter_key_id: string;
   brave_api_key: string;
   searxng_url: string;
   searxng_token: string;
@@ -430,7 +432,8 @@ export type MetaTunableKey =
   | "max_tokens"
   | "reasoning_effort"
   | "context_messages"
-  | "openrouter_api_key";
+  | "openrouter_api_key"
+  | "openrouter_key_id";
 
 export type MetaCapability = {
   enabled?: boolean;
@@ -562,3 +565,22 @@ export function describeSessionFailure(raw: string): string | null {
 export function agentUrl(sessionId: string, path: string) {
   return `${AGENT_URL}/agents/session-agent/${encodeURIComponent(sessionId)}/${path}`;
 }
+
+/**
+ * One key in the caller's OpenRouter wallet. `key` is the secret for a pasted key and
+ * null for a provisioned one, which is only ever spent through an agent. Credit figures
+ * are OpenRouter's, in dollars; null means no limit, or not reported.
+ */
+export type WalletKey = {
+  id: string;
+  nickname: string;
+  kind: "own" | "provisioned";
+  created_at: number;
+  /** How many agents hold this key. */
+  agents: number;
+  key: string | null;
+  valid: boolean;
+  limit: number | null;
+  usage: number | null;
+  remaining: number | null;
+};

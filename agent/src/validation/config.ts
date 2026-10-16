@@ -74,6 +74,13 @@ export function validateConfig(body: Partial<Config>): Partial<Config> {
     patch[key] = value.trim().slice(0, 1000);
   }
 
+  if (body.openrouter_key_id !== undefined) {
+    if (typeof body.openrouter_key_id !== "string") {
+      throw new Error("openrouter_key_id must be a string");
+    }
+    patch.openrouter_key_id = body.openrouter_key_id.trim().slice(0, 64);
+  }
+
   for (const flag of CAPABILITY_FLAGS) {
     if (body[flag] !== undefined) (patch[flag] as number) = body[flag] ? 1 : 0;
   }

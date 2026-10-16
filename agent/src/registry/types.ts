@@ -47,6 +47,11 @@ export type Config = {
    * agent cannot answer, which keeps the deployment's credit out of reach.
    */
   openrouter_api_key: string;
+  /**
+   * The wallet key `openrouter_api_key` was copied from, by id; blank when the key was
+   * pasted. Not secret: the browser maps it to the key's nickname.
+   */
+  openrouter_key_id: string;
   /** Brave Search API key. The default web search provider when set. */
   brave_api_key: string;
   /** Base URL of a self-hosted SearXNG instance. Only used when `brave_api_key` is empty. */
@@ -103,6 +108,7 @@ export const DEFAULT_CONFIG: Omit<Config, "model" | SettableConfigKey> = {
   private_notes: "",
   public_notes: "",
   openrouter_api_key: "",
+  openrouter_key_id: "",
   brave_api_key: "",
   searxng_url: "",
   searxng_token: "",
@@ -200,7 +206,8 @@ export type MetaTunableKey =
   | "max_tokens"
   | "reasoning_effort"
   | "context_messages"
-  | "openrouter_api_key";
+  | "openrouter_api_key"
+  | "openrouter_key_id";
 
 export type MetaCapability = {
   /** Whether the capability is switched on when the defaults are applied. */
@@ -352,4 +359,20 @@ export type BusinessRequest = {
   email: string;
   requested_increase: number;
   created_at: number;
+};
+
+/** Pasted by the user, or provisioned by the deployment after a payment. */
+export type WalletKeyKind = "own" | "provisioned";
+
+/** One key in an account's OpenRouter wallet, as stored. Never sent to a browser as is. */
+export type WalletKeyRow = {
+  id: string;
+  email: string;
+  /** Given by the deployment, at random; what the key is picked by everywhere. */
+  nickname: string;
+  kind: WalletKeyKind;
+  secret: string;
+  created_at: number;
+  /** How many agents hold it. */
+  agents: number;
 };

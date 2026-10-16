@@ -89,6 +89,11 @@ async function patchFleet(call: FleetCall): Promise<Response> {
   } catch (err) {
     return jsonError(errorMessage(err), 400);
   }
+  // A default may only name a key from the fleet admin's own wallet.
+  const walletKeyId = meta.defaults.openrouter_key_id ?? "";
+  if (first && walletKeyId && !(await dir.walletKey(call.email, walletKeyId))) {
+    return jsonError("That key is not in your OpenRouter wallet.", 400);
+  }
   if (first) await dir.setFleetMeta(fleetId, JSON.stringify(meta));
 
   const size = Math.min(Math.max(1, Number(body.limit) || 10), 25);
