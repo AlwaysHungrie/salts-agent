@@ -19,6 +19,7 @@ import { readConfig } from "../worker/stores";
 import { type AgentCall, AgentParams, agentRoute } from "./agent";
 import { redirectUri, startMcpOauth } from "./mcp-oauth";
 import { recommendMcpTools } from "./mcp-recommend";
+import { forgetRemovedTool } from "./salts";
 import { rememberRemoval } from "./searxng";
 
 /**
@@ -222,7 +223,10 @@ export function mcpRoutes(app: ApiApp) {
     const call = mcpCall(c.var.call);
     if (!(await call.manages())) throw refused();
     const row = await call.reg.mcpServer(c.req.valid("param").serverId);
-    if (row) await rememberRemoval(call.env, call.reg, row);
+    if (row) {
+      await rememberRemoval(call.env, call.reg, row);
+      await forgetRemovedTool(call.env, call.agentId, row);
+    }
     await call.reg.removeMcpServer(c.req.valid("param").serverId);
     return c.json({ ok: true }, 200);
   });

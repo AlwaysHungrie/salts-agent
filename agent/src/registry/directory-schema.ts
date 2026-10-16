@@ -115,6 +115,52 @@ export const AGENT_DIRECTORY_MIGRATIONS: readonly Migration[] = [
       sql.exec(`CREATE INDEX IF NOT EXISTS idx_agents_guests ON agents(guests)`);
     },
   },
+  {
+    // salts-tools computers: paired from the browser, linked to agents, each link with the
+    // tools that agent gets from that computer.
+    name: "salts-tools computers",
+    up: (sql) => {
+      sql.exec(
+        `CREATE TABLE IF NOT EXISTS salts_pairings (
+           user_code TEXT PRIMARY KEY,
+           device_hash TEXT NOT NULL UNIQUE,
+           name TEXT NOT NULL,
+           created_at INTEGER NOT NULL,
+           expires_at INTEGER NOT NULL,
+           computer_id TEXT NOT NULL DEFAULT '',
+           credential TEXT NOT NULL DEFAULT ''
+         )`
+      );
+      sql.exec(
+        `CREATE TABLE IF NOT EXISTS salts_computers (
+           id TEXT PRIMARY KEY,
+           owner_email TEXT NOT NULL,
+           name TEXT NOT NULL,
+           cred_hash TEXT NOT NULL,
+           tunnel_url TEXT NOT NULL DEFAULT '',
+           gateway_token TEXT NOT NULL DEFAULT '',
+           old_gateway_token TEXT NOT NULL DEFAULT '',
+           tools TEXT NOT NULL DEFAULT '{}',
+           version TEXT NOT NULL DEFAULT '',
+           last_seen INTEGER NOT NULL DEFAULT 0,
+           created_at INTEGER NOT NULL
+         )`
+      );
+      sql.exec(
+        `CREATE INDEX IF NOT EXISTS idx_salts_computers_owner ON salts_computers(owner_email)`
+      );
+      sql.exec(
+        `CREATE TABLE IF NOT EXISTS salts_links (
+           computer_id TEXT NOT NULL,
+           agent_id TEXT NOT NULL,
+           tools TEXT NOT NULL DEFAULT '[]',
+           synced TEXT NOT NULL DEFAULT '',
+           PRIMARY KEY (computer_id, agent_id)
+         )`
+      );
+      sql.exec(`CREATE INDEX IF NOT EXISTS idx_salts_links_agent ON salts_links(agent_id)`);
+    },
+  },
 ];
 
 export function migrateMembership(storage: DurableObjectStorage) {
