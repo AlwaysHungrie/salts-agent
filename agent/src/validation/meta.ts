@@ -10,7 +10,14 @@ import {
   type MetaSettings,
   type MetaTunableKey,
 } from "../registry";
-import { catalogHeaders, checkIconSize, type DeploymentSettings, svgIcon } from "../settings";
+import {
+  catalogDescription,
+  catalogHeaders,
+  checkIconSize,
+  type DeploymentSettings,
+  guideSlug,
+  svgIcon,
+} from "../settings";
 import { CAPABILITY_FIELDS, CORE_SECRETS, MODEL_ID, validateConfig } from "./config";
 import { validateMcpBody } from "./mcp";
 
@@ -297,6 +304,14 @@ export function validateCatalogEntry(entry: unknown): McpCatalogEntry {
       raw.headers === undefined
         ? undefined
         : catalogHeaders(raw.headers, `MCP template ${text("id")} headers`),
+    description:
+      raw.description === undefined
+        ? undefined
+        : catalogDescription(raw.description, `MCP template ${text("id")} description`),
+    guide:
+      raw.guide === undefined
+        ? undefined
+        : guideSlug(raw.guide, `MCP template ${text("id")} guide`),
   };
 }
 

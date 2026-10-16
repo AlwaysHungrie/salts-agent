@@ -84,9 +84,7 @@ export function validateConfig(body: Partial<Config>): Partial<Config> {
     if (typeof value !== "string") throw new Error(`${field.key} must be a string`);
     // The mask is what a secret reads back as, so it means "leave this one alone".
     if (field.secret && value === SECRET_MASK) continue;
-    let cleaned = value.trim();
-    // Accept a leading @ but store the handle bare.
-    if (field.key === "telegram_bot_username") cleaned = cleaned.replace(/^@+/, "");
+    const cleaned = value.trim();
     // A list holds many entries, so it gets more room than a single credential.
     (patch[field.key] as string) = cleaned.slice(0, field.list ? 8000 : 1000);
   }

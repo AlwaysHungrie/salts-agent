@@ -180,6 +180,10 @@ export type McpCatalogEntry = {
   color?: string;
   /** Headers the add form starts with; values are placeholders to replace (`Bearer API-KEY`). */
   headers?: Record<string, string>;
+  /** One line on what the server does, shown when the tile is hovered. */
+  description?: string;
+  /** User guide article (`/guide/<slug>`) for this server, linked from its card once added. */
+  guide?: string;
 };
 
 /**

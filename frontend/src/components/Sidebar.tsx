@@ -170,21 +170,35 @@ export function Sidebar({
             >
               <Home size={16} strokeWidth={1.75} />
             </Link>
-            <button
-              onClick={() => {
-                onHome();
-                onClose();
-              }}
-              title={`${agentName || "Agent"} home`}
-              className="min-w-0 text-left"
-            >
-              <div className="truncate text-2xl font-[650] leading-tight">
-                {agentName || "Agent"}
-              </div>
-              <div className="text-muted text-sm font-light leading-[1.43]">
-                {fleetName || "Personal agent"}
-              </div>
-            </button>
+            <div className="min-w-0">
+              <button
+                onClick={() => {
+                  onHome();
+                  onClose();
+                }}
+                title={`${agentName || "Agent"} home`}
+                className="block w-full min-w-0 text-left"
+              >
+                <div className="truncate text-2xl font-[650] leading-tight">
+                  {agentName || "Agent"}
+                </div>
+                {fleetName && (
+                  <div className="text-muted text-sm font-light leading-[1.43]">
+                    {fleetName}
+                  </div>
+                )}
+              </button>
+              {!fleetName && (
+                <a
+                  href="/guide"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-muted hover:text-ink text-sm font-light leading-[1.43] underline underline-offset-2 transition"
+                >
+                  User guide
+                </a>
+              )}
+            </div>
           </div>
           <button
             onClick={onClose}

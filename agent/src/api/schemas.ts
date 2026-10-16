@@ -95,14 +95,17 @@ export const ConfigSchema = z
 pin<Same<z.infer<typeof ConfigSchema>, Config>>();
 
 /** A settings patch: any subset, and the capability switches also take booleans. */
-const ConfigPatchShape = ConfigSchema.partial().extend(
-  Object.fromEntries(
-    CAPABILITY_FLAGS.map((key) => [key, z.union([z.number(), z.boolean()]).optional()])
-  ) as Record<
-    (typeof CAPABILITY_FLAGS)[number],
-    z.ZodOptional<z.ZodUnion<[z.ZodNumber, z.ZodBoolean]>>
-  >
-);
+// The bot username is not sent: it is asked of Telegram whenever the token changes.
+const ConfigPatchShape = ConfigSchema.omit({ telegram_bot_username: true })
+  .partial()
+  .extend(
+    Object.fromEntries(
+      CAPABILITY_FLAGS.map((key) => [key, z.union([z.number(), z.boolean()]).optional()])
+    ) as Record<
+      (typeof CAPABILITY_FLAGS)[number],
+      z.ZodOptional<z.ZodUnion<[z.ZodNumber, z.ZodBoolean]>>
+    >
+  );
 
 export const SpendSchema = z
   .object({ usd: z.number(), limit: z.number(), month: z.string() })
@@ -136,6 +139,8 @@ export const McpCatalogEntrySchema = z
     letter: z.string().optional(),
     color: z.string().optional(),
     headers: z.record(z.string(), z.string()).optional(),
+    description: z.string().optional(),
+    guide: z.string().optional(),
   })
   .openapi("McpCatalogEntry");
 pin<Same<z.infer<typeof McpCatalogEntrySchema>, McpCatalogEntry>>();

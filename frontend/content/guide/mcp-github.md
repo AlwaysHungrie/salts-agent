@@ -46,5 +46,5 @@ Ask your agent something about one of your repositories, for example "What issue
 ## Footnotes
 
 1. If the GitHub card shows an error, check that the second box starts with `Bearer ` followed by the whole token, and that the token has not expired.
-2. When your token expires, create a new one, open the GitHub card, paste the new token into the second box and click **Save headers**.
+2. When your token expires, create a new one, open the GitHub card, paste the new token into the second box and click **Save**.
 3. Repositories that belong to an organisation may need the organisation's approval before a fine-grained token can access them.

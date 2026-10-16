@@ -20,7 +20,7 @@ On the home page, click **Create a new Agent**.
 
 ## 2. Choose the settings
 
-The next step is **Meta settings**, where you choose the settings every agent in the fleet starts with, and which of them your users are allowed to change. At the very least, we recommend that you:
+The next step is **Admin settings**, where you choose the settings every agent in the fleet starts with, and which of them your users are allowed to change. At the very least, we recommend that you:
 
 1. Paste your OpenRouter API key under **OpenRouter**, if the agents will use it.
 2. Set a **Monthly spend limit** under **Limits**, so no single agent can run up a large bill.

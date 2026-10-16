@@ -79,7 +79,6 @@ async function agentFixture(patch: Record<string, unknown> = {}) {
       body: JSON.stringify({
         cap_telegram: 1,
         telegram_bot_token: BOT_TOKEN,
-        telegram_bot_username: "mock_bot",
         // The whitelists ship as placeholders that match nobody, which is the whole
         // point of them; these tests are the owner talking to their own bot.
         telegram_user_whitelist: "",
@@ -166,6 +165,15 @@ async function waitForReply(chat: number, count = 1, tries = 120) {
   }
   return await sentTo(chat);
 }
+
+describe("the bot username", () => {
+  it("is asked of Telegram when the token is saved, not typed", async () => {
+    const { agentId, email } = await agentFixture();
+    const res = await SELF.fetch(`${BASE}/api/agents/${agentId}/config`, as(email));
+    const { config } = (await res.json()) as { config: { telegram_bot_username: string } };
+    expect(config.telegram_bot_username).toBe("mock_bot");
+  });
+});
 
 describe("a whole round trip", () => {
   it("answers the chat with a real model reply, quoting the message", async () => {

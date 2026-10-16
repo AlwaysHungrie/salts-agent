@@ -23,7 +23,7 @@ Once it is live, open your agent's **Capabilities** page and look under **MCP se
 
 ## 2. Add your key and spending limit
 
-The matchmaker pays for its model calls with your OpenRouter key. Click the **matchmaker** card to open it. salts-tools has already added both headers below with empty values, so you only fill in each **Header value** and then click **Save headers**.
+The matchmaker pays for its model calls with your OpenRouter key. Click the **matchmaker** card to open it. salts-tools has already added both headers below with empty values, so you only fill in each **Header value** and then click **Save**.
 
 | Header name | Value we recommend | What it covers |
 |---|---|---|

@@ -312,6 +312,10 @@ export type McpCatalogEntry = {
   color?: string;
   /** Headers the add form starts with; values are placeholders to replace. */
   headers?: Record<string, string>;
+  /** One line on what the server does, shown when the tile is hovered. */
+  description?: string;
+  /** User guide slug (`/guide/<slug>`) for this server. */
+  guide?: string;
 };
 
 /** One tool an MCP server advertises. */

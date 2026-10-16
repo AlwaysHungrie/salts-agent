@@ -2,11 +2,12 @@
 
 import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Check } from "lucide-react";
+import { ArrowLeft, Check, ExternalLink } from "lucide-react";
 import {
   CapabilitySection,
   ChipList,
   Field,
+  SaveButton,
 } from "@/components/CapabilitySection";
 import type {
   AgentRow,
@@ -203,6 +204,10 @@ export default function Settings({
     label?: string;
   } | null>(null);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** A debounced patch not sent yet: shown as unsaved, and sent if the page is left. */
+  const pending = useRef<Partial<Config> | null>(null);
+  const [unsaved, setUnsaved] = useState(false);
+  const nameBox = useRef<HTMLInputElement>(null);
   const [metaOpen, setMetaOpen] = useState(false);
   /** Bumped when the meta dialog closes: what it saved (models, locks) is read back. */
   const [reloads, setReloads] = useState(0);
@@ -381,12 +386,43 @@ export default function Settings({
   const set = (patch: Partial<Config>, wait = 0) => {
     setConfig((c) => (c ? { ...c, ...patch } : c));
     if (debounce.current) clearTimeout(debounce.current);
+    // A patch still waiting is folded into this one rather than dropped.
+    const merged = { ...pending.current, ...patch };
     if (wait === 0) {
-      void save(patch);
+      pending.current = null;
+      setUnsaved(false);
+      void save(merged);
       return;
     }
-    debounce.current = setTimeout(() => void save(patch), wait);
+    pending.current = merged;
+    setUnsaved(true);
+    debounce.current = setTimeout(flush, wait);
   };
+
+  /** Send a debounced patch now: when its field is left, or the page is. */
+  const flush = () => {
+    if (debounce.current) clearTimeout(debounce.current);
+    const patch = pending.current;
+    if (!patch) return;
+    pending.current = null;
+    setUnsaved(false);
+    void save(patch);
+  };
+
+  // Leaving the page mid-debounce still saves what was typed.
+  useEffect(
+    () => () => {
+      const patch = pending.current;
+      if (!patch) return;
+      void fetch(`/api/agents/${encodeURIComponent(agentId)}/config`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(patch),
+        keepalive: true,
+      });
+    },
+    [agentId],
+  );
 
   return (
     <div className="bg-canvas text-ink min-h-screen">
@@ -402,7 +438,7 @@ export default function Settings({
         <div className="flex items-baseline justify-between gap-4">
           <h1 className="text-[32px] font-[650] leading-[1.2]">Settings.</h1>
           <span className="text-faint text-xs leading-[1.33]">
-            {saving ? "Saving…" : "Saved"}
+            {saving ? "Saving…" : unsaved ? "Unsaved changes" : "Saved"}
           </span>
         </div>
         <p className="text-muted mt-1 text-sm font-light leading-[1.43]">
@@ -483,7 +519,20 @@ export default function Settings({
                 config={config}
                 set={set}
                 tint="#229ED9"
-              />
+              >
+                {/* Read from Telegram when the token is saved, so it is never typed. */}
+                {config.telegram_bot_username && (
+                  <a
+                    href={`https://t.me/${encodeURIComponent(config.telegram_bot_username)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="bg-canvas border-hairline hover:bg-canvas-soft inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-xs font-semibold leading-[1.33] transition"
+                  >
+                    Open @{config.telegram_bot_username} in Telegram
+                    <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                  </a>
+                )}
+              </CapabilitySection>
             )}
 
             {whatsapp && !locked.has("whatsapp") && (
@@ -535,6 +584,7 @@ export default function Settings({
                 <textarea
                   value={config.system_prompt}
                   onChange={(e) => set({ system_prompt: e.target.value }, 600)}
+                  onBlur={flush}
                   rows={4}
                   maxLength={4000}
                   placeholder="Answer in short paragraphs. Show code before explaining it."
@@ -647,7 +697,9 @@ export default function Settings({
             )}
 
             <Row title="Name" hint="What this agent is called, everywhere">
+              <div className="flex gap-2">
               <input
+                ref={nameBox}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 onBlur={() => void rename(name)}
@@ -660,8 +712,12 @@ export default function Settings({
                 }}
                 maxLength={60}
                 placeholder="New agent"
-                className="bg-field placeholder:text-faint w-full rounded-2xl px-5 py-4 text-sm leading-[1.43] outline-none"
+                className="bg-field placeholder:text-faint min-w-0 flex-1 rounded-2xl px-5 py-4 text-sm leading-[1.43] outline-none"
               />
+              {name.trim() !== (agent?.name ?? "") && (
+                <SaveButton onSave={() => nameBox.current?.blur()} />
+              )}
+              </div>
             </Row>
 
             <Row
@@ -705,20 +761,25 @@ export default function Settings({
               <ApiKeys agentId={agentId} roles={["user"]} />
             </Row>
 
-            {/* The agent's administrator also sees the meta dialog the home page opens
+            {/* The agent's administrator also sees the admin dialog the home page opens
                 for fleet agents; nobody else could save it. */}
             {isAdmin && agent && (
-              <Row
-                title="Meta settings"
-                hint="Advanced settings. Manage default options and lock settings from being changed."
-              >
+              <section className="border-hairline-soft flex items-center justify-between gap-4 border-t py-5">
+                <div className="min-w-0">
+                  <h2 className="text-base font-semibold leading-[1.38]">
+                    Admin settings
+                  </h2>
+                  <p className="text-muted text-xs font-light leading-[1.33]">
+                    Defaults, locks and limits.
+                  </p>
+                </div>
                 <button
                   onClick={() => setMetaOpen(true)}
-                  className="border-hairline text-ink hover:bg-canvas-soft h-10 rounded-full border px-5 text-sm font-semibold transition"
+                  className="border-hairline text-ink hover:bg-canvas-soft h-9 shrink-0 rounded-full border px-4 text-sm font-semibold transition"
                 >
-                  Open meta settings
+                  Open
                 </button>
-              </Row>
+              </section>
             )}
           </div>
         )}

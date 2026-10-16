@@ -299,7 +299,7 @@ that page renders, so a new capability needs no frontend change.
 | Audio input | a transcription model | `transcribe_audio` |
 | Voice notes | a voice model; Telegram or WhatsApp | `send_voice_note` |
 | Schedule tasks | — | `schedule_task`, `list_scheduled_tasks`, `cancel_scheduled_task` |
-| Telegram | bot token and username, whitelists | — |
+| Telegram | bot token (the username is read from Telegram on save), whitelists | — |
 | WhatsApp | a Meta app and number ([docs/whatsapp-setup.md](../docs/whatsapp-setup.md)) | — |
 | MCP servers | the server's URL, or a catalogue template | the server's own |
 | Private Memory | — | `remember`, `recall` |
