@@ -206,6 +206,8 @@ export default function Settings({
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** A debounced patch not sent yet: shown as unsaved, and sent if the page is left. */
   const pending = useRef<Partial<Config> | null>(null);
+  /** Saves sent so far, so an answer to an older one is not applied over a newer. */
+  const sent = useRef(0);
   const [unsaved, setUnsaved] = useState(false);
   const nameBox = useRef<HTMLInputElement>(null);
   const [metaOpen, setMetaOpen] = useState(false);
@@ -324,6 +326,8 @@ export default function Settings({
   };
 
   const save = async (patch: Partial<Config>) => {
+    // Saves can overlap; only the latest one may speak for the page.
+    const seq = ++sent.current;
     setSaving(true);
     const res = await fetch(
       `/api/agents/${encodeURIComponent(agentId)}/config`,
@@ -333,7 +337,7 @@ export default function Settings({
         body: JSON.stringify(patch),
       },
     );
-    setSaving(false);
+    if (seq === sent.current) setSaving(false);
     const payload = (await res.json().catch(() => null)) as {
       config: Config;
       openrouter?: { ok: boolean; error?: string; label?: string };
@@ -349,7 +353,10 @@ export default function Settings({
       return;
     }
     // Take the server's row back: it clamps values the UI could send out of range.
-    setConfig(payload.config);
+    // But not over what is still being typed: that row is as of when this save left,
+    // so keystrokes since — and any later save's answer — stay on top of it.
+    if (seq === sent.current)
+      setConfig({ ...payload.config, ...pending.current });
     // Only a save that carried a new key gets a verdict; the rest leave it alone.
     if (payload.openrouter) setKeyCheck(payload.openrouter);
     // The settings saved either way, but without the subscription no message is ever
