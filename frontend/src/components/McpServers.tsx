@@ -1,7 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { BookOpen, Loader2, Plus, Sparkles, Trash2, X } from "lucide-react";
+import {
+  BookOpen,
+  ChevronDown,
+  Loader2,
+  Plus,
+  Sparkles,
+  Trash2,
+  X,
+} from "lucide-react";
 import {
   SECRET_MASK,
   type McpAuth,
@@ -237,7 +245,17 @@ function ServerCard({
           : `${live} of ${server.tools.length} tools`;
 
   return (
-    <div className="bg-canvas border-hairline rounded-[20px] border p-4">
+    <div
+      // The whole card toggles, bar its controls and the open editor below.
+      onClick={(e) => {
+        const target = e.target as HTMLElement;
+        if (target.closest("button, a, input, textarea, select, label")) return;
+        if (target.closest("[data-card-body]")) return;
+        if (window.getSelection()?.toString()) return;
+        onOpenChange(!open);
+      }}
+      className="bg-canvas border-hairline relative cursor-pointer rounded-[20px] border p-4 pb-9"
+    >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <button
@@ -346,7 +364,7 @@ function ServerCard({
       </div>
 
       {open && (
-        <div className="mt-5 space-y-4">
+        <div data-card-body className="mt-5 cursor-auto space-y-4">
           {manage && (
             <div className="flex gap-2">
               <input
@@ -458,6 +476,19 @@ function ServerCard({
           )}
         </div>
       )}
+
+      <button
+        onClick={() => onOpenChange(!open)}
+        aria-expanded={open}
+        aria-label={open ? `Collapse ${server.name}` : `Expand ${server.name}`}
+        className="text-muted hover:text-ink absolute bottom-2 right-3 flex h-7 w-7 items-center justify-center rounded-full transition"
+      >
+        <ChevronDown
+          size={16}
+          strokeWidth={2}
+          className={`transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
     </div>
   );
 }

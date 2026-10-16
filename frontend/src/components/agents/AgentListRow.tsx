@@ -53,11 +53,12 @@ export function AgentListRow({
   );
 
   return (
-    <div className="bg-canvas-soft hover:bg-canvas-soft/60 group flex items-center gap-3 rounded-2xl px-5 py-4 transition">
+    <div className="bg-canvas-soft hover:bg-canvas-soft/60 group relative flex items-center gap-3 rounded-2xl px-5 py-4 transition">
       {isUser ? (
+        // Stretched over the whole row, so its padding and gaps open the agent too.
         <Link
           href={`/a/${encodeURIComponent(agent.id)}`}
-          className="min-w-0 flex-1"
+          className="min-w-0 flex-1 after:absolute after:inset-0 after:rounded-2xl"
         >
           {title}
         </Link>
@@ -68,7 +69,7 @@ export function AgentListRow({
       {showMeta && isAdmin && (
         <button
           onClick={() => onMeta(agent)}
-          className="text-muted hover:text-ink shrink-0 text-sm transition"
+          className="text-muted hover:text-ink relative z-10 shrink-0 text-sm transition"
         >
           <Settings size={16} />
         </button>
@@ -77,7 +78,7 @@ export function AgentListRow({
         <button
           onClick={() => onDelete(agent)}
           aria-label={`Delete ${agent.name}`}
-          className="text-muted hover:bg-canvas hover:text-ink flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-base leading-none opacity-100 transition md:opacity-0 md:group-hover:opacity-100"
+          className="text-muted hover:bg-canvas hover:text-ink relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-base leading-none opacity-100 transition md:opacity-0 md:group-hover:opacity-100"
         >
           ×
         </button>

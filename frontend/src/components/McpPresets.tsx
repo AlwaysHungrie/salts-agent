@@ -18,7 +18,37 @@ export type McpPreset = {
   logo: React.ReactNode;
   /** One line on what the server does. */
   description: string;
+  /** Fills the whole tile, in place of the plain canvas. */
+  tile?: string;
 };
+
+/** The salt mark (the app icon's four squares), in white, for a filled tile. */
+function SaltMark() {
+  return (
+    <svg aria-hidden="true" width={26} height={26} viewBox="8 8 16 16">
+      <rect x="9.5" y="9.5" width="5" height="5" rx="1.5" fill="#fff" />
+      <rect
+        x="17.5"
+        y="9.5"
+        width="5"
+        height="5"
+        rx="1.5"
+        fill="#fff"
+        fillOpacity="0.45"
+      />
+      <rect
+        x="9.5"
+        y="17.5"
+        width="5"
+        height="5"
+        rx="1.5"
+        fill="#fff"
+        fillOpacity="0.45"
+      />
+      <rect x="17.5" y="17.5" width="5" height="5" rx="1.5" fill="#fff" />
+    </svg>
+  );
+}
 
 /**
  * A catalogue entry as a tile: its SVG icon, or a letter mark when it has none.
@@ -33,6 +63,7 @@ export function toPreset(entry: McpCatalogEntry): McpPreset {
     auth: entry.auth,
     headers: entry.headers ?? {},
     description: entry.description ?? "",
+    tile: !entry.icon && entry.color ? entry.color : undefined,
     logo: entry.icon ? (
       // A plain <img>, not next/image: the icon is a data URL with nothing to optimise,
       // and <img> is what keeps any script inside the SVG from running.
@@ -45,11 +76,13 @@ export function toPreset(entry: McpCatalogEntry): McpPreset {
         height={26}
         className="h-[26px] w-[26px]"
       />
+    ) : entry.color ? (
+      <SaltMark />
     ) : (
       <span
         aria-hidden="true"
         className="flex h-[26px] w-[26px] items-center justify-center rounded-lg text-[13px] font-semibold text-white"
-        style={{ background: entry.color || "#6b7280" }}
+        style={{ background: "#6b7280" }}
       >
         {letter}
       </span>
@@ -201,6 +234,7 @@ export function McpPresetStrip({
                 onPick(preset);
               }}
               className="bg-canvas border-hairline text-ink hover:border-ink flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border transition"
+              style={preset.tile ? { background: preset.tile } : undefined}
             >
               {preset.logo}
             </button>
