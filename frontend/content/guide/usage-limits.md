@@ -19,7 +19,7 @@ A Personal Account can create **5 agents**. If you need more, for example to cre
 | File storage | 50 MB |
 | People you can add under **Manage access** | 200 |
 
-When your agent reaches its limit of sessions, it will not start a new one until you delete an old one. You can delete sessions from the sidebar in your browser, or send `!clear` on Telegram or WhatsApp, which deletes the old conversation as it starts a new one.
+When your agent reaches its limit of sessions, it will not start a new one until you delete an old one. You can delete sessions from the sidebar in your browser, or send `!clear` on Telegram or WhatsApp, which deletes the old conversation as it starts a new one. To delete several sessions at once, press and hold one in the sidebar, tick the others, then click the bin.
 
 When your agent runs out of file storage, it will not accept new files until you make room. Deleting a session also deletes the files that were sent in it.
 
