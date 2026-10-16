@@ -65,11 +65,12 @@ export function Fleet({
   return (
     <div>
       {/* Deletes the whole fleet, so it asks by name in a dialog. */}
-      <div className="from-accent/12 to-transparent hover:to-accent/5 bg-linear-to-r group flex items-center gap-3 rounded-2xl pr-5 transition">
+      <div className="from-accent/12 to-transparent hover:to-accent/5 bg-linear-to-r group relative flex items-center gap-3 rounded-2xl pr-5 transition">
+        {/* Stretched over the whole row, so its gaps and padding toggle it too. */}
         <button
           onClick={toggle}
           aria-expanded={open}
-          className="flex min-w-0 flex-1 items-center gap-3 px-5 py-4 text-left"
+          className="flex min-w-0 flex-1 items-center gap-3 px-5 py-4 text-left after:absolute after:inset-0 after:rounded-2xl"
         >
           <span className="text-muted shrink-0">
             {open ? (
@@ -90,7 +91,7 @@ export function Fleet({
         {/* The fleet's settings and adding agents belong to the fleet, not to any one agent. */}
         <button
           onClick={() => onFleetSettings(fleet)}
-          className="text-muted hover:text-ink shrink-0 text-sm transition"
+          className="text-muted hover:text-ink relative z-10 shrink-0 text-sm transition"
         >
           Fleet Settings
         </button>
@@ -98,7 +99,7 @@ export function Fleet({
         <button
           onClick={() => onAddAgents(fleet)}
           aria-label={`Add agent to fleet ${fleet.fleet_name || "Fleet"}`}
-          className="text-muted hover:bg-canvas hover:text-ink flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-base leading-none opacity-100 transition"
+          className="text-muted hover:bg-canvas hover:text-ink relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-base leading-none opacity-100 transition"
         >
           +
         </button>
@@ -106,7 +107,7 @@ export function Fleet({
         <button
           onClick={() => onDeleteFleet(fleet)}
           aria-label={`Delete the fleet ${fleet.fleet_name || "Fleet"}`}
-          className="text-muted hover:bg-canvas hover:text-ink flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-base leading-none opacity-100 transition md:opacity-0 md:group-hover:opacity-100"
+          className="text-muted hover:bg-canvas hover:text-ink relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-base leading-none opacity-100 transition md:opacity-0 md:group-hover:opacity-100"
         >
           ×
         </button>
