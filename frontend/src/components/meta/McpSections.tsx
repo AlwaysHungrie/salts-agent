@@ -42,16 +42,7 @@ export function McpTemplatesSection({
                 on ? "border-ink bg-canvas-soft" : "border-hairline hover:border-ink"
               }`}
             >
-              {preset.tile ? (
-                <span
-                  className="flex rounded-lg"
-                  style={{ background: preset.tile }}
-                >
-                  {preset.logo}
-                </span>
-              ) : (
-                preset.logo
-              )}
+              {preset.logo}
               {preset.name}
             </button>
           );
