@@ -161,6 +161,31 @@ export const AGENT_DIRECTORY_MIGRATIONS: readonly Migration[] = [
       sql.exec(`CREATE INDEX IF NOT EXISTS idx_salts_links_agent ON salts_links(agent_id)`);
     },
   },
+  {
+    name: "openrouter wallet",
+    up: (sql) => {
+      // Each account's OpenRouter keys. A provisioned key's secret never leaves the Worker.
+      sql.exec(
+        `CREATE TABLE IF NOT EXISTS wallet_keys (
+           id TEXT PRIMARY KEY,
+           email TEXT NOT NULL,
+           nickname TEXT NOT NULL,
+           kind TEXT NOT NULL,
+           secret TEXT NOT NULL,
+           created_at INTEGER NOT NULL
+         )`
+      );
+      sql.exec(`CREATE INDEX IF NOT EXISTS idx_wallet_keys_email ON wallet_keys(email)`);
+      // Which agent holds which wallet key, so removing a key reaches every copy of it.
+      sql.exec(
+        `CREATE TABLE IF NOT EXISTS wallet_key_uses (
+           agent_id TEXT PRIMARY KEY,
+           key_id TEXT NOT NULL
+         )`
+      );
+      sql.exec(`CREATE INDEX IF NOT EXISTS idx_wallet_key_uses_key ON wallet_key_uses(key_id)`);
+    },
+  },
 ];
 
 export function migrateMembership(storage: DurableObjectStorage) {

@@ -62,6 +62,8 @@ export type DeploymentSettings = {
   max_members: number;
   /** How many agents an account with no `account_limits` row may administer. */
   default_agent_limit: number;
+  /** How many keys one account's OpenRouter wallet may hold. */
+  max_wallet_keys: number;
   /** Attachment ceilings, per kind. */
   max_upload_bytes: UploadLimits;
   /** Past this, a first-page render is not a thumbnail. */
@@ -142,6 +144,7 @@ export const SETTINGS_FIELDS: readonly SettingsField[] = [
   INT("max_agent_bytes", 1, 1_000_000_000_000, "file storage one agent may hold, in bytes"),
   INT("max_members", 1, 100_000, "addresses one agent's access list may hold"),
   INT("default_agent_limit", 1, 100_000, "agents an ordinary account may administer"),
+  INT("max_wallet_keys", 1, 1000, "keys one account's OpenRouter wallet may hold"),
   {
     key: "max_upload_bytes",
     kind: "json",

@@ -235,4 +235,10 @@ export const SESSION_REGISTRY_MIGRATIONS: readonly Migration[] = [
       );
     },
   },
+  {
+    name: "openrouter wallet reference",
+    up: (sql) => {
+      addColumnIfMissing(sql, "config", `openrouter_key_id TEXT NOT NULL DEFAULT ''`);
+    },
+  },
 ];

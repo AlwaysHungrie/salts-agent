@@ -30,6 +30,7 @@ export const META_TUNABLES = [
   "reasoning_effort",
   "context_messages",
   "openrouter_api_key",
+  "openrouter_key_id",
 ] as const satisfies readonly MetaTunableKey[];
 
 /**
@@ -48,6 +49,8 @@ export function lockedColumns(locked: string[]): Set<string> {
       for (const field of capability.fields) columns.add(String(field.key));
     } else {
       columns.add(key);
+      // The key and the wallet entry it came from are one setting.
+      if (key === "openrouter_api_key") columns.add("openrouter_key_id");
     }
   }
   return columns;

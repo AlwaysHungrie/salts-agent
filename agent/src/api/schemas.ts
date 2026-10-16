@@ -74,6 +74,7 @@ export const ConfigSchema = z
     cap_whatsapp: flag,
     cap_mcp: flag,
     openrouter_api_key: z.string(),
+    openrouter_key_id: z.string(),
     brave_api_key: z.string(),
     searxng_url: z.string(),
     searxng_token: z.string(),
@@ -154,6 +155,7 @@ const tunable = z
     reasoning_effort: z.enum(["off", "low", "medium", "high"]),
     context_messages: z.number(),
     openrouter_api_key: z.string(),
+    openrouter_key_id: z.string(),
   })
   .partial();
 

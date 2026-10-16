@@ -2,6 +2,7 @@
   "max_sessions": 256,
   "max_agent_bytes": 50000000,
   "max_members": 200,
+  "max_wallet_keys": 20,
   "default_agent_limit": 5,
   "max_upload_bytes": {
     "text": 1000000,

@@ -59,6 +59,13 @@ import {
 } from "./directory-computers";
 import { AGENT_DIRECTORY_MIGRATIONS, migrateMembership } from "./directory-schema";
 import {
+  addWalletKey,
+  removeWalletKey,
+  setWalletKeyUse,
+  walletKey,
+  walletKeys,
+} from "./wallet";
+import {
   clearSettings,
   directorySettings,
   setSettings,
@@ -73,6 +80,8 @@ import type {
   MetadataFilter,
   UserDetail,
   UserPage,
+  WalletKeyKind,
+  WalletKeyRow,
 } from "./types";
 
 /**
@@ -315,6 +324,7 @@ export class AgentDirectory extends DurableObject {
   remove(id: string) {
     this.ensureSchema();
     this.ctx.storage.sql.exec(`DELETE FROM salts_links WHERE agent_id = ?`, id);
+    setWalletKeyUse(this.ctx.storage, id, "");
     return removeAgent(this.ctx.storage, id);
   }
 
@@ -346,6 +356,40 @@ export class AgentDirectory extends DurableObject {
   approveBusinessRequest(id: string): { email: string; agent_limit: number } | undefined {
     this.ensureSchema();
     return approveBusinessRequest(this.ctx.storage, id);
+  }
+
+  // ─── OpenRouter wallet (see wallet.ts) ──────────────────────────────────────────
+
+  /** Every key in `email`'s wallet, secrets included: the routes decide what is shown. */
+  walletKeys(email: string): WalletKeyRow[] {
+    this.ensureSchema();
+    return walletKeys(this.ctx.storage, email);
+  }
+
+  /** One of `email`'s keys; undefined when it is someone else's. */
+  walletKey(email: string, id: string): WalletKeyRow | undefined {
+    this.ensureSchema();
+    return walletKey(this.ctx.storage, email, id);
+  }
+
+  addWalletKey(
+    email: string,
+    key: { kind: WalletKeyKind; secret: string },
+    max: number
+  ): WalletKeyRow | { error: string } {
+    this.ensureSchema();
+    return addWalletKey(this.ctx.storage, email, key, max);
+  }
+
+  /** Remove a key; the agents that held it are returned for the caller to clear. */
+  removeWalletKey(email: string, id: string): string[] | undefined {
+    this.ensureSchema();
+    return removeWalletKey(this.ctx.storage, email, id);
+  }
+
+  setWalletKeyUse(agentId: string, keyId: string) {
+    this.ensureSchema();
+    return setWalletKeyUse(this.ctx.storage, agentId, keyId);
   }
 
   // ─── salts-tools computers (see directory-computers.ts) ─────────────────────────

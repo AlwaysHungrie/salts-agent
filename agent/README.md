@@ -73,10 +73,18 @@ they are written. With `npm run dev` running:
 cd ../admin-cli && npm run init -- --dev
 ```
 
-Every agent needs an OpenRouter key of its own, pasted under **Settings**, and there is
+Every agent needs an OpenRouter key of its own, picked under **Settings**, and there is
 no deployment-wide fallback to stand in for it. One agent's spend and rate limits are
 its own, and an agent with no key says so instead of answering. That is deliberate: a
 fallback would mean any agent anyone creates here spends the deployment's own credit.
+
+Keys live in each account's OpenRouter wallet (`wallet_keys` in `AgentDirectory`), and
+agents are given one by its id, `openrouter_key_id`. The Worker copies the key into the
+agent's `openrouter_api_key`, so turns never look the wallet up, and records which agents
+hold which key (`wallet_key_uses`) so removing a key clears it from every one of them. A
+pasted key is shown to its owner; a provisioned one (bought here) never leaves the Worker.
+Only the caller's own keys can be picked, and meta defaults are resolved from the admin's
+wallet. Buying and topping up keys answer 501 until a payment provider is wired in.
 
 Attachment bytes (images, voice-note clips) live in R2, not in the session's SQLite.
 Create the bucket once before deploying — `wrangler dev` simulates it locally:
@@ -118,7 +126,7 @@ curl -X POST http://localhost:8787/agents/session-agent/my-session/chat \
 | `GET\|DELETE /agents/session-agent/:id/files/:fileId` | Image bytes / drop a pending attachment |
 | `GET /agents/session-agent/:id/tasks` | Tasks this session scheduled |
 | `DELETE /agents/session-agent/:id/tasks/:taskId` | Cancel one |
-| `GET\|POST /api/agents` | List / create agents — `{ name, openrouter_api_key?, allowed_emails? }`, and a key that OpenRouter rejects is a 400 that creates nothing. `GET` lists only what the caller may open |
+| `GET\|POST /api/agents` | List / create agents — `{ name, openrouter_api_key?, allowed_emails?, meta? }` (`meta.defaults.openrouter_key_id` picks a wallet key), and a key that OpenRouter rejects is a 400 that creates nothing. `GET` lists only what the caller may open |
 | `GET\|PATCH\|DELETE /api/agents/:agentId` | Read / rename / delete an agent and everything it owns. `PATCH` takes `{ name?, allowed_emails? }` |
 | `GET\|PATCH /api/agents/:agentId/config` | That agent's settings, capabilities and their metadata |
 | `GET\|PATCH\|POST /api/agents/:agentId/meta` | The admin's meta settings: defaults and which of them users may change. `POST` re-applies them. Admin only |
@@ -133,6 +141,9 @@ curl -X POST http://localhost:8787/agents/session-agent/my-session/chat \
 | `POST /api/fleets/:fleetId/agents` | Add agents to a fleet, one per address |
 | `DELETE /api/agents?fleet=:fleetId` | Delete a fleet's agents, a page at a time. Fleet admin only |
 | `POST /api/business-requests` | A signed-in account asks for a higher agent limit |
+| `GET\|POST /api/wallet` | The caller's OpenRouter wallet / add a pasted key `{ key }`, checked with OpenRouter first and given a random nickname. At most `max_wallet_keys` |
+| `DELETE /api/wallet/:id` | Remove a key, clearing it from every agent that holds it |
+| `POST /api/wallet/purchases`, `POST /api/wallet/:id/credits` | Buy a key `{ amount }` / add credit to a bought one `{ amount }`. 501 for now |
 | `POST /telegram/webhook/:agentId` | One route per agent, because one bot per agent |
 | `GET\|POST /whatsapp/webhook/:agentId` | WhatsApp's subscription handshake (`GET`) and deliveries (`POST`) |
 | `POST /salts/pair` | A salts-tools computer starts pairing `{ name }`: returns `{ user_code, device_code, expires_in, interval }`. The user approves `user_code` in the browser |
