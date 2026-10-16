@@ -236,8 +236,9 @@ export default function Capabilities({
                 summaryExtra={
                   capability.id === "mcp" && (
                     <>
-                      Run free web search, the matchmaker and the spreadsheet
-                      analyst on your own computer with{" "}
+                      Salts also provides local MCP servers that can let your
+                      agent assist you with web search, data analysis,
+                      recruitment assistance, and more. Setup by running{" "}
                       <code className="text-ink">npx salts-tools</code>.
                       <SaltsToolsInfo />
                     </>

@@ -182,6 +182,23 @@ def scan(svc: Services) -> dict:
     return {"folder": folder, "files": files, "todo": todo, "already_added": done, "gave_up": gave_up}
 
 
+def clear(svc: Services) -> int:
+    """Deletes every file in the inbox and forgets them in the ledger. People already added keep their own copies."""
+    folder = inbox_dir(svc)
+    files = [p for p in folder.rglob("*") if p.is_file()]
+    for f in files:
+        f.unlink()
+    for d in sorted((p for p in folder.rglob("*") if p.is_dir()), key=lambda p: len(p.parts), reverse=True):
+        d.rmdir()
+    ledger = read_ledger(svc)
+    if ledger:
+        kept = {k: v for k, v in ledger.items() if not Path(k).is_relative_to(folder)}
+        tmp = _ledger_path(svc).with_name("inbox.json.tmp")
+        tmp.write_text(json.dumps(kept, indent=1), encoding="utf-8")
+        tmp.replace(_ledger_path(svc))
+    return len(files)
+
+
 def require_idle(runs: Runs) -> None:
     if active := runs.active():
         raise ToolFailure("already_running", f"inbox run {active.run_id} is still running; check get_ingest_status")
