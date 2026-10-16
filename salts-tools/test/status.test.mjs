@@ -1,98 +1,44 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { agentStatus, serviceStatus } from "../status.mjs";
+import { connectionStatus, serviceStatus } from "../status.mjs";
 
 const URL = "https://a-b.trycloudflare.com";
-const live = (agents) => ({ up: true, port: 8180, pushedTo: URL, agents });
+const APP = "https://app.test/salts-tools";
 
-test("a service that is not on, or with no supervisor, is off", () => {
-  const state = { services: ["web"], url: URL, svc: { web: live({ a: URL }) } };
-  assert.equal(serviceStatus(state, "matchmaker", true, ["a"]).label, "off");
-  assert.equal(serviceStatus(state, "web", false, ["a"]).label, "off");
+test("a service no agent uses, or with no supervisor, is off and says where to switch it on", () => {
+  const state = { services: ["web"], url: URL, svc: { web: { up: true } } };
+  const unused = serviceStatus(state, "matchmaker", true, APP);
+  assert.equal(unused.label, "off");
+  assert.match(unused.note, /app\.test/);
+  assert.equal(serviceStatus(state, "web", false, APP).label, "off");
 });
 
-test("a service walks starting → opening tunnel → connecting → live", () => {
+test("a service walks starting → opening tunnel → live", () => {
   const base = { services: ["web"] };
-  assert.equal(serviceStatus({ ...base, svc: { web: { up: false } } }, "web", true, ["a"]).label, "starting");
-  assert.equal(serviceStatus({ ...base, url: "", svc: { web: { up: true } } }, "web", true, ["a"]).label, "opening tunnel");
-  const half = { ...base, url: URL, svc: { web: live({ a: URL }) } };
-  assert.deepEqual(serviceStatus(half, "web", true, ["a", "b"]).label, "connecting 1/2");
-  const st = serviceStatus(half, "web", true, ["a"]);
+  assert.equal(serviceStatus({ ...base, svc: { web: { up: false } } }, "web", true, APP).label, "starting");
+  assert.equal(serviceStatus({ ...base, url: "", svc: { web: { up: true } } }, "web", true, APP).label, "opening tunnel");
+  const st = serviceStatus({ ...base, url: URL, svc: { web: { up: true } } }, "web", true, APP);
   assert.equal(st.label, "live");
   assert.equal(st.tone, "good");
 });
 
-test("a refused push names the agent and what to do", () => {
-  const svc = (pushStatus) => ({
-    services: ["matchmaker"],
-    url: URL,
-    svc: { matchmaker: { up: true, error: "push: …", pushStatus, failedAgent: "b" } },
-  });
-  const refused = serviceStatus(svc(401), "matchmaker", true, ["a", "b"]);
-  assert.equal(refused.label, "token refused");
-  assert.equal(refused.tone, "bad");
-  assert.match(refused.note, /agent b/);
-  assert.match(serviceStatus(svc(409), "matchmaker", true, ["b"]).note, /MCP server "matchmaker"/);
-  assert.equal(serviceStatus(svc(404), "matchmaker", true, ["b"]).label, "worker too old");
-  assert.equal(serviceStatus(svc(0), "matchmaker", true, ["b"]).tone, "busy");
+test("something missing to run it is shown even when it is off", () => {
+  const state = { services: [], tools: { web: { state: "missing", detail: "install Docker" } } };
+  const st = serviceStatus(state, "web", true, APP);
+  assert.equal(st.label, "missing");
+  assert.equal(st.note, "install Docker");
 });
 
-test("a service that failed to come up shows its error", () => {
-  const state = { services: ["web"], svc: { web: { up: false, error: "Docker did not come up within 180s" } } };
-  const st = serviceStatus(state, "web", true, ["a"]);
-  assert.equal(st.label, "failing");
-  assert.equal(st.note, "Docker did not come up within 180s");
+test("a failing service says why", () => {
+  const state = { services: ["analyst"], url: URL, svc: { analyst: { up: false, error: "uv sync failed" } } };
+  assert.equal(serviceStatus(state, "analyst", true, APP).note, "uv sync failed");
 });
 
-test("an agent is connected once it holds every service's current address", () => {
-  const state = {
-    services: ["web", "analyst"],
-    url: URL,
-    svc: { web: live({ a: URL, b: URL }), analyst: live({ a: URL }) },
-  };
-  assert.equal(agentStatus(state, "a", true).label, "connected");
-  const b = agentStatus(state, "b", true);
-  assert.equal(b.label, "connecting 1/2");
-  assert.equal(b.note, "has web");
-  assert.equal(agentStatus(state, "a", false).label, "nothing running");
-});
-
-test("only the agent that refused is marked as refusing", () => {
-  const state = {
-    services: ["web"],
-    url: URL,
-    svc: { web: { up: true, agents: { a: URL }, error: "push: …", pushStatus: 401, failedAgent: "b" } },
-  };
-  assert.equal(agentStatus(state, "a", true).label, "connected");
-  assert.equal(agentStatus(state, "b", true).label, "token refused");
-});
-
-test("an agent where the user removed a server is not waited on", () => {
-  const removedIn = (ids) => ({
-    services: ["web", "matchmaker"],
-    url: URL,
-    svc: {
-      web: live({ a: URL, b: URL }),
-      matchmaker: { ...live({ a: URL }), removed: Object.fromEntries(ids.map((id) => [id, true])) },
-    },
-  });
-  assert.equal(serviceStatus(removedIn(["b"]), "matchmaker", true, ["a", "b"]).label, "live");
-  assert.equal(serviceStatus(removedIn(["a", "b"]), "matchmaker", true, ["a", "b"]).label, "removed");
-  const agent = agentStatus(removedIn(["b"]), "b", true);
-  assert.equal(agent.label, "connected");
-  assert.match(agent.note, /removed here: matchmaker/);
-});
-
-test("a service no agent is set to use says so, and an agent ignores services not set for it", () => {
-  const state = {
-    services: ["web", "matchmaker"],
-    url: URL,
-    agentServices: { b: ["web"] },
-    svc: { web: live({ a: URL, b: URL }), matchmaker: live({ a: URL }) },
-  };
-  assert.equal(serviceStatus(state, "matchmaker", true, []).label, "no agents");
-  const b = agentStatus(state, "b", true);
-  assert.equal(b.label, "connected");
-  assert.equal(b.note, "has web");
+test("the connection reads disconnected, connecting, can't report or connected", () => {
+  assert.equal(connectionStatus({ unpaired: true }, true).label, "disconnected");
+  assert.equal(connectionStatus({}, false).label, "not running");
+  assert.equal(connectionStatus({}, true).label, "connecting");
+  assert.equal(connectionStatus({ reportedAt: "x", reportError: "offline" }, true).tone, "busy");
+  assert.equal(connectionStatus({ reportedAt: "x" }, true).label, "connected");
 });

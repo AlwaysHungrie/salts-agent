@@ -35,42 +35,33 @@ If you only want the spreadsheet analyst, you can skip Docker.
 
 There is nothing else to download. Node.js comes with `npx`, which fetches salts-tools the first time you run it, so every command in these guides starts with `npx salts-tools`.
 
-## 3. Start salts-tools
+## 3. Connect your computer
 
-First, open your agent in the browser and copy its agent ID. It is the part of the address after `/a/`:
-
-```
-https://salts-agent-app.vercel.app/a/<your-agent-id>
-```
-
-Then start salts-tools with the tool you want first. For web search, run:
+In your terminal, run:
 
 ```
-npx salts-tools start web
+npx salts-tools
 ```
 
-Use `matchmaker` or `analyst` in place of `web` to start one of those instead. salts-tools checks that everything from step 1 is installed, and then asks you a few questions:
+salts-tools checks that cloudflared is installed, then shows a short code and opens this site in your browser.
 
-1. **Agent IDs**: paste your agent ID. To give several agents these tools from the same computer, paste all their IDs with a space between each one.
-2. salts-tools will then show you a **token**. Copy it, and leave your terminal open while you do the next step.
+1. Check that the code on the page matches the one in your terminal.
+2. Tick the agents this computer should serve, and click **Connect**.
 
-## 4. Add the token to your agent
+Your terminal carries on by itself. There is nothing to copy or paste.
 
-Open your agent, go to **Capabilities**, and find **Web search**. If you entered several agent IDs, do this for each of those agents, using the same token.
+## 4. Choose your tools
 
-1. Paste the token into **SearXNG token** and save.
-2. If you are setting up web search, switch **Web search** on, and leave **Brave Search API key** and **SearXNG URL** empty. salts-tools fills in the URL for you.
+After you connect, click **Choose tools**, or open the [salts-tools page](/salts-tools) at any time. You will see your computer and each agent it serves. Switch on the tools you want for each agent. salts-tools starts them on your computer and connects them to that agent within a few seconds.
 
-The token lives under **Web search** even if you only want the matchmaker or the analyst, since it is how your agent knows the tools really come from you.
-
-Go back to your terminal and press **Enter**. salts-tools starts your tool and connects it to your agent. When it is done, you will see green ticks followed by `live for agent <your-agent-id>`.
+If a tool needs something more, the page says so under the agent, with a button to fix it. For example, the analyst needs **File ingest** switched on, and the matchmaker needs your OpenRouter key. If something is missing on your computer, such as Docker for web search, the page tells you what to install.
 
 ## 5. Start at login
 
-Finally, salts-tools asks whether it should start automatically when you log in. We recommend saying yes, otherwise your agent loses its tools every time you restart your computer. You can change this later with `npx salts-tools autostart on` or `off`.
+Finally, salts-tools asks in the terminal whether it should start automatically when you log in. We recommend saying yes, otherwise your agent loses its tools every time you restart your computer. You can change this later with `npx salts-tools autostart on` or `off`.
 
 ## You are done
 
-Your first tool is running. To add another one, run `npx salts-tools start` followed by its name, for example `npx salts-tools start analyst`. It joins the one that is already running, so you do not have to set anything up again.
+Your computer is connected. To give another agent these tools, choose it under **Use this computer for another agent** on the [salts-tools page](/salts-tools).
 
 Next, read [Everyday use](/guide/salts-tools-everyday) to learn the salts-tools screen and the commands you will use day to day.

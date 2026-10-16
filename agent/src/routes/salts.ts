@@ -12,6 +12,7 @@ import { CAPABILITIES } from "../capabilities";
 import type { Env } from "../env";
 import { type McpServerRow, parseHeaders } from "../mcp";
 import { type ComputerLink, type ComputerRow, type Config, EMPTY_MCP_SERVER } from "../registry";
+import { ADOPT } from "../registry/directory-computers";
 import { callerEmail, mayUseAgent } from "../worker/auth";
 import { json, jsonError, readJson } from "../worker/http";
 import { syncMcpTools } from "../worker/integrations";
@@ -150,14 +151,16 @@ async function isAny(value: string, tokens: string[]): Promise<boolean> {
  */
 export async function syncLink(env: Env, c: ComputerRow, link: ComputerLink, force = false) {
   if (!c.gateway_token) return;
-  // With no tunnel yet, only taking things out can be done.
-  const on = c.tunnel_url ? parseList(link.tools) : [];
+  const reg = registry(env, link.agent_id);
   const tools = reportedTools(c.tools);
+  const tokens = tokensOf(c);
+  let on = parseList(link.tools);
+  if (link.synced === ADOPT) on = await adopt(env, reg, c, link, tools, tokens);
+  // Nothing to point at yet: leave the agent as it is until there is a tunnel.
+  if (!c.tunnel_url && on.length) return;
   const key = JSON.stringify([c.tunnel_url, c.gateway_token, on, tools]);
   if (!force && link.synced === key) return;
 
-  const reg = registry(env, link.agent_id);
-  const tokens = tokensOf(c);
   const tunnel = c.tunnel_url.replace(/\/+$/, "");
 
   // Web search: at most one SearXNG per agent, so the config fields are this computer's
@@ -175,6 +178,31 @@ export async function syncLink(env: Env, c: ComputerRow, link: ComputerLink, for
 
   await syncServers(reg, tools, on, tunnel, c.gateway_token, tokens);
   await directory(env).markComputerLinkSynced(c.id, link.agent_id, key);
+}
+
+/**
+ * A new link's tools, from what this computer's gateway token already reaches on the
+ * agent (set up before pairing, by the salts-tools that used to push addresses itself):
+ * kept, rather than taken out, so headers filled in there survive.
+ */
+async function adopt(
+  env: Env,
+  reg: Registry,
+  c: ComputerRow,
+  link: ComputerLink,
+  tools: Record<string, ReportedTool>,
+  tokens: string[]
+): Promise<string[]> {
+  const found = new Set(parseList(link.tools));
+  const web = Object.entries(tools).find(([, t]) => t.kind === "searxng");
+  if (web && (await isAny((await readConfig(env, reg)).searxng_token, tokens))) found.add(web[0]);
+  for (const row of await reg.mcpServers()) {
+    const name = row.name.toLowerCase();
+    if (tools[name]?.kind === "mcp" && (await trustsAny(row, tokens))) found.add(name);
+  }
+  const on = [...found].sort();
+  await directory(env).setComputerLink(c.id, link.agent_id, on);
+  return on;
 }
 
 async function syncServers(
@@ -364,7 +392,8 @@ async function report(request: Request, env: Env): Promise<Response> {
   const updated = (await dir.computer(c.id))!;
   const links = await dir.computerLinks(c.id);
   await syncAll(env, updated, links);
-  return json(await computerView(env, updated, links));
+  // Read again: a new link's first sync can adopt tools.
+  return json(await computerView(env, updated, await dir.computerLinks(c.id)));
 }
 
 /** The computer forgetting itself (`salts-tools reset`): everything it put anywhere goes. */

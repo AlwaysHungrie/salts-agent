@@ -292,4 +292,45 @@ describe("a paired computer", () => {
     ).toBe(400);
     expect((await report(credential, { tunnel_url: "http://plain.test" })).status).toBe(400);
   });
+
+  it("keeps the agent pointed at the last tunnel while a new one opens", async () => {
+    const { email, agentId, credential, computerId } = await setup();
+    await setTools(email, computerId, agentId, ["web"]);
+    expect((await report(credential, { tunnel_url: "" })).status).toBe(200);
+    expect((await config(email, agentId)).searxng_url).toBe(`${TUNNEL}/web`);
+  });
+});
+
+describe("pairing a computer that already served an agent", () => {
+  it("adopts what its gateway token set up there, keeping headers the user filled in", async () => {
+    const email = someone();
+    const agentId = await createAgent(email);
+    // What salts-tools set up before pairing existed: the token as the SearXNG token and
+    // as the matchmaker's bearer, with the user's key filled in.
+    await SELF.fetch(
+      `${BASE}/api/agents/${agentId}/config`,
+      as(email, { method: "PATCH", body: JSON.stringify({ searxng_token: GATEWAY }) })
+    );
+    await SELF.fetch(
+      `${BASE}/api/agents/${agentId}/mcp`,
+      as(email, {
+        method: "POST",
+        body: JSON.stringify({
+          name: "matchmaker",
+          url: "https://mcp.test/old/matchmaker/mcp",
+          auth: "headers",
+          headers: { Authorization: `Bearer ${GATEWAY}`, "X-OpenRouter-Api-Key": "sk-or-mine" },
+        }),
+      })
+    );
+
+    const { credential } = await pair(email, [agentId]);
+    const body = (await (await report(credential)).json()) as { agents: { tools: string[] }[] };
+    expect(body.agents[0].tools).toEqual(["matchmaker", "web"]);
+
+    const [server] = await servers(email, agentId);
+    expect(server.url).toBe(`${TUNNEL}/matchmaker/mcp`);
+    expect(server.headers["X-OpenRouter-Api-Key"]).toBe("sk-or-mine");
+    expect((await config(email, agentId)).searxng_url).toBe(`${TUNNEL}/web`);
+  });
 });

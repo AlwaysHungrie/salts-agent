@@ -8,6 +8,7 @@ import {
   visionBlockedNote,
 } from "@/components/CapabilitySection";
 import { McpServers } from "@/components/McpServers";
+import { SaltsToolsInfo } from "@/components/SaltsToolsInfo";
 import type { Capability, Config, ModelOption } from "@/lib/agent";
 import { cached, keys, remember, revise } from "@/lib/cache";
 
@@ -35,7 +36,9 @@ function shownCapabilities(payload: ConfigPayload | undefined): Capability[] {
   if (!payload) return [];
   const locked = new Set(payload.locked ?? []);
   return payload.capabilities
-    .filter((c) => c.id !== "telegram" && c.id !== "whatsapp" && !locked.has(c.id))
+    .filter(
+      (c) => c.id !== "telegram" && c.id !== "whatsapp" && !locked.has(c.id),
+    )
     .sort((a, b) => Number(b.id === "mcp") - Number(a.id === "mcp"));
 }
 
@@ -66,10 +69,17 @@ export default function Capabilities({
 
   useEffect(() => {
     void (async () => {
-      const res = await fetch(`/api/agents/${encodeURIComponent(agentId)}/config`);
-      const payload = (await res.json().catch(() => null)) as ConfigPayload | null;
+      const res = await fetch(
+        `/api/agents/${encodeURIComponent(agentId)}/config`,
+      );
+      const payload = (await res
+        .json()
+        .catch(() => null)) as ConfigPayload | null;
       if (!res.ok || !payload) {
-        setError(payload?.error ?? "Couldn't load your capabilities. Refresh the page to try again.");
+        setError(
+          payload?.error ??
+            "Couldn't load your capabilities. Refresh the page to try again.",
+        );
         return;
       }
       remember(keys.config(agentId), payload);
@@ -83,11 +93,14 @@ export default function Capabilities({
     // Saves can overlap; only the latest one may speak for the page.
     const seq = ++sent.current;
     setSaving(true);
-    const res = await fetch(`/api/agents/${encodeURIComponent(agentId)}/config`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(patch),
-    });
+    const res = await fetch(
+      `/api/agents/${encodeURIComponent(agentId)}/config`,
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(patch),
+      },
+    );
     if (seq === sent.current) setSaving(false);
     const payload = (await res.json().catch(() => null)) as {
       config: Config;
@@ -178,16 +191,22 @@ export default function Capabilities({
           </span>
         </div>
         <p className="text-muted mt-1 text-sm font-light leading-[1.43]">
-          Choose what this agent can do besides write. Applies to every one of
-          its sessions, and to nothing another agent does. To change its model,
-          instructions and channels, go to{" "}
+          Choose what this agent can do besides write. To change its model,
+          instructions and general settings, go to{" "}
           <Link
             href={`/a/${encodeURIComponent(agentId)}/settings`}
             className="text-ink underline"
           >
             Settings
           </Link>
+          . Run free web search, the matchmaker and the spreadsheet analyst on
+          your own computer with{" "}
+          <code className="text-ink">npx salts-tools</code>, then manage it from{" "}
+          <Link href="/salts-tools" className="text-ink underline">
+            salts-tools
+          </Link>
           .
+          <SaltsToolsInfo />
         </p>
 
         {error && (
