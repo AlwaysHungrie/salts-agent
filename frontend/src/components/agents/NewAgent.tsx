@@ -103,7 +103,7 @@ export function NewAgent({
         >
           <p className="text-faint text-xs leading-[1.33]">Step 2 of 2</p>
           <p className="text-lg font-semibold leading-[1.38]">
-            {fleet ? "Meta settings" : "OpenRouter key"}
+            {fleet ? "Admin settings" : "OpenRouter key"}
           </p>
           <p className="text-muted mt-1 text-xs font-light leading-[1.33]">
             {fleet

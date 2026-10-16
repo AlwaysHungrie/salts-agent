@@ -22,7 +22,7 @@ const BASE = "https://worker.test";
  *
  * The pool no longer rolls storage back between tests, and the directory is a single
  * deployment-wide object, so an address used twice carries the first test's agents
- * into the second — and `DEFAULT_AGENT_LIMIT` is 1, so the second test's create would
+ * into the second — and past `DEFAULT_AGENT_LIMIT`, a later test's create would
  * be refused for reasons that have nothing to do with what it is asserting. A unique
  * address per test removes the coupling entirely.
  */
@@ -219,11 +219,12 @@ describe("creating an agent", () => {
 });
 
 describe("the agent ceiling", () => {
-  it("refuses a second agent on the default limit", async () => {
+  it("refuses one agent past the default limit", async () => {
     const capped = someone("capped");
-    await createAgent(capped);
-    const { res } = await createAgent(capped, "Second");
-    // `DEFAULT_AGENT_LIMIT` is 1, so the second is the one that must be refused.
+    for (let i = 0; i < DEFAULT_AGENT_LIMIT; i++) {
+      expect((await createAgent(capped, `Agent ${i}`)).res.status).toBe(200);
+    }
+    const { res } = await createAgent(capped, "One too many");
     expect(res.status).toBe(403);
   });
 

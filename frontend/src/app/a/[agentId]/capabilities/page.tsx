@@ -58,6 +58,9 @@ export default function Capabilities({
   const [saving, setSaving] = useState(false);
   // Credentials save on a timer so a PATCH does not fire on every keystroke.
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** A debounced patch not sent yet: shown as unsaved, and sent if the page is left. */
+  const pending = useRef<Partial<Config> | null>(null);
+  const [unsaved, setUnsaved] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -106,12 +109,43 @@ export default function Capabilities({
     touched.current = true;
     setConfig((c) => (c ? { ...c, ...patch } : c));
     if (debounce.current) clearTimeout(debounce.current);
+    // A patch still waiting is folded into this one rather than dropped.
+    const merged = { ...pending.current, ...patch };
     if (wait === 0) {
-      void save(patch);
+      pending.current = null;
+      setUnsaved(false);
+      void save(merged);
       return;
     }
-    debounce.current = setTimeout(() => void save(patch), wait);
+    pending.current = merged;
+    setUnsaved(true);
+    debounce.current = setTimeout(flush, wait);
   };
+
+  /** Send a debounced patch now: when its field is left, or the page is. */
+  const flush = () => {
+    if (debounce.current) clearTimeout(debounce.current);
+    const patch = pending.current;
+    if (!patch) return;
+    pending.current = null;
+    setUnsaved(false);
+    void save(patch);
+  };
+
+  // Leaving the page mid-debounce still saves what was typed.
+  useEffect(
+    () => () => {
+      const patch = pending.current;
+      if (!patch) return;
+      void fetch(`/api/agents/${encodeURIComponent(agentId)}/config`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(patch),
+        keepalive: true,
+      });
+    },
+    [agentId],
+  );
 
   const model = models.find((m) => m.id === config?.model) ?? null;
 
@@ -131,7 +165,7 @@ export default function Capabilities({
             Capabilities.
           </h1>
           <span className="text-faint text-xs leading-[1.33]">
-            {saving ? "Saving…" : "Saved"}
+            {saving ? "Saving…" : unsaved ? "Unsaved changes" : "Saved"}
           </span>
         </div>
         <p className="text-muted mt-1 text-sm font-light leading-[1.43]">

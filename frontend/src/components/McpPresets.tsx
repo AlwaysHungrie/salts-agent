@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { McpAuth, McpCatalogEntry } from "@/lib/agent";
 
 /**
@@ -16,6 +16,8 @@ export type McpPreset = {
   headers: Record<string, string>;
   /** The provider's mark, drawn at 24×24. */
   logo: React.ReactNode;
+  /** One line on what the server does. */
+  description: string;
 };
 
 /**
@@ -30,6 +32,7 @@ export function toPreset(entry: McpCatalogEntry): McpPreset {
     url: entry.url,
     auth: entry.auth,
     headers: entry.headers ?? {},
+    description: entry.description ?? "",
     logo: entry.icon ? (
       // A plain <img>, not next/image: the icon is a data URL with nothing to optimise,
       // and <img> is what keeps any script inside the SVG from running.
@@ -93,6 +96,12 @@ export function McpPresetStrip({
   // How far the current gesture has travelled. Read by the click that follows the
   // pointer-up, which is the only way to tell a pick from the end of a drag.
   const moved = useRef(0);
+  /** The tile under the pointer, and where its popup sits within the strip. */
+  const [hovered, setHovered] = useState<{
+    preset: McpPreset;
+    x: number;
+  } | null>(null);
+  const wrapper = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let frame = 0;
@@ -133,57 +142,90 @@ export function McpPresetStrip({
   if (!presets.length) return null;
 
   return (
-    <div
-      onPointerEnter={() => (held.current = true)}
-      onPointerLeave={() => {
-        held.current = false;
-        drag.current = null;
-      }}
-      onPointerDown={(e) => {
-        drag.current = { x: e.clientX };
-        moved.current = 0;
-        captured.current = false;
-      }}
-      onPointerMove={(e) => {
-        if (!drag.current) return;
-        const dx = e.clientX - drag.current.x;
-        drag.current = { x: e.clientX };
-        moved.current += Math.abs(dx);
-        offset.current += dx;
-        // Now it is a drag: hold the pointer so it keeps working past the edges.
-        if (!captured.current && moved.current > DRAG_SLOP) {
-          captured.current = true;
-          e.currentTarget.setPointerCapture(e.pointerId);
-        }
-      }}
-      onPointerUp={(e) => {
-        if (captured.current)
-          e.currentTarget.releasePointerCapture(e.pointerId);
-        captured.current = false;
-        drag.current = null;
-      }}
-      // The strip fades out at both edges rather than being cut off. A mask is used
-      // instead of a gradient overlay because the section behind it is itself a
-      // gradient, which an overlay in a flat colour would band against.
-      className="cursor-grab touch-pan-y overflow-hidden py-0 select-none active:cursor-grabbing [mask-image:linear-gradient(to_right,transparent,black_40px,black_calc(100%-40px),transparent)]"
-    >
-      <div ref={track} className="flex w-max gap-3">
-        {tiles.map((preset, i) => (
-          <button
-            key={`${preset.id}-${i}`}
-            title={`Add ${preset.name}`}
-            aria-label={`Add ${preset.name}`}
-            onClick={() => {
-              // A drag that ends on a tile is a drag, not a click on it.
-              if (moved.current > DRAG_SLOP) return;
-              onPick(preset);
-            }}
-            className="bg-canvas border-hairline text-ink hover:border-ink flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border transition"
-          >
-            {preset.logo}
-          </button>
-        ))}
+    // The popup sits outside the clipped strip, so it is not cut off by its mask.
+    <div ref={wrapper} className="relative">
+      <div
+        onPointerEnter={() => (held.current = true)}
+        onPointerLeave={() => {
+          held.current = false;
+          drag.current = null;
+          setHovered(null);
+        }}
+        onPointerDown={(e) => {
+          drag.current = { x: e.clientX };
+          moved.current = 0;
+          captured.current = false;
+        }}
+        onPointerMove={(e) => {
+          if (!drag.current) return;
+          const dx = e.clientX - drag.current.x;
+          drag.current = { x: e.clientX };
+          moved.current += Math.abs(dx);
+          offset.current += dx;
+          setHovered(null);
+          // Now it is a drag: hold the pointer so it keeps working past the edges.
+          if (!captured.current && moved.current > DRAG_SLOP) {
+            captured.current = true;
+            e.currentTarget.setPointerCapture(e.pointerId);
+          }
+        }}
+        onPointerUp={(e) => {
+          if (captured.current)
+            e.currentTarget.releasePointerCapture(e.pointerId);
+          captured.current = false;
+          drag.current = null;
+        }}
+        // The strip fades out at both edges rather than being cut off. A mask is used
+        // instead of a gradient overlay because the section behind it is itself a
+        // gradient, which an overlay in a flat colour would band against.
+        className="cursor-grab touch-pan-y overflow-hidden py-0 select-none active:cursor-grabbing [mask-image:linear-gradient(to_right,transparent,black_40px,black_calc(100%-40px),transparent)]"
+      >
+        <div ref={track} className="flex w-max gap-3">
+          {tiles.map((preset, i) => (
+            <button
+              key={`${preset.id}-${i}`}
+              aria-label={`Add ${preset.name}`}
+              onPointerEnter={(e) => {
+                if (drag.current && moved.current > DRAG_SLOP) return;
+                const box = wrapper.current?.getBoundingClientRect();
+                const tile = e.currentTarget.getBoundingClientRect();
+                if (box)
+                  setHovered({
+                    preset,
+                    x: tile.left + tile.width / 2 - box.left,
+                  });
+              }}
+              onClick={() => {
+                // A drag that ends on a tile is a drag, not a click on it.
+                if (moved.current > DRAG_SLOP) return;
+                onPick(preset);
+              }}
+              className="bg-canvas border-hairline text-ink hover:border-ink flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border transition"
+            >
+              {preset.logo}
+            </button>
+          ))}
+        </div>
       </div>
+      {hovered && (
+        <div
+          role="tooltip"
+          className="bg-canvas border-hairline pointer-events-none absolute top-full z-20 mt-2 w-60 rounded-2xl border px-4 py-3 shadow-lg"
+          style={{
+            // Centred on the tile, but kept inside the strip at both ends.
+            left: `clamp(0px, ${hovered.x}px - 7.5rem, 100% - 15rem)`,
+          }}
+        >
+          <p className="text-ink text-[13px] font-semibold leading-[1.38]">
+            {hovered.preset.name}
+          </p>
+          {hovered.preset.description && (
+            <p className="text-muted mt-1 text-xs leading-[1.4]">
+              {hovered.preset.description}
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

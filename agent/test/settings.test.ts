@@ -268,6 +268,24 @@ describe("validating a patch", () => {
     }
   });
 
+  it("keeps a template's description and guide slug, and refuses a bad slug", () => {
+    const entry = { id: "x", name: "X", url: "https://x.example/mcp", auth: "none" };
+    const saved = validateSettingsPatch(
+      { mcp_catalog: [{ ...entry, description: " Reads X. ", guide: "mcp-x" }] },
+      {}
+    );
+    expect(saved.mcp_catalog![0]).toMatchObject({ description: "Reads X.", guide: "mcp-x" });
+    expect(() =>
+      validateSettingsPatch({ mcp_catalog: [{ ...entry, guide: "../etc" }] }, {})
+    ).toThrow(/guide slug/);
+  });
+
+  it("ships a description for every template", () => {
+    for (const entry of SHIPPED.mcp_catalog) {
+      expect(entry.description, entry.id).toBeTruthy();
+    }
+  });
+
   it("refuses mcp_templates, and drops it from a document saved before its removal", () => {
     expect(() => validateSettingsPatch({ mcp_templates: [] }, {})).toThrow(/unknown setting/);
     const stored = { max_sessions: 5, mcp_templates: ["notion"] } as never;

@@ -9,7 +9,7 @@ To keep Salts running smoothly for everyone, there are a few limits on how many 
 
 ## Your account
 
-A Personal Account can create **1 agent**. If you need more, for example to create agents for your team, click **Need more agents?** on the home page and request a Fleet Account. See [Get a Fleet Account](/guide/fleet-account).
+A Personal Account can create **5 agents**. If you need more, for example to create agents for your team, click **Need more agents?** on the home page and request a Fleet Account. See [Get a Fleet Account](/guide/fleet-account).
 
 ## Each agent
 

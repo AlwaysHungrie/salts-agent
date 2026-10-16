@@ -48,41 +48,22 @@ describe("capabilityReady", () => {
     const capability = CAPABILITY_BY_ID.get("telegram")!;
     // Switched on but unusable. Offering the tool here would mean a turn that fails
     // inside the model's tool call rather than a capability that is simply off.
-    expect(
-      capabilityReady(
-        capability,
-        config({ cap_telegram: 1, telegram_bot_token: "", telegram_bot_username: "" })
-      )
-    ).toBe(false);
-  });
-
-  it("is false when only some required credentials are present", () => {
-    const capability = CAPABILITY_BY_ID.get("telegram")!;
-    expect(
-      capabilityReady(
-        capability,
-        config({ cap_telegram: 1, telegram_bot_token: "token", telegram_bot_username: "" })
-      )
-    ).toBe(false);
+    expect(capabilityReady(capability, config({ cap_telegram: 1, telegram_bot_token: "" }))).toBe(
+      false
+    );
   });
 
   it("is true once every required credential is present", () => {
     const capability = CAPABILITY_BY_ID.get("telegram")!;
-    expect(
-      capabilityReady(
-        capability,
-        config({ cap_telegram: 1, telegram_bot_token: "t", telegram_bot_username: "bot" })
-      )
-    ).toBe(true);
+    expect(capabilityReady(capability, config({ cap_telegram: 1, telegram_bot_token: "t" }))).toBe(
+      true
+    );
   });
 
   it("treats whitespace as a missing credential", () => {
     const capability = CAPABILITY_BY_ID.get("telegram")!;
     expect(
-      capabilityReady(
-        capability,
-        config({ cap_telegram: 1, telegram_bot_token: "   ", telegram_bot_username: "bot" })
-      )
+      capabilityReady(capability, config({ cap_telegram: 1, telegram_bot_token: "   " }))
     ).toBe(false);
   });
 

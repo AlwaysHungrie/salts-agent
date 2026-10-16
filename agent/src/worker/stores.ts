@@ -2,6 +2,7 @@ import { routeAgentRequest } from "agents";
 import type { Env } from "../env";
 import type { SessionRegistry } from "../registry";
 import { deploymentSettings, type DeploymentSettings } from "../settings";
+import { Telegram } from "../telegram";
 
 /** One agent's own store. Agents share nothing: separate objects, credentials and queues. */
 export function registry(env: Env, agentId: string) {
@@ -22,14 +23,33 @@ export async function readConfig(env: Env, reg: ReturnType<typeof registry>) {
   return await reg.config(settings.default_model, settings.config_defaults);
 }
 
-/** As `readConfig`, writing a patch over it. */
+/**
+ * As `readConfig`, writing a patch over it. A new Telegram bot token brings its bot's
+ * username with it — asked of Telegram, never typed — so group mentions are recognised.
+ */
 export async function writeConfig(
   env: Env,
   reg: ReturnType<typeof registry>,
   patch: Parameters<ReturnType<typeof registry>["setConfig"]>[0]
 ) {
   const settings = await deploymentSettings(env);
+  if (patch.telegram_bot_token !== undefined) {
+    patch = {
+      ...patch,
+      telegram_bot_username: await botUsername(patch.telegram_bot_token, env.TELEGRAM_API_BASE),
+    };
+  }
   return await reg.setConfig(patch, settings.default_model, settings.config_defaults);
+}
+
+/** The bot's username from Telegram, or "" when there is no token or Telegram refuses it. */
+async function botUsername(token: string, api?: string): Promise<string> {
+  if (!token) return "";
+  try {
+    return (await new Telegram(token, api).me()).username ?? "";
+  } catch {
+    return "";
+  }
 }
 
 /** Copy an agent's session count into the directory for admin stats. Off the hot path. */
