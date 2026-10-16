@@ -60,6 +60,8 @@ export default function Capabilities({
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** A debounced patch not sent yet: shown as unsaved, and sent if the page is left. */
   const pending = useRef<Partial<Config> | null>(null);
+  /** Saves sent so far, so an answer to an older one is not applied over a newer. */
+  const sent = useRef(0);
   const [unsaved, setUnsaved] = useState(false);
 
   useEffect(() => {
@@ -78,13 +80,15 @@ export default function Capabilities({
   }, [agentId]);
 
   const save = async (patch: Partial<Config>) => {
+    // Saves can overlap; only the latest one may speak for the page.
+    const seq = ++sent.current;
     setSaving(true);
     const res = await fetch(`/api/agents/${encodeURIComponent(agentId)}/config`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(patch),
     });
-    setSaving(false);
+    if (seq === sent.current) setSaving(false);
     const payload = (await res.json().catch(() => null)) as {
       config: Config;
       error?: string;
@@ -96,7 +100,10 @@ export default function Capabilities({
       );
       return;
     }
-    setConfig(payload.config);
+    // The server's row is as of when this save left: keystrokes since, and any later
+    // save's answer, stay on top of it.
+    if (seq === sent.current)
+      setConfig({ ...payload.config, ...pending.current });
     revise<ConfigPayload>(keys.config(agentId), (held) => ({
       ...held,
       config: payload.config,
