@@ -101,6 +101,7 @@ export class SessionAgent extends Think<Env> {
     failedCalls: [],
     calls: [],
     outOfRounds: false,
+    after: null,
   };
 
   /** The streaming turn, kept so a browser that reloads mid-reply can catch up. */
@@ -325,6 +326,7 @@ export class SessionAgent extends Think<Env> {
     this.turn.failedCalls = [];
     this.turn.calls = [];
     this.turn.outOfRounds = false;
+    this.turn.after = null;
     this.turn.running++;
     await maybeCompact(this.host, config);
 

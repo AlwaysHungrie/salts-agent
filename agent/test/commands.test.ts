@@ -75,6 +75,11 @@ describe("parseCommand", () => {
     expect(parseCommand("@mybot !enable-mcp notion")).toEqual({ mcp: "enable", server: "notion" });
   });
 
+  it("parses !docs with a page", () => {
+    expect(parseCommand("!docs openrouter")).toEqual({ page: "openrouter" });
+    expect(parseCommand("@mybot !DOCS  salts-tools ")).toEqual({ page: "salts-tools" });
+  });
+
   it("does not match an mcp command without a server name", () => {
     expect(parseCommand("!enable-mcp")).toBe(null);
     expect(parseCommand("!disable-mcp   ")).toBe(null);

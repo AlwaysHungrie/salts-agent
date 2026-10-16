@@ -21,6 +21,8 @@
  * - `!!fail500` — the provider answers 500.
  * - `!!fail401` — the provider rejects the key.
  * - `!!toolcall` — the model calls the `list` tool, then answers using its result.
+ * - `!!command <command> [argument]` — the model calls `run_command`, then answers
+ *   `Command said: <its result>`.
  * - `!!toolloop` — the model calls `list` again and again until it may no longer call tools.
  *   The second leg is recognised by the tool message the SDK sends back, so the whole
  *   two-step exchange stays deterministic.
@@ -907,6 +909,21 @@ export async function openrouterMock(request: Request): Promise<Response> {
   if (message.startsWith("!!toolloop")) {
     if (body.tool_choice === "none") return streamedText(TOOLLOOP_REPLY);
     return streamedToolCall("list", { path: "/" });
+  }
+
+  // `!!command <command> [argument]`: call `run_command`, then repeat what it said.
+  if (message.startsWith("!!command")) {
+    if (carriesToolResult(body)) {
+      const result = (body.messages ?? []).filter((m) => m.role === "tool").at(-1)?.content;
+      return streamedText(
+        `Command said: ${typeof result === "string" ? result : JSON.stringify(result)}`
+      );
+    }
+    const [, command, ...rest] = message.split(/\s+/);
+    return streamedToolCall(
+      "run_command",
+      rest.length ? { command, argument: rest.join(" ") } : { command }
+    );
   }
 
   if (message.startsWith("!!toolcall")) {

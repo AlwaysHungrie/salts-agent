@@ -10,6 +10,7 @@ import {
 import { parseCommand } from "../commands";
 import { toArrayBuffer } from "../util/bytes";
 import { attachmentsOf, drawnIds, getAttachment, insertAttachment } from "./attachments";
+import { runQueuedCommand } from "./command-tool";
 import { runCommand } from "./commands";
 import { isPdf, isSheet, uploadPath } from "./files";
 import { chatReply, reportable, textOf, turnFailure } from "./format";
@@ -156,6 +157,12 @@ export async function channelTurn(
     // Its own message, so the model cannot paraphrase away what the user must do.
     if (host.turn.scheduled && channel.scheduledNotice) {
       await channel.sendText(target, channel.scheduledNotice);
+    }
+    // A command the model queued (`!new`, `!clear`, `!compact`): its own message, as if sent.
+    const queued = await runQueuedCommand(host, result.status === "completed");
+    if (queued) {
+      await channel.sendText(target, queued.text);
+      if (queued.destroy) await host.finishDelete();
     }
     return { ok: true };
   } catch (err) {

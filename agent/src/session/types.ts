@@ -3,6 +3,7 @@ import { Workspace } from "@cloudflare/shell";
 import type { UIMessage } from "ai";
 import { SessionAgent } from "../agent";
 import type { ScheduledTask } from "../capabilities";
+import type { Command } from "../commands";
 import type { Env } from "../env";
 import type { McpServerRow } from "../mcp";
 import { type Config, type Memory, SessionRegistry } from "../registry";
@@ -122,6 +123,8 @@ export type TurnState = {
   calls: string[];
   /** The turn reached its last tool round and was made to answer. */
   outOfRounds: boolean;
+  /** A command `run_command` queued for after the reply (`!new`, `!clear`, `!compact`). */
+  after: Command | null;
 };
 
 /**
