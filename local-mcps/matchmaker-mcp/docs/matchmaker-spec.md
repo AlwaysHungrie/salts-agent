@@ -107,7 +107,8 @@ alone, hybrid on the posting, hybrid on a written query, and both hybrids with a
    caller did not come through the salts-tools gateway), `ingest_inbox` (a background run, each file a new
    person's resume; files added before and unchanged are skipped by path, size and modification time, text
    already on file costs nothing, failures retried up to 3 times; the whole run must fit Tool-Call-Max-Charge),
-   `get_ingest_status`, `export_people` / `export_jobs` (exports.py: a zip with people.csv or jobs.csv and every
+   `get_ingest_status`, `clear_inbox` (deletes every inbox file and its ledger entry; people already added stay;
+   refused while an inbox run is going), `export_people` / `export_jobs` (exports.py: a zip with people.csv or jobs.csv and every
    person's or job's files under DATA_DIR/exports/, handed over as a download link; exports older than a
    link's lifetime are pruned when the next is made), `reset_server` (wipes DATA_DIR and the inbox; the first call
    returns a one-time code, valid 10 minutes and spent by any attempt, that the user must type back for the second

@@ -103,3 +103,32 @@ async def test_a_run_over_the_cap_is_refused_and_one_at_a_time(mm):
     assert (await server.get_ingest_status()).state == "running"
     gate.set()
     assert (await finish()).counts == {"added": 3}
+
+
+async def test_clearing_the_inbox_keeps_people_and_forgets_the_files(mm):
+    inbox = bulk.inbox_dir(mm)
+    (inbox / "day").mkdir()
+    (inbox / "a.txt").write_text(resume("Asha R", "Backend engineer", "Python"), encoding="utf-8")
+    await server.ingest_inbox(ctx=ctx())
+    await finish()
+    (inbox / "day" / "wrong.txt").write_text(resume("Bo C", "Designer", "Figma"), encoding="utf-8")
+    assert (await server.get_upload_link()).new == 1
+
+    assert (await server.clear_inbox()).deleted == 2
+    assert list(inbox.iterdir()) == [] and (await server.get_upload_link()).files == 0
+    assert json.loads((mm.settings.data_dir / "inbox.json").read_text()) == {}
+    assert (await server.ping()).people == 1
+
+    gate = asyncio.Event()
+    real = mm.llm.structured
+
+    async def slow(*a, **k):
+        await gate.wait()
+        return await real(*a, **k)
+    mm.llm.structured = slow
+    (inbox / "c.txt").write_text(resume("Cy D", "Accountant", "GST"), encoding="utf-8")
+    await server.ingest_inbox(ctx=ctx())
+    busy = await server.clear_inbox()
+    assert busy.is_error and json.loads(busy.content[0].text)["error"]["code"] == "already_running"
+    gate.set()
+    await finish()

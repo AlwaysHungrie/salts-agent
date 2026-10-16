@@ -55,7 +55,8 @@ mcp = MCPServer(
         "same again (~$0.10), so offer it rather than fetching it. "
         "Many resumes at once: call get_upload_link and give the user message_for_user (a link to an upload page "
         "in their browser); tell them to tell you when the upload is done. Never ask where their files are. Then "
-        "call ingest_inbox and report progress with get_ingest_status. "
+        "call ingest_inbox and report progress with get_ingest_status. clear_inbox empties the inbox when the user "
+        "asks (e.g. wrong files uploaded). "
         "search_people browses the pool without a job, unjudged. get_person gives a full profile with contact "
         "details. When the user asks for someone's resume or files, call get_person_files_link and give them the "
         "link; do not paste the files into the chat. delete_person only after the user confirms. "
@@ -433,6 +434,26 @@ async def get_ingest_status(run_id: Annotated[str | None, Field(description="Fro
     return IngestStatus(run_id=run.run_id, state=run.state, stopped_reason=run.stopped_reason, files=run.total_files,
                         to_process=run.to_process, processed=run.processed, counts=dict(run.counts),
                         cost_usd=round(run.cost_usd, 4), failures=run.failures[:20])
+
+
+class InboxCleared(BaseModel):
+    deleted: int = Field(description="Files removed from the inbox")
+
+
+@mcp.tool(
+    description=(
+        "Empty the inbox: delete every file waiting there, read or not, e.g. when the wrong files were uploaded. "
+        "People already added stay. Only when the user asks. Refused while an inbox run is going. Free."
+    ),
+    annotations=ToolAnnotations(read_only_hint=False, destructive_hint=True, idempotent_hint=True),
+)
+@tool_handler("clear_inbox")
+async def clear_inbox() -> InboxCleared:
+    svc = services()
+    bulk.require_idle(_runs)
+    deleted = await asyncio.to_thread(bulk.clear, svc)
+    log.info("inbox cleared: files=%d", deleted)
+    return InboxCleared(deleted=deleted)
 
 
 class ExportLink(BaseModel):
