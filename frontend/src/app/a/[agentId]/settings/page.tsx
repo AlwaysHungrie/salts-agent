@@ -442,7 +442,9 @@ export default function Settings({
           Sessions
         </Link>
 
-        <div className="flex items-baseline justify-between gap-4">
+        {/* Stuck to the top, so the save status is in view however far down the
+            edit is. */}
+        <div className="bg-canvas sticky top-0 z-20 -mx-5 flex items-baseline justify-between gap-4 px-5 py-3 md:-mx-8 md:px-8">
           <h1 className="text-[32px] font-[650] leading-[1.2]">Settings.</h1>
           <span className="text-faint text-xs leading-[1.33]">
             {saving ? "Saving…" : unsaved ? "Unsaved changes" : "Saved"}
