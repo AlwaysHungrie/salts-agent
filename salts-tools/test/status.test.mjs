@@ -4,35 +4,29 @@ import { test } from "node:test";
 import { connectionStatus, serviceStatus } from "../status.mjs";
 
 const URL = "https://a-b.trycloudflare.com";
-const APP = "https://app.test/salts-tools";
 
-test("a service no agent uses, or with no supervisor, is off and says where to switch it on", () => {
-  const state = { services: ["web"], url: URL, svc: { web: { up: true } } };
-  const unused = serviceStatus(state, "matchmaker", true, APP);
-  assert.equal(unused.label, "off");
-  assert.match(unused.note, /app\.test/);
-  assert.equal(serviceStatus(state, "web", false, APP).label, "off");
+test("a running service is live when an agent uses it, and live · not in use otherwise", () => {
+  const state = { services: ["web"], url: URL, svc: { web: { up: true }, matchmaker: { up: true } } };
+  const live = serviceStatus(state, "web", true);
+  assert.equal(live.label, "live");
+  assert.equal(live.tone, "good");
+  const unused = serviceStatus(state, "matchmaker", true);
+  assert.equal(unused.label, "live · not in use");
+  assert.match(unused.note, /Agents tab/);
 });
 
-test("a service walks starting → opening tunnel → live", () => {
-  const base = { services: ["web"] };
-  assert.equal(serviceStatus({ ...base, svc: { web: { up: false } } }, "web", true, APP).label, "starting");
-  assert.equal(serviceStatus({ ...base, url: "", svc: { web: { up: true } } }, "web", true, APP).label, "opening tunnel");
-  const st = serviceStatus({ ...base, url: URL, svc: { web: { up: true } } }, "web", true, APP);
-  assert.equal(st.label, "live");
-  assert.equal(st.tone, "good");
+test("on the way up a service is starting, and with no supervisor it is stopped", () => {
+  assert.equal(serviceStatus({ svc: { web: { up: false } } }, "web", true).label, "starting");
+  assert.equal(serviceStatus({ url: "", svc: { web: { up: true } } }, "web", true).label, "starting");
+  assert.equal(serviceStatus({ url: URL, svc: { web: { up: true } } }, "web", false).label, "stopped");
 });
 
-test("something missing to run it is shown even when it is off", () => {
-  const state = { services: [], tools: { web: { state: "missing", detail: "install Docker" } } };
-  const st = serviceStatus(state, "web", true, APP);
-  assert.equal(st.label, "missing");
-  assert.equal(st.note, "install Docker");
-});
-
-test("a failing service says why", () => {
-  const state = { services: ["analyst"], url: URL, svc: { analyst: { up: false, error: "uv sync failed" } } };
-  assert.equal(serviceStatus(state, "analyst", true, APP).note, "uv sync failed");
+test("something missing to run it, or a failure, is an error that says why", () => {
+  const missing = serviceStatus({ tools: { web: { state: "missing", detail: "install Docker" } } }, "web", true);
+  assert.equal(missing.label, "error");
+  assert.match(missing.note, /install Docker/);
+  const failed = serviceStatus({ url: URL, svc: { analyst: { up: false, error: "uv sync failed" } } }, "analyst", true);
+  assert.deepEqual([failed.label, failed.note], ["error", "uv sync failed"]);
 });
 
 test("the connection reads disconnected, connecting, can't report or connected", () => {

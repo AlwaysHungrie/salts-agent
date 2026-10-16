@@ -9,10 +9,10 @@ the internet through a single cloudflared quick tunnel (free, no account):
 | `matchmaker` | [local-mcps/matchmaker-mcp](../local-mcps/matchmaker-mcp/docs/matchmaker-spec.md): resumes and cover letters in, the best people for a job out, as an MCP server. Files on disk, no Docker. | MCP server `matchmaker`: `<tunnel>/matchmaker/mcp` |
 | `analyst` | [local-mcps/analyst-mcp](../local-mcps/analyst-mcp/README.md): Excel and CSV analysis as an MCP server. It reads workbooks sent in the chat, answers questions about them, previews tables and charts, and returns built workbooks. No Docker. | MCP server `analyst`: `<tunnel>/analyst/mcp` |
 
-The computer is paired with the user's Salts account once, from the browser. After
-that, the user switches tools on and off per agent on the site's `/salts-tools` page,
-and the Worker keeps each agent pointed at the tunnel. Nothing is copied by hand: no
-agent IDs, no tokens.
+The computer is paired with the user's Salts account once, from the browser; that is
+the only thing done there. After that, the dashboard lists the user's agents and the
+user switches tools on and off per agent in it, and the Worker keeps each agent pointed
+at the tunnel. Nothing is copied by hand: no agent IDs, no tokens.
 
 The CLI:
 
@@ -20,7 +20,8 @@ The CLI:
 - runs a gateway on loopback that routes by the first path segment and refuses anything
   without the gateway token, except a service's share links (`/<service>/share/…`)
 - opens one cloudflared tunnel to the gateway, so every service shares its address
-- reports to the Worker every 30 seconds and runs the services it answers are wanted
+- runs every service this machine can run, whether or not an agent uses it yet
+- reports to the Worker every 30 seconds
 - rebuilds the tunnel whenever it drops or moves
 - optionally starts at login
 
@@ -45,7 +46,7 @@ It runs on macOS, Linux and Windows.
   `libsecret` on Fedora/Arch) to keep the secrets in the desktop keyring. See
   [Where things live](#where-things-live).
 
-A tool whose requirement is missing is reported to the site as `missing`, with what to
+A tool whose requirement is missing shows as `error` in the dashboard, with what to
 install; the others run regardless.
 
 ## Install
@@ -76,17 +77,18 @@ npx salts-tools
 1. Checks that cloudflared is installed.
 2. Opens a pairing with the Worker (`POST /salts/pair`), prints a code and a link to
    `<site>/salts-tools/pair?code=…`, and opens it in the browser.
-3. The signed-in user checks the code, ticks the agents this computer serves and clicks
-   **Connect**. salts-tools polls (`POST /salts/pair/poll`) and receives this computer's
-   credential, once. It makes a gateway token if it has none.
-4. Starts the supervisor, which reports in and prints the agents served and the tools on
-   for each (none, for a new link, unless the agent already had this computer's tools —
-   see [Upgrading](#upgrading-from-an-install-that-pushed-addresses)).
-5. Asks whether to start salts-tools at login.
+3. The signed-in user checks the code and clicks **Connect**. salts-tools polls
+   (`POST /salts/pair/poll`) and receives this computer's credential, once. It makes a
+   gateway token if it has none.
+4. Starts the supervisor, which reports in.
+5. Asks whether to start salts-tools at login, then opens the dashboard on the Agents tab.
 
-Then, on `<site>/salts-tools`, the user switches tools on per agent. The page lists what
-is still to do on each agent (a capability switch, the matchmaker's headers, a Brave key
-that would take over from SearXNG) with a button or link for each.
+There the user opens an agent and switches tools on for it (`PUT
+/salts/computer/agents/:id`). The agent lists what is still to do before they work, and
+`enter` does it: switch on a capability a tool needs (`POST …/capability`), type in a
+header value such as the matchmaker's OpenRouter key (`PUT …/headers`, never shown or
+sent back). A Brave key that would take over from SearXNG, or a server of the same name
+set up some other way, is pointed out.
 
 ## The matchmaker and the analyst
 
@@ -99,12 +101,12 @@ for the user to fill in once on the agent; they are kept when the address change
 | `X-OpenRouter-Api-Key` | your OpenRouter key | pays for its model calls |
 | `Tool-Call-Max-Charge` | `0.25` | optional: the most one call may spend, in US dollars (a resume ~$0.001, a judged page of 50 ~$0.10) |
 
-The analyst needs **File ingest** and **MCP** switched on for the agent; the site offers
-to switch them on.
+The analyst needs **File ingest** and **MCP** switched on for the agent; the dashboard
+offers to switch them on.
 
 Deleting the server on the agent switches that tool off for that agent, so it stays
-deleted. A server of the same name set up some other way is never touched; the site says
-the name is taken.
+deleted. A server of the same name set up some other way is never touched; the dashboard
+says the name is taken.
 
 Each server's own `.env` still applies (`MM_DATA_DIR`, models, `DATA_DIR`, `INBOX_DIR`,
 `ALLOW_PYTHON`, …). salts-tools overrides the transport, host, port and token. Logs:
@@ -118,9 +120,9 @@ while the supervisor works in the background.
 
 | Tab | Shows | Keys |
 | --- | --- | --- |
-| 1 Services | Each service, its status (`live`, `starting`, `missing`, `off`, …) and its address. `enter` opens a service: its address, port, log and files. | `s` start, `r` new tunnel, `x` stop everything, `o` open the site |
-| 2 Agents | The agents this computer serves and the tools on for each, as the Worker last said. | `enter`/`a` open the site |
-| 3 Settings | The connection, start at login, the Worker, where files live, reset. | `enter` change |
+| 1 Services | Display only. Each service and its status: `live` (an agent uses it), `live · not in use`, `error` (it cannot run here, or failed, with why), `starting` on the way up. `enter` opens a service: who uses it, its address, port, files and log. | `s` start, `r` new tunnel, `x` stop everything |
+| 2 Agents | Every agent the user is a member of, and the tools on for each. `enter` opens an agent: a switch per tool, what is left to do (`enter` does it), and stop serving it. | `enter` switch / do, `esc` back |
+| 3 Settings | The connection, start at login, the Worker, where files live, disconnect, reset. | `enter` change |
 | 4 Log | The supervisor's log, newest at the bottom. | |
 
 On every tab: `↑`/`↓` move, `←`/`→` or `1`–`4` switch tab, `q` quits. The line under the
@@ -134,6 +136,7 @@ list explains the selected row. Quitting leaves the services running.
 | `salts-tools start` | Checks the machine, pairs on first run, starts the supervisor. The login item runs this; unattended, it never pairs. |
 | `salts-tools stop` | Stops the supervisor, the tunnel and the containers. The next `start` brings back the same services. |
 | `salts-tools restart` | Opens a new tunnel; the agents follow it on the next report. |
+| `salts-tools disconnect` | Unpairs this computer (`DELETE /salts/computer`, which takes its tools off every agent) and stops it. The gateway token and state stay, so pairing again reuses them. |
 | `salts-tools reset` | Stops everything, disconnects this computer (`DELETE /salts/computer`, which takes its tools off every agent), and deletes both secrets, `~/.salts-tools` (except `mcps/` and `staging/`), the login item and any salts-web leftovers. Keeps the matchmaker's people and jobs and the analyst's files. |
 | `salts-tools autostart on` / `off` | Adds or removes the login item. |
 
@@ -159,18 +162,18 @@ override the Worker and the site.
 `start` launches a background supervisor. It runs the gateway on `127.0.0.1` and, every
 30 seconds:
 
-- Brings up each wanted service that does not answer on loopback (starting Docker if
-  needed) and takes down each that is no longer wanted.
+- Brings up each service that does not answer on loopback (starting Docker if needed),
+  unless something it needs is not installed.
 - Restarts cloudflared if it is not running; opens a new tunnel after three failures in
   a row to reach the tunnel from outside.
 - Reports to the Worker (`PUT /salts/computer`, the credential as bearer): the tunnel
   address, the gateway token, version, and for each tool its kind, state (`ready`,
   `starting`, `missing`, `failed`, `off`), what it is waiting on, the headers it wants
-  filled in and the capabilities it needs. The Worker brings every linked agent in step
-  and answers with the agents and the services wanted, which the supervisor runs. A
-  report while a new tunnel opens keeps the last address on the agents.
-- A credential the Worker refuses (the computer was disconnected on the site) stops
-  everything; `salts-tools` then pairs again.
+  filled in and the capabilities it needs. The Worker brings every agent served in step
+  and answers with those agents and the tools on for each. A report while a new tunnel
+  opens keeps the last address on the agents.
+- A credential the Worker refuses (the computer was disconnected) stops everything;
+  `salts-tools` then pairs again.
 
 At login, the login item runs `salts-tools start` without a terminal. That start skips
 the Docker wait and leaves it to the supervisor, so login is never held up.

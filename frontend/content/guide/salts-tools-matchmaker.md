@@ -11,11 +11,11 @@ This guide will help you start the matchmaker and connect it to your agent. You 
 
 ## 1. Switch the matchmaker on
 
-Open the [salts-tools page](/salts-tools) and switch on **Matchmaker** for your agent. The first start takes a minute or two, because salts-tools sets up everything the matchmaker needs on your computer. Your agent then has a new MCP server called **matchmaker**, already connected.
+Run `npx salts-tools`, open your agent in the **Agents** tab and switch on **Matchmaker**. The first time salts-tools starts, it takes a minute or two to set up everything the matchmaker needs on your computer. Your agent then has a new MCP server called **matchmaker**, already connected.
 
 ## 2. Add your key and spending limit
 
-The matchmaker pays for its model calls with your OpenRouter key. The salts-tools page shows **Fill in** under your agent until you have added it. Click it, then click the **matchmaker** card under **MCP servers**. Both headers below are already there with empty values, so you only fill in each **Header value** and then click **Save**.
+The matchmaker pays for its model calls with your OpenRouter key. Until you add it, your agent in the salts-tools screen shows **to do: Matchmaker needs X-OpenRouter-Api-Key**. Press **Enter** on it, paste your key and press **Enter** again. You can also set the headers below yourself on the **matchmaker** card under **MCP servers** in your agent's **Capabilities**.
 
 | Header name | Value we recommend | What it covers |
 |---|---|---|
@@ -24,7 +24,7 @@ The matchmaker pays for its model calls with your OpenRouter key. The salts-tool
 
 The limit is optional, and we recommend it. Reading one resume costs about $0.001, and checking a page of 50 candidates against a job costs about $0.10. A request that would cost more than your limit is stopped before it spends anything, and your agent tells you what to raise. You only need to add these once, since they stay in place when salts-tools reconnects.
 
-If you delete the **matchmaker** server from your agent, salts-tools switches the matchmaker off for that agent. To bring it back, switch it on again on the salts-tools page.
+If you delete the **matchmaker** server from your agent, salts-tools switches the matchmaker off for that agent. To bring it back, switch it on again in the salts-tools screen.
 
 ## You are done
 
@@ -60,5 +60,5 @@ As with every MCP server, keep only the tools you use switched on, since each on
 
 ## Footnotes
 
-1. If the salts-tools page says your agent already has a different MCP server called **matchmaker**, delete that one from **MCP servers**, and salts-tools adds its own within a minute.
+1. If the salts-tools screen says your agent already has a different MCP server called **matchmaker**, delete that one from **MCP servers**, and salts-tools adds its own within a minute.
 2. If you used the matchmaker before this version, your earlier candidates are not carried over. Send the resumes to your agent again to add them.

@@ -44,13 +44,13 @@ In your terminal, run:
 npx salts-tools
 ```
 
-salts-tools shows a short code and opens this site in your browser. Check the code matches, tick the agents that should get web search, and click **Connect**. There is nothing to copy or paste.
+salts-tools shows a short code and opens this site in your browser. Check the code matches and click **Connect**. There is nothing to copy or paste.
 
 ## 4. Switch web search on
 
-Open the [salts-tools page](/salts-tools) and switch on **Web search** for each agent. salts-tools starts the search engine and connects it to those agents. If **Web search** is switched off in an agent's **Capabilities**, the page shows a **Turn on** button for it.
+Back in your terminal, salts-tools lists your agents. Pick an agent, press **Enter**, and switch on **Web search**. salts-tools connects it to that agent within a few seconds. If **Web search** is switched off in the agent's **Capabilities**, the agent shows it as **to do**: press **Enter** on it to switch it on.
 
-Leave **Brave Search API key** empty in **Capabilities**. When a Brave key is set, your agent uses Brave instead, and the salts-tools page reminds you of that.
+Leave **Brave Search API key** empty in **Capabilities**. When a Brave key is set, your agent uses Brave instead, and salts-tools reminds you of that.
 
 Finally, salts-tools asks in the terminal whether it should start automatically when you log in. We recommend saying yes, otherwise your agent loses web search every time you restart your computer.
 
@@ -70,7 +70,7 @@ If you also want your agent to open search results and read the full page, switc
 | `npx salts-tools reset` | Disconnects this computer and forgets everything. |
 | `npx salts-tools autostart on` | Starts salts-tools when you log in. Use `off` to turn this off. |
 
-To choose which agents get web search, use the [salts-tools page](/salts-tools).
+To choose which agents get web search, use the **Agents** tab in `npx salts-tools`.
 
 ## Using Brave instead
 
@@ -79,5 +79,5 @@ If you would rather not run anything on your computer, you can use Brave's searc
 ## Footnotes
 
 1. If your agent stops searching, check that your computer is awake and online, then run `npx salts-tools restart`.
-2. If the salts-tools page shows your computer as **Offline**, run `npx salts-tools` on it.
+2. If the salts-tools screen says `disconnected`, run `npx salts-tools` to connect your computer again.
 3. If your agent is not searching when it should, add this to **Custom instructions** in **Settings**: "Search the web for anything about current events, prices or dates." A stronger model also helps.

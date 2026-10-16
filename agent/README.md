@@ -138,13 +138,14 @@ curl -X POST http://localhost:8787/agents/session-agent/my-session/chat \
 | `POST /salts/pair` | A salts-tools computer starts pairing `{ name }`: returns `{ user_code, device_code, expires_in, interval }`. The user approves `user_code` in the browser |
 | `POST /salts/pair/poll` | `{ device_code }`: `pending`, `gone`, or once approved `{ status: "approved", computer_id, credential }` (handed over once) |
 | `PUT /salts/computer` | The computer's report, every 30 s, with its credential as bearer: `{ tunnel_url, gateway_token, tools, version }`. Every linked agent is brought in step (SearXNG URL and token, one MCP server per MCP tool, `Authorization: Bearer <gateway_token>`); answers `{ computer, agents, wanted }` |
-| `DELETE /salts/computer` | The computer unpairs itself; what it put on every agent is removed |
+| `DELETE /salts/computer` | The computer unpairs itself (`salts-tools disconnect`, `reset`); what it put on every agent is removed |
 | `GET /api/salts/pair/:code` | Clerk. The pairing behind a code: `{ name, approved }` |
-| `POST /api/salts/pair/:code` | Clerk. Approve `{ agent_ids }` (each one the caller may use); the computer is the caller's |
-| `GET /api/salts/computers` | Clerk. The caller's computers: online, reported tools, linked agents with the tools on and what is still to do on each (`todos`) |
-| `PUT /api/salts/computers/:id/agents/:agentId` | Clerk. Link the agent with exactly `{ tools }` on, synced at once |
-| `DELETE /api/salts/computers/:id/agents/:agentId` | Clerk. Unlink; what the computer put on the agent is removed |
-| `DELETE /api/salts/computers/:id` | Clerk. Disconnect: every agent cleaned up, the credential revoked |
+| `POST /api/salts/pair/:code` | Clerk. Approve; the computer is the caller's. `{ agent_ids }` (optional) serves those at once |
+| `GET /salts/computer/agents` | Computer credential. Every agent the owner is a member of: `linked`, the tools on, and what is still to do on each (`todos`) |
+| `PUT /salts/computer/agents/:agentId` | Computer credential. Serve the agent with exactly `{ tools }` on, synced at once |
+| `DELETE /salts/computer/agents/:agentId` | Computer credential. Stop serving it; what the computer put there is removed |
+| `POST /salts/computer/agents/:agentId/capability` | Computer credential. Switch on `{ flag }`, a capability a tool on there needs (not one the admin locked) |
+| `PUT /salts/computer/agents/:agentId/headers` | Computer credential. `{ tool, headers }`: values for the header names that tool asks for, on its server there. Never sent back |
 | `POST /searxng/:agentId/url` | salts-tools reports its tunnel address. Bearer token must match the agent's SearXNG token |
 | `POST /searxng/:agentId/mcp` | salts-tools points the agent's MCP server `{ name }` at its tunnel `{ url }`: creates it with `Authorization: Bearer <token>`, or repoints one whose Authorization is already that token (409 otherwise). Same token proof |
 | `GET /api/mcp/oauth/callback` | Where an MCP provider's OAuth sends the browser back |

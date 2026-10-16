@@ -11,12 +11,13 @@
 import { CAPABILITIES } from "../capabilities";
 import type { Env } from "../env";
 import { type McpServerRow, parseHeaders } from "../mcp";
-import { type ComputerLink, type ComputerRow, type Config, EMPTY_MCP_SERVER } from "../registry";
+import { type ComputerLink, type ComputerRow, EMPTY_MCP_SERVER } from "../registry";
 import { ADOPT } from "../registry/directory-computers";
 import { callerEmail, mayUseAgent } from "../worker/auth";
 import { json, jsonError, readJson } from "../worker/http";
 import { syncMcpTools } from "../worker/integrations";
 import { directory, type Registry, readConfig, registry, writeConfig } from "../worker/stores";
+import { handleComputerAgents } from "./salts-agents";
 import { HEADER_NAME, sameSecret, trustsToken, withEmpty } from "./searxng";
 
 /** How long a pairing code waits for the user. */
@@ -24,14 +25,12 @@ export const PAIR_TTL = 10 * 60 * 1000;
 /** Pairings waiting at once, across the deployment; past this, new ones are refused. */
 const MAX_PENDING = 500;
 /** Agents one approval may link. */
-const MAX_LINKED = 50;
-/** A computer counts as online this long after it last reported. */
-export const ONLINE_WINDOW = 90 * 1000;
-const MAX_TOOLS = 8;
-const TOOL_NAME = /^[a-z0-9][a-z0-9-]{0,39}$/;
+export const MAX_LINKED = 50;
+export const MAX_TOOLS = 8;
+export const TOOL_NAME = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const STATES = new Set(["ready", "starting", "missing", "failed", "off"]);
 /** The capability switches a tool may say it needs. */
-const FLAGS = new Map(CAPABILITIES.map((c) => [c.flag as string, c.label]));
+export const FLAGS = new Map(CAPABILITIES.map((c) => [c.flag as string, c.label]));
 
 /** One tool as the computer reports it. */
 export type ReportedTool = {
@@ -77,7 +76,7 @@ async function computerCaller(request: Request, env: Env): Promise<ComputerRow |
   return (await sameSecret(await sha256(offered), row.cred_hash)) ? row : undefined;
 }
 
-const parseList = (raw: string): string[] => {
+export const parseList = (raw: string): string[] => {
   try {
     const list = JSON.parse(raw);
     return Array.isArray(list) ? list.filter((t): t is string => typeof t === "string") : [];
@@ -131,9 +130,9 @@ export function validateTools(raw: unknown): Record<string, ReportedTool> | stri
 }
 
 /** The gateway tokens servers made for this computer may carry: the current one, then the last. */
-const tokensOf = (c: ComputerRow) => [c.gateway_token, c.old_gateway_token].filter(Boolean);
+export const tokensOf = (c: ComputerRow) => [c.gateway_token, c.old_gateway_token].filter(Boolean);
 
-async function trustsAny(row: McpServerRow, tokens: string[]): Promise<boolean> {
+export async function trustsAny(row: McpServerRow, tokens: string[]): Promise<boolean> {
   for (const token of tokens) if (await trustsToken(row, token)) return true;
   return false;
 }
@@ -258,7 +257,7 @@ async function syncServers(
 }
 
 /** Take a computer's tools out of one agent: the link with nothing on, synced. */
-async function clearLink(env: Env, c: ComputerRow, link: ComputerLink) {
+export async function clearLink(env: Env, c: ComputerRow, link: ComputerLink) {
   await syncLink(env, c, { ...link, tools: "[]" }, true);
 }
 
@@ -289,23 +288,36 @@ export async function forgetRemovedTool(env: Env, agentId: string, row: McpServe
 
 // ─── machine routes ─────────────────────────────────────────────────────────────
 
-/** `/salts/…`: pairing, and the computer's own report. Undefined when not one of these. */
+/**
+ * `/salts/…`: pairing, the computer's report, and everything the CLI manages with the
+ * computer's credential: the owner's agents, the tools on for each, and what is left to
+ * do there. Undefined when not one of these.
+ */
 export async function handleSaltsMachine(
   request: Request,
   env: Env,
   segments: string[]
 ): Promise<Response | undefined> {
-  const [, second, third] = segments;
+  const [, second, third, fourth, fifth, sixth] = segments;
   const method = request.method;
   if (method === "POST" && second === "pair" && !third) return await startPairing(request, env);
-  if (method === "POST" && second === "pair" && third === "poll" && !segments[3]) {
+  if (method === "POST" && second === "pair" && third === "poll" && !fourth) {
     return await pollPairing(request, env);
   }
-  if (second === "computer" && !third) {
-    if (method === "PUT") return await report(request, env);
-    if (method === "DELETE") return await unpairSelf(request, env);
+  if (second !== "computer") return undefined;
+
+  const c = await computerCaller(request, env);
+  if (!c) return jsonError("unauthorized", 401);
+  if (!third) {
+    if (method === "PUT") return await report(request, env, c);
+    if (method === "DELETE") {
+      await disconnect(env, c);
+      return json({ ok: true });
+    }
+    return undefined;
   }
-  return undefined;
+  if (third !== "agents" || sixth) return undefined;
+  return await handleComputerAgents(request, env, c, fourth, fifth);
 }
 
 async function startPairing(request: Request, env: Env): Promise<Response> {
@@ -342,7 +354,7 @@ async function pollPairing(request: Request, env: Env): Promise<Response> {
 }
 
 /** What a computer is told: who it is, its agents with their tools, and every tool wanted. */
-async function computerView(env: Env, c: ComputerRow, links: ComputerLink[]) {
+function computerView(c: ComputerRow, links: ComputerLink[]) {
   const agents = links.map((l) => ({
     id: l.agent_id,
     name: l.agent_name,
@@ -355,9 +367,7 @@ async function computerView(env: Env, c: ComputerRow, links: ComputerLink[]) {
   };
 }
 
-async function report(request: Request, env: Env): Promise<Response> {
-  const c = await computerCaller(request, env);
-  if (!c) return jsonError("unauthorized", 401);
+async function report(request: Request, env: Env, c: ComputerRow): Promise<Response> {
   const body = await readJson<{
     tunnel_url?: unknown;
     gateway_token?: unknown;
@@ -390,20 +400,12 @@ async function report(request: Request, env: Env): Promise<Response> {
     now: Date.now(),
   });
   const updated = (await dir.computer(c.id))!;
-  const links = await dir.computerLinks(c.id);
-  await syncAll(env, updated, links);
+  await syncAll(env, updated, await dir.computerLinks(c.id));
   // Read again: a new link's first sync can adopt tools.
-  return json(await computerView(env, updated, await dir.computerLinks(c.id)));
+  return json(computerView(updated, await dir.computerLinks(c.id)));
 }
 
-/** The computer forgetting itself (`salts-tools reset`): everything it put anywhere goes. */
-async function unpairSelf(request: Request, env: Env): Promise<Response> {
-  const c = await computerCaller(request, env);
-  if (!c) return jsonError("unauthorized", 401);
-  await disconnect(env, c);
-  return json({ ok: true });
-}
-
+/** Unpairing (`salts-tools disconnect`, `reset`): everything the computer put anywhere goes. */
 async function disconnect(env: Env, c: ComputerRow) {
   const dir = directory(env);
   for (const link of await dir.computerLinks(c.id)) {
@@ -418,130 +420,34 @@ async function disconnect(env: Env, c: ComputerRow) {
 
 // ─── browser routes ─────────────────────────────────────────────────────────────
 
-type Todo =
-  | { kind: "capability"; tool: string; flag: string; label: string }
-  | { kind: "brave"; tool: string }
-  | { kind: "headers"; tool: string; server_id: string; headers: string[] }
-  | { kind: "disabled"; tool: string; server_id: string }
-  | { kind: "name_taken"; tool: string }
-  | { kind: "managed"; tool: string };
-
-/** What is still to do on one agent before each tool switched on there works. */
-async function todosFor(env: Env, c: ComputerRow, agentId: string, on: string[]): Promise<Todo[]> {
-  const tools = reportedTools(c.tools);
-  const reg = registry(env, agentId);
-  const config: Config = await readConfig(env, reg);
-  const servers = await reg.mcpServers();
-  const userServers = (await reg.meta()).mcp.user_servers;
-  const todos: Todo[] = [];
-  for (const name of on) {
-    const tool = tools[name];
-    if (!tool) continue;
-    for (const flag of tool.needs) {
-      if (!config[flag as keyof Config])
-        todos.push({ kind: "capability", tool: name, flag, label: FLAGS.get(flag)! });
-    }
-    if (tool.kind === "searxng") {
-      if (config.brave_api_key) todos.push({ kind: "brave", tool: name });
-      continue;
-    }
-    const server = servers.find((s) => s.name.toLowerCase() === name);
-    if (!server) {
-      if (!userServers) todos.push({ kind: "managed", tool: name });
-      continue;
-    }
-    if (!(await trustsAny(server, tokensOf(c)))) {
-      todos.push({ kind: "name_taken", tool: name });
-      continue;
-    }
-    const empty = Object.entries(parseHeaders(server.headers))
-      .filter(([, v]) => !v.trim())
-      .map(([k]) => k);
-    if (empty.length)
-      todos.push({ kind: "headers", tool: name, server_id: server.id, headers: empty });
-    if (!server.enabled) todos.push({ kind: "disabled", tool: name, server_id: server.id });
-  }
-  return todos;
-}
-
-async function computerPage(env: Env, c: ComputerRow) {
-  const links = await directory(env).computerLinks(c.id);
-  return {
-    id: c.id,
-    name: c.name,
-    version: c.version,
-    online: !!c.last_seen && Date.now() - c.last_seen < ONLINE_WINDOW,
-    last_seen: c.last_seen,
-    created_at: c.created_at,
-    tools: reportedTools(c.tools),
-    agents: await Promise.all(
-      links.map(async (l) => {
-        const on = parseList(l.tools);
-        return {
-          id: l.agent_id,
-          name: l.agent_name,
-          tools: on,
-          todos: await todosFor(env, c, l.agent_id, on),
-        };
-      })
-    ),
-  };
-}
-
-/** The caller's own computer, or undefined (someone else's is as good as missing). */
-async function ownComputer(env: Env, email: string, id: string) {
-  const c = await directory(env).computer(id);
-  return c && email && c.owner_email === email ? c : undefined;
-}
-
-const computerNotFound = () => jsonError("computer not found", 404);
-
-/** `/api/salts/…`. Undefined when the path is not one of these. */
+/** `/api/salts/pair/:code`: the one thing done in the browser. Undefined otherwise. */
 export async function handleSaltsBrowser(
   request: Request,
   env: Env,
   segments: string[]
 ): Promise<Response | undefined> {
-  const [, , third, fourth, fifth, sixth] = segments;
-  const method = request.method;
+  const [, , third, fourth, fifth] = segments;
+  if (third !== "pair" || !fourth || fifth) return undefined;
   const email = await callerEmail(request, env);
   if (!email) return jsonError("unauthorized", 401);
-
-  if (third === "pair" && fourth && !fifth) {
-    const code = decodeURIComponent(fourth).toUpperCase();
-    if (method === "GET") {
-      const live = await directory(env).pairing(code, Date.now());
-      return live
-        ? json(live)
-        : jsonError("This code has expired. Run salts-tools again for a new one.", 404);
-    }
-    if (method === "POST") return await approve(request, env, email, code);
+  const code = decodeURIComponent(fourth).toUpperCase();
+  if (request.method === "GET") {
+    const live = await directory(env).pairing(code, Date.now());
+    return live
+      ? json(live)
+      : jsonError("This code has expired. Run salts-tools again for a new one.", 404);
   }
-
-  if (third !== "computers") return undefined;
-  if (!fourth) return method === "GET" ? await listComputers(env, email) : undefined;
-
-  const c = await ownComputer(env, email, decodeURIComponent(fourth));
-  if (!c) return computerNotFound();
-  if (!fifth) {
-    if (method === "GET") return json(await computerPage(env, c));
-    if (method === "DELETE") {
-      await disconnect(env, c);
-      return json({ ok: true });
-    }
-    return undefined;
-  }
-  if (fifth !== "agents" || !sixth || segments[6]) return undefined;
-  const agentId = decodeURIComponent(sixth);
-  if (method === "PUT") return await setTools(request, env, c, agentId);
-  if (method === "DELETE") return await unlink(env, c, agentId);
+  if (request.method === "POST") return await approve(request, env, email, code);
   return undefined;
 }
 
+/**
+ * Approve a pairing for the signed-in user. Agents are chosen afterwards in the CLI;
+ * `agent_ids` may name some to serve straight away.
+ */
 async function approve(request: Request, env: Env, email: string, code: string): Promise<Response> {
   const body = await readJson<{ agent_ids?: unknown }>(request);
   const ids = Array.isArray(body.agent_ids) ? [...new Set(body.agent_ids.map(String))] : [];
-  if (!ids.length) return jsonError("choose at least one agent", 400);
   if (ids.length > MAX_LINKED) return jsonError(`at most ${MAX_LINKED} agents at once`, 400);
   for (const id of ids) {
     if (!(await mayUseAgent(request, env, id))) return jsonError(`agent ${id} not found`, 404);
@@ -558,39 +464,4 @@ async function approve(request: Request, env: Env, email: string, code: string):
   if (!approved)
     return jsonError("This code has expired or was already used. Run salts-tools again.", 404);
   return json({ computer_id: computerId });
-}
-
-async function listComputers(env: Env, email: string): Promise<Response> {
-  const rows = await directory(env).computersOf(email);
-  return json({ computers: await Promise.all(rows.map((c) => computerPage(env, c))) });
-}
-
-/** Link the agent (when it is not yet) with exactly these tools on, and sync it now. */
-async function setTools(
-  request: Request,
-  env: Env,
-  c: ComputerRow,
-  agentId: string
-): Promise<Response> {
-  if (!(await mayUseAgent(request, env, agentId))) return jsonError("agent not found", 404);
-  const body = await readJson<{ tools?: unknown }>(request);
-  if (!Array.isArray(body.tools)) return jsonError("tools must be a list of tool names", 400);
-  const tools = [...new Set(body.tools.map(String))];
-  if (tools.length > MAX_TOOLS || tools.some((t) => !TOOL_NAME.test(t))) {
-    return jsonError("tools must be a list of tool names", 400);
-  }
-  const dir = directory(env);
-  await dir.setComputerLink(c.id, agentId, tools);
-  const link = (await dir.computerLinks(c.id)).find((l) => l.agent_id === agentId);
-  if (link) await syncLink(env, c, link);
-  return json(await computerPage(env, c));
-}
-
-async function unlink(env: Env, c: ComputerRow, agentId: string): Promise<Response> {
-  const dir = directory(env);
-  const link = (await dir.computerLinks(c.id)).find((l) => l.agent_id === agentId);
-  if (!link) return jsonError("agent not linked", 404);
-  await clearLink(env, c, link);
-  await dir.removeComputerLink(c.id, agentId);
-  return json(await computerPage(env, c));
 }

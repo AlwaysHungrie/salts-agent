@@ -1,37 +1,3 @@
-/** salts-tools computers as the Worker describes them (`/api/salts/computers`). */
-
-export type SaltsTool = {
-  kind: "searxng" | "mcp";
-  /** `ready`, `starting`, `missing` (something to install), `failed` or `off`. */
-  state: string;
-  detail: string;
-  label: string;
-  headers: string[];
-  needs: string[];
-};
-
-export type SaltsTodo =
-  | { kind: "capability"; tool: string; flag: string; label: string }
-  | { kind: "brave"; tool: string }
-  | { kind: "headers"; tool: string; server_id: string; headers: string[] }
-  | { kind: "disabled"; tool: string; server_id: string }
-  | { kind: "name_taken"; tool: string }
-  | { kind: "managed"; tool: string };
-
-export type SaltsComputer = {
-  id: string;
-  name: string;
-  version: string;
-  online: boolean;
-  last_seen: number;
-  created_at: number;
-  tools: Record<string, SaltsTool>;
-  agents: { id: string; name: string; tools: string[]; todos: SaltsTodo[] }[];
-};
-
-/** The command that starts salts-tools on a computer. */
-export const SALTS_COMMAND = "npx salts-tools";
-
 /**
  * A prompt for whatever assistant the user already has (Claude, ChatGPT, Grok, …), so
  * it can walk them through putting salts-tools on their computer, step by step.
@@ -51,7 +17,9 @@ Then I run this in a terminal:
 
     npx salts-tools
 
-It checks what is installed and says what is missing. It then opens my browser on a Salts page where I am already signed in. I tick the agents this computer should serve and press Connect. On the salts-tools page that opens next, I switch on the tools I want for each agent, and do anything it lists as still to do (for example, adding an OpenRouter key to the matchmaker).
+It checks what is installed and says what is missing. It then opens my browser on a Salts page where I am already signed in, and shows a code. I check the code matches the one in my terminal and press Connect. That is the only step in the browser.
+
+Back in the terminal, salts-tools opens a screen listing my agents. I pick an agent, switch on the tools I want for it, and do anything it lists as still to do (for example, typing in an OpenRouter key for the matchmaker). Every tool this computer can run starts on its own.
 
 It asks whether to start when I log in; saying yes keeps my agent's tools available after a restart. My computer has to be on and online for the agent to use them.
 

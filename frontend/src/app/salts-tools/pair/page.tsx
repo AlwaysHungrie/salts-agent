@@ -2,32 +2,17 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Check } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { AuthModal } from "@/components/auth/AuthModal";
 import { FrontDoor } from "@/components/agents/FrontDoor";
 import { useIdentity } from "@/lib/identity";
-import type { AgentRow } from "@/lib/agent";
 
 type Pairing = { name: string; approved: boolean };
 
-/** Every agent the caller can open, page after page. */
-async function allAgents(): Promise<AgentRow[]> {
-  const out: AgentRow[] = [];
-  let cursor = "";
-  for (let i = 0; i < 20; i++) {
-    const res = await fetch(`/api/agents?limit=100${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`);
-    if (!res.ok) break;
-    const page = (await res.json()) as { agents: AgentRow[]; has_more: boolean; cursor: string };
-    out.push(...page.agents);
-    if (!page.has_more || !page.cursor) break;
-    cursor = page.cursor;
-  }
-  return out;
-}
-
 /**
- * Where `npx salts-tools` sends the browser: the computer's code, and the agents it
- * should serve. Approving hands the computer its credential; nothing is copied by hand.
+ * Where `npx salts-tools` sends the browser: the one step done here. The signed-in user
+ * checks the computer's code and connects it to their account; agents and tools are
+ * chosen back in the terminal.
  */
 export default function Pair({
   searchParams,
@@ -40,8 +25,6 @@ export default function Pair({
   const [code, setCode] = useState(given.toUpperCase());
   const [typed, setTyped] = useState("");
   const [pairing, setPairing] = useState<Pairing | null>(null);
-  const [agents, setAgents] = useState<AgentRow[] | null>(null);
-  const [chosen, setChosen] = useState<Set<string>>(new Set());
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
@@ -49,7 +32,6 @@ export default function Pair({
   useEffect(() => {
     if (!ready || !signedIn || !code) return;
     void (async () => {
-      setError("");
       const res = await fetch(`/api/salts/pair/${encodeURIComponent(code)}`);
       const body = (await res.json().catch(() => ({}))) as Pairing & { error?: string };
       if (!res.ok) {
@@ -57,21 +39,10 @@ export default function Pair({
         setError(body.error ?? "This code was not found.");
         return;
       }
+      setError("");
       setPairing(body);
-      const list = await allAgents();
-      setAgents(list);
-      // One agent: nothing to choose.
-      if (list.length === 1) setChosen(new Set([list[0].id]));
     })();
   }, [ready, signedIn, code]);
-
-  const toggle = (id: string) =>
-    setChosen((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
 
   const connect = async () => {
     setBusy(true);
@@ -79,7 +50,7 @@ export default function Pair({
     const res = await fetch(`/api/salts/pair/${encodeURIComponent(code)}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ agent_ids: [...chosen] }),
+      body: JSON.stringify({}),
     });
     const body = (await res.json().catch(() => ({}))) as { error?: string };
     setBusy(false);
@@ -98,8 +69,9 @@ export default function Pair({
         </Link>
         <h1 className="mt-4 text-[32px] font-[650] leading-[1.2]">Connect a computer.</h1>
         <p className="text-muted mt-1 text-sm font-light leading-[1.43]">
-          salts-tools runs web search, the matchmaker and the spreadsheet analyst on
-          your own computer. Choose which of your agents this computer serves.
+          salts-tools runs web search, the matchmaker and the spreadsheet analyst on your
+          own computer for your agents. Connecting it is the only step here; you choose
+          agents and tools in your terminal.
         </p>
 
         {!ready && <p className="text-muted py-4 text-sm">Loading…</p>}
@@ -132,18 +104,10 @@ export default function Pair({
         )}
 
         {done && (
-          <div className="mt-8 space-y-4">
-            <div className="bg-canvas-soft rounded-2xl px-5 py-4 text-sm leading-[1.43]">
-              <span className="font-semibold">{pairing?.name}</span> is connected. Your
-              terminal will carry on by itself. Next, switch on the tools you want for
-              each agent.
-            </div>
-            <Link
-              href="/salts-tools"
-              className="bg-ink text-on-primary inline-flex h-10 items-center rounded-full px-5 text-sm font-semibold"
-            >
-              Choose tools
-            </Link>
+          <div className="bg-canvas-soft mt-8 rounded-2xl px-5 py-4 text-sm leading-[1.43]">
+            <span className="font-semibold">{pairing?.name}</span> is connected. You can
+            close this page. Back in your terminal, salts-tools lists your agents: pick
+            one and switch on the tools you want for it.
           </div>
         )}
 
@@ -155,43 +119,13 @@ export default function Pair({
               <>
                 <p className="text-sm leading-[1.43]">
                   <span className="font-semibold">{pairing.name}</span> is asking to
-                  connect, with the code <span className="font-semibold">{code}</span>.
-                  Check it matches your terminal.
+                  connect to your account with the code{" "}
+                  <span className="font-semibold">{code}</span>. Check it matches your
+                  terminal.
                 </p>
-                {agents === null && <p className="text-muted py-4 text-sm">Loading your agents…</p>}
-                {agents && agents.length === 0 && (
-                  <p className="text-muted py-4 text-sm">
-                    You have no agents yet. <Link href="/" className="underline">Create one</Link> first.
-                  </p>
-                )}
-                {agents && agents.length > 0 && (
-                  <ul className="mt-4 space-y-2">
-                    {agents.map((agent) => {
-                      const on = chosen.has(agent.id);
-                      return (
-                        <li key={agent.id}>
-                          <button
-                            onClick={() => toggle(agent.id)}
-                            aria-pressed={on}
-                            className="bg-canvas-soft hover:bg-canvas-soft/60 flex w-full items-center gap-3 rounded-2xl px-5 py-4 text-left text-sm transition"
-                          >
-                            <span
-                              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${
-                                on ? "bg-ink border-ink text-on-primary" : "border-hairline"
-                              }`}
-                            >
-                              {on && <Check size={14} strokeWidth={3} />}
-                            </span>
-                            {agent.name}
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
                 <button
                   onClick={() => void connect()}
-                  disabled={busy || chosen.size === 0}
+                  disabled={busy}
                   className="bg-ink text-on-primary mt-6 h-10 rounded-full px-5 text-sm font-semibold transition hover:opacity-85 disabled:opacity-40"
                 >
                   {busy ? "Connecting…" : "Connect"}

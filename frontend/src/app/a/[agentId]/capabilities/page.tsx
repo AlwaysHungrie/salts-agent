@@ -201,11 +201,7 @@ export default function Capabilities({
           </Link>
           . Run free web search, the matchmaker and the spreadsheet analyst on
           your own computer with{" "}
-          <code className="text-ink">npx salts-tools</code>, then manage it from{" "}
-          <Link href="/salts-tools" className="text-ink underline">
-            salts-tools
-          </Link>
-          .
+          <code className="text-ink">npx salts-tools</code>.
           <SaltsToolsInfo />
         </p>
 
