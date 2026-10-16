@@ -1,7 +1,7 @@
 ---
 title: Commands
-section: Advanced use
-order: 2
+section: Using your agent
+order: 4
 summary: Short messages that control the conversation itself. They work in the browser, on Telegram and on WhatsApp.
 ---
 

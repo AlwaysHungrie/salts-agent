@@ -48,11 +48,12 @@ export type GuideSection = { title: string; guides: Guide[] };
  */
 const SECTION_ORDER = [
   "Get started",
+  "Using your agent",
   "Managing costs",
+  "Help",
   "Telegram",
   "WhatsApp",
   "MCP servers",
-  "Advanced use",
   "salts-tools",
   "Fleets",
   "API",

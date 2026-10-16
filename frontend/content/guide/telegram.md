@@ -2,7 +2,7 @@
 title: Connect your agent to Telegram
 section: Telegram
 order: 1
-summary: Create a Telegram bot for your agent and talk to it from your phone, in a private chat or in a group.
+summary: Create a Telegram bot for your agent and talk to it from your phone, in a private chat or in a group, and what to check when the bot does not answer.
 featured: true
 ---
 

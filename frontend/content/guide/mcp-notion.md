@@ -1,7 +1,7 @@
 ---
-title: Adding your first MCP server
+title: Connect Notion
 section: MCP servers
-order: 1
+order: 3
 summary: Connect your agent to Notion, so it can read, search and add to your Notion pages for you.
 ---
 

@@ -1,7 +1,7 @@
 ---
 title: Create your first agent
 section: Get started
-order: 2
+order: 3
 summary: Sign in, create an agent, and send it your first message.
 featured: true
 ---
@@ -34,13 +34,13 @@ Every chat is called a session, and your sessions are listed in the sidebar on t
 
 Apart from the chat, your agent has two pages in the sidebar.
 
-**Settings** is where you connect Telegram or WhatsApp, pick the model, write custom instructions, change the OpenRouter key and choose who else can use the agent.
+**Settings** is where you connect Telegram or WhatsApp, pick the model, write custom instructions, change the OpenRouter key and choose who else can use the agent. [Your agent's settings](/guide/settings) explains every field.
 
-**Capabilities** is where you switch on what your agent can do, such as searching the web, reading links and files, understanding images, voice notes, scheduled tasks, memory and connecting to other apps. Most capabilities are off when you create an agent. We recommend switching on only the ones you need, since each one makes every reply a little more expensive.
+**Capabilities** is where you switch on what your agent can do, such as searching the web, reading links and files, understanding images, voice notes, scheduled tasks, memory and connecting to other apps. Most capabilities are off when you create an agent. We recommend switching on only the ones you need, since each one makes every reply a little more expensive. [What your agent can do](/guide/capabilities) explains each one.
 
 ## You are done
 
-From here, most people want to talk to their agent from their phone. Follow [Connect your agent to Telegram](/guide/telegram) or [Connect your agent to WhatsApp](/guide/whatsapp) to set that up.
+If something does not work, see [My agent is not replying](/guide/troubleshooting). From here, most people want to talk to their agent from their phone. Follow [Connect your agent to Telegram](/guide/telegram) or [Connect your agent to WhatsApp](/guide/whatsapp) to set that up.
 
 ## Footnotes
 

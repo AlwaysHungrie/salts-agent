@@ -1,7 +1,7 @@
 ---
 title: Chat session hygiene
 section: Managing costs
-order: 3
+order: 2
 summary: How to keep your conversations short and your replies cheap, especially on Telegram and WhatsApp.
 ---
 

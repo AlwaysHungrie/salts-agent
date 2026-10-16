@@ -451,6 +451,12 @@ describe("bang commands over chat", () => {
     // The guide's own links open from a chat.
     expect(page).not.toMatch(/\]\(\/guide\//);
 
+    // A web page's browser widgets have nothing to draw in a chat.
+    expect(guidePage("whatsapp")?.body).toContain("{{verify-token}}");
+    const whatsapp = await reply("!docs whatsapp");
+    expect(whatsapp).toContain("**Verify token**");
+    expect(whatsapp).not.toContain("{{");
+
     expect(await reply("!docs nope")).toContain('No guide page named "nope"');
   });
 

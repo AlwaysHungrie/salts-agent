@@ -1,7 +1,7 @@
 ---
 title: Why and when to compact
 section: Managing costs
-order: 2
+order: 3
 summary: Long conversations get slower and more expensive with every reply. Compacting is how you keep them cheap.
 ---
 

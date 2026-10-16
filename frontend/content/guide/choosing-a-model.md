@@ -1,8 +1,8 @@
 ---
 title: Choose the right model
-section: Managing costs
-order: 1
-summary: Which model to pick, when to pay for a better one, and the settings that change how it answers.
+section: Using your agent
+order: 5
+summary: Which model to pick, when to pay for a better one, and the settings that change how it answers, such as extended reasoning and custom instructions.
 featured: true
 ---
 
