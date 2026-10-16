@@ -300,8 +300,8 @@ export type McpAuth = "none" | "headers" | "oauth";
  *
  * What a tile needs to become a server: a name, a url and how it authenticates. The
  * logo is `icon`, an SVG data URL drawn with `<img>` so no script inside it runs;
- * without one, a tile with a `color` is the salt icon with `letter` in that colour at its
- * centre, and a tile without either is `letter` on grey.
+ * without one, a tile with a `color` is the salt icon filling the tile, with `letter` in
+ * white outlined in that colour at its centre; without either, `letter` on grey.
  */
 export type McpCatalogEntry = {
   id: string;
