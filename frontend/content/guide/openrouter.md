@@ -1,12 +1,14 @@
 ---
 title: Get an OpenRouter API key
 section: Get started
-order: 1
+order: 2
 summary: Create an OpenRouter account, add credit and get an API key for your agent.
 featured: true
 ---
 
-Your agent needs an LLM in order to understand and respond to your messages. OpenRouter is a service that lets you use any LLM, image generation or voice model, and you pay only for the tokens that were actually consumed.
+Your agent needs an AI model to understand and reply to your messages. OpenRouter is a service that gives your agent access to hundreds of models, including the ones that create images and voice notes, from a single account. You add credit to the account, and each reply is paid for from it based on how many tokens the model read and wrote. If any of these words are new to you, read [What is Salts](/guide/why-salts) first.
+
+The key you create here is what lets your agent use your OpenRouter account. It takes about five minutes, and you will need to buy a few dollars of credit.
 
 ## 1. Create an account
 

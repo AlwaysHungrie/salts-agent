@@ -51,7 +51,11 @@ export function ApiPlayground({ base }: { base: string }) {
 
   useEffect(() => {
     fetch(`${base}/openapi.json`)
-      .then((res) => res.json() as Promise<OpenApiDoc>)
+      // A 503 (settings incomplete) answers with an error body, not a spec.
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json() as Promise<OpenApiDoc>;
+      })
       .then(setDoc)
       .catch(() => setFailed("Could not load the API description."));
   }, [base]);

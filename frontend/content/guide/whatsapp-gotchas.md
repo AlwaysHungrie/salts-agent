@@ -2,7 +2,7 @@
 title: WhatsApp gotchas
 section: WhatsApp
 order: 2
-summary: The rules WhatsApp plays by, and the mistakes that make an agent go quiet.
+summary: Why your agent is not replying on WhatsApp. The 24-hour window, models that do not work there, expired tokens and the other rules Meta sets.
 ---
 
 WhatsApp has stricter rules than Telegram. Meta decides who your agent can talk to, when it can message you, and which models can read your messages. If your agent is not working on WhatsApp, the reason is usually one of the rules on this page.

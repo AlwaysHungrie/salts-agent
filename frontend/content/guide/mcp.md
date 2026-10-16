@@ -1,7 +1,7 @@
 ---
 title: What is an MCP server
 section: MCP servers
-order: 3
+order: 1
 summary: MCP servers connect your agent to the apps you already use, so it can do things in them for you.
 ---
 
@@ -13,7 +13,7 @@ Once an app is connected, your agent uses it with your account and your permissi
 
 MCP servers are added from the **MCP servers** section of your agent's **Capabilities** page. There are two ways to add one:
 
-- **Ready-made servers**: click one of the app icons at the top of the section. Everything is filled in for you. Point at an icon to see what that server does, and once it is added, click **Open manual** on its card for its guide. [Adding your first MCP server](/guide/mcp-notion) walks you through Notion, and [Connect GitHub](/guide/mcp-github) walks you through GitHub. For **Bonfire**, replace the URL with the endpoint Bonfire gives you, and `API-KEY` in the `Authorization` header with your Bonfire API key.
+- **Ready-made servers**: click one of the app icons at the top of the section. Everything is filled in for you. Point at an icon to see what that server does, and once it is added, click **Open manual** on its card for its guide. [Connect Notion](/guide/mcp-notion) walks you through Notion, and [Connect GitHub](/guide/mcp-github) walks you through GitHub. For **Bonfire**, replace the URL with the endpoint Bonfire gives you, and `API-KEY` in the `Authorization` header with your Bonfire API key.
 - **Any other server**: click **Add an MCP server** and enter its details yourself. See [Adding a custom MCP server](/guide/mcp-custom).
 
 ## Signing in

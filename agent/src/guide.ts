@@ -35,8 +35,11 @@ export function guideIndex(): string {
 /**
  * A page's markdown with the guide's own site-relative links made absolute, so they open
  * from a chat. `base` is the web app's address, or null to leave them as they are.
+ * A `{{name}}` line is a browser widget on the web page; a chat has nothing to draw, so
+ * it goes, and the page's own words say where to find it.
  */
 export function guideBody(page: GuidePage, base: string | null): string {
-  const body = base ? page.body.replace(/\]\(\/(?!\/)/g, `](${base}/`) : page.body;
+  const widgetless = page.body.replace(/^\{\{[\w-]+\}\}\n*/gm, "");
+  const body = base ? widgetless.replace(/\]\(\/(?!\/)/g, `](${base}/`) : widgetless;
   return `# ${page.title}\n\n${body}`;
 }
