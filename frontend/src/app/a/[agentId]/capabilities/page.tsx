@@ -167,7 +167,9 @@ export default function Capabilities({
           Sessions
         </Link>
 
-        <div className="flex items-baseline justify-between gap-4">
+        {/* Stuck to the top, so the save status is in view however far down the
+            edit is. */}
+        <div className="bg-canvas sticky top-0 z-20 -mx-5 flex items-baseline justify-between gap-4 px-5 py-3 md:-mx-8 md:px-8">
           <h1 className="text-[32px] font-[650] leading-[1.2]">
             Capabilities.
           </h1>
@@ -177,7 +179,15 @@ export default function Capabilities({
         </div>
         <p className="text-muted mt-1 text-sm font-light leading-[1.43]">
           Choose what this agent can do besides write. Applies to every one of
-          its sessions, and to nothing another agent does.
+          its sessions, and to nothing another agent does. To change its model,
+          instructions and channels, go to{" "}
+          <Link
+            href={`/a/${encodeURIComponent(agentId)}/settings`}
+            className="text-ink underline"
+          >
+            Settings
+          </Link>
+          .
         </p>
 
         {error && (
