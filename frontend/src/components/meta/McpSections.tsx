@@ -42,17 +42,7 @@ export function McpTemplatesSection({
                 on ? "border-ink bg-canvas-soft" : "border-hairline hover:border-ink"
               }`}
             >
-              {preset.tile ? (
-                // The salt mark is drawn for a filled tile, so it gets a small one here.
-                <span
-                  className="flex h-[26px] w-[26px] items-center justify-center overflow-hidden rounded-lg [&>svg]:h-[26px] [&>svg]:w-[26px]"
-                  style={{ background: preset.tile }}
-                >
-                  {preset.logo}
-                </span>
-              ) : (
-                preset.logo
-              )}
+              {preset.logo}
               {preset.name}
             </button>
           );
