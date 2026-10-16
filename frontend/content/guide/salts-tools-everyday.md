@@ -14,7 +14,7 @@ Run `npx salts-tools` in a terminal to open a screen that shows what is running 
 | Tab | What it shows |
 |---|---|
 | **1 Services** | Each tool and whether it is `live` (an agent uses it), `live · not in use` or `error`. Every tool your computer can run is always on. Press **Enter** on a tool for its address, its log and where its files live. |
-| **2 Agents** | Every agent you have, and the tools on for each. Press **Enter** on an agent to switch its tools on or off, fix anything marked **to do**, or stop serving it. |
+| **2 Agents** | The agents you have added to this computer, and the tools on for each. Press **a** to add an agent by its ID or its link. Press **Enter** on an agent to switch its tools on or off, fix anything marked **to do**, or unregister it, which turns off its tools and removes it from the list. |
 | **3 Settings** | Whether the computer is connected, whether salts-tools starts at login, and where its files live. **disconnect** unpairs this computer. |
 | **4 Log** | What salts-tools has been doing, newest at the bottom. |
 

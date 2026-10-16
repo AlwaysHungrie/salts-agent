@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { openCommand, toolsReport, waitForApproval, wantedServices } from "../computer.mjs";
+import { agentIdFrom, openCommand, toolsReport, waitForApproval, wantedServices } from "../computer.mjs";
 
 const SERVICES = {
   web: { kind: "searxng", label: "Web search", needs: ["cap_web_search"] },
@@ -50,4 +50,12 @@ test("the browser opens with each platform's own command", () => {
   assert.deepEqual(openCommand("https://x", "darwin"), ["open", ["https://x"]]);
   assert.deepEqual(openCommand("https://x", "linux"), ["xdg-open", ["https://x"]]);
   assert.equal(openCommand("https://x", "win32")[0], "cmd");
+});
+
+test("an agent is added by its id, or by any link to one of its pages", () => {
+  assert.equal(agentIdFrom("  abc123 "), "abc123");
+  assert.equal(agentIdFrom("https://salts.app/a/abc123"), "abc123");
+  assert.equal(agentIdFrom("https://salts.app/a/abc123/capabilities?tab=2"), "abc123");
+  assert.equal(agentIdFrom("salts.app/a/ab%20c#top"), "ab c");
+  assert.equal(agentIdFrom(""), "");
 });

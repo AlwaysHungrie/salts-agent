@@ -26,10 +26,10 @@ export async function startPairing(worker, name) {
   if (status !== 200) {
     throw new Error(
       status === 0
-        ? `could not reach ${worker} (offline?)`
+        ? `Couldn't reach ${worker}. Are you offline?`
         : status === 404
-          ? `${worker} does not support pairing yet`
-          : body.error || `the Worker answered ${status}`
+          ? `${worker} doesn't support pairing yet.`
+          : body.error || `Salts returned an error (${status}).`
     );
   }
   return body;
@@ -92,4 +92,19 @@ export function openCommand(url, platform) {
   if (platform === "darwin") return ["open", [url]];
   if (platform === "win32") return ["cmd", ["/c", "start", "", url]];
   return ["xdg-open", [url]];
+}
+
+/**
+ * The agent id in what the user typed: the id itself, or any link to one of the agent's
+ * pages on the Salts site (`…/a/<id>/…`). "" when there is nothing to go on.
+ */
+export function agentIdFrom(text) {
+  const typed = String(text ?? "").trim();
+  const inLink = typed.match(/\/a\/([^/?#\s]+)/);
+  if (!inLink) return typed;
+  try {
+    return decodeURIComponent(inLink[1]);
+  } catch {
+    return inLink[1];
+  }
 }

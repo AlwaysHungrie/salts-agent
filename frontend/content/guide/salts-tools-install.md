@@ -47,7 +47,9 @@ salts-tools checks that cloudflared is installed, then shows a short code and op
 
 ## 4. Choose your tools
 
-Back in your terminal, salts-tools opens its screen on the **Agents** tab, which lists every agent you have. Pick an agent with the arrow keys and press **Enter**, then press **Enter** on each tool you want for it. salts-tools connects it to that agent within a few seconds. Press **Esc** to go back to the list.
+Back in your terminal, salts-tools opens its screen on the **Agents** tab. It only lists the agents you add to this computer, so if you have many agents you only see the ones it works for. To add one, press **a**, paste the agent's ID and press **Enter**. The ID is the part after `/a/` in the agent's address on this site, and you can paste the whole link instead.
+
+salts-tools then opens the agent. Press **Enter** on each tool you want for it, and salts-tools connects it to that agent within a few seconds. Press **Esc** to go back to the list.
 
 If a tool needs something more, the agent shows it as **to do**: press **Enter** on it to fix it. For example, the analyst needs **File ingest** switched on, which salts-tools does for you, and the matchmaker needs your OpenRouter key, which you type in right there. If something is missing on your computer, such as Docker for web search, the **Services** tab shows that tool as `error` and says what to install.
 
@@ -57,6 +59,6 @@ Finally, salts-tools asks in the terminal whether it should start automatically 
 
 ## You are done
 
-Your computer is connected. To give another agent these tools, open it in the **Agents** tab and switch them on.
+Your computer is connected. To give another agent these tools, press **a** in the **Agents** tab to add it, then switch them on.
 
 Next, read [Everyday use](/guide/salts-tools-everyday) to learn the salts-tools screen and the commands you will use day to day.

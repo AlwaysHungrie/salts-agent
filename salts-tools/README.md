@@ -10,9 +10,11 @@ the internet through a single cloudflared quick tunnel (free, no account):
 | `analyst` | [local-mcps/analyst-mcp](../local-mcps/analyst-mcp/README.md): Excel and CSV analysis as an MCP server. It reads workbooks sent in the chat, answers questions about them, previews tables and charts, and returns built workbooks. No Docker. | MCP server `analyst`: `<tunnel>/analyst/mcp` |
 
 The computer is paired with the user's Salts account once, from the browser; that is
-the only thing done there. After that, the dashboard lists the user's agents and the
-user switches tools on and off per agent in it, and the Worker keeps each agent pointed
-at the tunnel. Nothing is copied by hand: no agent IDs, no tokens.
+the only thing done there. After that, the user adds agents to the dashboard by ID (or
+a link to one) and switches tools on and off per agent in it, and the Worker keeps each
+agent pointed at the tunnel. Only agents added there are listed, so an owner of a fleet
+sees just the ones this computer serves. Nothing else is copied by hand: no tokens, no
+tunnel addresses.
 
 The CLI:
 
@@ -83,8 +85,10 @@ npx salts-tools
 4. Starts the supervisor, which reports in.
 5. Asks whether to start salts-tools at login, then opens the dashboard on the Agents tab.
 
-There the user opens an agent and switches tools on for it (`PUT
-/salts/computer/agents/:id`). The agent lists what is still to do before they work, and
+There the user presses `a` and enters an agent's ID or a link to it (`POST
+/salts/computer/agents/:id` registers it with no tools on; one the user is not a member
+of is refused), then switches tools on for it (`PUT /salts/computer/agents/:id`).
+Unregistering (`DELETE …/:id`) turns every tool off for it and takes it off the list. The agent lists what is still to do before they work, and
 `enter` does it: switch on a capability a tool needs (`POST …/capability`), type in a
 header value such as the matchmaker's OpenRouter key (`PUT …/headers`, never shown or
 sent back). A Brave key that would take over from SearXNG, or a server of the same name
@@ -121,7 +125,7 @@ while the supervisor works in the background.
 | Tab | Shows | Keys |
 | --- | --- | --- |
 | 1 Services | Display only. Each service and its status: `live` (an agent uses it), `live · not in use`, `error` (it cannot run here, or failed, with why), `starting` on the way up. `enter` opens a service: who uses it, its address, port, files and log. | `s` start, `r` new tunnel, `x` stop everything |
-| 2 Agents | Every agent the user is a member of, and the tools on for each. `enter` opens an agent: a switch per tool, what is left to do (`enter` does it), and stop serving it. | `enter` switch / do, `esc` back |
+| 2 Agents | The agents added to this computer, and the tools on for each. `a` adds one by its ID or a link to it. `enter` opens an agent: a switch per tool, what is left to do (`enter` does it), and unregister it. | `a` add agent, `enter` toggle, `esc` back |
 | 3 Settings | The connection, start at login, the Worker, where files live, disconnect, reset. | `enter` change |
 | 4 Log | The supervisor's log, newest at the bottom. | |
 

@@ -32,7 +32,7 @@ export function installMcp(bundled, target, version) {
   const marker = path.join(target, MARKER);
   if (existsSync(marker) && readFileSync(marker, "utf8").trim() === version) return false;
   if (!existsSync(path.join(bundled, "pyproject.toml"))) {
-    throw new Error(`this salts-tools package is missing ${bundled}; reinstall it`);
+    throw new Error(`This salts-tools package is missing ${bundled}. Reinstall it.`);
   }
   mkdirSync(target, { recursive: true });
   for (const name of readdirSync(target)) {

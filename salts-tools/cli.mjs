@@ -59,7 +59,7 @@ import os from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
-import { call, openCommand, startPairing, toolsReport, waitForApproval, wantedServices } from "./computer.mjs";
+import { agentIdFrom, call, openCommand, startPairing, toolsReport, waitForApproval, wantedServices } from "./computer.mjs";
 import { startGateway } from "./gateway.mjs";
 import { installMcp, launchArgs, mcpSource, viaNpx } from "./mcps.mjs";
 import { caffeinateArgs, orphanTunnels, parseProcessList, supervisorsOf } from "./procs.mjs";
@@ -91,7 +91,7 @@ const TARGETS = {
   },
 };
 if (!TARGETS[TARGET]) {
-  console.error(`unknown target "${TARGET}": use production (no suffix) or :staging`);
+  console.error(`Unknown target "${TARGET}". Leave it off for production, or add :staging for staging.`);
   process.exit(1);
 }
 const { worker: DEFAULT_WORKER, suffix: SUFFIX } = TARGETS[TARGET];
@@ -295,7 +295,7 @@ function writeSecret(secret, value) {
     }
   }
   if (res.status !== 0 || readSecret(secret) !== value) {
-    throw new Error(`could not store the ${secret === SECRETS.token ? "gateway token" : "credential"}: ${(res.stderr ?? "").trim()}`);
+    throw new Error(`Couldn't save the ${secret === SECRETS.token ? "gateway token" : "credential"}: ${(res.stderr ?? "").trim()}`);
   }
 }
 
@@ -354,25 +354,25 @@ async function ensureDocker(say = () => {}) {
   if (dockerUp()) return;
   const winDesktop = path.join(process.env.ProgramFiles ?? "C:\\Program Files", "Docker", "Docker", "Docker Desktop.exe");
   if (IS_MAC && existsSync("/Applications/Docker.app")) {
-    say("Docker is not running; starting Docker Desktop");
+    say("Docker isn't running. Starting Docker Desktop…");
     run("open", ["-g", "-a", "Docker"]);
   } else if (IS_WIN && existsSync(winDesktop)) {
-    say("Docker is not running; starting Docker Desktop");
+    say("Docker isn't running. Starting Docker Desktop…");
     spawn(winDesktop, [], { detached: true, stdio: "ignore" }).unref();
   } else if (!IS_MAC && !IS_WIN && run("systemctl", ["--user", "cat", "docker-desktop"]).status === 0) {
-    say("Docker is not running; starting Docker Desktop");
+    say("Docker isn't running. Starting Docker Desktop…");
     run("systemctl", ["--user", "start", "docker-desktop"]);
   } else if (have("orbctl")) {
-    say("Docker is not running; starting OrbStack");
+    say("Docker isn't running. Starting OrbStack…");
     run("orbctl", ["start"], { timeout: DOCKER_WAIT_MS });
   } else if (have("colima")) {
-    say("Docker is not running; starting Colima");
+    say("Docker isn't running. Starting Colima…");
     run("colima", ["start"], { timeout: DOCKER_WAIT_MS });
   } else {
     throw new Error(
       IS_MAC || IS_WIN
-        ? "Docker is not running, and no Docker Desktop, OrbStack or Colima was found to start"
-        : "Docker is not running — start it (`sudo systemctl start docker`) and check your user can run `docker info`"
+        ? "Docker isn't running, and Docker Desktop, OrbStack or Colima couldn't be found to start it."
+        : "Docker isn't running. Start it with `sudo systemctl start docker`, and check your user can run `docker info`."
     );
   }
   const until = Date.now() + DOCKER_WAIT_MS;
@@ -380,7 +380,7 @@ async function ensureDocker(say = () => {}) {
     if (dockerUp()) return;
     await sleep(3000);
   }
-  throw new Error(`Docker did not come up within ${DOCKER_WAIT_MS / 1000}s`);
+  throw new Error(`Docker didn't start within ${DOCKER_WAIT_MS / 1000} seconds.`);
 }
 
 /** What stops `name` running here that it cannot fix itself, or "" when nothing does. */
@@ -393,7 +393,7 @@ function toolMissing(name) {
           ? "install Docker Desktop"
           : "install Docker Engine with the compose plugin (https://docs.docker.com/engine/install/)";
     }
-    if (run("docker", ["compose", "version"]).status !== 0) return "update Docker: `docker compose` is not available";
+    if (run("docker", ["compose", "version"]).status !== 0) return "update Docker (`docker compose` isn't available)";
   }
   if (SERVICES[name].uv && !have("uv")) return "install uv (https://docs.astral.sh/uv/)";
   return "";
@@ -402,11 +402,12 @@ function toolMissing(name) {
 /** cloudflared, which every tool needs: what to run to install it, or "". */
 function cloudflaredMissing() {
   if (have("cloudflared")) return "";
+  const why = "Salts tools needs cloudflared to connect your agents to this computer.";
   return IS_MAC
-    ? "cloudflared is not installed — `brew install cloudflared`"
+    ? `cloudflared isn't installed. ${why} To install it, run:\n    brew install cloudflared`
     : IS_WIN
-      ? "cloudflared is not installed — `winget install --id Cloudflare.cloudflared`"
-      : "cloudflared is not installed — see https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/";
+      ? `cloudflared isn't installed. ${why} To install it, run:\n    winget install --id Cloudflare.cloudflared`
+      : `cloudflared isn't installed. ${why} To install it, follow:\n    https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/`;
 }
 
 function portFree(port, host) {
@@ -421,7 +422,7 @@ async function freePort(from) {
   for (let port = from; port < from + 200; port++) {
     if ((await portFree(port, "127.0.0.1")) && (await portFree(port, "0.0.0.0"))) return port;
   }
-  throw new Error(`no free port between ${from} and ${from + 199}`);
+  throw new Error(`No free port between ${from} and ${from + 199}.`);
 }
 
 
@@ -506,7 +507,7 @@ function readyMcp(name, src, bin) {
   if (!fresh && existsSync(bin)) return;
   log(`${name}: uv sync`);
   const res = run("uv", ["sync", "--frozen"], { cwd: src.dir, timeout: 600_000 });
-  if (res.status !== 0) throw new Error(`${name}: uv sync failed: ${(res.stderr || res.stdout).trim()}`);
+  if (res.status !== 0) throw new Error(`Couldn't install ${name}'s packages (uv sync): ${(res.stderr || res.stdout).trim()}`);
 }
 const ANALYST_BIN = IS_WIN
   ? path.join(ANALYST_DIR, ".venv", "Scripts", "analyst-mcp.exe")
@@ -545,7 +546,7 @@ const SERVICES = {
       port = port || (await portFrom(readState().svc?.web?.port, WEB_PORT));
       log(`web: docker compose up on port ${port}`);
       const res = compose(WEB_DIR, WEB_PROJECT, ["up", "-d", "--remove-orphans"], webEnv(token, port));
-      if (res.status !== 0) throw new Error(`web: docker compose up failed: ${(res.stderr || res.stdout).trim()}`);
+      if (res.status !== 0) throw new Error(`Couldn't start Web search in Docker: ${(res.stderr || res.stdout).trim()}`);
       port = webPort() || port;
       // SearXNG takes a few seconds before the gate stops answering 502.
       await waitUntil(() => this.healthy(port, token), 30);
@@ -594,7 +595,7 @@ const SERVICES = {
       writeSvc("matchmaker", { pid: child.pid });
       log(`matchmaker started (pid ${child.pid}) on port ${port}; log at ${MATCHMAKER_LOG}`);
       if (!(await waitUntil(() => this.healthy(port), 60))) {
-        throw new Error(`matchmaker did not answer on port ${port} — see ${MATCHMAKER_LOG}`);
+        throw new Error(`Matchmaker didn't respond on port ${port}. Details are in ${MATCHMAKER_LOG}`);
       }
       return port;
     },
@@ -648,7 +649,7 @@ const SERVICES = {
       writeSvc("analyst", { pid: child.pid });
       log(`analyst started (pid ${child.pid}) on port ${port}; log at ${ANALYST_LOG}`);
       if (!(await waitUntil(() => this.healthy(port), 60))) {
-        throw new Error(`analyst did not answer on port ${port} — see ${ANALYST_LOG}`);
+        throw new Error(`Spreadsheet analyst didn't respond on port ${port}. Details are in ${ANALYST_LOG}`);
       }
       return port;
     },
@@ -1039,13 +1040,13 @@ async function migrateFromSaltsWeb() {
     svc: { web: { port: prev.port || 0 } },
   });
   renameSync(oldState, `${oldState}.migrated`);
-  console.log(`${GREEN}✓${OFF} moved salts-web's settings to ${HOME}`);
+  console.log(`${GREEN}✓${OFF} Moved your salts-web settings to ${HOME}`);
 
   const legacy = autostartFor("salts-web");
   if (existsSync(legacy.file)) {
     autostartOff(legacy);
     autostartOn();
-    console.log(`${GREEN}✓${OFF} replaced the salts-web login item with salts-tools`);
+    console.log(`${GREEN}✓${OFF} Replaced the salts-web login item with Salts tools`);
   }
 }
 
@@ -1103,7 +1104,7 @@ async function waitForReport(pid, since, { timeoutMs = 90_000, until = () => tru
     for (const err of [s.lastError, s.reportError]) {
       if (err && !shown.has(err)) {
         shown.add(err);
-        console.log(`${DIM}  … ${err}${OFF}`);
+        console.log(`  … ${err}`);
       }
     }
     // The spawned pid, not the pid file: the file is written a moment after spawning.
@@ -1126,7 +1127,7 @@ function autostartOn({ label, file } = AUTOSTART) {
   if (!IS_MAC) {
     // A systemd user unit. `start` exits once the supervisor is spawned; RemainAfterExit
     // keeps the unit (and so the supervisor in its cgroup) alive.
-    if (!have("systemctl")) throw new Error("autostart on Linux needs systemd (`systemctl --user`)");
+    if (!have("systemctl")) throw new Error("Starting at login on Linux needs systemd (`systemctl --user`).");
     const q = (s) => `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
     writeFileSync(
       file,
@@ -1207,23 +1208,25 @@ async function pair(rl) {
   for (;;) {
     const pairing = await startPairing(worker, name);
     const link = `${APP}/salts-tools/pair?code=${encodeURIComponent(pairing.user_code)}`;
+    const opened = openBrowser(link);
     console.log(`
-Connect this computer to your Salts account. Open:
+Connect this computer to your Salts account.
 
-  ${BOLD}${link}${OFF}
+  1. Open this link${opened ? " (it should have opened in your browser)" : ""}:
+       ${link}
 
-and check the code there is ${BOLD}${pairing.user_code}${OFF}.`);
-    if (openBrowser(link)) console.log(`${DIM}  (opened in your browser)${OFF}`);
-    console.log(`${DIM}  … waiting for you to press Connect${OFF}`);
+  2. Check the code on the page is ${pairing.user_code}, then press Connect.
+
+Waiting for you to press Connect…`);
     const credential = await waitForApproval(worker, pairing, { sleep });
     if (credential) {
       deleteSecret(SECRETS.credential);
       writeSecret(SECRETS.credential, credential);
       if (!readToken()) newToken();
-      console.log(`${GREEN}✓${OFF} connected`);
+      console.log(`\n${GREEN}✓${OFF} Connected.`);
       return true;
     }
-    const again = await rl.question("The code expired. Press Enter for a new one, or q to quit: ");
+    const again = await rl.question("\nThe code expired. Press Enter to get a new one, or type q to quit: ");
     if (again.trim().toLowerCase() === "q") return false;
   }
 }
@@ -1231,43 +1234,48 @@ and check the code there is ${BOLD}${pairing.user_code}${OFF}.`);
 /** Who this computer is, which agents it serves with what, and where to change that. */
 function summary(s) {
   const agents = s.agents ?? [];
-  console.log(
-    `${GREEN}✓${OFF} ${BOLD}${s.computer?.name ?? "this computer"}${OFF} serves ${agents.length} agent${agents.length === 1 ? "" : "s"}`
-  );
+  const width = Math.max(0, ...agents.map((a) => a.name.length));
+  console.log(`\n${GREEN}✓${OFF} Salts tools is running.\n  Your agents can now use this computer.\n`);
+  console.log(`  Agents\n  ${"─".repeat(40)}`);
+  if (!agents.length) console.log("  No agents added yet.");
   for (const a of agents) {
-    console.log(`    ${a.name}: ${a.tools.length ? a.tools.join(", ") : `${DIM}no tools on yet${OFF}`}`);
+    console.log(`  ${a.name.padEnd(width)}   ${a.tools.length ? a.tools.join(", ") : "no tools turned on yet"}`);
   }
-  for (const [name, tool] of Object.entries(s.tools ?? {})) {
-    if (tool.state === "missing") console.log(`${DIM}  ${name} can't run here yet: ${tool.detail}${OFF}`);
-  }
-  console.log(`  Choose agents and tools in the dashboard: ${BOLD}${SELF}${SUFFIX ? ` :${TARGET}` : ""}${OFF}, tab 2 Agents`);
+  const missing = Object.entries(s.tools ?? {}).filter(([, tool]) => tool.state === "missing");
+  if (missing.length) console.log("");
+  for (const [name, tool] of missing) console.log(`  ${name} can't run here yet: ${tool.detail}`);
+  console.log(`\n  To add agents or choose their tools, run:\n${commandLine(SUFFIX ? `:${TARGET}` : "")}\n  then open the Agents tab.\n`);
+}
+
+/** A command for the user to run, on a line of its own. */
+function commandLine(rest) {
+  return `    ${SELF}${rest ? ` ${rest}` : ""}`;
 }
 
 async function askAutostart(rl) {
   if (existsSync(AUTOSTART.file)) return;
-  const yes = (await rl.question("Start salts-tools automatically when you log in? [Y/n] ")).trim().toLowerCase();
+  const yes = (await rl.question("\nStart Salts tools by itself when you log in? [Y/n] ")).trim().toLowerCase();
   if (yes === "" || yes === "y" || yes === "yes") {
     autostartOn();
-    console.log(`${GREEN}✓${OFF} will start at login (undo with \`${SELF} ${withTarget("autostart")} off\`)`);
+    console.log(`\n${GREEN}✓${OFF} Salts tools will start by itself when you log in.\n\n  To turn that off, run:\n${commandLine(`${withTarget("autostart")} off`)}\n`);
   }
 }
 
 /** Connected (pairing first if not) and running, reporting to Salts. */
-async function start({ interactive }) {
-  if (args.length) console.log(`${DIM}Every tool runs whenever it can; choose them per agent in the dashboard.${OFF}`);
+async function start({ interactive, summarize = true }) {
+  if (args.length) console.log(`Every tool starts when it can. Choose which agent uses which tool in the dashboard's Agents tab.`);
   const cloudflared = cloudflaredMissing();
   if (cloudflared) {
-    console.error(`${RED}✗${OFF} ${cloudflared}`);
+    console.error(`\n${RED}✗${OFF} ${cloudflared}\n`);
     process.exit(1);
   }
 
   const rl = interactive ? createInterface({ input: process.stdin, output: process.stdout }) : null;
   try {
-    console.log(`${GREEN}✓${OFF} cloudflared installed`);
     let fresh = false;
     if (!readCredential() || readState().unpaired) {
       if (!rl) {
-        console.error(`${RED}✗${OFF} not connected yet — run \`${SELF} ${withTarget("start")}\` in a terminal`);
+        console.error(`\n${RED}✗${OFF} This computer isn't connected to Salts yet. To connect it, run this in a terminal:\n${commandLine(withTarget("start"))}\n`);
         process.exit(1);
       }
       if (!(await pair(rl))) return false;
@@ -1276,14 +1284,15 @@ async function start({ interactive }) {
 
     const { pid, since } = await ensureSupervisor();
     if (!rl) {
-      console.log(`supervisor running; log at ${LOG_FILE}`);
+      console.log(`Salts tools is running in the background. Its log is at ${LOG_FILE}`);
       return true;
     }
-    console.log(`${DIM}  … starting and reporting to Salts${OFF}`);
+    console.log(`\nStarting Salts tools…`);
     const result = await waitForReport(pid, since);
-    if (result.ok) summary(result.state);
-    else if (result.state.unpaired) console.log(`${RED}✗${OFF} this computer was disconnected in the browser; run this again to connect it`);
-    else console.log(`${RED}✗${OFF} ${result.state.reportError || result.state.lastError || "no report yet"} — it keeps trying; log at ${LOG_FILE}`);
+    if (result.ok && summarize) summary(result.state);
+    else if (result.ok) console.log(`\n${GREEN}✓${OFF} Salts tools is running.\n`);
+    else if (result.state.unpaired) console.log(`\n${RED}✗${OFF} This computer was disconnected from Salts in the browser.\n  Run this command again to connect it.\n`);
+    else console.log(`\n${RED}✗${OFF} Salts tools couldn't reach Salts: ${result.state.reportError || result.state.lastError || "no response yet"}\n  It will keep trying. Details are in:\n    ${LOG_FILE}\n`);
     if (fresh) await askAutostart(rl);
     return true;
   } finally {
@@ -1292,11 +1301,15 @@ async function start({ interactive }) {
 }
 
 async function stop() {
-  if (args.length) throw new Error("switch a tool off for an agent in the dashboard (Agents tab); `stop` alone stops everything");
+  if (args.length) throw new Error("To turn a tool off for one agent, use the dashboard's Agents tab. `stop` on its own stops everything.");
   const { was, failed } = await stopAll();
+  console.log("");
   for (const line of failed) console.log(`${RED}✗${OFF} ${line}`);
-  console.log(was ? `${GREEN}✓${OFF} stopped` : "was not running");
-  if (existsSync(AUTOSTART.file)) console.log(`${DIM}  starts again at next login (autostart is on)${OFF}`);
+  console.log(was ? `${GREEN}✓${OFF} Salts tools stopped.\n  Your agents can't use this computer until you start it again.` : "Salts tools wasn't running.");
+  if (existsSync(AUTOSTART.file)) {
+    console.log(`\n  It will start by itself the next time you log in. To turn that off, run:\n${commandLine(`${withTarget("autostart")} off`)}`);
+  }
+  console.log("");
 }
 
 /**
@@ -1340,15 +1353,17 @@ function clearHome(dir) {
  */
 async function disconnect() {
   const credential = readCredential();
-  if (!credential) return "not connected";
+  if (!credential) return "This computer isn't connected.";
   if (supervisorPid()) await stopAll();
   const { status } = await call(workerUrl(), "/salts/computer", { method: "DELETE", credential });
   if (status !== 200 && status !== 401) {
-    throw new Error(`could not reach Salts (${status || "offline"}); still connected — try again`);
+    throw new Error(`Couldn't reach Salts (${status || "offline"}). This computer is still connected. Try again.`);
   }
   deleteSecret(SECRETS.credential);
   writeState({ unpaired: false, agents: [], services: [], computer: undefined, reportedAt: undefined });
-  return status === 200 ? "disconnected; its tools are off every agent" : "this computer was already disconnected";
+  return status === 200
+    ? "Disconnected. This computer's tools are turned off for every agent."
+    : "This computer was already disconnected.";
 }
 
 /**
@@ -1359,34 +1374,34 @@ async function disconnect() {
  */
 async function reset() {
   if (pidIn(path.join(homeFor("salts-web"), "supervisor.pid"))) {
-    throw new Error("salts-web is running — stop it first");
+    throw new Error("salts-web is running. Stop it first.");
   }
   const done = [];
   if (supervisorPid()) {
     await stopAll();
-    done.push("stopped salts-tools");
+    done.push("Stopped Salts tools");
   }
   const credential = readCredential();
   if (credential) {
     const { status } = await call(workerUrl(), "/salts/computer", { method: "DELETE", credential });
     done.push(
       status === 200
-        ? "disconnected this computer from Salts"
+        ? "Disconnected this computer from Salts"
         : status === 401
-          ? "this computer was already disconnected"
-          : `could not reach Salts (${status || "offline"}); it stays paired there until you pair again`
+          ? "This computer was already disconnected"
+          : `Couldn't reach Salts (${status || "offline"}), so it still lists this computer until you connect again`
     );
   }
   const where = tokenStoreName();
-  if (deleteSecret(SECRETS.credential)) done.push(`deleted the credential from ${where}`);
-  if (deleteSecret(SECRETS.token)) done.push(`deleted the gateway token from ${where}`);
+  if (deleteSecret(SECRETS.credential)) done.push(`Deleted the credential from ${where}`);
+  if (deleteSecret(SECRETS.token)) done.push(`Deleted the gateway token from ${where}`);
   for (const item of [AUTOSTART, autostartFor("salts-web")]) {
     if (!existsSync(item.file)) continue;
     autostartOff(item);
-    done.push(`removed the login item ${item.file}`);
+    done.push(`Removed the login item ${item.file}`);
   }
   for (const dir of [HOME, homeFor("salts-web")]) {
-    if (clearHome(dir)) done.push(`deleted ${dir}${SUFFIX ? "" : " (staging and MCP servers kept)"}`);
+    if (clearHome(dir)) done.push(`Deleted ${dir}${SUFFIX ? "" : " (staging and installed tools kept)"}`);
   }
   return done;
 }
@@ -1394,15 +1409,15 @@ async function reset() {
 async function restart() {
   const pid = supervisorPid();
   if (!pid) {
-    console.log("not running; starting it");
+    console.log("Salts tools isn't running. Starting it…");
     return await start({ interactive: process.stdin.isTTY });
   }
   const before = readState().url;
   const since = await requestRestart(pid);
-  console.log(`${DIM}  … opening a new tunnel${OFF}`);
+  console.log(`\nOpening a new tunnel…`);
   const result = await waitForReport(pid, since, { timeoutMs: 150_000, until: (s) => s.url && s.url !== before });
-  if (result.ok) console.log(`${GREEN}✓${OFF} tunnel ${result.state.url}; every agent follows it`);
-  else console.log(`${RED}✗${OFF} ${result.state.lastError || result.state.reportError || "no new tunnel yet"} — log at ${LOG_FILE}`);
+  if (result.ok) console.log(`\n${GREEN}✓${OFF} New tunnel open. Every agent now uses it:\n    ${result.state.url}\n`);
+  else console.log(`\n${RED}✗${OFF} ${result.state.lastError || result.state.reportError || "No new tunnel yet."}\n  Details are in:\n    ${LOG_FILE}\n`);
 }
 
 /** Ask the running supervisor `pid` for a new tunnel. Returns when. */
@@ -1421,9 +1436,10 @@ async function requestRestart(pid) {
 //
 //   1 Services  each service and whether it is live, live but not in use, or in error;
 //               `enter` opens one: its address, port, files and log. Display only.
-//   2 Agents    every agent the user is a member of; `enter` opens one: a switch per
-//               tool, what is left to do before they work (done from here), and
-//               stopping serving it
+//   2 Agents    the agents registered on this computer (not every agent the user has:
+//               one may have a fleet); `a` adds one by its id or a link to it; `enter`
+//               opens one: a switch per tool, what is left to do before they work (done
+//               from here), and unregistering it
 //   3 Settings  the connection, start at login, where things live, disconnect, reset
 //   4 Log       the supervisor's log, newest at the bottom
 
@@ -1438,7 +1454,7 @@ const ui = {
   /** The agent opened from the Agents tab, or "" while the list is showing. */
   openAgent: "",
   openAgentPos: { sel: 0, top: 0 },
-  /** The user's agents as the Worker last listed them, or null before the first answer. */
+  /** The agents registered here, as the Worker last listed them; null before its first answer. */
   agents: null,
   agentsError: "",
   /** Non-null while a value is being typed: `{ label, buffer, secret, submit(text) }`. */
@@ -1478,25 +1494,29 @@ function startEdit(label, { secret = false } = {}, submit) {
 }
 
 async function startFromDashboard() {
-  if (!readCredential()) return say("not connected: quit (q) and run salts-tools again to connect");
-  say("starting…");
+  if (!readCredential()) return say("This computer isn't connected. Quit (q) and run salts-tools again to connect it.");
+  say("Starting…");
   await ensureSupervisor();
-  say("starting; this screen follows it");
+  say("Starting. This screen updates as it goes.");
 }
 
 async function stopEverything() {
-  say("stopping…");
+  say("Stopping…");
   const { was, failed } = await stopAll();
-  say(failed.length ? paint(failed.join("; "), "bad") : was ? "stopped" : "was not running");
+  say(failed.length ? paint(failed.join("; "), "bad") : was ? "Salts tools stopped. Your agents can't use this computer until you start it again." : "Salts tools wasn't running.");
 }
 
 /** Ask the Worker about this computer's agents, with its credential. */
 async function agentCall(path, method = "GET", body) {
   const credential = readCredential();
-  if (!credential) throw new Error("not connected: quit (q) and run salts-tools again to connect");
+  if (!credential) throw new Error("This computer isn't connected. Quit (q) and run salts-tools again to connect it.");
   const res = await call(workerUrl(), `/salts/computer/agents${path}`, { method, body, credential });
-  if (res.status === 401) throw new Error("this computer was disconnected: quit (q) and run salts-tools again");
-  if (res.status !== 200) throw new Error(res.status === 0 ? "could not reach Salts (offline?)" : res.body.error || `Salts answered ${res.status}`);
+  if (res.status === 401) throw new Error("This computer was disconnected from Salts. Quit (q) and run salts-tools again to connect it.");
+  if (res.status !== 200) {
+    const err = new Error(res.status === 0 ? "Couldn't reach Salts. Are you offline?" : res.body.error || `Salts returned an error (${res.status}).`);
+    err.status = res.status;
+    throw err;
+  }
   return res.body;
 }
 
@@ -1520,15 +1540,40 @@ function updated(agent) {
 async function toggleTool(agent, name) {
   const on = agent.tools.includes(name);
   const tools = on ? agent.tools.filter((t) => t !== name) : [...agent.tools, name];
-  say(`${on ? "switching off" : "switching on"} ${SERVICES[name].label} for ${agent.name}…`);
+  say(`Turning ${SERVICES[name].label} ${on ? "off" : "on"} for ${agent.name}…`);
   updated(await agentCall(`/${encodeURIComponent(agent.id)}`, "PUT", { tools }));
-  say(`${SERVICES[name].label} ${on ? "off" : "on"} for ${agent.name}`);
+  say(`${SERVICES[name].label} is now ${on ? "off" : "on"} for ${agent.name}.`);
 }
 
-function stopServing(agent) {
-  confirm(`Stop serving ${agent.name}? Its tools are taken off it.`, async () => {
-    updated(await agentCall(`/${encodeURIComponent(agent.id)}`, "DELETE"));
-    say(`no longer serving ${agent.name}`);
+/** Register an agent on this computer by its id (or a link to it), then open it. */
+function addAgent() {
+  startEdit("Agent ID or link:", {}, async (text) => {
+    const id = agentIdFrom(text);
+    if (!id) return say("");
+    say("Adding the agent…");
+    let agent;
+    try {
+      agent = await agentCall(`/${encodeURIComponent(id)}`, "POST");
+    } catch (err) {
+      if (err.status === 404) return say(paint(`You do not have ownership of an agent with ID "${id}".`, "bad"));
+      throw err;
+    }
+    const known = (ui.agents ?? []).some((a) => a.id === agent.id);
+    ui.agents = known ? ui.agents.map((a) => (a.id === agent.id ? agent : a)) : [...(ui.agents ?? []), agent];
+    ui.openAgent = agent.id;
+    ui.openAgentPos = { sel: 0, top: 0 };
+    say(known ? `${agent.name} is already added.` : `Added ${agent.name}. Choose the tools it can use.`);
+  });
+}
+
+/** Every tool off for the agent, and it leaves this computer's list. */
+function unregister(agent) {
+  confirm(`Unregister ${agent.name}? Every tool is turned off for it, and it is removed from this list.`, async () => {
+    await agentCall(`/${encodeURIComponent(agent.id)}`, "DELETE");
+    ui.agents = (ui.agents ?? []).filter((a) => a.id !== agent.id);
+    ui.openAgent = "";
+    if (supervisorPid()) writeFileSync(RELOAD_FILE, new Date().toISOString());
+    say(`Unregistered ${agent.name}.`);
   });
 }
 
@@ -1537,7 +1582,7 @@ async function doTodo(agent, todo) {
   const label = SERVICES[todo.tool]?.label ?? todo.tool;
   if (todo.kind === "capability") {
     updated(await agentCall(`/${encodeURIComponent(agent.id)}/capability`, "POST", { flag: todo.flag }));
-    return say(`${todo.label} switched on for ${agent.name}`);
+    return say(`${todo.label} is now on for ${agent.name}.`);
   }
   if (todo.kind === "headers") {
     const [header] = todo.headers;
@@ -1549,7 +1594,7 @@ async function doTodo(agent, todo) {
           headers: { [header]: value },
         })
       );
-      say(`${header} saved on ${agent.name}'s ${todo.tool} server`);
+      say(`Saved ${header} for ${label} on ${agent.name}.`);
     });
   }
   say(todoNote(todo, label));
@@ -1560,17 +1605,17 @@ function todoText(todo) {
   const label = SERVICES[todo.tool]?.label ?? todo.tool;
   switch (todo.kind) {
     case "capability":
-      return [`${label} needs ${todo.label} on`, "enter switches it on"];
+      return [`${label} needs ${todo.label} turned on`, `Press "Enter" to turn on ${todo.label} for this agent.`];
     case "headers":
-      return [`${label} needs ${todo.headers.join(", ")}`, "enter types it in; it is saved on the agent, never shown"];
+      return [`${label} needs ${todo.headers.join(", ")}`, `Press "Enter" to type it in. It's saved on the agent and never shown again.`];
     case "brave":
-      return [`${label}: a Brave key is set, so Brave is used`, "remove the Brave key in the agent's Capabilities to use this computer"];
+      return [`${label} isn't used: this agent has a Brave key`, "To use this computer's Web search, remove the Brave key in the agent's Capabilities on the Salts site."];
     case "disabled":
-      return [`${label}'s MCP server is switched off`, "switch it on in the agent's Capabilities"];
+      return [`${label}'s MCP server is turned off`, "Turn it on in the agent's Capabilities on the Salts site."];
     case "name_taken":
-      return [`another MCP server is called ${todo.tool}`, `delete it in the agent's Capabilities and this computer's ${todo.tool} is added`];
+      return [`Another MCP server is called ${todo.tool}`, `Delete it in the agent's Capabilities on the Salts site, and this computer's ${todo.tool} is added in its place.`];
     default:
-      return [`${label} can't be added`, "this agent's MCP servers are set by its admin"];
+      return [`${label} can't be added`, "This agent's admin manages its MCP servers."];
   }
 }
 
@@ -1596,12 +1641,12 @@ function tail(file, bytes = 64 * 1024) {
 function serviceFiles(name) {
   if (name === "matchmaker") {
     const data = path.join(MATCHMAKER_DIR, "data", "matchmaker");
-    return [["people and jobs", data, "MM_DATA_DIR in its .env moves it", data]];
+    return [["people and jobs", data, "To move it, set MM_DATA_DIR in its .env file.", data]];
   }
   if (name === "analyst") {
     return [
-      ["inbox folder", ANALYST_INBOX, `files here are read too; DATA_DIR / INBOX_DIR in ${path.join(ANALYST_DIR, ".env")} move it`, ANALYST_INBOX],
-      ["run_python", "off unless ALLOW_PYTHON=true", `set in ${path.join(ANALYST_DIR, ".env")}`],
+      ["inbox folder", ANALYST_INBOX, `Files you put here can be read too. To move it, set DATA_DIR or INBOX_DIR in ${path.join(ANALYST_DIR, ".env")}`, ANALYST_INBOX],
+      ["run_python", "off unless ALLOW_PYTHON=true", `Set it in ${path.join(ANALYST_DIR, ".env")}`],
     ];
   }
   return [];
@@ -1613,7 +1658,7 @@ const ANALYST_INBOX = path.join(ANALYST_DIR, "data", "inbox");
 const copyRow = (cells, text, note) => ({
   cells,
   note,
-  enter: () => say(copy(text) ? `copied ${text}` : "no clipboard tool found"),
+  enter: () => say(copy(text) ? `Copied ${text}` : "Couldn't copy: no clipboard tool found on this computer."),
 });
 
 const back = (key) => () => {
@@ -1643,18 +1688,18 @@ function view() {
           columns: [["", 20], ["", 0]],
           rows: [
             { cells: ["status", { text: st.label, tone: st.tone }], note: st.note },
-            { cells: ["used by", users.length ? users.join(", ") : { text: "no agent", tone: "off" }], note: "switch it on for an agent in the Agents tab" },
+            { cells: ["used by", users.length ? users.join(", ") : { text: "no agents", tone: "off" }], note: "Turn it on for an agent in the Agents tab." },
             live(name)
-              ? copyRow(["address", svc.reached(s.url)], svc.reached(s.url), "where the agents reach it; Salts is told each new one")
+              ? copyRow(["address", svc.reached(s.url)], svc.reached(s.url), "Your agents reach it at this address. Salts is told whenever it changes.")
               : { cells: ["address", { text: "not running", tone: "off" }] },
-            { cells: ["local port", live(name) && e.port ? `127.0.0.1:${e.port}` : "—"], note: "loopback only; the tunnel reaches it through the token gate" },
+            { cells: ["local port", live(name) && e.port ? `127.0.0.1:${e.port}` : "—"], note: "Only reachable from this computer. The tunnel reaches it through a token check." },
             ...serviceFiles(name).map(([label, value, note, copyText]) =>
               copyText ? copyRow([label, value], copyText, note) : { cells: [label, value], note }
             ),
             copyRow(["log", svc.log], svc.log),
           ],
           pos: ui.openPos,
-          hint: "enter copy   esc back",
+          hint: "[enter] copy   [esc] back",
           keys: { "\x1b": back("open") },
         };
       }
@@ -1673,15 +1718,15 @@ function view() {
           };
         }),
         pos: ui.pos[0],
-        hint: running ? "enter details   r new tunnel   x stop all" : "enter details   s start",
+        hint: running ? "[enter] details   [r] new tunnel   [x] stop" : "[enter] details   [s] start",
         keys: {
-          s: () => (running ? say("already running") : startFromDashboard()),
+          s: () => (running ? say("Salts tools is already running.") : startFromDashboard()),
           r: () => {
             const pid = supervisorPid();
-            if (!pid) return say("nothing running");
-            return requestRestart(pid).then(() => say("opening a new tunnel"));
+            if (!pid) return say("Salts tools isn't running.");
+            return requestRestart(pid).then(() => say("Opening a new tunnel…"));
           },
-          x: () => running && confirm("Stop every service and the tunnel?", stopEverything),
+          x: () => running && confirm("Stop Salts tools? Your agents can't use this computer until you start it again.", stopEverything),
         },
       };
     }
@@ -1695,7 +1740,7 @@ function view() {
           const st = serviceStatus(s, name, running);
           return {
             cells: [SERVICES[name].label, on ? { text: "on", tone: "good" } : { text: "off", tone: "off" }],
-            note: `enter switches ${SERVICES[name].label} ${on ? "off" : "on"} for ${agent.name}${st.tone === "bad" ? ` (${st.note})` : ""}`,
+            note: `Press "Enter" to toggle "${SERVICES[name].label}" ${on ? "OFF" : "ON"} for ${agent.name}${st.tone === "bad" ? ` (${st.note})` : ""}`,
             enter: () => toggleTool(agent, name),
           };
         });
@@ -1703,19 +1748,17 @@ function view() {
           const [text, note] = todoText(todo);
           rows.push({ cells: ["to do", { text, tone: "bad" }], note, enter: () => doTodo(agent, todo) });
         }
-        if (agent.linked) {
-          rows.push({
-            cells: ["", { text: "stop serving this agent", tone: "off" }],
-            note: "takes every tool off this agent",
-            enter: () => stopServing(agent),
-          });
-        }
+        rows.push({
+          cells: ["", { text: "Unregister this agent", tone: "bad" }],
+          note: "Turns off every tool for this agent and removes it from this list.",
+          enter: () => unregister(agent),
+        });
         return {
           title: agent.name,
           columns: [["", 22], ["", 0]],
           rows,
           pos: ui.openAgentPos,
-          hint: "enter switch / do   esc back",
+          hint: "[enter] toggle   [esc] back",
           keys: { "\x1b": back("openAgent") },
         };
       }
@@ -1728,7 +1771,7 @@ function view() {
               ? { text: `${a.tools.map((t) => SERVICES[t]?.label ?? t).join(", ")}${a.todos.length ? `  (${a.todos.length} to do)` : ""}`, tone: a.todos.length ? "busy" : "good" }
               : { text: "—", tone: "off" },
           ],
-          note: a.todos.length ? `${todoText(a.todos[0])[0]}: enter to fix` : "enter to choose its tools",
+          note: a.todos.length ? `${todoText(a.todos[0])[0]}. Press "Enter" to fix it.` : `Press "Enter" to update "${a.name}" tools`,
           enter: () => {
             ui.openAgent = a.id;
             ui.openAgentPos = { sel: 0, top: 0 };
@@ -1736,8 +1779,13 @@ function view() {
           },
         })),
         pos: ui.pos[1],
-        empty: ui.agentsError || (ui.agents ? "you have no agents yet: create one on the Salts site" : "loading your agents…"),
-        hint: "enter choose tools",
+        empty:
+          ui.agentsError ||
+          (ui.agents
+            ? `No agents added yet. Press "a" to add one by its ID, from its link on the Salts site (…/a/<ID>).`
+            : "Loading your agents…"),
+        hint: agents.length ? "[enter] update tools   [a] add agent" : "[a] add agent",
+        keys: { a: addAgent },
       };
     }
 
@@ -1753,36 +1801,36 @@ function view() {
           },
           {
             cells: ["start at login", autostart ? { text: "on", tone: "good" } : { text: "off", tone: "off" }],
-            note: "a login item runs `salts-tools start`, which brings everything back",
+            note: "When this is on, Salts tools starts by itself when you log in.",
             enter: () => {
               if (autostart) autostartOff();
               else autostartOn();
-              say(`start at login ${autostart ? "off" : "on"}`);
+              say(`Start at login is now ${autostart ? "off" : "on"}.`);
             },
           },
-          { cells: ["worker", workerUrl()], note: `${TARGET}; SALTS_TOOLS_WORKER changes it before connecting` },
+          { cells: ["worker", workerUrl()], note: `The ${TARGET} Salts server. To change it, set SALTS_TOOLS_WORKER before connecting.` },
           { cells: ["secrets kept in", tokenStoreName()] },
           copyRow(["state and logs", HOME], HOME),
           {
-            cells: ["disconnect", { text: "unpair this computer", tone: "bad" }],
-            note: "stops everything and takes its tools off every agent; run salts-tools again to pair",
+            cells: ["disconnect", { text: "Disconnect this computer", tone: "bad" }],
+            note: "Stops everything and turns this computer's tools off for every agent. Run salts-tools again to reconnect.",
             enter: () =>
               confirm("Disconnect this computer from Salts?", async () => {
-                say(`${await disconnect()} — quit and run salts-tools again to connect`);
+                say(`${await disconnect()} Quit (q) and run salts-tools again to connect.`);
               }),
           },
           {
-            cells: ["reset", { text: "disconnect and forget everything", tone: "bad" }],
-            note: "as disconnect, and deletes the secrets, state, logs and login item; data is kept",
+            cells: ["reset", { text: "Disconnect and forget everything", tone: "bad" }],
+            note: "Disconnects, then deletes the saved secrets, state, logs and login item. Your tools' data is kept.",
             enter: () =>
               confirm("Stop, disconnect this computer and forget everything?", async () => {
                 const done = await reset();
-                say(`${done.length ? done.join("; ") : "nothing to reset"} — quit and run salts-tools again to connect`);
+                say(`${done.length ? `${done.join(". ")}.` : "Nothing to reset."} Quit (q) and run salts-tools again to connect.`);
               }),
           },
         ],
         pos: ui.pos[2],
-        hint: "enter change",
+        hint: "[enter] change",
       };
     }
 
@@ -1797,7 +1845,7 @@ function view() {
         columns: [["", 15], ["", 0]],
         rows,
         pos,
-        empty: "no log yet",
+        empty: "No log yet.",
       };
     }
   }
@@ -1817,10 +1865,10 @@ function render() {
     s.unpaired
       ? paint(`  ${conn.note}`, "bad")
       : !running
-        ? paint("  not running: press s to start", "off")
+        ? paint(`  Not running. Press "s" to start.`, "off")
         : s.url
           ? `${paint(`  tunnel ${s.url}`, "good")}  ${paint(conn.label, conn.tone)}`
-          : paint(`  opening a tunnel…${s.lastError ? `  ${s.lastError}` : ""}`, s.lastError ? "bad" : "busy")
+          : paint(`  Opening a tunnel…${s.lastError ? `  ${s.lastError}` : ""}`, s.lastError ? "bad" : "busy")
   );
   const trouble = [
     NAMES.some((n) => serviceStatus(s, n, running).tone === "bad"),
@@ -1861,16 +1909,23 @@ function render() {
     // shown as dots.
     const shown = ui.edit.secret ? "•".repeat(ui.edit.buffer.length) : ui.edit.buffer;
     out.push(`  ${BOLD}${ui.edit.label}${OFF} ${shown}${INV} ${OFF}`);
-    out.push(`${DIM}  enter save   esc cancel${OFF}`);
+    out.push(`${DIM}  [enter] save   [esc] cancel${OFF}`);
   } else if (ui.confirm) {
     out.push(`  ${BOLD}${ui.confirm.prompt}${OFF}`);
-    out.push(`${DIM}  y confirm   any other key cancel${OFF}`);
+    out.push(`${DIM}  [y] yes   [any other key] cancel${OFF}`);
   } else {
     // Two lines kept for the note, so the hints below do not jump as the selection moves.
     const note = wrap(v.rows[pos.sel]?.note ?? "", width - 2);
     for (let i = 0; i < 2; i++) out.push(note[i] ? `${DIM}  ${note[i]}${OFF}` : "");
-    const hints = ["↑/↓ move", v.hint, "←/→ tab", "q quit"].filter(Boolean);
-    out.push(`${DIM}  ${hints.join("   ")}${OFF}`);
+    // Keys wrap between hints, never inside one.
+    const hints = [...(v.hint ?? "").split(/\s{3,}/), "[↑/↓] move", "[←/→] switch tab", "[q] quit"].filter(Boolean);
+    const lines = [""];
+    for (const hint of hints) {
+      const last = lines.length - 1;
+      if (lines[last] && lines[last].length + 3 + hint.length > width - 2) lines.push(hint);
+      else lines[last] = lines[last] ? `${lines[last]}   ${hint}` : hint;
+    }
+    for (const line of lines) out.push(`${DIM}  ${line}${OFF}`);
   }
   if (ui.status) out.push(`  ${ui.status}`);
 
@@ -1896,7 +1951,7 @@ async function onEditKey(key) {
 function quit() {
   process.stdout.write("\x1b[?25h\x1b[?1049l");
   if (process.stdin.isTTY) process.stdin.setRawMode(false);
-  if (supervisorPid()) console.log(`salts-tools keeps running in the background. \`${SELF} ${withTarget("stop")}\` stops it.`);
+  if (supervisorPid()) console.log(`\nSalts tools is still running, so your agents can keep using this computer.\n\n  To stop it, run:\n${commandLine(withTarget("stop"))}\n`);
   process.exit(0);
 }
 
@@ -1912,7 +1967,7 @@ async function onKey(key) {
     const { run } = ui.confirm;
     ui.confirm = null;
     if (key === "y" || key === "Y") return await run();
-    return say("cancelled");
+    return say("Cancelled.");
   }
   if (key === "q") quit();
 
@@ -1961,16 +2016,20 @@ function dashboard(tab = 0) {
   setInterval(render, 1000);
 }
 
-const usage = `${BOLD}salts-tools${OFF}                 start if needed, then the dashboard
-${BOLD}salts-tools start${OFF}           connect this computer (first run) and start
-${BOLD}salts-tools stop${OFF}            stop everything
-${BOLD}salts-tools restart${OFF}         open a new tunnel
-${BOLD}salts-tools disconnect${OFF}      unpair this computer; its tools come off every agent
-${BOLD}salts-tools reset${OFF}           disconnect and forget everything
-${BOLD}salts-tools autostart${OFF} on|off  start at login
+const usage = `
+Usage
 
-Agents and tools are chosen in the dashboard; the Salts site is only for pairing.
-Add :staging to any of them (\`salts-tools :staging\`, \`start:staging\`) for staging.`;
+  salts-tools                    Start Salts tools if needed, then open the dashboard
+  salts-tools start              Connect this computer (on first run) and start
+  salts-tools stop               Stop everything
+  salts-tools restart            Open a new tunnel
+  salts-tools disconnect         Disconnect this computer. Its tools turn off for every agent
+  salts-tools reset              Disconnect and forget everything on this computer
+  salts-tools autostart on|off   Start by itself when you log in, or stop doing that
+
+Add agents and choose their tools in the dashboard's Agents tab.
+For staging, add :staging to any command, e.g. salts-tools :staging or salts-tools start:staging.
+`;
 
 try {
   // Not before `reset`: it deletes salts-web's leftovers rather than moving them.
@@ -1986,7 +2045,7 @@ try {
       {
         const pairing = !readCredential() || readState().unpaired;
         if (pairing || !supervisorPid()) {
-          if (!(await start({ interactive: true }))) break;
+          if (!(await start({ interactive: true, summarize: false }))) break;
           await sleep(1500);
         }
         dashboard(pairing ? 1 : 0);
@@ -1996,7 +2055,7 @@ try {
       await start({ interactive: process.stdin.isTTY });
       break;
     case "setup":
-      console.log(`Agents and tools are chosen in the dashboard: \`${SELF}${SUFFIX ? ` :${TARGET}` : ""}\`, tab 2 Agents.`);
+      console.log(`\nAgents and their tools are managed in the dashboard. To open it, run:\n${commandLine(SUFFIX ? `:${TARGET}` : "")}\nthen open the Agents tab.\n`);
       break;
     case "disconnect":
       console.log(`${GREEN}✓${OFF} ${await disconnect()}`);
@@ -2010,14 +2069,14 @@ try {
     case "reset": {
       const done = await reset();
       for (const line of done) console.log(`${GREEN}✓${OFF} ${line}`);
-      if (!done.length) console.log("nothing to reset");
+      if (!done.length) console.log("Nothing to reset.");
       break;
     }
     case "autostart":
       if (args[0] === "on") autostartOn();
       else if (args[0] === "off") autostartOff();
-      else throw new Error(`autostart on|off`);
-      console.log(`${GREEN}✓${OFF} autostart ${args[0]}`);
+      else throw new Error(`Use "autostart on" or "autostart off".`);
+      console.log(`${GREEN}✓${OFF} Start at login is now ${args[0]}.`);
       break;
     case "_supervise":
       await supervise();

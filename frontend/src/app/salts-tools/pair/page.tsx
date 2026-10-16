@@ -67,11 +67,11 @@ export default function Pair({
         >
           <ArrowLeft size={14} /> Agents
         </Link>
-        <h1 className="mt-4 text-[32px] font-[650] leading-[1.2]">Connect a computer.</h1>
+        <h1 className="mt-4 text-[32px] font-[650] leading-[1.2]">Pair Salts tools</h1>
         <p className="text-muted mt-1 text-sm font-light leading-[1.43]">
-          salts-tools runs web search, the matchmaker and the spreadsheet analyst on your
-          own computer for your agents. Connecting it is the only step here; you choose
-          agents and tools in your terminal.
+          Salts tools are a collection of local MCP servers (web search, the matchmaker and
+          the spreadsheet analyst) that run on your computer. Pairing links this computer
+          to your Salts account so your agents can use them.
         </p>
 
         {!ready && <p className="text-muted py-4 text-sm">Loading…</p>}
@@ -105,9 +105,9 @@ export default function Pair({
 
         {done && (
           <div className="bg-canvas-soft mt-8 rounded-2xl px-5 py-4 text-sm leading-[1.43]">
-            <span className="font-semibold">{pairing?.name}</span> is connected. You can
-            close this page. Back in your terminal, salts-tools lists your agents: pick
-            one and switch on the tools you want for it.
+            <span className="font-semibold">{pairing?.name}</span> is paired. You can close
+            this page and use the salts-tools CLI to connect agents and turn on local MCP
+            tools.
           </div>
         )}
 
