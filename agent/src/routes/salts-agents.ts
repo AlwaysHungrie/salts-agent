@@ -1,6 +1,7 @@
 // The agents a paired computer serves, managed from the CLI with its credential:
-// `/salts/computer/agents[/:agentId[/capability|/headers]]`. The owner's agents are
-// listed with the tools on and what is left to do; switching tools, stopping serving
+// `/salts/computer/agents[/:agentId[/capability|/headers]]`. Only the agents registered
+// on this computer are listed (an owner may have a fleet), with the tools on and what is
+// left to do; registering one by id (POST), switching tools (PUT), unregistering (DELETE)
 // one, switching on a capability a tool needs and filling in its header values happen
 // here, so the browser is needed for pairing only.
 
@@ -39,6 +40,7 @@ export async function handleComputerAgents(
   const agentId = decodeURIComponent(agentSegment);
   if (!(await isMember(env, c.owner_email, agentId))) return jsonError("agent not found", 404);
   if (!action) {
+    if (method === "POST") return await register(env, c, agentId);
     if (method === "PUT") return await setTools(request, env, c, agentId);
     if (method === "DELETE") return await unlink(env, c, agentId);
     return undefined;
@@ -99,30 +101,20 @@ async function todosFor(env: Env, c: ComputerRow, agentId: string, on: string[])
   return todos;
 }
 
-/** Most agents one listing names; a member of more is rare and gets the newest. */
-const MAX_LISTED = 200;
-
 /**
- * Every agent the owner is a member of, served by this computer or not, with the tools
- * on and what is left to do for each one served.
+ * The agents registered on this computer that the owner is still a member of, with the
+ * tools on and what is left to do for each.
  */
 async function agentsView(env: Env, c: ComputerRow) {
   const dir = directory(env);
   const links = new Map((await dir.computerLinks(c.id)).map((l) => [l.agent_id, l]));
-  const rows = (await dir.list(c.owner_email))
-    .filter((a) => emailAllowed(a.allowed_emails, c.owner_email))
-    .slice(-MAX_LISTED);
+  const rows = (await dir.list(c.owner_email)).filter(
+    (a) => links.has(a.id) && emailAllowed(a.allowed_emails, c.owner_email)
+  );
   return await Promise.all(
     rows.map(async (a) => {
-      const link = links.get(a.id);
-      const on = link ? parseList(link.tools) : [];
-      return {
-        id: a.id,
-        name: a.name,
-        linked: !!link,
-        tools: on,
-        todos: link ? await todosFor(env, c, a.id, on) : [],
-      };
+      const on = parseList(links.get(a.id)!.tools);
+      return { id: a.id, name: a.name, tools: on, todos: await todosFor(env, c, a.id, on) };
     })
   );
 }
@@ -131,7 +123,22 @@ async function agentView(env: Env, c: ComputerRow, agentId: string) {
   return (await agentsView(env, c)).find((a) => a.id === agentId);
 }
 
-/** Serve the agent (when it is not yet) with exactly these tools on, and sync it now. */
+/** Put the agent on this computer's list with no tools on; one already there is left as is. */
+async function register(env: Env, c: ComputerRow, agentId: string): Promise<Response> {
+  if (!(await linkOf(env, c, agentId))) {
+    const dir = directory(env);
+    if ((await dir.computerLinks(c.id)).length >= MAX_LINKED) {
+      return jsonError(`one computer serves at most ${MAX_LINKED} agents`, 400);
+    }
+    await dir.setComputerLink(c.id, agentId, []);
+  }
+  return json(await agentView(env, c, agentId));
+}
+
+/**
+ * Serve the agent (registering it when it is not yet) with exactly these tools on, and
+ * sync it now. No tools registers it with everything off.
+ */
 async function setTools(
   request: Request,
   env: Env,
@@ -157,12 +164,13 @@ async function setTools(
 const linkOf = async (env: Env, c: ComputerRow, agentId: string) =>
   (await directory(env).computerLinks(c.id)).find((l) => l.agent_id === agentId);
 
+/** Unregister: every tool taken off the agent, and it leaves this computer's list. */
 async function unlink(env: Env, c: ComputerRow, agentId: string): Promise<Response> {
   const link = await linkOf(env, c, agentId);
   if (!link) return jsonError("agent not served by this computer", 404);
   await clearLink(env, c, link);
   await directory(env).removeComputerLink(c.id, agentId);
-  return json(await agentView(env, c, agentId));
+  return json({ id: agentId });
 }
 
 /**

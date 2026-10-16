@@ -101,7 +101,6 @@ const report = (credential: string, body: Record<string, unknown> = {}) =>
 type AgentView = {
   id: string;
   name: string;
-  linked: boolean;
   tools: string[];
   todos: { kind: string; tool: string; flag?: string; headers?: string[] }[];
 };
@@ -145,7 +144,7 @@ describe("pairing a computer", () => {
     const email = someone();
     const mine = await createAgent(email);
     const { credential } = await pair(email, [mine]);
-    expect((await agents(credential)).find((a) => a.id === mine)?.linked).toBe(true);
+    expect((await agents(credential)).map((a) => a.id)).toEqual([mine]);
 
     const theirs = await createAgent(someone("other"));
     const start = (await (await post("/salts/pair", { name: "X" })).json()) as {
@@ -173,27 +172,42 @@ describe("pairing a computer", () => {
 });
 
 describe("managing agents from the CLI", () => {
-  it("lists the owner's agents, none served yet", async () => {
-    const { agentId, credential } = await setup();
+  it("lists only the agents registered on this computer; registering one turns nothing on", async () => {
+    const { email, agentId, credential } = await setup();
+    await createAgent(email, "Another Agent");
+    expect(await agents(credential)).toEqual([]);
+
+    const registered = await cli(credential, `/agents/${agentId}`, "POST");
+    expect(registered.status).toBe(200);
+    expect(await registered.json()).toEqual({ id: agentId, name: "Test Agent", tools: [], todos: [] });
     expect(await agents(credential)).toEqual([
-      { id: agentId, name: "Test Agent", linked: false, tools: [], todos: [] },
+      { id: agentId, name: "Test Agent", tools: [], todos: [] },
     ]);
     const body = (await (await report(credential)).json()) as { wanted: string[] };
     expect(body.wanted).toEqual([]);
   });
 
-  it("never lists or serves someone else's agent", async () => {
+  it("registering an agent already on the list keeps its tools", async () => {
+    const { agentId, credential } = await setup();
+    await setTools(credential, agentId, ["web"]);
+    const again = await cli(credential, `/agents/${agentId}`, "POST");
+    expect(((await again.json()) as AgentView).tools).toEqual(["web"]);
+  });
+
+  it("never lists, registers or serves someone else's agent, or one that does not exist", async () => {
     const { credential } = await setup();
     const theirs = await createAgent(someone("other"));
-    expect((await agents(credential)).some((a) => a.id === theirs)).toBe(false);
+    expect((await cli(credential, `/agents/${theirs}`, "POST")).status).toBe(404);
     expect((await setTools(credential, theirs, ["web"])).status).toBe(404);
+    expect((await cli(credential, "/agents/no-such-agent", "POST")).status).toBe(404);
+    expect(await agents(credential)).toEqual([]);
   });
 
   it("puts web search and an MCP server on the agent when switched on, and the computer runs them", async () => {
     const { email, agentId, credential } = await setup();
     const res = await setTools(credential, agentId, ["web", "matchmaker"]);
     expect(res.status).toBe(200);
-    expect(((await res.json()) as AgentView).linked).toBe(true);
+    expect(((await res.json()) as AgentView).tools.sort()).toEqual(["matchmaker", "web"]);
 
     expect((await config(email, agentId)).searxng_url).toBe(`${TUNNEL}/web`);
     const [server] = await servers(email, agentId);
@@ -293,12 +307,13 @@ describe("managing agents from the CLI", () => {
     expect((await agents(credential))[0].tools).toEqual([]);
   });
 
-  it("stops serving an agent and cleans it up; unpairing revokes the credential", async () => {
+  it("unregisters an agent and cleans it up; unpairing revokes the credential", async () => {
     const { email, agentId, credential } = await setup();
     await setTools(credential, agentId, ["web", "matchmaker"]);
     const unlinked = await cli(credential, `/agents/${agentId}`, "DELETE");
     expect(unlinked.status).toBe(200);
-    expect(((await unlinked.json()) as AgentView).linked).toBe(false);
+    expect(await unlinked.json()).toEqual({ id: agentId });
+    expect(await agents(credential)).toEqual([]);
     expect((await config(email, agentId)).searxng_url).toBe("");
     expect(await servers(email, agentId)).toEqual([]);
 
