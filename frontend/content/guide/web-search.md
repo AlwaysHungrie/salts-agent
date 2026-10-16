@@ -36,38 +36,23 @@ This guide will help you run your own free search engine, called SearXNG, on you
 
 salts-tools is a small program that starts the search engine and connects it to your agent. There is nothing else to download: Node.js comes with `npx`, which fetches salts-tools the first time you run it, so every command below starts with `npx salts-tools`.
 
-## 3. Start salts-tools
+## 3. Connect your computer
 
-First, open your agent in the browser and copy its agent ID. It is the part of the address after `/a/`:
-
-```
-https://salts-agent-app.vercel.app/a/<your-agent-id>
-```
-
-Then run:
+In your terminal, run:
 
 ```
-npx salts-tools start
+npx salts-tools
 ```
 
-salts-tools will ask you a few questions:
+salts-tools shows a short code and opens this site in your browser. Check the code matches, tick the agents that should get web search, and click **Connect**. There is nothing to copy or paste.
 
-1. **Agent IDs**: paste your agent ID. To give several agents web search from the same computer, paste all their IDs with a space between each one.
-2. salts-tools will then show you a **token**. Copy it, and leave your terminal open while you do the next step.
+## 4. Switch web search on
 
-## 4. Add the token to your agent
+Open the [salts-tools page](/salts-tools) and switch on **Web search** for each agent. salts-tools starts the search engine and connects it to those agents. If **Web search** is switched off in an agent's **Capabilities**, the page shows a **Turn on** button for it.
 
-Open your agent, go to **Capabilities**, and find **Web search**. If you entered several agent IDs, do this for each of those agents, using the same token.
+Leave **Brave Search API key** empty in **Capabilities**. When a Brave key is set, your agent uses Brave instead, and the salts-tools page reminds you of that.
 
-1. Switch **Web search** on.
-2. Paste the token into **SearXNG token** and save.
-3. Leave **Brave Search API key** and **SearXNG URL** empty. salts-tools fills in the URL for you.
-
-Go back to your terminal and press **Enter**. When salts-tools is done, you will see green ticks for the tunnel and `web`, followed by `live for agent <your-agent-id>`.
-
-Finally, salts-tools asks whether it should start automatically when you log in. We recommend saying yes, otherwise your agent loses web search every time you restart your computer.
-
-To add or remove agents later, run `npx salts-tools setup` and enter the full list of agent IDs again.
+Finally, salts-tools asks in the terminal whether it should start automatically when you log in. We recommend saying yes, otherwise your agent loses web search every time you restart your computer.
 
 ## You are done
 
@@ -79,13 +64,13 @@ If you also want your agent to open search results and read the full page, switc
 
 | Command | What it does |
 |---|---|
-| `npx salts-tools` | Opens a screen that shows whether search is running and connected to each agent. Use the arrow keys to move, **s** to start or stop, **c** to copy the token, and **q** to quit. |
-| `npx salts-tools start` | Starts the search engine. |
+| `npx salts-tools` | Starts salts-tools if needed, then opens a screen that shows whether search is running. Use the arrow keys to move and **q** to quit. |
 | `npx salts-tools stop` | Stops the search engine. |
-| `npx salts-tools restart` | Restarts the search engine and reconnects it to your agent. |
-| `npx salts-tools setup` | Asks the setup questions again, for example to connect a different agent. |
-| `npx salts-tools reset` | Forgets the token and agent ID. Run `npx salts-tools stop` first. |
+| `npx salts-tools restart` | Gets a fresh address; your agents follow it on their own. |
+| `npx salts-tools reset` | Disconnects this computer and forgets everything. |
 | `npx salts-tools autostart on` | Starts salts-tools when you log in. Use `off` to turn this off. |
+
+To choose which agents get web search, use the [salts-tools page](/salts-tools).
 
 ## Using Brave instead
 
@@ -94,5 +79,5 @@ If you would rather not run anything on your computer, you can use Brave's searc
 ## Footnotes
 
 1. If your agent stops searching, check that your computer is awake and online, then run `npx salts-tools restart`.
-2. If salts-tools says your agent refused the token, paste the token into **SearXNG token** again, save, and choose **retry**.
+2. If the salts-tools page shows your computer as **Offline**, run `npx salts-tools` on it.
 3. If your agent is not searching when it should, add this to **Custom instructions** in **Settings**: "Search the web for anything about current events, prices or dates." A stronger model also helps.

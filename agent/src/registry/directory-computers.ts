@@ -149,6 +149,7 @@ export function computersOf(storage: DurableObjectStorage, email: string): Compu
 /**
  * Write what the computer reports. A new gateway token keeps the previous one as
  * `old_gateway_token`, so servers made with it are still recognised as this computer's.
+ * An empty tunnel (one being replaced) keeps the last address rather than clearing it.
  */
 export function reportComputer(
   storage: DurableObjectStorage,
@@ -158,10 +159,12 @@ export function reportComputer(
   storage.sql.exec(
     `UPDATE salts_computers SET
        old_gateway_token = CASE WHEN gateway_token != ? AND gateway_token != '' THEN gateway_token ELSE old_gateway_token END,
-       gateway_token = ?, tunnel_url = ?, tools = ?, version = ?, last_seen = ?
+       gateway_token = ?, tunnel_url = CASE WHEN ? != '' THEN ? ELSE tunnel_url END,
+       tools = ?, version = ?, last_seen = ?
      WHERE id = ?`,
     r.gateway_token,
     r.gateway_token,
+    r.tunnel_url,
     r.tunnel_url,
     r.tools,
     r.version,
@@ -194,7 +197,13 @@ export function linksOfAgent(storage: DurableObjectStorage, agentId: string): Co
     .toArray() as unknown as ComputerLink[];
 }
 
-/** Link (or relink) an agent with these tools on; its side is brought in step again. */
+/** Marks a new link: its first sync adopts what this computer already put on the agent. */
+export const ADOPT = "adopt";
+
+/**
+ * Link an agent with these tools on, or change an existing link's tools; its side is
+ * brought in step again. A new link starts as ADOPT.
+ */
 export function setLink(
   storage: DurableObjectStorage,
   computerId: string,
@@ -202,7 +211,7 @@ export function setLink(
   tools: string[]
 ) {
   storage.sql.exec(
-    `INSERT INTO salts_links (computer_id, agent_id, tools, synced) VALUES (?, ?, ?, '')
+    `INSERT INTO salts_links (computer_id, agent_id, tools, synced) VALUES (?, ?, ?, '${ADOPT}')
      ON CONFLICT (computer_id, agent_id) DO UPDATE SET tools = excluded.tools, synced = ''`,
     computerId,
     agentId,

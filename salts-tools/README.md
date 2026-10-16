@@ -1,46 +1,52 @@
 # salts-tools — local services for a salt-agent, behind one tunnel
 
-salts-tools runs services for an agent on your own laptop and puts all of them on the
-internet through a single cloudflared quick tunnel (free, no account):
+salts-tools runs services for Salts agents on your own computer and puts all of them on
+the internet through a single cloudflared quick tunnel (free, no account):
 
-| Service | What it is | The agent reaches it at |
+| Service | What it is | Put on the agent as |
 | --- | --- | --- |
-| `web` | [SearXNG](https://github.com/searxng/searxng), a self-hosted metasearch engine (Google, Bing, DuckDuckGo, Brave, Wikipedia and about 70 others, merged, over a JSON API). No account, no API key, no per-query bill. | **SearXNG URL** setting: `<tunnel>/web` |
-| `matchmaker` | [local-mcps/matchmaker-mcp](../local-mcps/matchmaker-mcp/docs/matchmaker-spec.md): resumes and cover letters in, the best people for a job out, as an MCP server. Files on disk, no Docker. | MCP server named `matchmaker`: `<tunnel>/matchmaker/mcp` |
-| `analyst` | [local-mcps/analyst-mcp](../local-mcps/analyst-mcp/README.md): Excel and CSV analysis as an MCP server. It reads workbooks sent in the chat, answers questions about them, previews tables and charts, and returns built workbooks. It needs no Docker. | MCP server named `analyst`: `<tunnel>/analyst/mcp` |
+| `web` | [SearXNG](https://github.com/searxng/searxng), a self-hosted metasearch engine (Google, Bing, DuckDuckGo, Brave, Wikipedia and about 70 others, merged, over a JSON API). No account, no API key, no per-query bill. | **SearXNG URL** and **SearXNG token**: `<tunnel>/web` |
+| `matchmaker` | [local-mcps/matchmaker-mcp](../local-mcps/matchmaker-mcp/docs/matchmaker-spec.md): resumes and cover letters in, the best people for a job out, as an MCP server. Files on disk, no Docker. | MCP server `matchmaker`: `<tunnel>/matchmaker/mcp` |
+| `analyst` | [local-mcps/analyst-mcp](../local-mcps/analyst-mcp/README.md): Excel and CSV analysis as an MCP server. It reads workbooks sent in the chat, answers questions about them, previews tables and charts, and returns built workbooks. No Docker. | MCP server `analyst`: `<tunnel>/analyst/mcp` |
+
+The computer is paired with the user's Salts account once, from the browser. After
+that, the user switches tools on and off per agent on the site's `/salts-tools` page,
+and the Worker keeps each agent pointed at the tunnel. Nothing is copied by hand: no
+agent IDs, no tokens.
 
 The CLI:
 
 - runs each service bound to `127.0.0.1` only
 - runs a gateway on loopback that routes by the first path segment and refuses anything
-  without the token, except a service's share links (`/<service>/share/…`)
+  without the gateway token, except a service's share links (`/<service>/share/…`)
 - opens one cloudflared tunnel to the gateway, so every service shares its address
-- writes each service's address into the agent
-- rebuilds the tunnel and updates the agent whenever the tunnel drops or moves
+- reports to the Worker every 30 seconds and runs the services it answers are wanted
+- rebuilds the tunnel whenever it drops or moves
 - optionally starts at login
 
-It runs on macOS, Linux and Windows. It was called salts-web; see
-[Moving from salts-web](#moving-from-salts-web).
+It runs on macOS, Linux and Windows.
 
 ## Requirements
 
-- Docker with the compose plugin, for `web`. `matchmaker` and `analyst` do not
-  need Docker. Docker does not need to start at login.
+- Node 20 or later.
+- cloudflared: `brew install cloudflared` (macOS), `winget install --id Cloudflare.cloudflared`
+  (Windows), or [the Cloudflare downloads page](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/)
+  (Linux). No Cloudflare account is needed.
+- For `web` only: Docker with the compose plugin. Docker does not need to start at login.
   - macOS: Docker Desktop, OrbStack or Colima. salts-tools starts it when it is not running.
   - Windows: Docker Desktop. salts-tools starts it when it is not running.
   - Linux: Docker Engine, Docker Desktop or Colima. salts-tools starts Docker Desktop and
     Colima itself. Docker Engine runs as a system service, so start it with
     `sudo systemctl enable --now docker`, and add your user to the `docker` group so
     `docker info` works without `sudo`.
-- cloudflared: `brew install cloudflared` (macOS), `winget install --id Cloudflare.cloudflared`
-  (Windows), or [the Cloudflare downloads page](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/)
-  (Linux). No Cloudflare account is needed.
-- Node 20 or later.
-- For `matchmaker` and `analyst`: [uv](https://docs.astral.sh/uv/). salts-tools runs
+- For `matchmaker` and `analyst` only: [uv](https://docs.astral.sh/uv/). salts-tools runs
   `uv sync` the first time.
 - Linux only, optional: `secret-tool` (package `libsecret-tools` on Debian/Ubuntu,
-  `libsecret` on Fedora/Arch) to keep the token in the desktop keyring. See
+  `libsecret` on Fedora/Arch) to keep the secrets in the desktop keyring. See
   [Where things live](#where-things-live).
+
+A tool whose requirement is missing is reported to the site as `missing`, with what to
+install; the others run regardless.
 
 ## Install
 
@@ -64,200 +70,157 @@ npm publish         # prepack copies local-mcps/{matchmaker,analyst}-mcp into mc
 ## First run
 
 ```bash
-salts-tools start web
+npx salts-tools
 ```
 
-1. Checks that Docker and cloudflared are installed (and uv, for `matchmaker` and `analyst`),
-   and that Docker is running. Starts Docker if it is not.
-2. Generates a token if the OS secret store does not already hold one.
-3. Asks for the agent IDs, space separated. One salts-tools serves as many agents as you
-   list, and each of them gets every service unless you choose otherwise in the dashboard
-   (Agents tab, `enter` on an agent).
-4. Shows the token **once**. Paste it into each agent's settings under Capabilities →
-   **Web search** → **SearXNG token**, then save. Leave the Brave key blank. When a
-   Brave key is set, the agent uses Brave and ignores SearXNG. This one token guards
-   every service, and it is how the Worker knows the addresses come from you.
-5. Starts the gateway, the service and the tunnel, and sends the service's address to
-   every agent.
-6. Asks whether to start salts-tools at login.
+1. Checks that cloudflared is installed.
+2. Opens a pairing with the Worker (`POST /salts/pair`), prints a code and a link to
+   `<site>/salts-tools/pair?code=…`, and opens it in the browser.
+3. The signed-in user checks the code, ticks the agents this computer serves and clicks
+   **Connect**. salts-tools polls (`POST /salts/pair/poll`) and receives this computer's
+   credential, once. It makes a gateway token if it has none.
+4. Starts the supervisor, which reports in and prints the agents served and the tools on
+   for each (none, for a new link, unless the agent already had this computer's tools —
+   see [Upgrading](#upgrading-from-an-install-that-pushed-addresses)).
+5. Asks whether to start salts-tools at login.
 
-If an agent refuses the token because it was not saved in that agent, salts-tools names
-it, and you can retry or generate a new one (which then goes into every agent).
+Then, on `<site>/salts-tools`, the user switches tools on per agent. The page lists what
+is still to do on each agent (a capability switch, the matchmaker's headers, a Brave key
+that would take over from SearXNG) with a button or link for each.
 
-## Adding the matchmaker
+## The matchmaker and the analyst
 
-```bash
-salts-tools start matchmaker
-```
-
-With salts-tools already running, this joins the same tunnel, so the address does not
-change. It runs `uv sync` the first time, starts the server (`matchmaker-mcp`) on
-loopback with the token as its `MCP_AUTH_TOKEN`, and tells the agent.
-
-The agent gets an MCP server named `matchmaker`, with `Authorization: Bearer <token>`
-already set, and the headers below added with empty values. Fill in their values once
-on that server in each agent's settings; salts-tools adds a missing one back empty and
-never changes a value you set:
+The Worker creates the agent's MCP server (`matchmaker` or `analyst`) with
+`Authorization: Bearer <gateway token>`. For the matchmaker it adds these headers empty,
+for the user to fill in once on the agent; they are kept when the address changes:
 
 | Header | Suggested value | Covers |
 | --- | --- | --- |
 | `X-OpenRouter-Api-Key` | your OpenRouter key | pays for its model calls |
 | `Tool-Call-Max-Charge` | `0.25` | optional: the most one call may spend, in US dollars (a resume ~$0.001, a judged page of 50 ~$0.10) |
 
-The dashboard lists them under the matchmaker, and `enter` copies a header's name.
+The analyst needs **File ingest** and **MCP** switched on for the agent; the site offers
+to switch them on.
 
-If you remove the `matchmaker` server in an agent, salts-tools does not add it back; the
-dashboard shows it as removed there. To use it again, add it in the agent from the
-**matchmaker** template tile with `Authorization: Bearer <token>`; salts-tools repoints it
-to the tunnel within 30 seconds. The same holds for `analyst`.
+Deleting the server on the agent switches that tool off for that agent, so it stays
+deleted. A server of the same name set up some other way is never touched; the site says
+the name is taken.
 
-The matchmaker's own `.env` in `local-mcps/matchmaker-mcp` still applies (`MM_DATA_DIR`,
-models, and so on). salts-tools overrides the transport, host, port and token. People and
-jobs are folders under `data/matchmaker` in its folder (`local-mcps/matchmaker-mcp` in a clone,
-`~/.salts-tools/mcps/matchmaker-mcp` from npm). Its log is
-`~/.salts-tools/matchmaker.log`.
-
-## Adding the analyst
-
-```bash
-salts-tools start analyst
-```
-
-This joins the same tunnel, runs `uv sync` in `local-mcps/analyst-mcp` the first time,
-starts the server on loopback with the token as its `MCP_AUTH_TOKEN`, and tells the agent.
-
-The agent gets an MCP server named `analyst`, with `Authorization: Bearer <token>`
-already set. Turn on **File ingest** and **MCP** in the agent's capabilities. Users can
-then attach .xlsx and .csv files in the chat. The agent shows previews of the tables
-and charts it builds, and sends the finished workbook as a download.
-
-The analyst's own `.env` in `local-mcps/analyst-mcp` still applies (`DATA_DIR`,
-`INBOX_DIR`, `ALLOW_PYTHON`, and so on). salts-tools overrides the transport, host, port
-and token. Its log is `~/.salts-tools/analyst.log`.
+Each server's own `.env` still applies (`MM_DATA_DIR`, models, `DATA_DIR`, `INBOX_DIR`,
+`ALLOW_PYTHON`, …). salts-tools overrides the transport, host, port and token. Logs:
+`~/.salts-tools/matchmaker.log`, `~/.salts-tools/analyst.log`.
 
 ## Dashboard
 
-Run `salts-tools` with no command (`salts-tools :staging` for staging) to open a
-full-screen dashboard. It has four tabs and updates every second while the supervisor
-works in the background.
+`npx salts-tools` (`npx salts-tools :staging` for staging) starts salts-tools if it is not
+running, then opens a full-screen dashboard. It has four tabs and updates every second
+while the supervisor works in the background.
 
 | Tab | Shows | Keys |
 | --- | --- | --- |
-| 1 Services | Each service, its status (`live`, `starting`, `token refused`, …) and its address. `enter` opens a service: its address, which agents have it, and what to set on the agent (the matchmaker's headers, the analyst's inbox folder). | `s` start or stop, `r` new tunnel, `x` stop everything |
-| 2 Agents | Each agent served and whether it holds the address of every service set for it. `enter` opens an agent: each service is `on` or `off` for that agent only. An agent never chosen for gets every service. | `a` add, `x` remove; inside an agent `enter`/`space` switch a service |
-| 3 Settings | The token, start at login, the Worker, where files live, reset. | `enter` change, `n` new token |
+| 1 Services | Each service, its status (`live`, `starting`, `missing`, `off`, …) and its address. `enter` opens a service: its address, port, log and files. | `s` start, `r` new tunnel, `x` stop everything, `o` open the site |
+| 2 Agents | The agents this computer serves and the tools on for each, as the Worker last said. | `enter`/`a` open the site |
+| 3 Settings | The connection, start at login, the Worker, where files live, reset. | `enter` change |
 | 4 Log | The supervisor's log, newest at the bottom. | |
 
-On every tab: `↑`/`↓` move, `←`/`→` or `1`–`4` switch tab, `c` copies the token,
-`q` quits. The line under the list explains the selected row; when something is wrong
-it says what to do. On a first run the dashboard opens on the agent-ID prompt and makes
-the token when the first agent is added. Quitting leaves the services running.
+On every tab: `↑`/`↓` move, `←`/`→` or `1`–`4` switch tab, `q` quits. The line under the
+list explains the selected row. Quitting leaves the services running.
 
 ## Commands
 
-The commands do the same things without the screen, for scripts and the login item.
-
 | Command | What it does |
 | --- | --- |
-| `salts-tools` | Opens the dashboard. |
-| `salts-tools start` | Checks the machine, runs the first-run steps if needed, then starts the services that were on last time (`web` if none were). The login item runs this. |
-| `salts-tools start <service>…` | Starts those services only, on the running tunnel if there is one. Services already running keep running; others are not started. |
-| `salts-tools stop <service>` | Turns one service off and stops it. The others and the tunnel keep running. Stopping the last one stops everything. |
+| `salts-tools` | Starts if needed (pairing on first run), then opens the dashboard. |
+| `salts-tools start` | Checks the machine, pairs on first run, starts the supervisor. The login item runs this; unattended, it never pairs. |
 | `salts-tools stop` | Stops the supervisor, the tunnel and the containers. The next `start` brings back the same services. |
-| `salts-tools restart` | Opens a new tunnel and sends its addresses to every agent. |
-| `salts-tools reset` | Back to a first run: deletes the token, `~/.salts-tools` (state and logs), the login item and any salts-web leftovers. Keeps the matchmaker's people and jobs. Stop salts-tools first. |
-| `salts-tools setup` | Runs the first-run questions again, for example to add or remove agents. Starts nothing; a running salts-tools sends its addresses to newly listed agents within 30 seconds. |
-| `salts-tools autostart on` / `off` | Adds or removes the login item. See [Where things live](#where-things-live). |
-
-Services: `web`, `matchmaker`, `analyst`.
+| `salts-tools restart` | Opens a new tunnel; the agents follow it on the next report. |
+| `salts-tools reset` | Stops everything, disconnects this computer (`DELETE /salts/computer`, which takes its tools off every agent), and deletes both secrets, `~/.salts-tools` (except `mcps/` and `staging/`), the login item and any salts-web leftovers. Keeps the matchmaker's people and jobs and the analyst's files. |
+| `salts-tools autostart on` / `off` | Adds or removes the login item. |
 
 ## Staging
 
 Add `:staging` to any command to use the staging Worker
-(`salt-agent-staging.dhairyashah98.workers.dev`) instead of production:
+(`salt-agent-staging.dhairyashah98.workers.dev`) and the staging site instead of
+production:
 
 ```bash
-salts-tools start:staging web matchmaker
-salts-tools restart:staging
-salts-tools stop:staging
-salts-tools reset:staging
-salts-tools setup:staging
-salts-tools autostart:staging on
+npx salts-tools :staging
+npx salts-tools stop:staging
+npx salts-tools reset:staging
 ```
 
-Staging runs as a separate instance, with its own token, state, containers, ports,
-tunnel and login item, so it can run alongside production. `stop:staging` does not
-affect production. Staging uses the token account `searxng-token-staging`, state and
-logs in `~/.salts-tools/staging/`, the Docker projects `searxng-staging` and
-`matchmaker-mcp-staging`, and a login item with a `-staging` suffix. Each runs its own
-tunnel.
+Staging runs as a separate instance, with its own credential, gateway token, state,
+containers, ports, tunnel and login item, so it can run alongside production. State and
+logs are in `~/.salts-tools/staging/`. `SALTS_TOOLS_WORKER` and `SALTS_TOOLS_APP`
+override the Worker and the site.
 
 ## How it stays up
 
-`start` launches a background supervisor. It runs the gateway on `127.0.0.1` and checks
-the following every 30 seconds:
+`start` launches a background supervisor. It runs the gateway on `127.0.0.1` and, every
+30 seconds:
 
-- Each service that is on answers on loopback. If not, it starts Docker if needed and
-  brings the service up. A service turned off with `stop <service>` is taken down.
-- cloudflared is running. If not, it restarts cloudflared.
-- The tunnel answers from outside. After three failures in a row it opens a new tunnel.
-- Every agent has each service's current address. If not, it sends it, and retries until
-  the Worker accepts it. This covers a laptop that wakes up offline. An agent that
-  refuses does not hold up the others.
-
-Addresses go to the Worker with the token as `Authorization: Bearer`, and no Clerk
-session. The Worker accepts them only when the token matches the agent's saved SearXNG
-token; an agent with no token saved cannot be updated this way.
-
-- `web`: `POST /searxng/:agentId/url { url }`. The only setting it changes is
-  `searxng_url`.
-- `matchmaker`: `POST /searxng/:agentId/mcp { name, url, headers }`. Creates the MCP server
-  `matchmaker` if the agent has none, with the token as its `Authorization` and each name
-  in `headers` (`X-OpenRouter-Api-Key`, `Tool-Call-Max-Charge`) added empty; on an existing
-  server, missing ones are added empty and set values are kept. An existing
-  server of that name is repointed only if its `Authorization` is already this token;
-  otherwise the Worker answers 409 and changes nothing, so the token can never redirect
-  an MCP server (and the headers it carries) that you set up some other way. When the user
-  removed a server that carried this token, the Worker answers 410 and does not recreate it
-  until the user adds a server of that name again.
+- Brings up each wanted service that does not answer on loopback (starting Docker if
+  needed) and takes down each that is no longer wanted.
+- Restarts cloudflared if it is not running; opens a new tunnel after three failures in
+  a row to reach the tunnel from outside.
+- Reports to the Worker (`PUT /salts/computer`, the credential as bearer): the tunnel
+  address, the gateway token, version, and for each tool its kind, state (`ready`,
+  `starting`, `missing`, `failed`, `off`), what it is waiting on, the headers it wants
+  filled in and the capabilities it needs. The Worker brings every linked agent in step
+  and answers with the agents and the services wanted, which the supervisor runs. A
+  report while a new tunnel opens keeps the last address on the agents.
+- A credential the Worker refuses (the computer was disconnected on the site) stops
+  everything; `salts-tools` then pairs again.
 
 At login, the login item runs `salts-tools start` without a terminal. That start skips
 the Docker wait and leaves it to the supervisor, so login is never held up.
 
+## Upgrading from an install that pushed addresses
+
+Versions before 3 pushed addresses to agents listed by ID, proven by a token pasted into
+each agent's SearXNG token field. The token stays in the secret store as the gateway
+token, so on the first report after pairing, a newly linked agent adopts the tools that
+token already reaches there (its SearXNG token, MCP servers whose `Authorization` is
+`Bearer <token>`). They are repointed rather than removed, and headers filled in on them
+are kept. The `/searxng/:agentId/*` routes remain on the Worker for installs that have not
+upgraded.
+
 ## Security
 
 - Every service listens on `127.0.0.1` only. cloudflared reaches only the gateway.
-- The gateway refuses any request without `Authorization: Bearer <token>` (compared in
-  constant time) and passes the header on, so SearXNG's Caddy gate and the matchmaker
-  check the same token again.
+- The gateway refuses any request without `Authorization: Bearer <gateway token>`
+  (compared in constant time) and passes the header on, so SearXNG's Caddy gate and the
+  MCP servers check the same token again.
 - The one exception is a `GET` or `POST` to `/<service>/share/…`: a link the matchmaker
   hands out for the user to open in a browser (a person's files, the bulk upload page).
   The link is a random 20-character code the matchmaker records with what it opens and
   when it expires (24 hours by default, `MM_LINK_TTL_HOURS`). The matchmaker checks it;
-  SearXNG and the analyst still refuse the path without the token. Replacing the token
-  voids every link.
+  SearXNG and the analyst still refuse the path without the token.
 - The gateway sends each request on with a loopback `Host`, which the matchmaker's MCP
   library requires, and the address it came in on as `X-Forwarded-Host`, `-Proto` and
   `-Prefix`, so the matchmaker can write links to itself.
-- Whoever holds the token can search through your SearXNG, call the matchmaker's tools,
-  and point the agent's SearXNG URL and `matchmaker` server elsewhere. Keep it in the
-  secret store and the agent's settings only.
+- The credential proves reports come from this computer. The Worker stores its hash
+  only, and changes or removes only what carries this computer's gateway token. Whoever
+  holds the credential can point the linked agents' tools at another address; whoever
+  holds the gateway token can use the services. Neither is ever printed.
 
 ## Where things live
 
-- **Token**: never passed on a command line. It reaches SearXNG's Caddy container as
-  `SALTS_TOKEN` and the matchmaker as `MCP_AUTH_TOKEN`. The Keychain entry keeps its
-  salts-web name, so an existing token keeps working.
+- **Secrets**: never passed on a command line or shown. The gateway token reaches
+  SearXNG's Caddy container as `SALTS_TOKEN` and the MCP servers as `MCP_AUTH_TOKEN`.
 
   | Platform | Stored in |
   | --- | --- |
-  | macOS | Keychain, service `salts-web`, account `searxng-token` |
-  | Linux with `secret-tool` and a running keyring | Secret Service keyring, attributes `service=salts-web`, `account=searxng-token` |
-  | Linux without a keyring (headless) | `~/.salts-tools/token`, mode `0600` |
-  | Windows | `%USERPROFILE%\.salts-tools\token.dpapi`, encrypted with DPAPI for the current user |
+  | macOS | Keychain, service `salts-web`, accounts `searxng-token` (gateway token) and `computer-credential` |
+  | Linux with `secret-tool` and a running keyring | Secret Service keyring, attributes `service=salts-web`, `account=…` as on macOS |
+  | Linux without a keyring (headless) | `~/.salts-tools/token` and `~/.salts-tools/credential`, mode `0600` |
+  | Windows | `%USERPROFILE%\.salts-tools\token.dpapi` and `credential.dpapi`, encrypted with DPAPI for the current user |
 
-- **State**: `~/.salts-tools/state.json` holds the agent IDs, the services chosen for each agent, Worker URL, which services
-  are on, their ports, and the tunnel address. It contains no secrets.
+  Staging's accounts and files carry a `-staging` suffix or live under `staging/`.
+
+- **State**: `~/.salts-tools/state.json` holds the Worker URL, the services wanted, the
+  agents served and the tools as last reported, ports and the tunnel address. It
+  contains no secrets.
 - **Logs**: `~/.salts-tools/supervisor.log`, `~/.salts-tools/matchmaker.log`,
   `~/.salts-tools/analyst.log`.
 - **Login item**:
@@ -268,25 +231,13 @@ the Docker wait and leaves it to the supervisor, so login is never held up.
   | Linux | systemd user unit `~/.config/systemd/user/salts-tools.service` |
   | Windows | `salts-tools.cmd` in the Startup folder (`shell:startup`) |
 
-To target a different Worker, set `SALTS_TOOLS_WORKER=https://…` when you run
-`salts-tools setup`. The default is the production Worker.
-
-To replace the token, reset and start again:
-
-```bash
-salts-tools stop
-salts-tools reset
-salts-tools start
-```
-
 ## Moving from salts-web
 
 The first `salts-tools` command on a machine that ran salts-web stops the salts-web
-supervisor and its tunnel, copies its agent ID, Worker and port from `~/.salts-web` into
-`~/.salts-tools` (the old `state.json` is renamed `state.json.migrated`), turns `web` on,
-and replaces a salts-web login item with a salts-tools one. The token stays where it is.
-The SearXNG containers are the same Docker project, so they are reused. The agent's
-SearXNG URL gains `/web` the next time the supervisor pushes it.
+supervisor and its tunnel, copies its Worker and port from `~/.salts-web` into
+`~/.salts-tools` (the old `state.json` is renamed `state.json.migrated`), and replaces a
+salts-web login item with a salts-tools one. The token stays where it is and becomes the
+gateway token. The SearXNG containers are the same Docker project, so they are reused.
 
 ## Check it by hand
 
@@ -317,7 +268,8 @@ curl -s 'http://localhost:8080/search?q=solana&format=json' | head -c 400
 ## Files
 
 - `cli.mjs`: the CLI, the dashboard and the supervisor
-- `status.mjs`: the status of each service and agent, read from `state.json`
+- `computer.mjs`: pairing, the report to the Worker and what it says about each tool
+- `status.mjs`: the status of each service and of the connection, read from `state.json`
 - `tui.mjs`: the dashboard's drawing and key handling
 - `gateway.mjs`: the token check (and the share-link exception) and path routing in front of every service
 - `mcps.mjs`: where each MCP server runs from (the repo, or its installed copy from npm) and the login item's command
