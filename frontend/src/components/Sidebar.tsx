@@ -1,3 +1,4 @@
+/* eslint-disable max-lines-per-function */
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -228,9 +229,9 @@ export function Sidebar({
                 <span
                   key={String(copy)}
                   aria-hidden={copy || undefined}
-                  className="px-6 text-[11px] font-medium leading-[1.33]"
+                  className="pl-2 pr-6 text-[11px] font-medium leading-[1.33]"
                 >
-                  This agent is part of {fleetName}
+                  This agent is part of &quot;{fleetName}&quot; fleet.
                 </span>
               ))}
             </div>
@@ -261,22 +262,16 @@ export function Sidebar({
                 <div className="truncate text-2xl font-[650] leading-tight">
                   {agentName || "Agent"}
                 </div>
-                {fleetName && (
-                  <div className="text-muted text-sm font-light leading-[1.43]">
-                    {fleetName}
-                  </div>
-                )}
               </button>
-              {!fleetName && (
-                <a
-                  href="/guide"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-muted hover:text-ink text-sm font-light leading-[1.43] underline underline-offset-2 transition"
-                >
-                  User guide
-                </a>
-              )}
+
+              <a
+                href="/guide"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-muted hover:text-ink text-sm font-light leading-[1.43] underline underline-offset-2 transition"
+              >
+                User guide
+              </a>
             </div>
           </div>
           <button
