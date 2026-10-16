@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { Eye, EyeOff } from "lucide-react";
 import type { WalletKey } from "@/lib/agent";
 import { formatUsdShort } from "@/lib/format";
 import { BuyKeyDialog } from "./BuyKeyDialog";
@@ -35,7 +34,9 @@ export function WalletDialog({ onClose }: { onClose: () => void }) {
       >
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-lg font-semibold leading-[1.38]">OpenRouter wallet</p>
+            <p className="text-lg font-semibold leading-[1.38]">
+              OpenRouter wallet
+            </p>
             <p className="text-muted mt-1 text-xs font-light leading-[1.33]">
               Manage your OpenRouter API keys.
             </p>
@@ -45,27 +46,24 @@ export function WalletDialog({ onClose }: { onClose: () => void }) {
               onClick={() => setBuying(true)}
               className="bg-ink text-on-primary h-9 rounded-full px-4 text-sm font-semibold transition hover:opacity-85"
             >
-              Buy a key
-            </button>
-            <button
-              onClick={onClose}
-              aria-label="Close"
-              className="text-muted hover:bg-canvas-soft hover:text-ink flex h-9 w-9 items-center justify-center rounded-full text-lg leading-none transition"
-            >
-              ×
+              Use Card/Crypto
             </button>
           </div>
         </div>
 
-        {wallet.error && <p className="mt-4 text-xs leading-[1.33]">{wallet.error}</p>}
+        {wallet.error && (
+          <p className="mt-4 text-xs leading-[1.33]">{wallet.error}</p>
+        )}
 
-        <div className="mt-5 space-y-2">
+        <div className="mt-6 space-y-3">
           {wallet.keys === null && (
-            <p className="text-muted text-sm leading-[1.43]">Loading your keys…</p>
+            <p className="text-muted text-sm leading-[1.43]">
+              Loading your keys…
+            </p>
           )}
           {wallet.keys?.length === 0 && (
-            <p className="text-muted text-sm leading-[1.43]">
-              No keys yet. Add one you already have, or buy one.
+            <p className="text-center mt-8 text-muted text-sm leading-[1.43]">
+              No keys yet.
             </p>
           )}
           {wallet.keys?.map((key) => (
@@ -90,7 +88,7 @@ export function WalletDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
-/** One key: its nickname, what it may still spend, and what can be done with it. */
+/** One key, laid out like a pricing card: its name, what it may still spend, its details. */
 function KeyRow({
   walletKey: key,
   onRemove,
@@ -116,122 +114,129 @@ function KeyRow({
     return !failed;
   };
 
+  const usedBy =
+    key.agents === 0
+      ? "Not used by any agent yet."
+      : `Used by ${key.agents === 1 ? "1 agent" : `${key.agents} agents`}.`;
+
   return (
-    <div className="bg-canvas-soft rounded-2xl px-4 py-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold leading-[1.43]">{key.nickname}</p>
-          <p className="text-muted text-xs font-light leading-[1.33]">
-            {key.kind === "provisioned" ? "Bought here" : "Added by you"}
-            {" · "}
-            {key.agents === 1 ? "1 agent" : `${key.agents} agents`}
-          </p>
-        </div>
-        <Credit walletKey={key} />
+    <div className="ring-hairline-soft rounded-[24px] p-6 ring-1">
+      <div className="flex items-start justify-between gap-4">
+        <p className="min-w-0 truncate text-xl font-semibold leading-[1.3]">{key.nickname}</p>
+        {!confirming && !crediting && (
+          <div className="flex shrink-0 gap-2">
+            {key.kind === "provisioned" && (
+              <button
+                onClick={() => setCrediting(true)}
+                className="border-hairline text-ink hover:bg-canvas-soft h-9 rounded-full border px-4 text-xs font-semibold transition"
+              >
+                Add credits
+              </button>
+            )}
+            <button
+              onClick={() => setConfirming(true)}
+              className="bg-canvas-soft text-ink h-9 rounded-full px-4 text-xs font-semibold transition hover:opacity-70"
+            >
+              Remove
+            </button>
+          </div>
+        )}
       </div>
 
-      {key.key !== null && (
-        <div className="mt-2 flex items-center gap-2">
-          <code className="text-muted min-w-0 flex-1 truncate text-xs">
-            {shown ? key.key : "sk-or-…" + key.key.slice(-4)}
-          </code>
-          <button
-            onClick={() => setShown(!shown)}
-            aria-label={shown ? "Hide key" : "Show key"}
-            className="text-muted hover:text-ink flex h-7 w-7 items-center justify-center rounded-full transition"
-          >
-            {shown ? <EyeOff size={14} /> : <Eye size={14} />}
-          </button>
-        </div>
-      )}
+      <Credit walletKey={key} />
 
-      {crediting && (
-        <div className="mt-3 flex gap-2">
-          <input
-            type="number"
-            min={1}
-            step={1}
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            aria-label="Credit to add, in USD"
-            className="bg-canvas ring-hairline-soft h-9 w-28 rounded-full px-4 text-sm ring-1 outline-none"
-          />
-          <button
-            onClick={() =>
-              void run(() => onAddCredits(Number(amount))).then((ok) => ok && setCrediting(false))
-            }
-            disabled={busy || !(Number(amount) > 0)}
-            className="bg-ink text-on-primary h-9 rounded-full px-4 text-xs font-semibold transition hover:opacity-85 disabled:opacity-40"
-          >
-            Pay with crypto
-          </button>
-        </div>
-      )}
+      <div className="text-muted mt-5 text-sm leading-[1.43]">
+        {key.key !== null ? (
+          <p className="break-all">
+            {shown ? key.key : `Your key ending ${key.key.slice(-4)}.`}{" "}
+            <button
+              onClick={() => setShown(!shown)}
+              className="hover:text-ink underline underline-offset-2 transition"
+            >
+              {shown ? "Hide" : "Show"}
+            </button>
+          </p>
+        ) : (
+          <p>Bought here. The key itself stays hidden.</p>
+        )}
+        <p>{usedBy}</p>
+      </div>
 
       {confirming && (
-        <p className="mt-3 text-xs leading-[1.33]">
-          {key.agents > 0
-            ? `${key.agents === 1 ? "1 agent uses" : `${key.agents} agents use`} this key and will stop working until given another.`
-            : "No agent uses this key."}
-          {key.kind === "provisioned" && " Its remaining credit is lost."}
-        </p>
-      )}
-
-      {error && <p className="mt-2 text-xs leading-[1.33]">{error}</p>}
-
-      <div className="mt-3 flex justify-end gap-2">
-        {key.kind === "provisioned" && !confirming && (
-          <button
-            onClick={() => setCrediting(!crediting)}
-            className="border-hairline text-ink hover:bg-canvas h-8 rounded-full border px-4 text-xs font-semibold transition"
-          >
-            {crediting ? "Cancel" : "Add credits"}
-          </button>
-        )}
-        {confirming ? (
-          <>
+        <div className="bg-canvas-soft mt-5 rounded-2xl px-4 py-4">
+          <p className="text-sm leading-[1.43]">
+            {key.agents === 0
+              ? "Remove this key from your wallet?"
+              : `Remove this key? ${key.agents === 1 ? "1 agent" : `${key.agents} agents`} will stop replying until given another.`}
+            {key.kind === "provisioned" && " Its remaining credit is lost."}
+          </p>
+          <div className="mt-3 flex justify-end gap-2">
             <button
               onClick={() => setConfirming(false)}
-              className="border-hairline text-ink hover:bg-canvas h-8 rounded-full border px-4 text-xs font-semibold transition"
+              className="border-hairline text-ink hover:bg-canvas h-9 rounded-full border px-4 text-xs font-semibold transition"
             >
-              Keep
+              Keep key
             </button>
             <button
               onClick={() => void run(onRemove)}
               disabled={busy}
-              className="bg-ink text-on-primary h-8 rounded-full px-4 text-xs font-semibold transition hover:opacity-85 disabled:opacity-40"
+              className="bg-ink text-on-primary h-9 rounded-full px-4 text-xs font-semibold transition hover:opacity-85 disabled:opacity-40"
             >
-              Remove
+              {busy ? "Removing…" : "Remove key"}
             </button>
-          </>
-        ) : (
-          !crediting && (
+          </div>
+        </div>
+      )}
+
+      {crediting && (
+        <div className="bg-canvas-soft mt-5 rounded-2xl px-4 py-4">
+          <label className="block text-sm leading-[1.43]">
+            Credit to add, in US dollars
+            <input
+              type="number"
+              min={1}
+              step={1}
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className="bg-canvas mt-2 block h-11 w-full rounded-2xl px-4 text-sm outline-none focus:ring-2 focus:ring-ink"
+            />
+          </label>
+          <div className="mt-3 flex justify-end gap-2">
             <button
-              onClick={() => setConfirming(true)}
-              className="text-muted hover:text-ink h-8 rounded-full px-3 text-xs font-semibold transition"
+              onClick={() => setCrediting(false)}
+              className="border-hairline text-ink hover:bg-canvas h-9 rounded-full border px-4 text-xs font-semibold transition"
             >
-              Remove
+              Cancel
             </button>
-          )
-        )}
-      </div>
+            <button
+              onClick={() =>
+                void run(() => onAddCredits(Number(amount))).then((ok) => ok && setCrediting(false))
+              }
+              disabled={busy || !(Number(amount) > 0)}
+              className="bg-ink text-on-primary h-9 rounded-full px-4 text-xs font-semibold transition hover:opacity-85 disabled:opacity-40"
+            >
+              Add credits
+            </button>
+          </div>
+        </div>
+      )}
+
+      {error && <p className="mt-3 text-sm leading-[1.43]">{error}</p>}
     </div>
   );
 }
 
-/** What the key may still spend, as OpenRouter reports it. */
+/** What the key may still spend, as OpenRouter reports it: one large figure, a caption under. */
 function Credit({ walletKey: key }: { walletKey: WalletKey }) {
-  if (!key.valid) return <p className="shrink-0 text-xs leading-[1.33]">Not working</p>;
+  const [figure, caption] = !key.valid
+    ? ["—", "OpenRouter isn't accepting this key."]
+    : key.limit === null
+      ? [formatUsdShort(key.usage), "spent so far, no limit set"]
+      : [formatUsdShort(key.remaining), `left of ${formatUsdShort(key.limit)}`];
   return (
-    <div className="shrink-0 text-right">
-      <p className="text-sm font-semibold leading-[1.43]">
-        {key.limit === null ? "No limit" : `${formatUsdShort(key.remaining)} left`}
-      </p>
-      <p className="text-muted text-xs font-light leading-[1.33]">
-        {key.limit === null
-          ? `${formatUsdShort(key.usage)} used`
-          : `of ${formatUsdShort(key.limit)}`}
-      </p>
+    <div className="mt-4">
+      <p className="text-[32px] font-[650] leading-[1.13]">{figure}</p>
+      <p className="text-muted mt-1 text-xs leading-[1.33]">{caption}</p>
     </div>
   );
 }
@@ -266,12 +271,12 @@ function AddKey({ onAdd }: { onAdd: (key: string) => Promise<string | null> }) {
           autoComplete="off"
           placeholder="Paste an OpenRouter key, sk-or-v1-…"
           aria-label="OpenRouter API key"
-          className="bg-field placeholder:text-faint min-w-0 flex-1 rounded-full px-4 text-sm outline-none"
+          className="bg-field placeholder:text-faint focus:ring-ink h-11 min-w-0 flex-1 rounded-2xl px-4 text-sm outline-none focus:ring-2"
         />
         <button
           onClick={() => void submit()}
           disabled={!ready || busy}
-          className="border-hairline text-ink hover:bg-canvas-soft h-10 shrink-0 rounded-full border px-5 text-sm font-semibold transition disabled:opacity-40"
+          className="border-hairline text-ink hover:bg-canvas-soft h-11 shrink-0 rounded-full border px-5 text-sm font-semibold transition disabled:opacity-40"
         >
           {busy ? "Checking…" : "Add key"}
         </button>

@@ -15,7 +15,7 @@ To talk to their agent from their phone, they can connect their own Telegram bot
 
 ## How they know it is a fleet agent
 
-- At the top of their agent's sidebar, they see **This agent is part of** followed by your fleet's name. They do not see your email address.
+- At the top of their agent's sidebar, they see a line such as **This agent is part of "Acme" fleet.**, with your fleet's name in place of Acme. They do not see your email address.
 - In **Settings**, they see how much of their monthly spending limit is left, marked **Set by agent admin**.
 - Under **Manage access**, they see how many more people they can add, if you set a member limit.
 
