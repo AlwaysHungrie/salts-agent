@@ -64,6 +64,11 @@ export type DeploymentSettings = {
   default_agent_limit: number;
   /** How many keys one account's OpenRouter wallet may hold. */
   max_wallet_keys: number;
+  /**
+   * The service fee on a credit purchase, in basis points of the credit (600 = 6%). It
+   * covers OpenRouter's own charge when the Worker tops up a key, and moving the funds.
+   */
+  wallet_fee_bps: number;
   /** Attachment ceilings, per kind. */
   max_upload_bytes: UploadLimits;
   /** Past this, a first-page render is not a thumbnail. */
@@ -145,6 +150,7 @@ export const SETTINGS_FIELDS: readonly SettingsField[] = [
   INT("max_members", 1, 100_000, "addresses one agent's access list may hold"),
   INT("default_agent_limit", 1, 100_000, "agents an ordinary account may administer"),
   INT("max_wallet_keys", 1, 1000, "keys one account's OpenRouter wallet may hold"),
+  INT("wallet_fee_bps", 0, 5000, "service fee on a credit purchase, in basis points (600 = 6%)"),
   {
     key: "max_upload_bytes",
     kind: "json",

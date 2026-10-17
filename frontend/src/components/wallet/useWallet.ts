@@ -7,16 +7,16 @@ async function errorOf(res: Response, fallback: string): Promise<string> {
   return payload?.error ?? fallback;
 }
 
-type WalletRead = { keys: WalletKey[]; networks: PayNetwork[]; error: string | null };
+type WalletRead = { keys: WalletKey[]; networks: PayNetwork[]; feeBps: number; error: string | null };
 
 /** The wallet as the Worker holds it, or the error it answered with. */
 async function readWallet(): Promise<WalletRead> {
   const res = await fetch("/api/wallet", { cache: "no-store" });
   if (!res.ok) {
-    return { keys: [], networks: [], error: await errorOf(res, "Couldn't load your wallet.") };
+    return { keys: [], networks: [], feeBps: 0, error: await errorOf(res, "Couldn't load your wallet.") };
   }
-  const body = (await res.json()) as { keys: WalletKey[]; networks?: PayNetwork[] };
-  return { keys: body.keys, networks: body.networks ?? [], error: null };
+  const body = (await res.json()) as { keys: WalletKey[]; networks?: PayNetwork[]; fee_bps?: number };
+  return { keys: body.keys, networks: body.networks ?? [], feeBps: body.fee_bps ?? 0, error: null };
 }
 
 /**
@@ -26,11 +26,14 @@ async function readWallet(): Promise<WalletRead> {
 export function useWallet() {
   const [keys, setKeys] = useState<WalletKey[] | null>(null);
   const [networks, setNetworks] = useState<PayNetwork[]>([]);
+  /** The service fee on a purchase, in basis points of the credit. */
+  const [feeBps, setFeeBps] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   const apply = useCallback((read: WalletRead) => {
     setKeys(read.keys);
     setNetworks(read.networks);
+    setFeeBps(read.feeBps);
     setError(read.error);
   }, []);
 
@@ -92,5 +95,5 @@ export function useWallet() {
     return "paid";
   };
 
-  return { keys, networks, error, load, add, remove, quote, confirm };
+  return { keys, networks, feeBps, error, load, add, remove, quote, confirm };
 }
