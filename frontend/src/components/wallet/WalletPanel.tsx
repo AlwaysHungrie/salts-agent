@@ -534,7 +534,11 @@ function ResumePayments({ recover }: { recover: Recover }) {
   );
 }
 
-/** Paste a payment's transaction id to get the key it paid for, when the page lost it. */
+/**
+ * Paste a payment's transaction id to get the key it paid for, when the page lost it. A
+ * link in the sidebar opens a dialog on the page body, as the sidebar's slide would
+ * otherwise contain it.
+ */
 function RecoverPayment({
   networks,
   recover,
@@ -543,11 +547,53 @@ function RecoverPayment({
   recover: Recover;
 }) {
   const [open, setOpen] = useState(false);
+  const close = useCallback(() => setOpen(false), []);
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        className="text-muted hover:text-ink mt-3 text-xs underline underline-offset-2"
+      >
+        Paid but didn&apos;t get a key?
+      </button>
+      {open && (
+        <RecoverDialog
+          networks={networks}
+          recover={recover}
+          onClose={close}
+        />
+      )}
+    </>
+  );
+}
+
+function RecoverDialog({
+  networks,
+  recover,
+  onClose,
+}: {
+  networks: { id: string; label: string }[];
+  recover: Recover;
+  onClose: () => void;
+}) {
   const [network, setNetwork] = useState(networks[0]?.id ?? "");
   const [tx, setTx] = useState("");
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const field = useRef<HTMLInputElement>(null);
   const ready = tx.trim() !== "" && network !== "";
+
+  // Escape closes the dialog and leaves the sidebar open: caught before the sidebar's own.
+  useEffect(() => {
+    field.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopImmediatePropagation();
+      onClose();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [onClose]);
 
   const submit = async () => {
     if (!ready || busy) return;
@@ -566,55 +612,78 @@ function RecoverPayment({
     }
   };
 
-  if (!open)
-    return (
-      <button
-        onClick={() => setOpen(true)}
-        className="text-muted hover:text-ink mt-3 text-xs underline underline-offset-2"
+  return createPortal(
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-70 flex items-center justify-center bg-black/30 px-5"
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Recover a payment"
+        onClick={(e) => e.stopPropagation()}
+        className="bg-canvas text-ink w-full max-w-md rounded-[20px] px-6 py-6 shadow-xl"
       >
-        Paid but didn&apos;t get a key?
-      </button>
-    );
-
-  return (
-    <div className="mt-4">
-      <p className="text-muted mb-2 text-xs leading-[1.33]">
-        Paste the transaction id from your wallet, and choose the network you
-        paid on.
-      </p>
-      <div className="flex gap-2">
-        <select
-          value={network}
-          onChange={(e) => setNetwork(e.target.value)}
-          aria-label="Network"
-          className="bg-field h-11 shrink-0 rounded-2xl px-3 text-sm outline-none"
-        >
-          {networks.map((n) => (
-            <option key={n.id} value={n.id}>
-              {n.label}
-            </option>
-          ))}
-        </select>
-        <input
-          value={tx}
-          onChange={(e) => setTx(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") void submit();
-          }}
-          autoComplete="off"
-          placeholder="Transaction id"
-          aria-label="Transaction id"
-          className="bg-field placeholder:text-faint focus:ring-ink h-11 min-w-0 flex-1 rounded-2xl px-4 text-sm outline-none focus:ring-2"
-        />
+        <div className="flex items-start gap-2">
+          <p className="flex-1 text-base font-semibold leading-[1.38]">
+            Paid but didn&apos;t get a key?
+          </p>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="text-muted hover:bg-canvas-soft hover:text-ink -mr-2 -mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <p className="text-muted mt-2 mb-4 text-sm font-light leading-[1.43]">
+          Paste the transaction id from your wallet, and choose the network you
+          paid on.
+        </p>
+        <div className="flex gap-2">
+          <select
+            value={network}
+            onChange={(e) => setNetwork(e.target.value)}
+            aria-label="Network"
+            className="bg-field h-11 shrink-0 rounded-2xl px-3 text-sm outline-none"
+          >
+            {networks.map((n) => (
+              <option key={n.id} value={n.id}>
+                {n.label}
+              </option>
+            ))}
+          </select>
+          <input
+            ref={field}
+            value={tx}
+            onChange={(e) => setTx(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void submit();
+            }}
+            autoComplete="off"
+            placeholder="Transaction id"
+            aria-label="Transaction id"
+            className="bg-field placeholder:text-faint focus:ring-ink h-11 min-w-0 flex-1 rounded-2xl px-4 text-sm outline-none focus:ring-2"
+          />
+        </div>
+        {note && <p className="mt-3 text-xs leading-[1.33]">{note}</p>}
+        <div className="mt-6 flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="border-hairline text-ink hover:bg-canvas-soft h-10 rounded-full border px-5 text-sm font-semibold transition"
+          >
+            Close
+          </button>
+          <button
+            onClick={() => void submit()}
+            disabled={!ready || busy}
+            className="bg-ink text-on-primary h-10 rounded-full px-5 text-sm font-semibold transition hover:opacity-85 disabled:opacity-40"
+          >
+            {busy ? "Checking…" : "Get my key"}
+          </button>
+        </div>
       </div>
-      <button
-        onClick={() => void submit()}
-        disabled={!ready || busy}
-        className="border-hairline text-ink hover:bg-canvas-soft mt-2 h-11 w-full rounded-full border px-5 text-sm font-semibold transition disabled:opacity-40"
-      >
-        {busy ? "Checking…" : "Get my key"}
-      </button>
-      {note && <p className="mt-2 text-xs leading-[1.33]">{note}</p>}
-    </div>
+    </div>,
+    document.body,
   );
 }
