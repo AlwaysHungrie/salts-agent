@@ -3,22 +3,18 @@ import { TelegramSettingsPreview } from "./TelegramSettingsPreview";
 import { AppPreview } from "./AppPreview";
 import {
   CAPABILITIES as CAPABILITIES_COPY,
-  COVERAGE_PERCENT,
   CTA as CTA_COPY,
   FEATURES as FEATURES_COPY,
   FLEET,
   HERO,
   HOW,
   LINKS,
-  MISSION,
   OWNERSHIP,
   PRICING,
   STATS as STATS_COPY,
   STEPS,
-  WORLD_POPULATION_B,
 } from "./content";
-import { Globe } from "./Globe";
-import { CountUp, HeroSquircles, Reveal } from "./motion";
+import { HeroSquircles, Reveal } from "./motion";
 import { Button, Eyebrow, Placeholder, Wrap } from "./ui";
 import type { ReactNode } from "react";
 
@@ -152,44 +148,6 @@ export function Features() {
             </article>
           </Reveal>
         </div>
-      </Wrap>
-    </section>
-  );
-}
-
-/* -------------------------------------------------------------- Mission -- */
-
-export function Mission() {
-  return (
-    <section id="mission" className="mt-20 scroll-mt-28 sm:mt-28 lg:mt-32">
-      <Wrap>
-        <Reveal>
-          <div className="relative overflow-hidden rounded-[32px] bg-ink px-5 py-12 text-center text-white sm:px-12 sm:py-16 lg:py-20">
-            {/* Cropped by the card edge, so it reads as a world still turning. */}
-            <Globe className="pointer-events-none absolute right-0 top-1/2 hidden h-[520px] w-[520px] -translate-y-1/2 translate-x-[45%] lg:block" />
-            <div className="relative">
-              <p className="text-xs tracking-[0.08em] text-faint">
-                {MISSION.eyebrow}
-              </p>
-              <h2 className="mx-auto mt-3 max-w-[18ch] text-[clamp(26px,3.5vw,38px)] font-[650] leading-[1.1] tracking-[-0.025em] text-balance">
-                <CountUp to={WORLD_POPULATION_B} decimals={2} suffix="B" />{" "}
-                {MISSION.titleSuffix}
-              </h2>
-              <h2 className="mx-auto max-w-[18ch] text-[clamp(26px,3.5vw,38px)] font-[650] leading-[1.1] tracking-[-0.025em] text-balance">
-                {MISSION.subtitle}
-              </h2>
-              <p className="mx-auto mt-4 max-w-[540px] text-lg font-light leading-[1.45] text-faint text-balance">
-                {MISSION.body}
-              </p>
-              <p className="mt-8 text-sm text-faint">
-                <span className="font-semibold text-white">
-                  <CountUp to={COVERAGE_PERCENT} decimals={6} suffix="%" />
-                </span>{" "}
-                {MISSION.coverageSuffix}
-              </p>
-            </div>
-          </div>
-        </Reveal>
       </Wrap>
     </section>
   );

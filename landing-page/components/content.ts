@@ -20,15 +20,8 @@ export const BRAND = {
 
 /* ------------------------------------------------------------- Numbers -- */
 
-/** Agents live right now. Used by the header counter and the mission maths. */
-export const AGENTS_DEPLOYED = 241;
-
-/** World population the mission counts up to, in billions. */
-export const WORLD_POPULATION_B = 8.31;
-
-/** Share of the world with an agent, as a percentage. Derived, never typed. */
-export const COVERAGE_PERCENT =
-  (AGENTS_DEPLOYED * 100) / (WORLD_POPULATION_B * 1_000_000_000);
+/** Agents one Personal Account can create (the `default_agent_limit` setting). */
+export const AGENT_LIMIT = 5;
 
 /** Chat sessions one agent keeps before you need to delete older ones. */
 export const SESSION_LIMIT = 256;
@@ -49,7 +42,7 @@ export const STORAGE_MB = 50;
 export const NAV = [
   { id: "skills", label: "What it does", sections: ["stats", "skills", "capabilities"] },
   { id: "how", label: "How it works", sections: ["how"] },
-  { id: "costs", label: "Pricing", sections: ["costs", "mission", "fleet"] },
+  { id: "costs", label: "Pricing", sections: ["costs", "fleet"] },
   { id: "faq", label: "FAQ", sections: ["faq", "start"] },
 ] as const;
 
@@ -92,7 +85,7 @@ export const HERO = {
     "So you can use it as much as you want, any way you want, and pay only for what you use.",
   ],
   primaryCta: "Get my agent",
-  secondaryCta: "See what can it do",
+  secondaryCta: "See what it can do",
   footnote: "Free to run with your own OpenRouter API key. Usage limits apply.",
 } as const;
 
@@ -121,7 +114,7 @@ export const FEATURES = {
   cards: [
     {
       title: "It works in your apps",
-      body: "Connect Notion, Gmail, GitHub or any other app you use, and your agent can work it for you. Ask it to add a task, find a page or open an issue, and it takes care of the clicks.",
+      body: "Connect Notion, GitHub or any other app with an MCP server, and your agent can work it for you. Ask it to add a task, find a page or open an issue, and it takes care of the clicks.",
       wide: true,
     },
     {
@@ -146,14 +139,6 @@ export const FEATURES = {
     title: "You are in control",
     body: "You choose the model, what your agent can do, who it talks to and how much it can spend.",
   },
-} as const;
-
-export const MISSION = {
-  eyebrow: "We're on track for",
-  titleSuffix: "agents.",
-  subtitle: "One for each person.",
-  body: "We believe every person on the planet should have open and equal access to AI.",
-  coverageSuffix: "covered so far.",
 } as const;
 
 export const PRICING = {
@@ -272,7 +257,7 @@ export const FAQ = {
     },
     {
       q: "What are the usage limits?",
-      a: `Each account can create one agent. Each agent can keep up to ${SESSION_LIMIT} chat sessions and ${STORAGE_MB} MB of files. When you reach a limit, delete older sessions to make room. Keep in mind that the longer a conversation gets, the more each reply costs, so we recommend starting a new one whenever you change the subject.`,
+      a: `Each account can create ${AGENT_LIMIT} agents. Each agent can keep up to ${SESSION_LIMIT} chat sessions and ${STORAGE_MB} MB of files. When you reach a limit, delete older sessions to make room. Keep in mind that the longer a conversation gets, the more each reply costs, so we recommend starting a new one whenever you change the subject.`,
     },
     {
       q: "Can I send it files?",
