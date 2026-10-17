@@ -474,6 +474,17 @@ export class AgentDirectory extends DurableObject {
     setDeploymentValue(this.ctx.storage, "reown_project_id", value);
   }
 
+  /** A Solana RPC URL that overrides the deployment's (it may carry an API key). */
+  solanaRpc(): string {
+    this.ensureSchema();
+    return deploymentValue(this.ctx.storage, "payment_rpc_solana");
+  }
+
+  setSolanaRpc(value: string) {
+    this.ensureSchema();
+    setDeploymentValue(this.ctx.storage, "payment_rpc_solana", value);
+  }
+
   /** Set one family's payment address; blank switches that family off. */
   setPaymentAddress(family: "evm" | "solana", value: string) {
     this.ensureSchema();

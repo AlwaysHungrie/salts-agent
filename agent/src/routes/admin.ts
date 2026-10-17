@@ -115,9 +115,10 @@ async function handleProvisioningKey(request: Request, env: Env): Promise<Respon
 /**
  * The payment settings, read together for the admin CLI's Payments tab: where purchases
  * are paid to (one EVM address for every EVM network, one Solana address), Reown's
- * project id (the browser's wallet modal), and whether a provisioning key is set (set
+ * project id (the browser's wallet modal), a Solana RPC URL overriding the configured one
+ * (write-only: only its host is shown, as it may carry an API key), and whether a provisioning key is set (set
  * through its own route, which checks it with OpenRouter). All but the key are public.
- * PATCH sets any of `evm`, `solana`, `reown_project_id`; a blank one switches it off.
+ * PATCH sets any of `evm`, `solana`, `reown_project_id`, `solana_rpc`; a blank one switches it off.
  */
 async function handlePayments(request: Request, env: Env): Promise<Response> {
   const dir = directory(env);
@@ -126,15 +127,26 @@ async function handlePayments(request: Request, env: Env): Promise<Response> {
     return {
       ...(await dir.paymentAddresses()),
       reown_project_id: await dir.reownProjectId(),
+      // Only the host: the URL may carry an API key.
+      solana_rpc: rpcHost(await dir.solanaRpc()),
       provisioning_key: { set: Boolean(key), hint: key ? key.slice(-4) : "" },
     };
   };
   if (request.method === "GET") return json(await view());
   if (request.method !== "PATCH") return methodNotAllowed();
-  const body = await readJson<{ evm?: unknown; solana?: unknown; reown_project_id?: unknown }>(request);
+  const body = await readJson<{
+    evm?: unknown;
+    solana?: unknown;
+    reown_project_id?: unknown;
+    solana_rpc?: unknown;
+  }>(request);
   const given = (v: unknown) => (typeof v === "string" ? v.trim() : "");
-  const fields = (["evm", "solana", "reown_project_id"] as const).filter((f) => body[f] !== undefined);
-  if (!fields.length) return jsonError("Give evm, solana or reown_project_id.", 400);
+  const fields = (["evm", "solana", "reown_project_id", "solana_rpc"] as const).filter(
+    (f) => body[f] !== undefined
+  );
+  if (!fields.length) return jsonError("Give evm, solana, reown_project_id or solana_rpc.", 400);
+  const rpc = given(body.solana_rpc);
+  if (rpc && !rpcHost(rpc)) return jsonError("A Solana RPC is an https:// URL.", 400);
   for (const family of ["evm", "solana"] as const) {
     const value = given(body[family]);
     // Kept as typed (an EVM checksum stays readable); compared lowercased.
@@ -150,7 +162,18 @@ async function handlePayments(request: Request, env: Env): Promise<Response> {
     if (body[family] !== undefined) await dir.setPaymentAddress(family, given(body[family]));
   }
   if (body.reown_project_id !== undefined) await dir.setReownProjectId(reown);
+  if (body.solana_rpc !== undefined) await dir.setSolanaRpc(rpc.slice(0, 2000));
   return json(await view());
+}
+
+/** An https URL's host, or "" for anything else. */
+function rpcHost(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" ? parsed.host : "";
+  } catch {
+    return "";
+  }
 }
 
 /** The owner's queue of requests for a higher agent ceiling. */

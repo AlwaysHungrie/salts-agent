@@ -246,8 +246,8 @@ const state = {
   users: pager("/api/admin/users", "users"),
   requests: pager("/api/admin/business-requests", "requests"),
   /**
-   * The payment settings: `{ evm, solana, reown_project_id, provisioning_key: { set,
-   * hint } }`; null until read, or when the Worker predates them.
+   * The payment settings: `{ evm, solana, reown_project_id, solana_rpc (host only),
+   * provisioning_key: { set, hint } }`; null until read, or when the Worker predates them.
    */
   payments: null,
   /** The user opened from the Users tab, or null while the list is showing. */
@@ -303,6 +303,8 @@ const PAYMENT_FIELDS = [
   { key: "evm", label: "EVM pay address", off: "EVM payments are closed" },
   { key: "solana", label: "Solana pay address", off: "Solana payments are closed" },
   { key: "reown_project_id", label: "Reown project id", off: "the wallet modal can't open" },
+  // Write-only: the Worker shows only its host, as the URL may carry an API key.
+  { key: "solana_rpc", label: "Solana RPC URL", off: "Solana uses the configured RPC", secret: true },
 ];
 
 /** Set one payment setting; the Worker checks it is the right shape. */
@@ -712,7 +714,8 @@ function view() {
           rows.push({
             cells: [field.label, pay[field.key] || `not set — ${field.off}`],
             unset: !pay[field.key],
-            enter: () => startEdit(field.label, pay[field.key] ?? "", (t) => setPayment(field, t)),
+            enter: () =>
+              startEdit(field.label, field.secret ? "" : pay[field.key] ?? "", (t) => setPayment(field, t), field.secret),
             remove: pay[field.key] ? () => removePayment(field) : undefined,
           });
         }

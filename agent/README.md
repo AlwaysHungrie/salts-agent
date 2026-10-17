@@ -105,7 +105,9 @@ tab with Reown's project id, which the browser's wallet modal is opened with (`G
 /api/admin/payments`, stored in `AgentDirectory`; `GET /api/wallet` hands the id to the
 page). A blank address switches that family off; without a Reown project id the wallet
 lists no networks. Which RPC each network is read from is `PAYMENT_RPC` in
-`wrangler.jsonc`. Base Sepolia (`base-sepolia`) is a testnet for
+`wrangler.jsonc`; the Payments tab's Solana RPC URL replaces Solana's (Solana's public
+endpoint answers Cloudflare with 403, and a keyed one such as Helius stays out of the
+repository: only its host is ever shown). Base Sepolia (`base-sepolia`) is a testnet for
 trying a purchase with faucet coins; it has an RPC on staging only, never production. Purchases are capped at
 `max_wallet_purchase_usd`.
 

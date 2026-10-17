@@ -632,6 +632,7 @@ describe("the payment addresses", () => {
       evm,
       solana: OURS_ON_SOLANA,
       reown_project_id: REOWN_ID,
+      solana_rpc: "",
       provisioning_key: { set: true, hint: PROVISIONING_KEY.slice(-4) },
     };
     expect(await json(set({ evm }))).toEqual(shown);
@@ -651,6 +652,27 @@ describe("the payment addresses", () => {
     expect((await set("not-a-project")).status).toBe(400);
     expect((await set("")).status).toBe(200);
     expect(await read()).toMatchObject({ reown_project_id: "", networks: [] });
+  });
+
+  it("take a Solana RPC URL in place of the configured one, showing only its host", async () => {
+    const set = (solana_rpc: string) =>
+      admin("payments", { method: "PATCH", body: JSON.stringify({ solana_rpc }) });
+    expect((await set("http://rpc.test/keyed")).status).toBe(400);
+    expect((await set("not a url")).status).toBe(400);
+    expect(await json(set("https://rpc.test/refuses?api-key=s3cret"))).toMatchObject({ solana_rpc: "rpc.test" });
+    expect(JSON.stringify(await json(admin("payments")))).not.toContain("s3cret");
+
+    // Verifying a Solana payment now asks the endpoint set, which refuses here.
+    const owner = someone("owner");
+    const payer = "BuyerWa11et1111111111111111111111111111111";
+    const q = await json<QuoteView>(buy(owner, { network: "solana", asset: "usdc", payer, amount: 10 }));
+    const res = await confirm(owner, q.id, "6".repeat(88));
+    expect(res.status).toBe(502);
+    expect((await res.json()) as { error: string }).toMatchObject({ error: "Solana didn't answer (403). Try again." });
+
+    // Blank goes back to the configured endpoint.
+    expect(await json(set(""))).toMatchObject({ solana_rpc: "" });
+    expect((await confirm(owner, q.id, "6".repeat(88))).status).not.toBe(502);
   });
 
   it("switch a family off when blank", async () => {
