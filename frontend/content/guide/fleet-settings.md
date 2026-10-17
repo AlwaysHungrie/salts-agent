@@ -20,7 +20,7 @@ We recommend locking settings that cost you money, and leaving the rest unlocked
 
 | Setting | What it does |
 |---|---|
-| **OpenRouter** | The key from your OpenRouter wallet that every agent uses. Lock it if you are paying and do not want users to replace it with their own key. |
+| **OpenRouter** | The key from your OpenRouter wallet that every agent uses. Lock it if you are paying and do not want users to replace it with their own key. If you leave it unlocked, users see it as **Default fleet key** and can switch back to it after trying their own. |
 | **Monthly spend limit** | How much each agent can spend in a calendar month, in US dollars. 0 means no limit. Users can see it but cannot change it. |
 | **Member limit** | How many other people each user can add to their agent. 0 means no limit. Users cannot change it. |
 | **Model options** | The list of models your users can choose from. Enter each model's OpenRouter ID, for example `anthropic/claude-haiku-5.5`, and optionally a name. Anything in brackets in the name, such as `Haiku (haiku)`, is a nickname users can switch to with `!model haiku`. Leave the list empty to use the default list. |
@@ -29,7 +29,7 @@ We recommend locking settings that cost you money, and leaving the rest unlocked
 | **Extended reasoning**, **Creativity**, **Reply length cap**, **Context window** | How the agent thinks and answers. See [Choose the right model](/guide/choosing-a-model). Extended reasoning and longer replies cost more, so lock them if you want to keep costs down. |
 | **Capabilities** | What the agents can do, such as web search, files, images, voice notes, reminders and memory. |
 | **MCP templates** | Which ready-made app connections your users can pick from. Selecting none shows all of them. |
-| **MCP servers** | App connections added to every agent. **Allow adding more MCP servers** decides whether users can add their own. |
+| **MCP servers** | App connections added to every agent. **Allow adding more MCP servers** decides whether users can add their own. Either way, users can change the URL, sign-in and headers of the servers you added, but not rename or remove them. |
 
 ## Leave Telegram and WhatsApp empty
 

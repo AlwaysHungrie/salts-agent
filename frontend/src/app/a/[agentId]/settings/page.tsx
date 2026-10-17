@@ -131,6 +131,8 @@ type ConfigPayload = {
   models: ModelOption[];
   capabilities: Capability[];
   locked?: string[];
+  /** The admin's default OpenRouter key, which may be picked again; blank when none. */
+  default_key_id?: string;
   spend?: SpendState;
   member_limit?: number;
   error?: string;
@@ -167,6 +169,8 @@ export default function Settings({
    * one thing on it that belongs to whoever provides the agent.
    */
   const [spend, setSpend] = useState<SpendState | null>(held?.spend ?? null);
+  /** The key whoever provides the agent gave it, offered beside the caller's own. */
+  const [defaultKeyId, setDefaultKeyId] = useState(held?.default_key_id ?? "");
   /**
    * How many addresses this agent's access list may hold, or 0 for no ceiling.
    * Set by whoever administers the agent; shown here so a list that is about to be
@@ -220,6 +224,7 @@ export default function Settings({
           : current,
       );
       setLocked(new Set(payload.locked ?? []));
+      setDefaultKeyId(payload.default_key_id ?? "");
       setSpend(payload.spend ?? null);
       setMemberLimit(payload.member_limit ?? 0);
       setAgent(payload.agent ?? null);
@@ -658,6 +663,7 @@ export default function Settings({
                 <WalletKeyPicker
                   value={config.openrouter_key_id}
                   hasKey={!!config.openrouter_api_key}
+                  defaultKeyId={defaultKeyId}
                   onChange={(id) => set({ openrouter_key_id: id })}
                 />
                 {!config.openrouter_api_key && (

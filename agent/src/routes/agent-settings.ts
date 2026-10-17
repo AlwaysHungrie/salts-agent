@@ -22,8 +22,8 @@ import { capabilitiesFor, modelOptions, notedCapabilities } from "../worker/capa
 import { ApiError, errorMessage } from "../worker/http";
 import { checkOpenrouterKey, syncWebhook, syncWhatsappSubscription } from "../worker/integrations";
 import { agentFor, applyMeta } from "../worker/provisioning";
-import { readConfig, writeConfig } from "../worker/stores";
-import { noteWalletUse, withWalletKey } from "../worker/wallet";
+import { directory, readConfig, writeConfig } from "../worker/stores";
+import { adminOf, noteWalletUse, withWalletKey } from "../worker/wallet";
 import { type AgentCall, AgentParams, agentRoute, may } from "./agent";
 import { guestsView } from "./guest";
 
@@ -45,6 +45,11 @@ const ConfigViewSchema = z
     models: z.array(ModelOptionSchema),
     capabilities: z.array(CapabilitySchema),
     locked: z.array(z.string()),
+    /**
+     * The admin's default OpenRouter key (a wallet key id from their wallet), which anyone
+     * using the agent may pick again; blank when there is none, or it has left that wallet.
+     */
+    default_key_id: z.string(),
     guests: GuestsSchema,
     limits: z.object({
       max_files_per_message: z.number(),
@@ -186,6 +191,7 @@ async function getConfig({ env, reg, agent, email, access }: AgentCall) {
     capabilities: notedCapabilities(capabilitiesFor(meta, settings), settings),
     // What this page may not show or change; the PATCH drops these.
     locked: meta.locked,
+    default_key_id: await defaultKeyId(env, reg, meta),
     guests: guestsView(access),
     // Sent rather than compiled in, so the browser refuses at the Worker's numbers.
     limits: {
@@ -193,6 +199,13 @@ async function getConfig({ env, reg, agent, email, access }: AgentCall) {
       max_upload_bytes: settings.max_upload_bytes,
     },
   };
+}
+
+/** The admin's default key, while it is still in their wallet; "" otherwise. */
+async function defaultKeyId(env: AgentCall["env"], reg: AgentCall["reg"], meta: MetaSettings) {
+  const id = meta.defaults.openrouter_key_id ?? "";
+  if (!id) return "";
+  return (await directory(env).walletKey(await adminOf(reg), id)) ? id : "";
 }
 
 async function patchConfig({ env, url, agentId, reg, email }: AgentCall, body: Partial<Config>) {
@@ -221,8 +234,11 @@ async function patchConfig({ env, url, agentId, reg, email }: AgentCall, body: P
       }
     }
   }
-  // A wallet key is picked from the caller's own wallet, whoever administers the agent.
-  patch = await withWalletKey(env, email, patch);
+  // A wallet key is picked from the caller's own wallet, whoever administers the agent;
+  // the admin's default key, which the agent was given, from the admin's.
+  const fromDefault =
+    !!patch.openrouter_key_id && patch.openrouter_key_id === meta.defaults.openrouter_key_id;
+  patch = await withWalletKey(env, fromDefault ? await adminOf(reg) : email, patch);
   const config = await writeConfig(env, reg, patch);
   await noteWalletUse(env, agentId, patch);
   // Saving the credentials is the whole setup for Telegram and WhatsApp.

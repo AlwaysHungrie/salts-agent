@@ -150,6 +150,40 @@ describe("OpenRouter wallet", () => {
     expect(refused.status).toBe(400);
   });
 
+  it("lets anyone using the agent pick the admin's default key again", async () => {
+    const owner = someone("owner");
+    const member = someone("member");
+    const { id: fleetKey } = await json<KeyView>(addKey(owner));
+    const { id } = await json<{ id: string }>(
+      SELF.fetch(
+        `${BASE}/api/agents`,
+        as(owner, {
+          method: "POST",
+          body: JSON.stringify({
+            name: "Fleet",
+            allowed_emails: `${owner}, ${member}`,
+            meta: { defaults: { openrouter_key_id: fleetKey } },
+          }),
+        })
+      )
+    );
+    const view = () =>
+      json<{ default_key_id: string; config: { openrouter_key_id: string } }>(
+        SELF.fetch(`${BASE}/api/agents/${id}/config`, as(member))
+      );
+    expect((await view()).default_key_id).toBe(fleetKey);
+
+    // Away to a key of their own, and back to the admin's: not in their wallet, but given.
+    const { id: mine } = await json<KeyView>(addKey(member));
+    expect((await pick(member, id, mine)).status).toBe(200);
+    expect((await pick(member, id, fleetKey)).status).toBe(200);
+    expect((await view()).config.openrouter_key_id).toBe(fleetKey);
+
+    // Any other key of the admin's stays theirs.
+    const { id: otherOfOwner } = await json<KeyView>(addKey(owner));
+    expect((await pick(member, id, otherOfOwner)).status).toBe(400);
+  });
+
   it("clears a pasted key's reference when a key is pasted over a wallet key", async () => {
     const owner = someone("owner");
     const { id: keyId } = await json<KeyView>(addKey(owner));
