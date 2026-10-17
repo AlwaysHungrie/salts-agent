@@ -84,7 +84,9 @@ agent's `openrouter_api_key`, so turns never look the wallet up, and records whi
 hold which key (`wallet_key_uses`) so removing a key clears it from every one of them. A
 pasted key is shown to its owner; a provisioned one (bought here) never leaves the Worker.
 Only the caller's own keys can be picked, and meta defaults are resolved from the admin's
-wallet.
+wallet. The one exception is the admin's default key itself: the settings view returns it
+as `default_key_id` (while it is still in the admin's wallet), and anyone using the agent
+may pick it again.
 
 Keys are bought with crypto and no processor in between. The buyer asks for a quote
 (`wallet_purchases`): exactly `units` of USDC (or ETH, priced from Chainlink's on-chain

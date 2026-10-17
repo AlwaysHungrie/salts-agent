@@ -163,9 +163,7 @@ function HeaderEditor({
         >
           + Add header
         </button>
-        {onCommit && dirty && (
-          <SaveButton onSave={() => onCommit(pairs)} />
-        )}
+        {onCommit && dirty && <SaveButton onSave={() => onCommit(pairs)} />}
       </div>
     </div>
   );
@@ -198,10 +196,10 @@ function ServerCard({
   onRemove: () => void;
   busy: boolean;
   /**
-   * Whether what the server *is* may be changed here — its name, where it points,
-   * how it authenticates, and whether it stays at all. False leaves what it is *for*:
-   * the switch, its tools, and its OAuth. The Worker refuses the difference, so an
-   * editor shown here would be one that cannot save.
+   * Whether the list itself may be changed here: the server's name, and whether it stays
+   * at all. False still leaves everything about using it: where it points, how it
+   * authenticates, its headers, the switch, its tools and its OAuth. The Worker refuses
+   * the difference, so an editor shown here would be one that cannot save.
    */
   manage: boolean;
   /**
@@ -215,9 +213,7 @@ function ServerCard({
 }) {
   const [name, setName] = useState(server.name);
   const [url, setUrl] = useState(server.url);
-  const [pairs, setPairs] = useState<HeaderPair[]>(
-    pairsFrom(server.headers),
-  );
+  const [pairs, setPairs] = useState<HeaderPair[]>(pairsFrom(server.headers));
 
   // Each field saves when it is left, or from its Save button while it has edits.
   const saveName = () => {
@@ -385,23 +381,21 @@ function ServerCard({
             Always editable: a server without OAuth counts as connected as soon as it
             is saved. Moving an OAuth server drops its tokens, so it reconnects.
           */}
-          {manage && (
-            <div className="flex gap-2">
-              <input
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                onBlur={saveUrl}
-                onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
-                aria-label="Server URL"
-                className={`${input} flex-1`}
-              />
-              {url.trim() && url !== server.url && (
-                <SaveButton onSave={saveUrl} />
-              )}
-            </div>
-          )}
+          <div className="flex gap-2">
+            <input
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              onBlur={saveUrl}
+              onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+              aria-label="Server URL"
+              className={`${input} flex-1`}
+            />
+            {url.trim() && url !== server.url && (
+              <SaveButton onSave={saveUrl} />
+            )}
+          </div>
 
-          {manage && !server.connected && (
+          {!server.connected && (
             <AuthPicker
               value={server.auth}
               onChange={(auth) => onPatch({ auth })}
@@ -412,7 +406,7 @@ function ServerCard({
             Outside the block above: a headers server counts as connected as soon as it
             is saved, and a key that has to be rotated is still a key worth editing.
           */}
-          {manage && server.auth === "headers" && (
+          {server.auth === "headers" && (
             <HeaderEditor
               pairs={pairs}
               onChange={setPairs}
@@ -511,7 +505,9 @@ function AddServer({
   const [name, setName] = useState(preset?.name ?? "");
   const [url, setUrl] = useState(preset?.url ?? "");
   const [auth, setAuth] = useState<McpAuth>(preset?.auth ?? "oauth");
-  const [pairs, setPairs] = useState<HeaderPair[]>(pairsFrom(preset?.headers ?? {}));
+  const [pairs, setPairs] = useState<HeaderPair[]>(
+    pairsFrom(preset?.headers ?? {}),
+  );
 
   const reset = () => {
     setName("");
@@ -640,7 +636,9 @@ export function McpServers({
   /** Preset ids this agent's meta settings offer. Empty means every preset. */
   const [templates, setTemplates] = useState<string[]>(held?.templates ?? []);
   /** Templates provisioned for this agent, which replace the built-in strip. */
-  const [catalog, setCatalog] = useState<McpCatalogEntry[]>(held?.catalog ?? []);
+  const [catalog, setCatalog] = useState<McpCatalogEntry[]>(
+    held?.catalog ?? [],
+  );
   /** Whether the list itself may be changed from here. */
   const [manage, setManage] = useState(held?.manage ?? meta);
   /** The cards expanded right now, by server id. */
