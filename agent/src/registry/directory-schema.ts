@@ -211,6 +211,23 @@ export const AGENT_DIRECTORY_MIGRATIONS: readonly Migration[] = [
       sql.exec(`CREATE INDEX IF NOT EXISTS idx_wallet_purchases_email ON wallet_purchases(email)`);
     },
   },
+  {
+    name: "wallet provisioning",
+    up: (sql) => {
+      // A bought key's handle at OpenRouter, to remove it there too.
+      addColumnIfMissing(sql, "wallet_keys", `openrouter_hash TEXT NOT NULL DEFAULT ''`);
+      // When a paid purchase was taken up for delivery, so two confirms cannot both deliver.
+      addColumnIfMissing(sql, "wallet_purchases", `claimed_at INTEGER NOT NULL DEFAULT 0`);
+      // Values the owner sets for the deployment from the admin CLI: the OpenRouter
+      // provisioning key and the payment addresses.
+      sql.exec(
+        `CREATE TABLE IF NOT EXISTS deployment_secrets (
+           name TEXT PRIMARY KEY,
+           value TEXT NOT NULL
+         )`
+      );
+    },
+  },
 ];
 
 export function migrateMembership(storage: DurableObjectStorage) {

@@ -29,10 +29,14 @@ export const ROUTE_INDEX = {
       "POST /api/admin/business-account { email, agent_limit }, GET /api/admin/stats  -> owner only, via API_SECRET",
     settings:
       "GET /api/admin/settings -> { settings, missing, fields }; PATCH /api/admin/settings { <field>: value } -> owner only, via API_SECRET",
+    payment_addresses:
+      "GET /api/admin/payment-addresses -> { evm, solana }; PATCH { evm?, solana? } (blank switches that family off) -> owner only, via API_SECRET",
+    provisioning_key:
+      "GET /api/admin/provisioning-key -> { set, hint }; PUT { key }, DELETE -> owner only, via API_SECRET",
     business_requests:
       "POST /api/business-requests { increase } -> signed-in caller; GET /api/admin/business-requests, POST .../:id/approve, DELETE .../:id -> owner only, via API_SECRET",
     wallet:
-      "GET /api/wallet, POST /api/wallet { key }, DELETE /api/wallet/:id, POST /api/wallet/purchases { amount, network, asset, payer }, POST /api/wallet/:id/credits { same }, POST /api/wallet/purchases/:id/confirm { tx } -> signed-in caller's own OpenRouter keys",
+      "GET /api/wallet, POST /api/wallet { key }, DELETE /api/wallet/:id, POST /api/wallet/purchases { amount, network, asset, payer }, POST /api/wallet/purchases/:id/confirm { tx } -> signed-in caller's own OpenRouter keys",
   },
   note: "A session id is `<agentId>~<local>`; every /agents/session-agent route takes that whole id.",
 };

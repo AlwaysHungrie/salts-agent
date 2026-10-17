@@ -49,8 +49,12 @@ export default function Agents() {
   const [tab, setTab] = useState<"agents" | "fleets">("agents");
   const shownTab = fleets.length > 0 ? tab : "agents";
 
-  const create = (name: string, emails: string, meta: MetaSettings, fleetName: string) =>
-    list.create(name, emails, meta, fleetName, () => setCreating(false));
+  const create = (
+    name: string,
+    emails: string,
+    meta: MetaSettings,
+    fleetName: string,
+  ) => list.create(name, emails, meta, fleetName, () => setCreating(false));
 
   return (
     <div className="bg-canvas text-ink relative min-h-screen">
@@ -91,7 +95,9 @@ export default function Agents() {
           <p className="text-muted py-4 text-sm leading-[1.43]">Loading…</p>
         )}
 
-        {isLoaded && !isSignedIn && <FrontDoor onConnect={() => setAuthing(true)} />}
+        {isLoaded && !isSignedIn && (
+          <FrontDoor onConnect={() => setAuthing(true)} />
+        )}
 
         {signedIn && (
           <>
@@ -153,7 +159,9 @@ export default function Agents() {
         )}
       </div>
 
-      {authing && <AuthModal mode="sign-in" onClose={() => setAuthing(false)} />}
+      {authing && (
+        <AuthModal mode="sign-in" onClose={() => setAuthing(false)} />
+      )}
 
       {metaFor && (
         <MetaSettingsDialog agent={metaFor} onClose={() => setMetaFor(null)} />

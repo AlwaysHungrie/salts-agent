@@ -2,6 +2,8 @@ import type { Env } from "../env";
 import { forgetCachedSettings, missingSettings, SETTINGS_FIELDS } from "../settings";
 import { callerEmail, trustedCaller } from "../worker/auth";
 import { json, jsonError, readJson } from "../worker/http";
+import { payerAddress } from "../payments";
+import { isProvisioningKey } from "../worker/provisioned-keys";
 import { directory, syncSessionCount } from "../worker/stores";
 
 const methodNotAllowed = () => jsonError("method not allowed", 405);
@@ -23,12 +25,22 @@ export async function handleAdmin(
   segments: string[]
 ): Promise<Response | undefined> {
   const route = segments[2];
-  const known = ["business-account", "settings", "business-requests", "stats", "users"];
+  const known = [
+    "business-account",
+    "settings",
+    "business-requests",
+    "stats",
+    "users",
+    "provisioning-key",
+    "payment-addresses",
+  ];
   if (!known.includes(route)) return undefined;
   if (!trustedCaller(request, env)) return jsonError("unauthorized", 401);
 
   if (route === "business-account") return await setAgentLimit(request, env);
   if (route === "settings") return await handleSettings(request, env);
+  if (route === "provisioning-key") return await handleProvisioningKey(request, env);
+  if (route === "payment-addresses") return await handlePaymentAddresses(request, env);
   if (route === "business-requests")
     return await handleBusinessRequests(request, env, url, segments);
   if (route === "stats") {
@@ -72,6 +84,57 @@ async function handleSettings(request: Request, env: Env): Promise<Response> {
     return json({ ...saved, fields: SETTINGS_FIELDS });
   }
   return methodNotAllowed();
+}
+
+/**
+ * The OpenRouter provisioning key bought keys are made with. Write-only: GET says whether
+ * one is set and its last four characters, never the key. PUT checks it with OpenRouter
+ * first; DELETE removes it, which closes key purchases.
+ */
+async function handleProvisioningKey(request: Request, env: Env): Promise<Response> {
+  const dir = directory(env);
+  const shown = (key: string) => ({ set: Boolean(key), hint: key ? key.slice(-4) : "" });
+  if (request.method === "GET") return json(shown(await dir.provisioningKey()));
+  if (request.method === "PUT") {
+    const body = await readJson<{ key?: string }>(request);
+    const key = (body.key ?? "").trim().slice(0, 1000);
+    if (!key) return jsonError("Paste an OpenRouter provisioning key.", 400);
+    if (!(await isProvisioningKey(key))) {
+      return jsonError("OpenRouter didn't accept that as a provisioning key.", 400);
+    }
+    await dir.setProvisioningKey(key);
+    return json(shown(key));
+  }
+  if (request.method === "DELETE") {
+    await dir.setProvisioningKey("");
+    return json(shown(""));
+  }
+  return methodNotAllowed();
+}
+
+/**
+ * Where wallet purchases are paid to: one EVM address (every EVM network) and one Solana
+ * address. Public, like any address, so GET returns them in full. PATCH sets either or
+ * both; a blank one switches that family's networks off.
+ */
+async function handlePaymentAddresses(request: Request, env: Env): Promise<Response> {
+  const dir = directory(env);
+  if (request.method === "GET") return json(await dir.paymentAddresses());
+  if (request.method !== "PATCH") return methodNotAllowed();
+  const body = await readJson<{ evm?: unknown; solana?: unknown }>(request);
+  const families = (["evm", "solana"] as const).filter((f) => body[f] !== undefined);
+  if (!families.length) return jsonError("Give an evm or solana address.", 400);
+  const set: { family: "evm" | "solana"; address: string }[] = [];
+  for (const family of families) {
+    const given = typeof body[family] === "string" ? (body[family] as string).trim() : "";
+    // Kept as typed (an EVM checksum stays readable); compared lowercased.
+    if (given && !payerAddress(family, given)) {
+      return jsonError(`That isn't ${family === "evm" ? "an EVM" : "a Solana"} address.`, 400);
+    }
+    set.push({ family, address: given });
+  }
+  for (const { family, address } of set) await dir.setPaymentAddress(family, address);
+  return json(await dir.paymentAddresses());
 }
 
 /** The owner's queue of requests for a higher agent ceiling. */

@@ -7,16 +7,33 @@ async function errorOf(res: Response, fallback: string): Promise<string> {
   return payload?.error ?? fallback;
 }
 
-type WalletRead = { keys: WalletKey[]; networks: PayNetwork[]; feeBps: number; error: string | null };
+type WalletRead = {
+  keys: WalletKey[];
+  networks: PayNetwork[];
+  feeBps: number;
+  maxUsd: number;
+  error: string | null;
+};
 
 /** The wallet as the Worker holds it, or the error it answered with. */
 async function readWallet(): Promise<WalletRead> {
   const res = await fetch("/api/wallet", { cache: "no-store" });
   if (!res.ok) {
-    return { keys: [], networks: [], feeBps: 0, error: await errorOf(res, "Couldn't load your wallet.") };
+    return { keys: [], networks: [], feeBps: 0, maxUsd: 0, error: await errorOf(res, "Couldn't load your wallet.") };
   }
-  const body = (await res.json()) as { keys: WalletKey[]; networks?: PayNetwork[]; fee_bps?: number };
-  return { keys: body.keys, networks: body.networks ?? [], feeBps: body.fee_bps ?? 0, error: null };
+  const body = (await res.json()) as {
+    keys: WalletKey[];
+    networks?: PayNetwork[];
+    fee_bps?: number;
+    max_usd?: number;
+  };
+  return {
+    keys: body.keys,
+    networks: body.networks ?? [],
+    feeBps: body.fee_bps ?? 0,
+    maxUsd: body.max_usd ?? 0,
+    error: null,
+  };
 }
 
 /**
@@ -28,12 +45,15 @@ export function useWallet() {
   const [networks, setNetworks] = useState<PayNetwork[]>([]);
   /** The service fee on a purchase, in basis points of the credit. */
   const [feeBps, setFeeBps] = useState(0);
+  /** The most credit one purchase may buy, in dollars. */
+  const [maxUsd, setMaxUsd] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   const apply = useCallback((read: WalletRead) => {
     setKeys(read.keys);
     setNetworks(read.networks);
     setFeeBps(read.feeBps);
+    setMaxUsd(read.maxUsd);
     setError(read.error);
   }, []);
 
@@ -62,15 +82,12 @@ export function useWallet() {
   };
 
   /**
-   * Ask for a quote: a new key, or credit for the bought key `keyId`. Resolves to the
-   * quote, or an error to show.
+   * Ask for a quote for a new key. Resolves to the quote, or an error to show.
    */
   const quote = async (
     body: { amount: number; network: string; asset: string; payer: string },
-    keyId?: string,
   ): Promise<PayQuote | string> => {
-    const path = keyId ? `/api/wallet/${encodeURIComponent(keyId)}/credits` : "/api/wallet/purchases";
-    const res = await fetch(path, {
+    const res = await fetch("/api/wallet/purchases", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
@@ -95,5 +112,5 @@ export function useWallet() {
     return "paid";
   };
 
-  return { keys, networks, feeBps, error, load, add, remove, quote, confirm };
+  return { keys, networks, feeBps, maxUsd, error, load, add, remove, quote, confirm };
 }

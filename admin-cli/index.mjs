@@ -4,7 +4,9 @@
 // Five tabs, each a list of rows — a row either holds a value that `enter` edits, or
 // is information only:
 //
-//   1 Overview   the deployment's counts
+//   1 Overview   the deployment's counts, the OpenRouter provisioning key bought keys
+//                are made with (never shown back), and the EVM and Solana addresses
+//                purchases are paid to — `enter` sets one, `x` removes it
 //   2 Users      every address, paged and searchable; `enter` opens one — its agent
 //                limit (editable) and its agents with their session counts
 //   3 Requests   the queue of accounts asking for a higher agent limit
@@ -241,6 +243,10 @@ const state = {
   fields: [],
   users: pager("/api/admin/users", "users"),
   requests: pager("/api/admin/business-requests", "requests"),
+  /** Whether a provisioning key is set, and its last four characters; null until read. */
+  provisioning: null,
+  /** Where purchases are paid to, `{ evm, solana }`; null until read. */
+  addresses: null,
   /** The user opened from the Users tab, or null while the list is showing. */
   user: null,
   /** Selection and scroll for the tabs that are not paged lists. */
@@ -270,6 +276,100 @@ async function loadSettings() {
   } catch (err) {
     state.status = `could not load settings — ${err.message}`;
   }
+  render();
+}
+
+async function loadProvisioning() {
+  try {
+    state.provisioning = await call("/api/admin/provisioning-key");
+  } catch (err) {
+    // A Worker from before key purchases has no such route: leave the row out.
+    state.provisioning = null;
+    if (err.status !== 401 && err.status !== 404) state.status = `could not read the provisioning key — ${err.message}`;
+  }
+  render();
+}
+
+async function loadAddresses() {
+  try {
+    state.addresses = await call("/api/admin/payment-addresses");
+  } catch (err) {
+    // A Worker from before configurable addresses has no such route: leave the rows out.
+    state.addresses = null;
+    if (err.status !== 401 && err.status !== 404) state.status = `could not read the payment addresses — ${err.message}`;
+  }
+  render();
+}
+
+const FAMILY = { evm: "EVM", solana: "Solana" };
+
+/** Set where one family's purchases are paid to; the Worker checks it is an address. */
+async function setAddress(family, text) {
+  const address = text.trim();
+  if (!address || address === state.addresses?.[family]) {
+    state.status = "nothing changed";
+    return render();
+  }
+  state.addresses = await call("/api/admin/payment-addresses", {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ [family]: address }),
+  });
+  state.status = `${FAMILY[family]} payments now go to ${address}`;
+  render();
+}
+
+function removeAddress(family) {
+  state.confirm = {
+    prompt: `Remove the ${FAMILY[family]} payment address? ${FAMILY[family]} payments close until one is set.`,
+    run: async () => {
+      try {
+        state.addresses = await call("/api/admin/payment-addresses", {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ [family]: "" }),
+        });
+        state.status = `${FAMILY[family]} payment address removed — ${FAMILY[family]} payments are closed`;
+      } catch (err) {
+        state.status = err.message;
+      }
+      render();
+    },
+  };
+  render();
+}
+
+/** Set the provisioning key: the Worker checks it with OpenRouter before keeping it. */
+async function setProvisioningKey(text) {
+  const key = text.trim();
+  if (!key) {
+    state.status = "nothing changed";
+    return render();
+  }
+  state.status = "checking with OpenRouter…";
+  render();
+  state.provisioning = await call("/api/admin/provisioning-key", {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ key }),
+  });
+  state.status = "provisioning key set — key purchases are open";
+  render();
+}
+
+function removeProvisioningKey() {
+  state.confirm = {
+    prompt: "Remove the provisioning key? Key purchases close until one is set.",
+    run: async () => {
+      try {
+        state.provisioning = await call("/api/admin/provisioning-key", { method: "DELETE" });
+        state.status = "provisioning key removed — key purchases are closed";
+      } catch (err) {
+        state.status = err.message;
+      }
+      render();
+    },
+  };
   render();
 }
 
@@ -328,8 +428,8 @@ async function fillUnset() {
 }
 
 /** Open a line editor on the status bar, starting from the value in force. */
-function startEdit(label, value, submit) {
-  state.edit = { label, buffer: value, submit };
+function startEdit(label, value, submit, secret = false) {
+  state.edit = { label, buffer: value, submit, secret };
   state.status = "";
   render();
 }
@@ -509,7 +609,41 @@ function view() {
           unset: state.missing.length > 0,
         });
       }
-      return { columns: [["", 22], ["", 0]], rows, pos: state.pos[0], empty: "loading…" };
+      const p = state.provisioning;
+      if (c && p) {
+        rows.push({
+          cells: [
+            "provisioning key",
+            p.set ? `set (…${p.hint})` : "not set — key purchases are closed",
+          ],
+          unset: !p.set,
+          enter: () => startEdit("OpenRouter provisioning key", "", setProvisioningKey, true),
+          remove: p.set ? removeProvisioningKey : undefined,
+        });
+      }
+      const a = state.addresses;
+      if (c && a) {
+        for (const family of ["evm", "solana"]) {
+          rows.push({
+            cells: [
+              `${FAMILY[family]} pay address`,
+              a[family] || `not set — ${FAMILY[family]} payments are closed`,
+            ],
+            unset: !a[family],
+            enter: () =>
+              startEdit(`${FAMILY[family]} payment address`, a[family], (t) => setAddress(family, t)),
+            remove: a[family] ? () => removeAddress(family) : undefined,
+          });
+        }
+      }
+      return {
+        columns: [["", 22], ["", 0]],
+        rows,
+        pos: state.pos[0],
+        empty: "loading…",
+        hint: p || a ? "enter set   x remove" : "",
+        keys: { x: (row) => row?.remove?.() },
+      };
     }
 
     case 1: {
@@ -671,7 +805,8 @@ function render() {
   if (state.edit) {
     // The cursor is drawn rather than moved: the screen is repainted whole on every
     // keypress, so a real cursor position would be lost on the next paint.
-    out.push(`  ${BOLD}${state.edit.label}${OFF} ${state.edit.buffer}${INV} ${OFF}`);
+    const typed = state.edit.secret ? "•".repeat(state.edit.buffer.length) : state.edit.buffer;
+    out.push(`  ${BOLD}${state.edit.label}${OFF} ${typed}${INV} ${OFF}`);
     out.push(`${DIM}  enter save   esc cancel${OFF}`);
   } else if (state.confirm) {
     out.push(`  ${BOLD}${state.confirm.prompt}${OFF}`);
@@ -866,7 +1001,13 @@ process.stdin.on("data", async (chunk) => {
 process.stdout.on("resize", render);
 process.on("SIGINT", quit);
 
-await Promise.all([loadSettings(), loadMore(state.users), loadMore(state.requests)]);
+await Promise.all([
+  loadSettings(),
+  loadProvisioning(),
+  loadAddresses(),
+  loadMore(state.users),
+  loadMore(state.requests),
+]);
 // A deployment with settings unset refuses every ordinary request, so say so first.
 if (state.missing.length) {
   state.status = "settings incomplete — press i to fill every unset row with the shipped value";

@@ -58,7 +58,17 @@ import {
   startPairing,
 } from "./directory-computers";
 import { AGENT_DIRECTORY_MIGRATIONS, migrateMembership } from "./directory-schema";
-import { createPurchase, markPurchasePaid, purchase, txCounted } from "./wallet-purchases";
+import {
+  claimPurchase,
+  createPurchase,
+  deploymentValue,
+  fulfilNewKey,
+  markPurchasePaid,
+  purchase,
+  releasePurchase,
+  setDeploymentValue,
+  txCounted,
+} from "./wallet-purchases";
 import {
   addWalletKey,
   removeWalletKey,
@@ -376,7 +386,7 @@ export class AgentDirectory extends DurableObject {
 
   addWalletKey(
     email: string,
-    key: { kind: WalletKeyKind; secret: string },
+    key: { kind: WalletKeyKind; secret: string; openrouter_hash?: string },
     max: number
   ): WalletKeyRow | { error: string } {
     this.ensureSchema();
@@ -395,7 +405,7 @@ export class AgentDirectory extends DurableObject {
   }
 
   /** Record a quote; `{ error }` when its amount clashes with another open one. */
-  createPurchase(p: Omit<WalletPurchase, "id" | "status" | "tx">): WalletPurchase | { error: string } {
+  createPurchase(p: Omit<WalletPurchase, "id" | "status" | "tx" | "claimed_at">): WalletPurchase | { error: string } {
     this.ensureSchema();
     return createPurchase(this.ctx.storage, p);
   }
@@ -414,6 +424,49 @@ export class AgentDirectory extends DurableObject {
   markPurchasePaid(id: string, tx: string): boolean {
     this.ensureSchema();
     return markPurchasePaid(this.ctx.storage, id, tx);
+  }
+
+  /** Take up a paid purchase for delivery: false while another confirm holds it. */
+  claimPurchase(id: string): boolean {
+    this.ensureSchema();
+    return claimPurchase(this.ctx.storage, id, Date.now());
+  }
+
+  releasePurchase(id: string) {
+    this.ensureSchema();
+    releasePurchase(this.ctx.storage, id);
+  }
+
+  /** Deliver a paid purchase as a new key; undefined when it is not waiting for one. */
+  fulfilNewKey(id: string, key: { secret: string; openrouter_hash: string }): WalletKeyRow | undefined {
+    this.ensureSchema();
+    return fulfilNewKey(this.ctx.storage, id, key);
+  }
+
+  /** The OpenRouter provisioning key bought keys are made with; "" when not set. */
+  provisioningKey(): string {
+    this.ensureSchema();
+    return deploymentValue(this.ctx.storage, "openrouter_provisioning_key");
+  }
+
+  setProvisioningKey(value: string) {
+    this.ensureSchema();
+    setDeploymentValue(this.ctx.storage, "openrouter_provisioning_key", value);
+  }
+
+  /** Where purchases are paid to, per family; "" where none is set. */
+  paymentAddresses(): { evm: string; solana: string } {
+    this.ensureSchema();
+    return {
+      evm: deploymentValue(this.ctx.storage, "payment_address_evm"),
+      solana: deploymentValue(this.ctx.storage, "payment_address_solana"),
+    };
+  }
+
+  /** Set one family's payment address; blank switches that family off. */
+  setPaymentAddress(family: "evm" | "solana", value: string) {
+    this.ensureSchema();
+    setDeploymentValue(this.ctx.storage, `payment_address_${family}`, value);
   }
 
   // ─── salts-tools computers (see directory-computers.ts) ─────────────────────────

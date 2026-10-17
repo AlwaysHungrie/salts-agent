@@ -18,6 +18,7 @@ import {
   verifyPayment,
 } from "../payments";
 import type { WalletPurchase } from "../registry";
+import { createKey, deleteKey, ProvisioningError } from "../worker/provisioned-keys";
 import { keyCredit } from "../worker/wallet";
 
 /**
@@ -40,10 +41,10 @@ async function view(row: WalletKeyRow) {
   };
 }
 
-/** A dollar amount to buy: $1 to $10,000, at most two decimals' worth. */
-function amountOf(value: unknown): number | undefined {
+/** A dollar amount to buy: $1 to `max`, at most two decimals' worth. */
+function amountOf(value: unknown, max: number): number | undefined {
   const usd = Number(value);
-  return Number.isFinite(usd) && usd >= 1 && usd <= 10_000 ? Math.round(usd * 100) / 100 : undefined;
+  return Number.isFinite(usd) && usd >= 1 && usd <= max ? Math.round(usd * 100) / 100 : undefined;
 }
 
 /** The service fee on `usd` of credit, in dollars: rounded up to the cent. */
@@ -91,22 +92,32 @@ export async function handleWallet(
     if (method === "GET") {
       const settings = await deploymentSettings(env);
       const keys = await Promise.all((await dir.walletKeys(email)).map(view));
-      // The networks a purchase can be paid on here; empty when payments are off.
-      const networks = enabledNetworks(env).map(({ id, label, family, chain_id, eth }) => ({
+      // The networks a purchase can be paid on here; empty when payments are off, and
+      // while no provisioning key is set, as nothing paid for could be delivered.
+      const open = Boolean(await dir.provisioningKey());
+      const addresses = await dir.paymentAddresses();
+      const networks = (open ? enabledNetworks(env, addresses) : []).map(({ id, label, family, chain_id, usdc, eth }) => ({
         id,
         label,
         family,
         chain_id,
+        usdc,
         assets: eth ? ["usdc", "eth"] : ["usdc"],
       }));
-      return json({ keys, max: settings.max_wallet_keys, fee_bps: settings.wallet_fee_bps, networks });
+      return json({
+        keys,
+        max: settings.max_wallet_keys,
+        fee_bps: settings.wallet_fee_bps,
+        max_usd: settings.max_wallet_purchase_usd,
+        networks,
+      });
     }
     if (method === "POST") return await addKey(request, env, email);
     return undefined;
   }
 
   if (id === "purchases" && method === "POST") {
-    if (!action) return await quote(request, env, email, "");
+    if (!action) return await quote(request, env, email);
     if (segments[4] === "confirm" && !segments[5]) return await confirm(request, env, email, action);
     return undefined;
   }
@@ -116,6 +127,9 @@ export async function handleWallet(
 
   if (!action && method === "DELETE") {
     const agents = (await dir.removeWalletKey(email, id)) ?? [];
+    // A bought key stops working at OpenRouter too. Best effort: it is gone from here.
+    const provisioning = key.openrouter_hash ? await dir.provisioningKey() : "";
+    if (provisioning) await deleteKey(provisioning, key.openrouter_hash).catch(() => undefined);
     // Every agent that held the key loses it now, not on its next save.
     for (const agentId of agents) {
       await writeConfig(env, registry(env, agentId), {
@@ -125,27 +139,29 @@ export async function handleWallet(
     }
     return json({ removed: id, agents: agents.length });
   }
-
-  if (action === "credits" && method === "POST") {
-    if (key.kind !== "provisioned") {
-      return jsonError("Credits can only be added to a key bought here.", 400);
-    }
-    return await quote(request, env, email, key.id);
-  }
   return undefined;
 }
 
 /**
- * Quote a purchase: a new key (`keyId` blank) or credit for a bought one. The amount
- * asked for carries a little dust of its own, so the payment can only match this quote.
+ * Quote a new key. The amount asked for carries a little dust of its own, so the payment
+ * can only match this quote.
  */
-async function quote(request: Request, env: Env, email: string, keyId: string): Promise<Response> {
+async function quote(request: Request, env: Env, email: string): Promise<Response> {
   const body = await readJson<{ amount?: number; network?: string; asset?: string; payer?: string }>(
     request
   );
-  const amount = amountOf(body.amount);
-  if (!amount) return jsonError("Choose an amount from $1 to $10,000.", 400);
-  const network = enabledNetworks(env).find((n) => n.id === body.network);
+  const settings = await deploymentSettings(env);
+  const max = settings.max_wallet_purchase_usd;
+  const amount = amountOf(body.amount, max);
+  if (!amount) return jsonError(`Choose an amount from $1 to $${max}.`, 400);
+  const dir = directory(env);
+  if (!(await dir.provisioningKey())) return jsonError("Key purchases aren't open yet.", 503);
+  // The key needs room in the wallet: once paid for, it is delivered regardless.
+  if ((await dir.walletKeys(email)).length >= settings.max_wallet_keys) {
+    return jsonError(`A wallet holds at most ${settings.max_wallet_keys} keys.`, 400);
+  }
+  const addresses = await dir.paymentAddresses();
+  const network = enabledNetworks(env, addresses).find((n) => n.id === body.network);
   if (!network) return jsonError("Payments on that network aren't available.", 400);
   const asset = body.asset as PayAsset;
   if (asset !== "usdc" && !(asset === "eth" && network.eth)) {
@@ -155,7 +171,7 @@ async function quote(request: Request, env: Env, email: string, keyId: string): 
   if (!payer) return jsonError("Connect a wallet first.", 400);
 
   // The buyer pays the credit plus the service fee; the key gets the credit.
-  const fee = feeOf(amount, (await deploymentSettings(env)).wallet_fee_bps);
+  const fee = feeOf(amount, settings.wallet_fee_bps);
   const total = Math.round((amount + fee) * 100) / 100;
   const now = Date.now();
   for (let tries = 0; tries < 5; tries++) {
@@ -166,13 +182,13 @@ async function quote(request: Request, env: Env, email: string, keyId: string): 
       if (err instanceof PaymentError) return jsonError(err.message, 502);
       throw err;
     }
-    const made = await directory(env).createPurchase({
+    const made = await dir.createPurchase({
       email,
-      key_id: keyId,
+      key_id: "",
       amount_usd: amount,
       network: network.id,
       asset,
-      to_address: payAddress(env, network),
+      to_address: payAddress(addresses, network),
       payer,
       units: units.toString(),
       created_at: now,
@@ -184,8 +200,10 @@ async function quote(request: Request, env: Env, email: string, keyId: string): 
 }
 
 /**
- * Count a payment: read the transaction back from the chain and check it against the
- * quote. 202 while it is not final yet, for the browser to ask again.
+ * Count a payment, then deliver it: read the transaction back from the chain, check it
+ * against the quote, and make the key (or add the credit). 202 while the chain is not
+ * final, or the delivery is under way or failed, for the browser to ask again; a counted
+ * payment is never lost, as the next confirm with the same transaction delivers it.
  */
 async function confirm(request: Request, env: Env, email: string, id: string): Promise<Response> {
   const dir = directory(env);
@@ -196,8 +214,8 @@ async function confirm(request: Request, env: Env, email: string, id: string): P
   const body = await readJson<{ tx?: string }>(request);
   const tx = txId(network.family, body.tx);
   if (!tx) return jsonError("That isn't a transaction id.", 400);
-  if (found.status === "paid") {
-    return found.tx === tx ? json({ status: "paid" }) : jsonError("This purchase is already paid.", 409);
+  if (found.status !== "pending") {
+    return found.tx === tx ? await deliver(env, found) : jsonError("This purchase is already paid.", 409);
   }
 
   // A payment counts once, however many quotes it might match.
@@ -213,10 +231,41 @@ async function confirm(request: Request, env: Env, email: string, id: string): P
   if (verdict.status === "pending") return json(verdict, 202);
   if (verdict.status === "failed") return jsonError(verdict.reason, 400);
   if (!(await dir.markPurchasePaid(found.id, tx))) {
-    return jsonError("That transaction has already been counted.", 409);
+    // Another confirm with this transaction may have counted it a moment ago.
+    const now = await dir.purchase(email, id);
+    if (now?.tx !== tx) return jsonError("That transaction has already been counted.", 409);
   }
-  // Provisioning the key (or topping it up) from a paid purchase is not built yet.
-  return json({ status: "paid" });
+  const paid = await dir.purchase(email, id);
+  return paid ? await deliver(env, paid) : jsonError("not found", 404);
+}
+
+const delivering = () => json({ status: "pending", reason: "Setting up your key." }, 202);
+
+/**
+ * Turn a paid purchase into its key, held to the credit bought. Held by one confirm at a
+ * time, so it happens once. The key is named at OpenRouter by its buyer and purchase, so
+ * the deployment's OpenRouter dashboard says whose each key is.
+ */
+async function deliver(env: Env, p: WalletPurchase): Promise<Response> {
+  if (p.status === "fulfilled") return json({ status: "paid", key_id: p.key_id });
+  const dir = directory(env);
+  const provisioning = await dir.provisioningKey();
+  if (!provisioning || !(await dir.claimPurchase(p.id))) return delivering();
+
+  try {
+    const made = await createKey(provisioning, `Salts ${p.email} ${p.id}`, p.amount_usd);
+    const row = await dir.fulfilNewKey(p.id, made).catch(() => undefined);
+    if (!row) {
+      // Recorded nowhere, so it must not live on at OpenRouter.
+      await deleteKey(provisioning, made.openrouter_hash).catch(() => undefined);
+      throw new ProvisioningError("Couldn't record the key.");
+    }
+    return json({ status: "paid", key_id: row.id });
+  } catch (err) {
+    await dir.releasePurchase(p.id);
+    if (err instanceof ProvisioningError) return delivering();
+    throw err;
+  }
 }
 
 /** Add a pasted key, checked with OpenRouter first so a typo is refused now. */

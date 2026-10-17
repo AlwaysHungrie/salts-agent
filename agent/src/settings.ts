@@ -69,6 +69,8 @@ export type DeploymentSettings = {
    * covers OpenRouter's own charge when the Worker tops up a key, and moving the funds.
    */
   wallet_fee_bps: number;
+  /** The most credit one purchase may buy, in dollars. */
+  max_wallet_purchase_usd: number;
   /** Attachment ceilings, per kind. */
   max_upload_bytes: UploadLimits;
   /** Past this, a first-page render is not a thumbnail. */
@@ -151,6 +153,7 @@ export const SETTINGS_FIELDS: readonly SettingsField[] = [
   INT("default_agent_limit", 1, 100_000, "agents an ordinary account may administer"),
   INT("max_wallet_keys", 1, 1000, "keys one account's OpenRouter wallet may hold"),
   INT("wallet_fee_bps", 0, 5000, "service fee on a credit purchase, in basis points (600 = 6%)"),
+  INT("max_wallet_purchase_usd", 1, 10_000, "most credit one wallet purchase may buy, in dollars"),
   {
     key: "max_upload_bytes",
     kind: "json",

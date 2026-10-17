@@ -59,17 +59,15 @@
       "vars": {
         "CLERK_ISSUER": "https://rich-horse-1284.clerk.accounts.dev",
         "APP_URL": "https://salts-agent-app-git-staging-dhairyashah98-gmailcoms-projects.vercel.app",
-        "PAYMENT_ADDRESSES": {
-          "evm": "0x43Cb32825f0A1CBaC2fd6B11a18f46aa81D142f4",
-          "solana": "GyzzvFLs4GdytV85nhMpdPr1fkih9Vk5bi5spBpfspiw"
-        },
         "PAYMENT_RPC": {
           "ethereum": "https://ethereum-rpc.publicnode.com",
           "base": "https://base-rpc.publicnode.com",
           "arbitrum": "https://arbitrum-one-rpc.publicnode.com",
           "optimism": "https://optimism-rpc.publicnode.com",
           "polygon": "https://polygon-bor-rpc.publicnode.com",
-          "solana": "https://api.mainnet-beta.solana.com"
+          "solana": "https://api.mainnet-beta.solana.com",
+          // Testnet: faucet coins buy real credit, so staging only.
+          "base-sepolia": "https://base-sepolia-rpc.publicnode.com"
         }
       }
     }
@@ -83,13 +81,8 @@
     "CLERK_ISSUER": "https://rich-horse-1284.clerk.accounts.dev",
     // The web app the `!docs`, `!settings` and `!mcp` links point at.
     "APP_URL": "https://salts-agent-app.vercel.app",
-    // Where OpenRouter wallet purchases are paid to: one EVM address (every EVM network)
-    // and one Solana address. Public, like any address; blank switches that family off.
-    "PAYMENT_ADDRESSES": {
-      "evm": "0x43Cb32825f0A1CBaC2fd6B11a18f46aa81D142f4",
-      "solana": "GyzzvFLs4GdytV85nhMpdPr1fkih9Vk5bi5spBpfspiw"
-    },
-    // The JSON-RPC endpoint each payment network's transactions are read back from.
+    // The JSON-RPC endpoint each payment network's transactions are read back from. Where
+    // payments go is set from the admin CLI (`/api/admin/payment-addresses`), not here.
     // Ethereum's also serves the Chainlink ETH/USD price. A missing one switches it off.
     "PAYMENT_RPC": {
       "ethereum": "https://ethereum-rpc.publicnode.com",
