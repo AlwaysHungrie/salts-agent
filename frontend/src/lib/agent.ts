@@ -606,6 +606,11 @@ export type PayQuote = {
   token: string | null;
   decimals: number;
   units: string;
+  /** The credit the key gets. */
   amount_usd: number;
+  /** The service fee on top of the credit. */
+  fee_usd: number;
+  /** What the buyer pays: credit plus fee. */
+  total_usd: number;
   expires_at: number;
 };

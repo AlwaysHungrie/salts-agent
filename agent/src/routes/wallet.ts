@@ -46,8 +46,16 @@ function amountOf(value: unknown): number | undefined {
   return Number.isFinite(usd) && usd >= 1 && usd <= 10_000 ? Math.round(usd * 100) / 100 : undefined;
 }
 
-/** A quote as the buyer's wallet needs it: what to send, where, on which chain. */
-function quoteView(p: WalletPurchase) {
+/** The service fee on `usd` of credit, in dollars: rounded up to the cent. */
+function feeOf(usd: number, bps: number): number {
+  return Math.ceil((Math.round(usd * 100) * bps) / 10_000) / 100;
+}
+
+/**
+ * A quote as the buyer's wallet needs it: what to send, where, on which chain, and how
+ * the total breaks down into credit and fee.
+ */
+function quoteView(p: WalletPurchase, fee: number) {
   const network = PAY_NETWORKS.find((n) => n.id === p.network);
   return {
     id: p.id,
@@ -60,6 +68,8 @@ function quoteView(p: WalletPurchase) {
     decimals: p.asset === "usdc" ? 6 : 18,
     units: p.units,
     amount_usd: p.amount_usd,
+    fee_usd: fee,
+    total_usd: Math.round((p.amount_usd + fee) * 100) / 100,
     status: p.status,
     expires_at: p.expires_at,
   };
@@ -89,7 +99,7 @@ export async function handleWallet(
         chain_id,
         assets: eth ? ["usdc", "eth"] : ["usdc"],
       }));
-      return json({ keys, max: settings.max_wallet_keys, networks });
+      return json({ keys, max: settings.max_wallet_keys, fee_bps: settings.wallet_fee_bps, networks });
     }
     if (method === "POST") return await addKey(request, env, email);
     return undefined;
@@ -144,11 +154,14 @@ async function quote(request: Request, env: Env, email: string, keyId: string): 
   const payer = payerAddress(network.family, body.payer);
   if (!payer) return jsonError("Connect a wallet first.", 400);
 
+  // The buyer pays the credit plus the service fee; the key gets the credit.
+  const fee = feeOf(amount, (await deploymentSettings(env)).wallet_fee_bps);
+  const total = Math.round((amount + fee) * 100) / 100;
   const now = Date.now();
   for (let tries = 0; tries < 5; tries++) {
     let units: bigint;
     try {
-      units = await quoteUnits(env, asset, amount);
+      units = await quoteUnits(env, asset, total);
     } catch (err) {
       if (err instanceof PaymentError) return jsonError(err.message, 502);
       throw err;
@@ -165,7 +178,7 @@ async function quote(request: Request, env: Env, email: string, keyId: string): 
       created_at: now,
       expires_at: now + QUOTE_TTL_MS,
     });
-    if (!("error" in made)) return json(quoteView(made));
+    if (!("error" in made)) return json(quoteView(made, fee));
   }
   return jsonError("Couldn't make a quote. Try again.", 503);
 }
@@ -212,7 +225,7 @@ async function addKey(request: Request, env: Env, email: string): Promise<Respon
   const secret = (body.key ?? "").trim().slice(0, 1000);
   if (!secret) return jsonError("Paste an OpenRouter API key.", 400);
   const checked = await checkOpenrouterKey(secret);
-  if (!checked.ok) return jsonError(checked.error ?? "Key was rejected by OpenRouter", 400);
+  if (!checked.ok) return jsonError(checked.error ?? "Failed to validate this OpenRouter API key", 400);
 
   const settings = await deploymentSettings(env);
   const added = await directory(env).addWalletKey(

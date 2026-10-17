@@ -1,6 +1,14 @@
 "use client";
 
-import { createContext, type ReactNode, useCallback, useContext, useEffect, useRef, useState } from "react";
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { ArrowLeft, Check, Copy, CreditCard, Wallet, X } from "lucide-react";
 import type { WalletKey } from "@/lib/agent";
 import { formatUsdShort } from "@/lib/format";
@@ -9,7 +17,9 @@ import { PayOption } from "./PayOption";
 import { useWallet } from "./useWallet";
 
 /** Opens the wallet sidebar; `onClose` runs once it shuts, e.g. to reread the wallet. */
-const WalletPanelContext = createContext<(onClose?: () => void) => void>(() => {});
+const WalletPanelContext = createContext<(onClose?: () => void) => void>(
+  () => {},
+);
 
 /** Open the one OpenRouter wallet sidebar from anywhere under the provider. */
 export function useWalletPanel() {
@@ -51,7 +61,10 @@ const SLIDE_MS = 200;
 function WalletSidebar({ onClose }: { onClose: () => void }) {
   const wallet = useWallet();
   /** The crypto checkout, when open: for a new key, or to top up the bought key named. */
-  const [buying, setBuying] = useState<{ keyId?: string; nickname?: string } | null>(null);
+  const [buying, setBuying] = useState<{
+    keyId?: string;
+    nickname?: string;
+  } | null>(null);
   const [shown, setShown] = useState(false);
 
   // Slide in once mounted; slide out before unmounting.
@@ -106,7 +119,11 @@ function WalletSidebar({ onClose }: { onClose: () => void }) {
           )}
           <div className="min-w-0 flex-1">
             <p className="truncate text-lg font-semibold leading-[1.38]">
-              {!buying ? "OpenRouter wallet" : buying.nickname ? `Top up ${buying.nickname}` : "Buy credits"}
+              {!buying
+                ? "OpenRouter wallet"
+                : buying.nickname
+                  ? `Top up ${buying.nickname}`
+                  : "Buy credits"}
             </p>
             <p className="text-muted text-xs font-light leading-[1.33]">
               {!buying
@@ -125,11 +142,12 @@ function WalletSidebar({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto overscroll-contain px-6 py-6">
+        <div className="flex-1 overflow-y-auto overscroll-contain px-6 py-6 flex flex-col">
           {buying ? (
             <BuyCredits
               key={buying.keyId ?? "new"}
               networks={wallet.networks}
+              feeBps={wallet.feeBps}
               calls={{
                 quote: (body) => wallet.quote(body, buying.keyId),
                 confirm: wallet.confirm,
@@ -138,26 +156,36 @@ function WalletSidebar({ onClose }: { onClose: () => void }) {
             />
           ) : (
             <>
-              {wallet.error && <p className="mb-4 text-xs leading-[1.33]">{wallet.error}</p>}
+              {wallet.error && (
+                <p className="mb-4 text-xs leading-[1.33]">{wallet.error}</p>
+              )}
 
-              <div className="space-y-3">
+              <div className="space-y-3 flex flex-1 flex-col">
                 {wallet.keys === null && (
-                  <p className="text-muted text-sm leading-[1.43]">Loading your keys…</p>
+                  <p className="text-muted text-sm leading-[1.43]">
+                    Loading your keys…
+                  </p>
                 )}
                 {wallet.keys?.length === 0 && (
-                  <p className="text-muted py-4 text-center text-sm leading-[1.43]">No keys yet.</p>
+                  <p className="text-muted py-4 my-auto text-center flex-1 text-sm leading-[1.43]">
+                    No keys yet.
+                  </p>
                 )}
                 {wallet.keys?.map((key) => (
                   <KeyRow
                     key={key.id}
                     walletKey={key}
                     onRemove={() => wallet.remove(key.id)}
-                    onAddCredits={() => setBuying({ keyId: key.id, nickname: key.nickname })}
+                    onAddCredits={() =>
+                      setBuying({ keyId: key.id, nickname: key.nickname })
+                    }
                   />
                 ))}
               </div>
 
-              <p className="text-muted mt-8 mb-3 text-xs font-medium">Buy credits</p>
+              <p className="text-muted mt-8 mb-3 text-xs font-medium">
+                Buy credits
+              </p>
               <div className="space-y-3">
                 <PayOption
                   icon={<Wallet className="h-4 w-4" />}
@@ -173,7 +201,9 @@ function WalletSidebar({ onClose }: { onClose: () => void }) {
                 />
               </div>
 
-              <p className="text-muted mt-8 mb-3 text-xs font-medium">Already have a key?</p>
+              <p className="text-muted mt-8 mb-3 text-xs font-medium">
+                Already have a key?
+              </p>
               <AddKey onAdd={wallet.add} />
             </>
           )}

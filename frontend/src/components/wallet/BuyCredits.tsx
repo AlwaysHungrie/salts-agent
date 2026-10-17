@@ -15,16 +15,38 @@ const CryptoCheckout = dynamic(() => import("./CryptoCheckout"), {
   loading: () => <p className="text-muted text-sm leading-[1.43]">Loading wallets…</p>,
 });
 
+/** One numbered step of the checkout: its number, a title, and a line on what it's for. */
+export function Step({ n, title, hint }: { n: number; title: string; hint?: string }) {
+  return (
+    <div className="mb-3 flex items-start gap-3">
+      <span className="bg-ink text-on-primary mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold">
+        {n}
+      </span>
+      <div className="min-w-0">
+        <p className="text-sm font-semibold leading-[1.43]">{title}</p>
+        {hint && <p className="text-muted text-xs leading-[1.33]">{hint}</p>}
+      </div>
+    </div>
+  );
+}
+
+/** Dollars to two places. */
+const usd = (n: number) => `$${n.toFixed(2)}`;
+
 /**
  * Buying credit with crypto, inside the wallet sidebar: a new key for the wallet, or more
- * credit on a bought one.
+ * credit on a bought one. The buyer sees the credit, the service fee and the total before
+ * anything is asked of their wallet.
  */
 export function BuyCredits({
   networks,
+  feeBps,
   calls,
   onPaid,
 }: {
   networks: PayNetwork[];
+  /** The service fee, in basis points of the credit. */
+  feeBps: number;
   /** The checkout's calls, with the amount still to be added to each quote. */
   calls: {
     quote: (
@@ -34,78 +56,89 @@ export function BuyCredits({
   };
   onPaid: () => void;
 }) {
-  /** A preset, or null while a custom amount is being typed. */
-  const [preset, setPreset] = useState<number | null>(PRESETS[0]);
-  const [custom, setCustom] = useState("");
+  const [text, setText] = useState(String(PRESETS[0]));
 
-  const amount = preset ?? Number(custom);
-  const valid = Number.isFinite(amount) && amount >= 1 && amount <= 10_000;
-
-  const tile = (active: boolean) =>
-    `h-11 rounded-xl border text-sm font-semibold transition ${
-      active ? "border-ink ring-ink ring-1" : "border-hairline hover:border-ink/40"
-    }`;
+  const amount = Number(text);
+  const valid = text.trim() !== "" && Number.isFinite(amount) && amount >= 1 && amount <= 10_000;
+  // The Worker's rounding: the fee to the cent above.
+  const fee = valid ? Math.ceil((Math.round(amount * 100) * feeBps) / 10_000) / 100 : 0;
+  const total = valid ? Math.round((amount + fee) * 100) / 100 : 0;
 
   return (
     <div>
-      <p className="text-muted mb-2 text-xs font-medium">Amount</p>
-      <div className="grid grid-cols-5 gap-2" role="radiogroup" aria-label="Amount">
-        {PRESETS.map((usd) => (
+      <Step n={1} title="How much credit?" hint="Your agents spend this on OpenRouter models." />
+      <label className="border-hairline focus-within:border-ink flex h-14 items-center gap-1 rounded-2xl border px-4 transition">
+        <span className="text-muted text-2xl font-semibold">$</span>
+        <input
+          type="number"
+          inputMode="decimal"
+          min={1}
+          max={10000}
+          step={1}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          aria-label="Credit in US dollars"
+          className="placeholder:text-faint min-w-0 flex-1 bg-transparent text-2xl font-semibold outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+          placeholder="0"
+        />
+        <span className="text-faint text-xs font-semibold">USD</span>
+      </label>
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        {PRESETS.map((p) => (
           <button
-            key={usd}
-            role="radio"
-            aria-checked={preset === usd}
-            onClick={() => setPreset(usd)}
-            className={tile(preset === usd)}
+            key={p}
+            onClick={() => setText(String(p))}
+            className={`h-7 rounded-full px-3 text-xs font-semibold transition ${
+              amount === p ? "bg-ink text-on-primary" : "bg-canvas-soft hover:bg-hairline"
+            }`}
           >
-            ${usd}
+            ${p}
           </button>
         ))}
-        <button
-          role="radio"
-          aria-checked={preset === null}
-          onClick={() => setPreset(null)}
-          className={tile(preset === null)}
-        >
-          Other
-        </button>
+        <span className={`ml-auto text-xs ${valid || !text ? "text-faint" : "text-red-600"}`}>
+          $1 to $10,000
+        </span>
       </div>
 
-      {preset === null && (
-        <label className="border-hairline focus-within:border-ink mt-2 flex h-11 items-center gap-1 rounded-xl border px-4 text-sm transition">
-          <span className="text-muted">$</span>
-          <input
-            type="number"
-            min={1}
-            max={10000}
-            step={1}
-            autoFocus
-            value={custom}
-            onChange={(e) => setCustom(e.target.value)}
-            aria-label="Amount in US dollars"
-            className="placeholder:text-faint min-w-0 flex-1 bg-transparent outline-none"
-            placeholder="40"
-          />
-          <span className="text-faint text-xs">$1 – $10,000</span>
-        </label>
-      )}
+      <div className="bg-canvas-soft mt-4 rounded-2xl px-4 py-3 text-sm leading-[1.43]">
+        <div className="flex justify-between">
+          <span className="text-muted">Credit added to your key</span>
+          <span>{valid ? usd(amount) : "—"}</span>
+        </div>
+        <div className="mt-1 flex justify-between">
+          <span className="text-muted">Service fee ({feeBps / 100}%)</span>
+          <span>{valid ? usd(fee) : "—"}</span>
+        </div>
+        <div className="border-hairline mt-2 flex justify-between border-t pt-2 font-semibold">
+          <span>You pay</span>
+          <span>{valid ? usd(total) : "—"}</span>
+        </div>
+        <p className="text-muted mt-2 text-xs leading-[1.33]">
+          We buy the credit from OpenRouter for you. The fee covers what they charge us and
+          moving the funds. Your wallet adds its own small network fee when you send.
+        </p>
+      </div>
 
-      <p className="text-muted mt-6 mb-2 text-xs font-medium">Pay from</p>
-      {!WALLETS_ON || networks.length === 0 ? (
-        <p className="text-muted text-sm leading-[1.43]">Wallet payments aren&apos;t open yet.</p>
-      ) : !valid ? (
-        <p className="text-muted text-sm leading-[1.43]">Enter an amount from $1 to $10,000.</p>
-      ) : (
-        <CryptoCheckout
-          amount={amount}
-          networks={networks}
-          calls={{
-            quote: (body) => calls.quote({ ...body, amount }),
-            confirm: calls.confirm,
-          }}
-          onPaid={onPaid}
+      <div className="mt-8">
+        <Step
+          n={2}
+          title="Pay from your crypto wallet"
+          hint="Connect, choose where your funds are, and approve in your wallet."
         />
-      )}
+        {!WALLETS_ON || networks.length === 0 ? (
+          <p className="text-muted text-sm leading-[1.43]">Wallet payments aren&apos;t open yet.</p>
+        ) : (
+          <CryptoCheckout
+            total={valid ? total : null}
+            networks={networks}
+            calls={{
+              quote: (body) => calls.quote({ ...body, amount }),
+              confirm: calls.confirm,
+            }}
+            onPaid={onPaid}
+          />
+        )}
+      </div>
     </div>
   );
 }

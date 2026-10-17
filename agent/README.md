@@ -88,7 +88,8 @@ wallet.
 
 Keys are bought with crypto and no processor in between. The buyer asks for a quote
 (`wallet_purchases`): exactly `units` of USDC (or ETH, priced from Chainlink's on-chain
-ETH/USD feed) to the deployment's address, with a little dust so no two open quotes ask for
+ETH/USD feed) to the deployment's address, for the credit plus the `wallet_fee_bps` service
+fee (rounded up to the cent; the quote returns `amount_usd`, `fee_usd`, `total_usd`), with a little dust so no two open quotes ask for
 the same amount. Their wallet sends it, and the Worker reads the transaction back over
 JSON-RPC: right sender, recipient, token and amount, enough confirmations (Solana:
 finalized), inside the quote's 30 minutes, and never counted before. Where payments go and
@@ -153,7 +154,7 @@ curl -X POST http://localhost:8787/agents/session-agent/my-session/chat \
 | `POST /api/business-requests` | A signed-in account asks for a higher agent limit |
 | `GET\|POST /api/wallet` | The caller's OpenRouter wallet / add a pasted key `{ key }`, checked with OpenRouter first and given a random nickname. At most `max_wallet_keys` |
 | `DELETE /api/wallet/:id` | Remove a key, clearing it from every agent that holds it |
-| `POST /api/wallet/purchases`, `POST /api/wallet/:id/credits` | Quote a new key / credit for a bought one: `{ amount, network, asset, payer }` → what to send, where. `GET /api/wallet` lists the open `networks` |
+| `POST /api/wallet/purchases`, `POST /api/wallet/:id/credits` | Quote a new key / credit for a bought one: `{ amount, network, asset, payer }` → what to send, where, and the `amount_usd` + `fee_usd` = `total_usd` breakdown. `GET /api/wallet` lists the open `networks` and `fee_bps` |
 | `POST /api/wallet/purchases/:id/confirm` | `{ tx }`: read the payment back from the chain. 200 paid, 202 not final yet, 400 not a match, 409 already counted |
 | `POST /telegram/webhook/:agentId` | One route per agent, because one bot per agent |
 | `GET\|POST /whatsapp/webhook/:agentId` | WhatsApp's subscription handshake (`GET`) and deliveries (`POST`) |

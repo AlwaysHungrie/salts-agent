@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Loader2, Wallet } from "lucide-react";
+import { Check, ChevronDown, Loader2, Wallet } from "lucide-react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useAppKit, useAppKitAccount, useAppKitProvider, useDisconnect } from "@reown/appkit/react";
 import { type Provider as SolanaProvider, useAppKitConnection } from "@reown/appkit-adapter-solana/react";
@@ -33,7 +33,8 @@ const POLL_FOR_MS = 15 * 60 * 1000;
  * Worker reads the transaction back from the chain before it counts.
  */
 export default function CryptoCheckout(props: {
-  amount: number;
+  /** What the buyer pays, credit plus fee; null while the amount isn't valid. */
+  total: number | null;
   networks: PayNetwork[];
   calls: CheckoutCalls;
   onPaid: () => void;
@@ -48,12 +49,12 @@ export default function CryptoCheckout(props: {
 }
 
 function Checkout({
-  amount,
+  total,
   networks,
   calls,
   onPaid,
 }: {
-  amount: number;
+  total: number | null;
   networks: PayNetwork[];
   calls: CheckoutCalls;
   onPaid: () => void;
@@ -168,6 +169,7 @@ function Checkout({
       <div className="bg-canvas-soft flex h-12 items-center justify-between gap-3 rounded-2xl px-4 text-sm leading-[1.43]">
         <span className="flex min-w-0 items-center gap-2">
           <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+          <span className="text-muted shrink-0 text-xs">Connected</span>
           <span className="truncate font-mono text-[13px]">
             {payer.slice(0, 6)}…{payer.slice(-4)}
           </span>
@@ -187,38 +189,36 @@ function Checkout({
         </p>
       ) : (
         <>
-          <p className="text-muted mt-5 mb-2 text-xs font-medium">Network</p>
-          <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Network">
-            {choices.map((n) => (
-              <button
-                key={n.id}
-                role="radio"
-                aria-checked={network?.id === n.id}
-                disabled={busy}
-                onClick={() => setNetworkId(n.id)}
-                className={`h-10 truncate rounded-xl border px-2 text-sm font-semibold transition disabled:opacity-60 ${
-                  network?.id === n.id
-                    ? "border-ink ring-ink ring-1"
-                    : "border-hairline hover:border-ink/40"
-                }`}
-              >
-                {n.label}
-              </button>
-            ))}
-          </div>
-
-          {network && network.assets.length > 1 && (
-            <>
-              <p className="text-muted mt-5 mb-2 text-xs font-medium">Token</p>
-              <div className="bg-field inline-flex rounded-full p-1" role="radiogroup" aria-label="Token">
-                {network.assets.map((a) => (
+          <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
+            <label className="min-w-0">
+              <span className="text-muted mb-1 block text-xs">Network your funds are on</span>
+              <span className="relative block">
+                <select
+                  value={network?.id ?? ""}
+                  disabled={busy}
+                  onChange={(e) => setNetworkId(e.target.value)}
+                  className="border-hairline focus:border-ink h-11 w-full appearance-none rounded-xl border bg-transparent pr-9 pl-3 text-sm font-semibold outline-none"
+                >
+                  {choices.map((n) => (
+                    <option key={n.id} value={n.id}>
+                      {n.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="text-muted pointer-events-none absolute top-1/2 right-3 h-4 w-4 -translate-y-1/2" />
+              </span>
+            </label>
+            <div>
+              <span className="text-muted mb-1 block text-xs">Pay in</span>
+              <div className="bg-field flex h-11 rounded-xl p-1" role="radiogroup" aria-label="Coin">
+                {(network?.assets ?? ["usdc"]).map((a) => (
                   <button
                     key={a}
                     role="radio"
                     aria-checked={coin === a}
                     disabled={busy}
                     onClick={() => setAsset(a)}
-                    className={`h-8 rounded-full px-5 text-sm font-semibold transition ${
+                    className={`rounded-lg px-4 text-sm font-semibold transition ${
                       coin === a ? "bg-canvas shadow-sm" : "text-muted hover:text-ink"
                     }`}
                   >
@@ -226,30 +226,27 @@ function Checkout({
                   </button>
                 ))}
               </div>
-            </>
-          )}
-
-          <div className="border-hairline-soft mt-6 flex items-baseline justify-between border-t pt-4">
-            <span className="text-muted text-sm">Total</span>
-            <span className="text-right">
-              <span className="text-lg font-semibold">${amount}</span>
-              <span className="text-muted ml-1.5 text-xs">
-                in {coin.toUpperCase()} on {network?.label}
-              </span>
-            </span>
+            </div>
           </div>
+          {coin === "eth" && (
+            <p className="text-muted mt-2 text-xs leading-[1.33]">
+              The ETH amount is worked out at the live price when you press pay.
+            </p>
+          )}
 
           <button
             onClick={() => void pay()}
-            disabled={busy || !network}
-            className="bg-ink text-on-primary mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-full px-6 text-sm font-semibold transition hover:opacity-85 disabled:opacity-60"
+            disabled={busy || !network || total === null}
+            className="bg-ink text-on-primary mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-full px-6 text-sm font-semibold transition hover:opacity-85 disabled:opacity-40"
           >
             {busy && <Loader2 className="h-4 w-4 animate-spin" />}
             {stage === "sign"
-              ? "Confirm in your wallet…"
+              ? "Approve in your wallet…"
               : stage === "wait"
-                ? "Confirming payment…"
-                : `Pay $${amount}`}
+                ? "Waiting for the network…"
+                : total === null
+                  ? "Enter an amount"
+                  : `Pay $${total.toFixed(2)} in ${coin.toUpperCase()}`}
           </button>
         </>
       )}

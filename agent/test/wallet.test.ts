@@ -2,6 +2,7 @@ import { SELF, env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { SECRET_MASK } from "../src/capabilities";
 import { signedIn } from "./clerk";
+import { SHIPPED } from "./shipped";
 
 /**
  * The OpenRouter wallet: each account's keys, picked by nickname wherever a key is asked
@@ -215,7 +216,19 @@ const BASE_USDC = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913";
 const TRANSFER = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 const USDC_ON_BASE = { network: "base", asset: "usdc", payer: PAYER };
 
-type QuoteView = { id: string; to: string; token: string | null; units: string; decimals: number };
+type QuoteView = {
+  id: string;
+  to: string;
+  token: string | null;
+  units: string;
+  decimals: number;
+  amount_usd: number;
+  fee_usd: number;
+  total_usd: number;
+};
+
+/** The shipped service fee on $10 of credit, in dollars. */
+const FEE_ON_10 = Math.ceil(10 * SHIPPED.wallet_fee_bps / 100) / 100;
 
 const word = (n: bigint | string) =>
   `0x${(typeof n === "string" ? n.slice(2) : n.toString(16)).padStart(64, "0")}`;
@@ -267,20 +280,28 @@ describe("buying with crypto", () => {
     expect(networks.find((n) => n.id === "polygon")?.assets).toEqual(["usdc"]);
   });
 
-  it("quotes USDC at the dollar amount plus a little dust of its own", async () => {
+  it("quotes USDC at the credit plus the service fee, plus a little dust of its own", async () => {
     const q = await json<QuoteView>(buy(someone("owner"), { ...USDC_ON_BASE, amount: 10 }));
     expect(q).toMatchObject({ to: OURS, token: BASE_USDC, decimals: 6 });
+    expect(q).toMatchObject({ amount_usd: 10, fee_usd: FEE_ON_10, total_usd: 10 + FEE_ON_10 });
     const units = BigInt(q.units);
-    expect(units > 10_000_000n && units < 10_010_000n).toBe(true);
+    const total = BigInt(Math.round((10 + FEE_ON_10) * 1e6));
+    expect(units > total && units < total + 10_000n).toBe(true);
+  });
+
+  it("tells the wallet what fee a purchase carries", async () => {
+    const wallet = await json<{ fee_bps: number }>(SELF.fetch(`${BASE}/api/wallet`, as(someone("owner"))));
+    expect(wallet.fee_bps).toBe(SHIPPED.wallet_fee_bps);
   });
 
   it("quotes ETH from the on-chain price", async () => {
     const q = await json<QuoteView>(
       buy(someone("owner"), { network: "base", asset: "eth", payer: PAYER, amount: 10 })
     );
-    // $10 at $2,000 is 0.005 ETH, plus under a millionth of a gwei of dust.
+    // $10 and its fee at $2,000 an ETH, plus under a millionth of a gwei of dust.
     const units = BigInt(q.units);
-    expect(units >= 5_000_000_000_000_000n && units < 5_000_000_001_000_000n).toBe(true);
+    const wei = BigInt(Math.ceil(((10 + FEE_ON_10) / 2000) * 1e9)) * 1_000_000_000n;
+    expect(units >= wei && units < wei + 1_000_000n).toBe(true);
     expect(q.token).toBeNull();
   });
 
