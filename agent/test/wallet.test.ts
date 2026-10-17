@@ -617,6 +617,60 @@ describe("the provisioning key", () => {
 
 /* ----------------------------------------------------- payment addresses -- */
 
+describe("recovering a payment the page lost", () => {
+  beforeEach(openPurchases);
+
+  function recover(email: string, body: Record<string, unknown>) {
+    return SELF.fetch(
+      `${BASE}/api/wallet/purchases/recover`,
+      as(email, { method: "POST", body: JSON.stringify(body) })
+    );
+  }
+
+  it("matches the transaction to the buyer's unpaid purchase and delivers its key", async () => {
+    const owner = someone("owner");
+    const older = await json<QuoteView>(buy(owner, { ...USDC_ON_BASE, amount: 5 }));
+    const q = await json<QuoteView>(buy(owner, { ...USDC_ON_BASE, amount: 10 }));
+    const hash = txHash();
+    // Pays the older quote: the newer one is checked first and does not match.
+    await onChain(hash, usdcTransfer(BigInt(older.units)));
+
+    // Only the buyer's own purchases are matched.
+    expect((await recover(someone("stranger"), { network: "base", tx: hash })).status).toBe(400);
+
+    const res = await json<{ status: string; key_id: string }>(recover(owner, { network: "base", tx: hash }));
+    expect(res.status).toBe("paid");
+    const { keys } = await json<{ keys: { id: string; credit_usd: number | null }[] }>(
+      SELF.fetch(`${BASE}/api/wallet`, as(owner))
+    );
+    expect(keys.map((k) => k.id)).toContain(res.key_id);
+
+    // Asking again delivers nothing new; the other quote stays unpaid.
+    expect(await json(recover(owner, { network: "base", tx: hash }))).toMatchObject({ key_id: res.key_id });
+    expect(Object.values(await madeKeys()).filter((k) => k.name.endsWith(older.id))).toHaveLength(1);
+    expect((await confirm(owner, q.id, hash)).status).toBe(409);
+  });
+
+  it("refuses a transaction that pays none of them", async () => {
+    const owner = someone("owner");
+    const q = await json<QuoteView>(buy(owner, { ...USDC_ON_BASE, amount: 10 }));
+    const hash = txHash();
+    await onChain(hash, usdcTransfer(BigInt(q.units) + 1n));
+    const res = await recover(owner, { network: "base", tx: hash });
+    expect(res.status).toBe(400);
+    expect((await recover(owner, { network: "nowhere", tx: hash })).status).toBe(400);
+    expect((await recover(owner, { network: "base", tx: "nope" })).status).toBe(400);
+  });
+
+  it("waits while the transaction is not final", async () => {
+    const owner = someone("owner");
+    const q = await json<QuoteView>(buy(owner, { ...USDC_ON_BASE, amount: 10 }));
+    const hash = txHash();
+    await onChain(hash, usdcTransfer(BigInt(q.units), PAYER, OURS, 1));
+    expect((await recover(owner, { network: "base", tx: hash })).status).toBe(202);
+  });
+});
+
 describe("the payment addresses", () => {
   beforeEach(openPurchases);
 
@@ -632,7 +686,7 @@ describe("the payment addresses", () => {
       evm,
       solana: OURS_ON_SOLANA,
       reown_project_id: REOWN_ID,
-      solana_rpc: "",
+      rpc: expect.objectContaining({ base: "", solana: "" }),
       provisioning_key: { set: true, hint: PROVISIONING_KEY.slice(-4) },
     };
     expect(await json(set({ evm }))).toEqual(shown);
@@ -654,12 +708,15 @@ describe("the payment addresses", () => {
     expect(await read()).toMatchObject({ reown_project_id: "", networks: [] });
   });
 
-  it("take a Solana RPC URL in place of the configured one, showing only its host", async () => {
-    const set = (solana_rpc: string) =>
-      admin("payments", { method: "PATCH", body: JSON.stringify({ solana_rpc }) });
+  it("take a network's RPC URL in place of the configured one, showing only its host", async () => {
+    const set = (url: string, network = "solana") =>
+      admin("payments", { method: "PATCH", body: JSON.stringify({ rpc: { [network]: url } }) });
     expect((await set("http://rpc.test/keyed")).status).toBe(400);
     expect((await set("not a url")).status).toBe(400);
-    expect(await json(set("https://rpc.test/refuses?api-key=s3cret"))).toMatchObject({ solana_rpc: "rpc.test" });
+    expect((await set("https://rpc.test/x", "nowhere")).status).toBe(400);
+    expect(await json(set("https://rpc.test/refuses?api-key=s3cret"))).toMatchObject({
+      rpc: { solana: "rpc.test" },
+    });
     expect(JSON.stringify(await json(admin("payments")))).not.toContain("s3cret");
 
     // Verifying a Solana payment now asks the endpoint set, which refuses here.
@@ -670,8 +727,13 @@ describe("the payment addresses", () => {
     expect(res.status).toBe(502);
     expect((await res.json()) as { error: string }).toMatchObject({ error: "Solana didn't answer (403). Try again." });
 
+    // Any network takes one: ETH is priced from Ethereum's.
+    await set("https://rpc.test/refuses?api-key=s3cret", "ethereum");
+    expect((await buy(owner, { ...USDC_ON_BASE, asset: "eth", amount: 10 })).status).toBe(502);
+    await set("", "ethereum");
+
     // Blank goes back to the configured endpoint.
-    expect(await json(set(""))).toMatchObject({ solana_rpc: "" });
+    expect(await json(set(""))).toMatchObject({ rpc: { solana: "" } });
     expect((await confirm(owner, q.id, "6".repeat(88))).status).not.toBe(502);
   });
 

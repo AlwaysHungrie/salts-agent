@@ -15,6 +15,7 @@ import type { WalletKey } from "@/lib/agent";
 import { formatUsdShort } from "@/lib/format";
 import { BuyCredits } from "./BuyCredits";
 import { PayOption } from "./PayOption";
+import { forgetPayment, sentPayments } from "./sentPayments";
 import { useWallet } from "./useWallet";
 
 /** Opens the wallet sidebar; `onClose` runs once it shuts, e.g. to reread the wallet. */
@@ -152,6 +153,7 @@ function WalletSidebar({ onClose }: { onClose: () => void }) {
               {wallet.error && (
                 <p className="mb-4 text-xs leading-[1.33]">{wallet.error}</p>
               )}
+              <ResumePayments recover={wallet.recover} />
 
               <div className="space-y-3 flex flex-1 flex-col">
                 {wallet.keys === null && (
@@ -190,6 +192,13 @@ function WalletSidebar({ onClose }: { onClose: () => void }) {
                   soon
                 />
               </div>
+
+              {wallet.networks.length > 0 && (
+                <RecoverPayment
+                  networks={wallet.networks}
+                  recover={wallet.recover}
+                />
+              )}
 
               <p className="text-muted mt-8 mb-3 text-xs font-medium">
                 Already have a key?
@@ -469,6 +478,143 @@ function AddKey({ onAdd }: { onAdd: (key: string) => Promise<string | null> }) {
         </button>
       </div>
       {error && <p className="mt-2 text-xs leading-[1.33]">{error}</p>}
+    </div>
+  );
+}
+
+type Recover = ReturnType<typeof useWallet>["recover"];
+
+/**
+ * Checks again the payments this browser sent but never saw a key for (the page was
+ * refreshed or closed, or the network was down), once each time the wallet opens.
+ */
+function ResumePayments({ recover }: { recover: Recover }) {
+  const [notes, setNotes] = useState<string[]>([]);
+
+  useEffect(() => {
+    let live = true;
+    void (async () => {
+      for (const sent of sentPayments()) {
+        if (!live) return;
+        setNotes((n) => [
+          ...n,
+          `Checking a payment you sent (${sent.tx.slice(0, 10)}…)`,
+        ]);
+        const verdict = await recover(sent.network, sent.tx);
+        if (
+          verdict === "paid" ||
+          (typeof verdict === "object" && verdict.final)
+        ) {
+          forgetPayment(sent.tx);
+        }
+        if (!live) return;
+        const line =
+          verdict === "paid"
+            ? "A payment you sent is counted: its key is in your wallet."
+            : verdict === "pending"
+              ? "A payment you sent isn't final yet. We'll check it again next time you open your wallet."
+              : verdict.final
+                ? verdict.error
+                : `${verdict.error} We'll check it again next time you open your wallet.`;
+        setNotes((n) => [...n.slice(0, -1), line]);
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, [recover]);
+
+  if (!notes.length) return null;
+  return (
+    <div className="bg-canvas-soft mb-4 space-y-1 rounded-2xl px-4 py-3 text-xs leading-[1.33]">
+      {notes.map((note, i) => (
+        <p key={i}>{note}</p>
+      ))}
+    </div>
+  );
+}
+
+/** Paste a payment's transaction id to get the key it paid for, when the page lost it. */
+function RecoverPayment({
+  networks,
+  recover,
+}: {
+  networks: { id: string; label: string }[];
+  recover: Recover;
+}) {
+  const [open, setOpen] = useState(false);
+  const [network, setNetwork] = useState(networks[0]?.id ?? "");
+  const [tx, setTx] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const ready = tx.trim() !== "" && network !== "";
+
+  const submit = async () => {
+    if (!ready || busy) return;
+    setBusy(true);
+    setNote(null);
+    const verdict = await recover(network, tx.trim());
+    setBusy(false);
+    if (verdict === "paid") {
+      forgetPayment(tx.trim());
+      setTx("");
+      setNote("Payment counted: the key is in your wallet.");
+    } else if (verdict === "pending") {
+      setNote("That payment isn't final yet. Try again in a minute.");
+    } else {
+      setNote(verdict.error);
+    }
+  };
+
+  if (!open)
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="text-muted hover:text-ink mt-3 text-xs underline underline-offset-2"
+      >
+        Paid but didn&apos;t get a key?
+      </button>
+    );
+
+  return (
+    <div className="mt-4">
+      <p className="text-muted mb-2 text-xs leading-[1.33]">
+        Paste the transaction id from your wallet, and choose the network you
+        paid on.
+      </p>
+      <div className="flex gap-2">
+        <select
+          value={network}
+          onChange={(e) => setNetwork(e.target.value)}
+          aria-label="Network"
+          className="bg-field h-11 shrink-0 rounded-2xl px-3 text-sm outline-none"
+        >
+          {networks.map((n) => (
+            <option key={n.id} value={n.id}>
+              {n.label}
+            </option>
+          ))}
+        </select>
+        <input
+          value={tx}
+          onChange={(e) => setTx(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") void submit();
+          }}
+          autoComplete="off"
+          placeholder="Transaction id"
+          aria-label="Transaction id"
+          className="bg-field placeholder:text-faint focus:ring-ink h-11 min-w-0 flex-1 rounded-2xl px-4 text-sm outline-none focus:ring-2"
+        />
+      </div>
+      <button
+        onClick={() => void submit()}
+        disabled={!ready || busy}
+        className="border-hairline text-ink hover:bg-canvas-soft mt-2 h-11 w-full rounded-full border px-5 text-sm font-semibold transition disabled:opacity-40"
+      >
+        {busy ? "Checking…" : "Get my key"}
+      </button>
+      {note && <p className="mt-2 text-xs leading-[1.33]">{note}</p>}
     </div>
   );
 }

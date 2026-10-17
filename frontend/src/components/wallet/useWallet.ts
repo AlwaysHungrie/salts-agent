@@ -138,6 +138,34 @@ export function useWallet() {
     return "paid";
   };
 
+  /**
+   * Count a payment the page lost track of, by its network and transaction id: "paid",
+   * "pending" while the chain or the delivery isn't done, or `{ error, final }`, final
+   * when asking again can't help (it pays for none of the buyer's purchases).
+   */
+  const recover = useCallback(
+    async (
+      network: string,
+      tx: string,
+    ): Promise<"paid" | "pending" | { error: string; final: boolean }> => {
+      const res = await fetch("/api/wallet/purchases/recover", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ network, tx }),
+      });
+      if (res.status === 202) return "pending";
+      if (!res.ok) {
+        return {
+          error: await errorOf(res, "Couldn't check the payment."),
+          final: res.status === 400 || res.status === 409,
+        };
+      }
+      await load();
+      return "paid";
+    },
+    [load],
+  );
+
   return {
     keys,
     networks,
@@ -150,5 +178,6 @@ export function useWallet() {
     remove,
     quote,
     confirm,
+    recover,
   };
 }

@@ -121,6 +121,7 @@ export async function handleWallet(
 
   if (id === "purchases" && method === "POST") {
     if (!action) return await quote(request, env, email);
+    if (action === "recover" && !segments[4]) return await recover(request, env, email);
     if (segments[4] === "confirm" && !segments[5]) return await confirm(request, env, email, action);
     return undefined;
   }
@@ -146,13 +147,13 @@ export async function handleWallet(
 }
 
 /**
- * The deployment's RPC endpoints, with the Solana one set from the admin CLI in place of
- * the configured one: a keyed endpoint stays out of the repository, and Solana's public
- * one refuses Cloudflare.
+ * The deployment's RPC endpoints, with any set from the admin CLI in place of the
+ * configured ones: keyed endpoints stay out of the repository, and the free public ones
+ * turn Cloudflare away.
  */
 async function withRpc(env: Env): Promise<Env> {
-  const solana = await directory(env).solanaRpc();
-  return solana ? { ...env, PAYMENT_RPC: { ...env.PAYMENT_RPC, solana } } : env;
+  const set = await directory(env).paymentRpcs(PAY_NETWORKS.map((n) => n.id));
+  return Object.keys(set).length ? { ...env, PAYMENT_RPC: { ...env.PAYMENT_RPC, ...set } } : env;
 }
 
 /**
@@ -251,6 +252,49 @@ async function confirm(request: Request, env: Env, email: string, id: string): P
   }
   const paid = await dir.purchase(email, id);
   return paid ? await deliver(env, paid) : jsonError("not found", 404);
+}
+
+/** How far back a pasted transaction is matched against unpaid purchases. */
+const RECOVER_DAYS = 30;
+
+/**
+ * Count a payment whose purchase the browser lost (a refresh, a closed tab, an RPC that
+ * was down): match `tx` against the caller's own unpaid purchases on `network`, each
+ * checked exactly as `confirm` checks it, so a payment still counts only for the quote
+ * its wallet, amount and timing match. Already counted for the caller: delivered.
+ */
+async function recover(request: Request, env: Env, email: string): Promise<Response> {
+  const body = await readJson<{ network?: string; tx?: string }>(request);
+  const network = PAY_NETWORKS.find((n) => n.id === body.network);
+  if (!network) return jsonError("Choose the network you paid on.", 400);
+  const tx = txId(network.family, body.tx);
+  if (!tx) return jsonError("That isn't a transaction id.", 400);
+  const dir = directory(env);
+  const candidates = await dir.recoverable(email, network.id, tx, Date.now() - RECOVER_DAYS * 86_400_000);
+  if (candidates[0]?.tx === tx) return await deliver(env, candidates[0]);
+  if (await dir.txCounted(tx)) return jsonError("That transaction has already been counted.", 409);
+
+  const rpcEnv = await withRpc(env);
+  for (const found of candidates) {
+    let verdict;
+    try {
+      verdict = await verifyPayment(rpcEnv, found, tx);
+    } catch (err) {
+      if (err instanceof PaymentError) return jsonError(err.message, 502);
+      throw err;
+    }
+    // Not final yet: the same for every purchase, so ask again later.
+    if (verdict.status === "pending") return json(verdict, 202);
+    if (verdict.status === "paid") {
+      if (!(await dir.markPurchasePaid(found.id, tx))) {
+        const now = await dir.purchase(email, found.id);
+        if (now?.tx !== tx) return jsonError("That transaction has already been counted.", 409);
+      }
+      const paid = await dir.purchase(email, found.id);
+      return paid ? await deliver(env, paid) : jsonError("not found", 404);
+    }
+  }
+  return jsonError("That transaction doesn't pay for any of your purchases.", 400);
 }
 
 const delivering = () => json({ status: "pending", reason: "Setting up your key." }, 202);

@@ -65,6 +65,7 @@ import {
   fulfilNewKey,
   markPurchasePaid,
   purchase,
+  recoverable,
   releasePurchase,
   setDeploymentValue,
   txCounted,
@@ -415,6 +416,12 @@ export class AgentDirectory extends DurableObject {
     return purchase(this.ctx.storage, email, id);
   }
 
+  /** What `tx` could pay for among `email`'s purchases (see `recoverable`). */
+  recoverable(email: string, network: string, tx: string, since: number): WalletPurchase[] {
+    this.ensureSchema();
+    return recoverable(this.ctx.storage, email, network, tx, since);
+  }
+
   txCounted(tx: string): boolean {
     this.ensureSchema();
     return txCounted(this.ctx.storage, tx);
@@ -474,15 +481,24 @@ export class AgentDirectory extends DurableObject {
     setDeploymentValue(this.ctx.storage, "reown_project_id", value);
   }
 
-  /** A Solana RPC URL that overrides the deployment's (it may carry an API key). */
-  solanaRpc(): string {
+  /**
+   * The RPC URLs set from the admin CLI, by network id, overriding the deployment's (they
+   * may carry API keys). Networks with none set are left out.
+   */
+  paymentRpcs(networks: string[]): Record<string, string> {
     this.ensureSchema();
-    return deploymentValue(this.ctx.storage, "payment_rpc_solana");
+    const set: Record<string, string> = {};
+    for (const id of networks) {
+      const url = deploymentValue(this.ctx.storage, `payment_rpc_${id}`);
+      if (url) set[id] = url;
+    }
+    return set;
   }
 
-  setSolanaRpc(value: string) {
+  /** Set one network's RPC URL; blank goes back to the deployment's. */
+  setPaymentRpc(network: string, value: string) {
     this.ensureSchema();
-    setDeploymentValue(this.ctx.storage, "payment_rpc_solana", value);
+    setDeploymentValue(this.ctx.storage, `payment_rpc_${network}`, value);
   }
 
   /** Set one family's payment address; blank switches that family off. */

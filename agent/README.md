@@ -105,9 +105,10 @@ tab with Reown's project id, which the browser's wallet modal is opened with (`G
 /api/admin/payments`, stored in `AgentDirectory`; `GET /api/wallet` hands the id to the
 page). A blank address switches that family off; without a Reown project id the wallet
 lists no networks. Which RPC each network is read from is `PAYMENT_RPC` in
-`wrangler.jsonc`; the Payments tab's Solana RPC URL replaces Solana's (Solana's public
-endpoint answers Cloudflare with 403, and a keyed one such as Helius stays out of the
-repository: only its host is ever shown). Base Sepolia (`base-sepolia`) is a testnet for
+`wrangler.jsonc`; an RPC URL set for a network in the Payments tab replaces it (`rpc` on
+`/api/admin/payments`). The free public endpoints answer Cloudflare with 403, so a
+deployment needs keyed ones (Alchemy, Helius, QuickNode); a keyed URL stays out of the
+repository and only its host is ever shown. Base Sepolia (`base-sepolia`) is a testnet for
 trying a purchase with faucet coins; it has an RPC on staging only, never production. Purchases are capped at
 `max_wallet_purchase_usd`.
 
@@ -122,6 +123,14 @@ next confirm with the same transaction delivers it. While no provisioning key is
 wallet lists no networks and quotes answer 503. Removing a bought key deletes it at
 OpenRouter too. The keys spend the deployment's OpenRouter credit, so that balance has to
 be kept funded.
+
+A payment the page lost track of (a refresh, a closed tab, an RPC that was down) is
+recovered with `POST /api/wallet/purchases/recover { network, tx }`: the transaction is
+checked, exactly as a confirm checks it, against the caller's own unpaid purchases on that
+network from the last 30 days, newest first, and delivers the one it pays for. The page
+keeps each sent payment in the browser until a key comes of it and checks it again when
+the wallet opens; the wallet also takes a pasted transaction id ("Paid but didn't get a
+key?").
 
 Attachment bytes (images, voice-note clips) live in R2, not in the session's SQLite.
 Create the bucket once before deploying — `wrangler dev` simulates it locally:
