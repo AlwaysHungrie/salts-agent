@@ -147,7 +147,9 @@ export function useWallet() {
     async (
       network: string,
       tx: string,
-    ): Promise<"paid" | "pending" | { error: string; final: boolean }> => {
+    ): Promise<
+      "paid" | "already" | "pending" | { error: string; final: boolean }
+    > => {
       const res = await fetch("/api/wallet/purchases/recover", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -160,8 +162,9 @@ export function useWallet() {
           final: res.status === 400 || res.status === 409,
         };
       }
+      const { already } = (await res.json()) as { already?: boolean };
       await load();
-      return "paid";
+      return already ? "already" : "paid";
     },
     [load],
   );

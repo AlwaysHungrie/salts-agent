@@ -640,13 +640,18 @@ describe("recovering a payment the page lost", () => {
 
     const res = await json<{ status: string; key_id: string }>(recover(owner, { network: "base", tx: hash }));
     expect(res.status).toBe("paid");
+    expect(res).not.toHaveProperty("already");
     const { keys } = await json<{ keys: { id: string; credit_usd: number | null }[] }>(
       SELF.fetch(`${BASE}/api/wallet`, as(owner))
     );
     expect(keys.map((k) => k.id)).toContain(res.key_id);
 
-    // Asking again delivers nothing new; the other quote stays unpaid.
-    expect(await json(recover(owner, { network: "base", tx: hash }))).toMatchObject({ key_id: res.key_id });
+    // Asking again delivers nothing new, and says the key was already issued; the other
+    // quote stays unpaid.
+    expect(await json(recover(owner, { network: "base", tx: hash }))).toMatchObject({
+      key_id: res.key_id,
+      already: true,
+    });
     expect(Object.values(await madeKeys()).filter((k) => k.name.endsWith(older.id))).toHaveLength(1);
     expect((await confirm(owner, q.id, hash)).status).toBe(409);
   });

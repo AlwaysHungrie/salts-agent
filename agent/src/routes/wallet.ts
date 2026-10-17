@@ -271,7 +271,13 @@ async function recover(request: Request, env: Env, email: string): Promise<Respo
   if (!tx) return jsonError("That isn't a transaction id.", 400);
   const dir = directory(env);
   const candidates = await dir.recoverable(email, network.id, tx, Date.now() - RECOVER_DAYS * 86_400_000);
-  if (candidates[0]?.tx === tx) return await deliver(env, candidates[0]);
+  if (candidates[0]?.tx === tx) {
+    // Its key was issued before: say so, so the page doesn't claim it was just added.
+    if (candidates[0].status === "fulfilled") {
+      return json({ status: "paid", key_id: candidates[0].key_id, already: true });
+    }
+    return await deliver(env, candidates[0]);
+  }
   if (await dir.txCounted(tx)) return jsonError("That transaction has already been counted.", 409);
 
   const rpcEnv = await withRpc(env);

@@ -467,7 +467,7 @@ function AddKey({ onAdd }: { onAdd: (key: string) => Promise<string | null> }) {
           autoComplete="off"
           placeholder="Paste an OpenRouter key, sk-or-v1-…"
           aria-label="OpenRouter API key"
-          className="bg-field placeholder:text-faint focus:ring-ink h-11 min-w-0 flex-1 rounded-2xl px-4 text-sm outline-none focus:ring-2"
+          className="bg-field placeholder:text-faint focus:ring-ink h-11 w-full rounded-2xl px-4 text-sm outline-none focus:ring-2"
         />
         <button
           onClick={() => void submit()}
@@ -503,13 +503,14 @@ function ResumePayments({ recover }: { recover: Recover }) {
         const verdict = await recover(sent.network, sent.tx);
         if (
           verdict === "paid" ||
+          verdict === "already" ||
           (typeof verdict === "object" && verdict.final)
         ) {
           forgetPayment(sent.tx);
         }
         if (!live) return;
         const line =
-          verdict === "paid"
+          verdict === "paid" || verdict === "already"
             ? "A payment you sent is counted: its key is in your wallet."
             : verdict === "pending"
               ? "A payment you sent isn't final yet. We'll check it again next time you open your wallet."
@@ -601,14 +602,20 @@ function RecoverDialog({
     setNote(null);
     const verdict = await recover(network, tx.trim());
     setBusy(false);
-    if (verdict === "paid") {
+    if (verdict === "paid" || verdict === "already") {
       forgetPayment(tx.trim());
       setTx("");
-      setNote("Payment counted: the key is in your wallet.");
+      setNote(
+        verdict === "already"
+          ? "Transaction confirmed. The key has already been added to your wallet."
+          : "Transaction confirmed. The key has been added to your wallet.",
+      );
     } else if (verdict === "pending") {
       setNote("That payment isn't final yet. Try again in a minute.");
     } else {
-      setNote(verdict.error);
+      setNote(
+        verdict.final ? "Failed to validate transaction." : verdict.error,
+      );
     }
   };
 
@@ -626,7 +633,7 @@ function RecoverDialog({
       >
         <div className="flex items-start gap-2">
           <p className="flex-1 text-base font-semibold leading-[1.38]">
-            Paid but didn&apos;t get a key?
+            Recover Lost Transactions
           </p>
           <button
             onClick={onClose}
@@ -637,15 +644,16 @@ function RecoverDialog({
           </button>
         </div>
         <p className="text-muted mt-2 mb-4 text-sm font-light leading-[1.43]">
-          Paste the transaction id from your wallet, and choose the network you
-          paid on.
+          In case you made a transaction but did not receive an API key in your
+          wallet, you might be able to recover the API key if your transaction
+          was successful. Please provide us with the transaction details.
         </p>
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2">
           <select
             value={network}
             onChange={(e) => setNetwork(e.target.value)}
             aria-label="Network"
-            className="bg-field h-11 shrink-0 rounded-2xl px-3 text-sm outline-none"
+            className="bg-field h-11 w-full rounded-2xl px-3 text-sm outline-none"
           >
             {networks.map((n) => (
               <option key={n.id} value={n.id}>
@@ -663,7 +671,7 @@ function RecoverDialog({
             autoComplete="off"
             placeholder="Transaction id"
             aria-label="Transaction id"
-            className="bg-field placeholder:text-faint focus:ring-ink h-11 min-w-0 flex-1 rounded-2xl px-4 text-sm outline-none focus:ring-2"
+            className="bg-field placeholder:text-faint focus:ring-ink h-11 w-full rounded-2xl px-4 text-sm outline-none focus:ring-2"
           />
         </div>
         {note && <p className="mt-3 text-xs leading-[1.33]">{note}</p>}
