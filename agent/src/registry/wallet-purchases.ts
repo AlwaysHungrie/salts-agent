@@ -60,6 +60,33 @@ export function purchase(
     .toArray()[0] as unknown as WalletPurchase | undefined;
 }
 
+/**
+ * `email`'s purchases on `network` that `tx` could still pay for, newest first: its own
+ * purchase if `tx` already counted for one, otherwise the unpaid ones made since `since`.
+ */
+export function recoverable(
+  storage: DurableObjectStorage,
+  email: string,
+  network: string,
+  tx: string,
+  since: number
+): WalletPurchase[] {
+  const counted = storage.sql
+    .exec(`SELECT * FROM wallet_purchases WHERE tx = ? AND email = ? LIMIT 1`, tx, email)
+    .toArray();
+  if (counted.length) return counted as unknown as WalletPurchase[];
+  return storage.sql
+    .exec(
+      `SELECT * FROM wallet_purchases
+        WHERE email = ? AND network = ? AND status = 'pending' AND created_at >= ?
+        ORDER BY created_at DESC LIMIT 10`,
+      email,
+      network,
+      since
+    )
+    .toArray() as unknown as WalletPurchase[];
+}
+
 /** Whether `tx` already paid for a purchase. */
 export function txCounted(storage: DurableObjectStorage, tx: string): boolean {
   return storage.sql.exec(`SELECT id FROM wallet_purchases WHERE tx = ? LIMIT 1`, tx).toArray().length > 0;

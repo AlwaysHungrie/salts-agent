@@ -246,7 +246,7 @@ const state = {
   users: pager("/api/admin/users", "users"),
   requests: pager("/api/admin/business-requests", "requests"),
   /**
-   * The payment settings: `{ evm, solana, reown_project_id, solana_rpc (host only),
+   * The payment settings: `{ evm, solana, reown_project_id, rpc: { [network]: host },
    * provisioning_key: { set, hint } }`; null until read, or when the Worker predates them.
    */
   payments: null,
@@ -303,9 +303,15 @@ const PAYMENT_FIELDS = [
   { key: "evm", label: "EVM pay address", off: "EVM payments are closed" },
   { key: "solana", label: "Solana pay address", off: "Solana payments are closed" },
   { key: "reown_project_id", label: "Reown project id", off: "the wallet modal can't open" },
-  // Write-only: the Worker shows only its host, as the URL may carry an API key.
-  { key: "solana_rpc", label: "Solana RPC URL", off: "Solana uses the configured RPC", secret: true },
 ];
+
+/** A network's RPC URL, edited like the other payment settings. */
+const rpcField = (network) => ({
+  key: `rpc:${network}`,
+  label: `${network} RPC URL`,
+  off: `${network} uses the configured RPC`,
+  body: (value) => ({ rpc: { [network]: value } }),
+});
 
 /** Set one payment setting; the Worker checks it is the right shape. */
 async function setPayment(field, text) {
@@ -317,7 +323,7 @@ async function setPayment(field, text) {
   state.payments = await call("/api/admin/payments", {
     method: "PATCH",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ [field.key]: value }),
+    body: JSON.stringify(field.body ? field.body(value) : { [field.key]: value }),
   });
   state.status = `${field.label} set`;
   render();
@@ -331,7 +337,7 @@ function removePayment(field) {
         state.payments = await call("/api/admin/payments", {
           method: "PATCH",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ [field.key]: "" }),
+          body: JSON.stringify(field.body ? field.body("") : { [field.key]: "" }),
         });
         state.status = `${field.label} removed — ${field.off}`;
       } catch (err) {
@@ -714,9 +720,17 @@ function view() {
           rows.push({
             cells: [field.label, pay[field.key] || `not set — ${field.off}`],
             unset: !pay[field.key],
-            enter: () =>
-              startEdit(field.label, field.secret ? "" : pay[field.key] ?? "", (t) => setPayment(field, t), field.secret),
+            enter: () => startEdit(field.label, pay[field.key] ?? "", (t) => setPayment(field, t)),
             remove: pay[field.key] ? () => removePayment(field) : undefined,
+          });
+        }
+        // Write-only: the Worker shows only the host, as the URL may carry an API key.
+        for (const [network, host] of Object.entries(pay.rpc ?? {})) {
+          const field = rpcField(network);
+          rows.push({
+            cells: [field.label, host ? `set (${host})` : "configured — the free public endpoint"],
+            enter: () => startEdit(field.label, "", (t) => setPayment(field, t), true),
+            remove: host ? () => removePayment(field) : undefined,
           });
         }
       }

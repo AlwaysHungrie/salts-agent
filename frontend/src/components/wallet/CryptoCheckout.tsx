@@ -14,6 +14,7 @@ import {
   useAppKitConnection,
 } from "@reown/appkit-adapter-solana/react";
 import type { Connection } from "@solana/web3.js";
+import { forgetPayment, rememberPayment } from "./sentPayments";
 import {
   createAssociatedTokenAccountIdempotentInstruction,
   createTransferCheckedInstruction,
@@ -179,8 +180,11 @@ function Checkout({
       setStage("idle");
       return;
     }
+    // Kept until a key comes of it: the wallet checks it again if this page is lost.
+    rememberPayment({ network: network.id, tx });
     setStage("wait");
     const failed = await settle(calls.confirm, q.id, tx);
+    if (!failed) forgetPayment(tx);
     if (failed) {
       setError(failed);
       setStage("idle");

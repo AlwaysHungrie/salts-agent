@@ -2,7 +2,7 @@ import type { Env } from "../env";
 import { forgetCachedSettings, missingSettings, SETTINGS_FIELDS } from "../settings";
 import { callerEmail, trustedCaller } from "../worker/auth";
 import { json, jsonError, readJson } from "../worker/http";
-import { payerAddress } from "../payments";
+import { PAY_NETWORKS, payerAddress } from "../payments";
 import { isProvisioningKey } from "../worker/provisioned-keys";
 import { directory, syncSessionCount } from "../worker/stores";
 
@@ -115,10 +115,10 @@ async function handleProvisioningKey(request: Request, env: Env): Promise<Respon
 /**
  * The payment settings, read together for the admin CLI's Payments tab: where purchases
  * are paid to (one EVM address for every EVM network, one Solana address), Reown's
- * project id (the browser's wallet modal), a Solana RPC URL overriding the configured one
- * (write-only: only its host is shown, as it may carry an API key), and whether a provisioning key is set (set
+ * project id (the browser's wallet modal), RPC URLs by network overriding the configured
+ * ones (write-only: only hosts are shown, as a URL may carry an API key), and whether a provisioning key is set (set
  * through its own route, which checks it with OpenRouter). All but the key are public.
- * PATCH sets any of `evm`, `solana`, `reown_project_id`, `solana_rpc`; a blank one switches it off.
+ * PATCH sets any of `evm`, `solana`, `reown_project_id`, `rpc: { [network]: url }`; a blank one switches it off.
  */
 async function handlePayments(request: Request, env: Env): Promise<Response> {
   const dir = directory(env);
@@ -127,8 +127,12 @@ async function handlePayments(request: Request, env: Env): Promise<Response> {
     return {
       ...(await dir.paymentAddresses()),
       reown_project_id: await dir.reownProjectId(),
-      // Only the host: the URL may carry an API key.
-      solana_rpc: rpcHost(await dir.solanaRpc()),
+      // Every network's RPC set here, by id ("" for the configured one); only the host,
+      // as the URL may carry an API key.
+      rpc: await (async () => {
+        const set = await dir.paymentRpcs(PAY_NETWORKS.map((n) => n.id));
+        return Object.fromEntries(PAY_NETWORKS.map((n) => [n.id, rpcHost(set[n.id] ?? "")]));
+      })(),
       provisioning_key: { set: Boolean(key), hint: key ? key.slice(-4) : "" },
     };
   };
@@ -138,15 +142,18 @@ async function handlePayments(request: Request, env: Env): Promise<Response> {
     evm?: unknown;
     solana?: unknown;
     reown_project_id?: unknown;
-    solana_rpc?: unknown;
+    rpc?: Record<string, unknown>;
   }>(request);
   const given = (v: unknown) => (typeof v === "string" ? v.trim() : "");
-  const fields = (["evm", "solana", "reown_project_id", "solana_rpc"] as const).filter(
-    (f) => body[f] !== undefined
+  const fields = (["evm", "solana", "reown_project_id", "rpc"] as const).filter((f) => body[f] !== undefined);
+  if (!fields.length) return jsonError("Give evm, solana, reown_project_id or rpc.", 400);
+  const rpcs = Object.entries(body.rpc && typeof body.rpc === "object" ? body.rpc : {}).map(
+    ([id, url]) => [id, given(url)] as const
   );
-  if (!fields.length) return jsonError("Give evm, solana, reown_project_id or solana_rpc.", 400);
-  const rpc = given(body.solana_rpc);
-  if (rpc && !rpcHost(rpc)) return jsonError("A Solana RPC is an https:// URL.", 400);
+  for (const [id, url] of rpcs) {
+    if (!PAY_NETWORKS.some((n) => n.id === id)) return jsonError(`There is no network ${id}.`, 400);
+    if (url && !rpcHost(url)) return jsonError("An RPC is an https:// URL.", 400);
+  }
   for (const family of ["evm", "solana"] as const) {
     const value = given(body[family]);
     // Kept as typed (an EVM checksum stays readable); compared lowercased.
@@ -162,7 +169,7 @@ async function handlePayments(request: Request, env: Env): Promise<Response> {
     if (body[family] !== undefined) await dir.setPaymentAddress(family, given(body[family]));
   }
   if (body.reown_project_id !== undefined) await dir.setReownProjectId(reown);
-  if (body.solana_rpc !== undefined) await dir.setSolanaRpc(rpc.slice(0, 2000));
+  for (const [id, url] of rpcs) await dir.setPaymentRpc(id, url.slice(0, 2000));
   return json(await view());
 }
 
