@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Check, Copy } from "lucide-react";
 import type { WalletKey } from "@/lib/agent";
 import { formatUsdShort } from "@/lib/format";
 import { BuyKeyDialog } from "./BuyKeyDialog";
@@ -77,6 +78,17 @@ export function WalletDialog({ onClose }: { onClose: () => void }) {
         </div>
 
         <AddKey onAdd={wallet.add} />
+
+        <div className="text-muted mt-3 text-center text-xs leading-[1.43]">
+          Don&apos;t have an API key? Use your{" "}
+          <button
+            onClick={() => setBuying(true)}
+            className="text-ink underline underline-offset-2 transition hover:opacity-85 cursor-pointer"
+          >
+            card or crypto wallet
+          </button>{" "}
+          instead.
+        </div>
       </div>
 
       {buying && (
@@ -98,7 +110,7 @@ function KeyRow({
   onRemove: () => Promise<string | null>;
   onAddCredits: (amount: number) => Promise<string | null>;
 }) {
-  const [shown, setShown] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [crediting, setCrediting] = useState(false);
   const [amount, setAmount] = useState("10");
@@ -114,6 +126,12 @@ function KeyRow({
     return !failed;
   };
 
+  const copy = async (secret: string) => {
+    await navigator.clipboard.writeText(secret);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
   const usedBy =
     key.agents === 0
       ? "Not used by any agent yet."
@@ -122,7 +140,9 @@ function KeyRow({
   return (
     <div className="ring-hairline-soft rounded-[24px] p-6 ring-1">
       <div className="flex items-start justify-between gap-4">
-        <p className="min-w-0 truncate text-xl font-semibold leading-[1.3]">{key.nickname}</p>
+        <p className="min-w-0 truncate text-xl font-semibold leading-[1.3]">
+          {key.nickname}
+        </p>
         {!confirming && !crediting && (
           <div className="flex shrink-0 gap-2">
             {key.kind === "provisioned" && (
@@ -145,21 +165,23 @@ function KeyRow({
 
       <Credit walletKey={key} />
 
-      <div className="text-muted mt-5 text-sm leading-[1.43]">
+      <div className="text-muted mt-5 flex items-center justify-between gap-3 text-sm leading-[1.43]">
+        <p className="min-w-0">{usedBy}</p>
         {key.key !== null ? (
-          <p className="break-all">
-            {shown ? key.key : `Your key ending ${key.key.slice(-4)}.`}{" "}
+          <div className="flex shrink-0 items-center gap-1.5">
+            <span>{`${key.key.slice(0, 4)}...${key.key.slice(-4)}`}</span>
             <button
-              onClick={() => setShown(!shown)}
-              className="hover:text-ink underline underline-offset-2 transition"
+              onClick={() => void copy(key.key ?? "")}
+              title={copied ? "Copied" : "Copy key"}
+              aria-label={copied ? "Copied" : "Copy key"}
+              className="hover:text-ink transition"
             >
-              {shown ? "Hide" : "Show"}
+              {copied ? <Check size={14} /> : <Copy size={14} />}
             </button>
-          </p>
+          </div>
         ) : (
-          <p>Bought here. The key itself stays hidden.</p>
+          <span className="shrink-0">Key hidden</span>
         )}
-        <p>{usedBy}</p>
       </div>
 
       {confirming && (
@@ -210,7 +232,9 @@ function KeyRow({
             </button>
             <button
               onClick={() =>
-                void run(() => onAddCredits(Number(amount))).then((ok) => ok && setCrediting(false))
+                void run(() => onAddCredits(Number(amount))).then(
+                  (ok) => ok && setCrediting(false),
+                )
               }
               disabled={busy || !(Number(amount) > 0)}
               className="bg-ink text-on-primary h-9 rounded-full px-4 text-xs font-semibold transition hover:opacity-85 disabled:opacity-40"

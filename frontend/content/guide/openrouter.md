@@ -34,4 +34,4 @@ Your wallet holds every key you add, and shows how much credit each one has left
 
 ## 5. Pick the key for your agent
 
-When you create your agent, choose the key by its nickname from the **OpenRouter key** dropdown. If you already have an agent, open its **Settings**, scroll to the **OpenRouter** section and choose the key there. You can also open your wallet from the **Wallet** button next to the dropdown.
+When you create your agent, choose the key by its nickname from the **OpenRouter key** dropdown. If you already have an agent, open its **Settings**, scroll to the **OpenRouter** section and choose the key there. You can also open your wallet from the wallet icon at the end of the dropdown.

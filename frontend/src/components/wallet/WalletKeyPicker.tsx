@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Wallet } from "lucide-react";
 import { formatUsdShort } from "@/lib/format";
 import { useWallet } from "./useWallet";
 import { WalletDialog } from "./WalletDialog";
@@ -36,7 +37,7 @@ export function WalletKeyPicker({
     <div>
       {label && <p className="text-sm font-semibold leading-[1.43]">{label}</p>}
       {hint && <p className="text-muted text-xs font-light leading-[1.33]">{hint}</p>}
-      <div className="mt-2 flex gap-2">
+      <div className="relative mt-2">
         <select
           value={selected}
           onChange={(e) => {
@@ -44,7 +45,7 @@ export function WalletKeyPicker({
           }}
           disabled={wallet.keys === null}
           aria-label="OpenRouter key"
-          className="bg-field text-ink min-w-0 flex-1 appearance-none rounded-2xl px-4 py-3 text-sm outline-none"
+          className="bg-field text-ink focus:ring-ink w-full appearance-none rounded-2xl py-3 pr-12 pl-4 text-sm outline-none focus:ring-2"
         >
           <option value="">{keys.length ? "Choose a key" : "No keys in your wallet"}</option>
           {elsewhere && (
@@ -55,15 +56,17 @@ export function WalletKeyPicker({
           {keys.map((k) => (
             <option key={k.id} value={k.id}>
               {k.nickname}
-              {k.limit !== null ? ` · ${formatUsdShort(k.remaining)} left` : ""}
+              {k.limit !== null ? ` (${formatUsdShort(k.remaining)} left)` : ""}
             </option>
           ))}
         </select>
         <button
           onClick={() => setManaging(true)}
-          className="border-hairline text-ink hover:bg-canvas-soft shrink-0 rounded-full border px-4 text-sm font-semibold transition"
+          title="Open your OpenRouter wallet"
+          aria-label="Open your OpenRouter wallet"
+          className="text-muted hover:text-ink absolute top-1/2 right-4 -translate-y-1/2 transition"
         >
-          Wallet
+          <Wallet size={16} />
         </button>
       </div>
 
