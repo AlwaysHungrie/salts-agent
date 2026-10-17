@@ -10,6 +10,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
+  AGENTS_DEPLOYED,
   BRAND,
   HERO,
   LINKS as DESTINATIONS,
@@ -121,7 +122,7 @@ export function SiteHeader() {
     <header className="fixed inset-x-0 top-0 z-50 pt-3 sm:pt-5">
       <div className="mx-auto w-full max-w-[1120px] px-4 sm:px-6">
         <div className="flex items-center gap-2">
-          {/* Identity island — mark and wordmark. */}
+          {/* Identity island — mark, wordmark, and the number this product is about. */}
           <div className={`${island} flex items-center gap-3 p-1.5 pr-3`}>
             <a href="#top" className="flex items-center gap-2.5">
               <Mark />
@@ -129,6 +130,14 @@ export function SiteHeader() {
                 {BRAND.name}
               </span>
             </a>
+            <span className="hidden h-5 w-px bg-hairline lg:block" />
+            <span className="tnum hidden text-[12px] font-semibold text-muted lg:block">
+              {new Intl.NumberFormat("en-US", {
+                notation: "compact",
+                compactDisplay: "short",
+              }).format(AGENTS_DEPLOYED)}
+              <span className="text-faint"> agents online</span>
+            </span>
           </div>
 
           {/* Navigation island — links, a hairline, then the one filled action. */}

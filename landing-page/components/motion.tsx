@@ -218,3 +218,70 @@ function Squircle({
     </motion.div>
   );
 }
+
+/* ------------------------------------------------------------ CountUp -- */
+
+/**
+ * Counts to a number the first time it is scrolled into view. Reduced motion
+ * gets the final number straight away.
+ */
+export function CountUp({
+  to,
+  decimals = 0,
+  suffix = "",
+  duration = 1.6,
+  className = "",
+}: {
+  to: number;
+  decimals?: number;
+  suffix?: string;
+  duration?: number;
+  className?: string;
+}) {
+  const reduced = useReducedMotion();
+  const ref = useRef<HTMLSpanElement>(null);
+
+  const show = (n: number) =>
+    n.toLocaleString("en-US", {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    }) + suffix;
+
+  const [text, setText] = useState(() => show(reduced ? to : 0));
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (reduced) {
+      setText(show(to));
+      return;
+    }
+
+    let controls: { stop: () => void } | undefined;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting) return;
+        observer.disconnect();
+        controls = animate(0, to, {
+          duration,
+          ease: [0.16, 1, 0.3, 1],
+          onUpdate: (n) => setText(show(n)),
+        });
+      },
+      { threshold: 0.4 },
+    );
+
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+      controls?.stop();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [duration, reduced, to, decimals, suffix]);
+
+  return (
+    <span ref={ref} className={`tnum ${className}`}>
+      {text}
+    </span>
+  );
+}

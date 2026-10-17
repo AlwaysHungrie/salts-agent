@@ -8,6 +8,7 @@ import {
   Features,
   Fleet,
   Hero,
+  Mission,
   Stats,
   Steps,
 } from "@/components/sections";
@@ -32,6 +33,7 @@ export default function Page() {
           <Capabilities />
           <Steps />
           <Costs />
+          <Mission />
           <Fleet />
           <FaqSection />
           <Cta />
