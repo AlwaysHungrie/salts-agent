@@ -16,7 +16,7 @@ import { FrontDoor } from "@/components/agents/FrontDoor";
 import { ListTabs } from "@/components/agents/ListTabs";
 import { NewAgent } from "@/components/agents/NewAgent";
 import { useAgentList } from "@/components/agents/useAgentList";
-import { WalletDialog } from "@/components/wallet/WalletDialog";
+import { useWalletPanel } from "@/components/wallet/WalletPanel";
 import { claim } from "@/lib/cache";
 import { useIdentity } from "@/lib/identity";
 import type { AgentRow, FleetRow, MetaSettings } from "@/lib/agent";
@@ -44,7 +44,7 @@ export default function Agents() {
   const [metaFor, setMetaFor] = useState<AgentRow | null>(null);
   const [authing, setAuthing] = useState(false);
   const [businessAsking, setBusinessAsking] = useState(false);
-  const [walletOpen, setWalletOpen] = useState(false);
+  const openWallet = useWalletPanel();
   /** The fleets tab exists only while there is a fleet. */
   const [tab, setTab] = useState<"agents" | "fleets">("agents");
   const shownTab = fleets.length > 0 ? tab : "agents";
@@ -63,7 +63,7 @@ export default function Agents() {
         </Link>
         {signedIn && (
           <button
-            onClick={() => setWalletOpen(true)}
+            onClick={() => openWallet()}
             className="text-muted hover:text-ink text-sm font-semibold transition-colors"
           >
             OpenRouter wallet
@@ -154,8 +154,6 @@ export default function Agents() {
       </div>
 
       {authing && <AuthModal mode="sign-in" onClose={() => setAuthing(false)} />}
-
-      {walletOpen && <WalletDialog onClose={() => setWalletOpen(false)} />}
 
       {metaFor && (
         <MetaSettingsDialog agent={metaFor} onClose={() => setMetaFor(null)} />

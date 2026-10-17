@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { WalletKey } from "@/lib/agent";
+import type { PayNetwork, PayQuote, WalletKey } from "@/lib/agent";
 
 /** The error a wallet route answered with, or a fallback when it said nothing readable. */
 async function errorOf(res: Response, fallback: string): Promise<string> {
@@ -7,11 +7,16 @@ async function errorOf(res: Response, fallback: string): Promise<string> {
   return payload?.error ?? fallback;
 }
 
+type WalletRead = { keys: WalletKey[]; networks: PayNetwork[]; error: string | null };
+
 /** The wallet as the Worker holds it, or the error it answered with. */
-async function readWallet(): Promise<{ keys: WalletKey[]; error: string | null }> {
+async function readWallet(): Promise<WalletRead> {
   const res = await fetch("/api/wallet", { cache: "no-store" });
-  if (!res.ok) return { keys: [], error: await errorOf(res, "Couldn't load your wallet.") };
-  return { keys: ((await res.json()) as { keys: WalletKey[] }).keys, error: null };
+  if (!res.ok) {
+    return { keys: [], networks: [], error: await errorOf(res, "Couldn't load your wallet.") };
+  }
+  const body = (await res.json()) as { keys: WalletKey[]; networks?: PayNetwork[] };
+  return { keys: body.keys, networks: body.networks ?? [], error: null };
 }
 
 /**
@@ -20,10 +25,12 @@ async function readWallet(): Promise<{ keys: WalletKey[]; error: string | null }
  */
 export function useWallet() {
   const [keys, setKeys] = useState<WalletKey[] | null>(null);
+  const [networks, setNetworks] = useState<PayNetwork[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  const apply = useCallback((read: { keys: WalletKey[]; error: string | null }) => {
+  const apply = useCallback((read: WalletRead) => {
     setKeys(read.keys);
+    setNetworks(read.networks);
     setError(read.error);
   }, []);
 
@@ -51,27 +58,39 @@ export function useWallet() {
     return null;
   };
 
-  const addCredits = async (id: string, amount: number) => {
-    const res = await fetch(`/api/wallet/${encodeURIComponent(id)}/credits`, {
+  /**
+   * Ask for a quote: a new key, or credit for the bought key `keyId`. Resolves to the
+   * quote, or an error to show.
+   */
+  const quote = async (
+    body: { amount: number; network: string; asset: string; payer: string },
+    keyId?: string,
+  ): Promise<PayQuote | string> => {
+    const path = keyId ? `/api/wallet/${encodeURIComponent(keyId)}/credits` : "/api/wallet/purchases";
+    const res = await fetch(path, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ amount }),
+      body: JSON.stringify(body),
     });
-    if (!res.ok) return await errorOf(res, "Couldn't add credits.");
-    await load();
-    return null;
+    if (!res.ok) return await errorOf(res, "Couldn't start the payment.");
+    return (await res.json()) as PayQuote;
   };
 
-  const buy = async (amount: number) => {
-    const res = await fetch("/api/wallet/purchases", {
+  /**
+   * Ask the Worker to count a sent payment: "paid", "pending" while the chain is not
+   * final, or an error to show.
+   */
+  const confirm = async (id: string, tx: string): Promise<"paid" | "pending" | string> => {
+    const res = await fetch(`/api/wallet/purchases/${encodeURIComponent(id)}/confirm`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ amount }),
+      body: JSON.stringify({ tx }),
     });
-    if (!res.ok) return await errorOf(res, "Couldn't start the purchase.");
+    if (res.status === 202) return "pending";
+    if (!res.ok) return await errorOf(res, "Couldn't check the payment.");
     await load();
-    return null;
+    return "paid";
   };
 
-  return { keys, error, load, add, remove, addCredits, buy };
+  return { keys, networks, error, load, add, remove, quote, confirm };
 }

@@ -584,3 +584,28 @@ export type WalletKey = {
   usage: number | null;
   remaining: number | null;
 };
+
+/** A network wallet purchases can be paid on, and what it takes there. */
+export type PayNetwork = {
+  id: string;
+  label: string;
+  family: "evm" | "solana";
+  chain_id: number;
+  assets: ("usdc" | "eth")[];
+};
+
+/** What the buyer's wallet must send: exactly `units` of the asset to `to`. */
+export type PayQuote = {
+  id: string;
+  network: string;
+  family: "evm" | "solana";
+  chain_id: number;
+  asset: "usdc" | "eth";
+  to: string;
+  /** The USDC contract or mint; null for ETH. */
+  token: string | null;
+  decimals: number;
+  units: string;
+  amount_usd: number;
+  expires_at: number;
+};
