@@ -92,9 +92,11 @@ export async function handleWallet(
     if (method === "GET") {
       const settings = await deploymentSettings(env);
       const keys = await Promise.all((await dir.walletKeys(email)).map(view));
-      // The networks a purchase can be paid on here; empty when payments are off, and
-      // while no provisioning key is set, as nothing paid for could be delivered.
-      const open = Boolean(await dir.provisioningKey());
+      // The networks a purchase can be paid on here; empty when payments are off: while
+      // no provisioning key is set (nothing paid for could be delivered), or no Reown
+      // project id (the browser could not open a wallet).
+      const reownProjectId = await dir.reownProjectId();
+      const open = Boolean(await dir.provisioningKey()) && Boolean(reownProjectId);
       const addresses = await dir.paymentAddresses();
       const networks = (open ? enabledNetworks(env, addresses) : []).map(({ id, label, family, chain_id, usdc, eth }) => ({
         id,
@@ -109,6 +111,7 @@ export async function handleWallet(
         max: settings.max_wallet_keys,
         fee_bps: settings.wallet_fee_bps,
         max_usd: settings.max_wallet_purchase_usd,
+        reown_project_id: reownProjectId,
         networks,
       });
     }

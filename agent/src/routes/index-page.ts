@@ -29,8 +29,8 @@ export const ROUTE_INDEX = {
       "POST /api/admin/business-account { email, agent_limit }, GET /api/admin/stats  -> owner only, via API_SECRET",
     settings:
       "GET /api/admin/settings -> { settings, missing, fields }; PATCH /api/admin/settings { <field>: value } -> owner only, via API_SECRET",
-    payment_addresses:
-      "GET /api/admin/payment-addresses -> { evm, solana }; PATCH { evm?, solana? } (blank switches that family off) -> owner only, via API_SECRET",
+    payments:
+      "GET /api/admin/payments -> { evm, solana, reown_project_id, provisioning_key: { set, hint } }; PATCH { evm?, solana?, reown_project_id? } (blank switches it off) -> owner only, via API_SECRET",
     provisioning_key:
       "GET /api/admin/provisioning-key -> { set, hint }; PUT { key }, DELETE -> owner only, via API_SECRET",
     business_requests:

@@ -40,8 +40,11 @@ export function WalletKeyPicker({
   const loading = wallet.keys === null;
   // The provider's own key appears by nickname in their wallet; anyone else sees it as
   // the default.
-  const offerDefault = !!defaultKeyId && !keys.some((k) => k.id === defaultKeyId);
-  const known = keys.some((k) => k.id === value) || (offerDefault && value === defaultKeyId);
+  const offerDefault =
+    !!defaultKeyId && !keys.some((k) => k.id === defaultKeyId);
+  const known =
+    keys.some((k) => k.id === value) ||
+    (offerDefault && value === defaultKeyId);
   // A key someone else picked, or one pasted before the wallet existed.
   const elsewhere = value ? !known : hasKey;
   const selected = loading ? LOADING : elsewhere ? ELSEWHERE : value;
@@ -49,7 +52,9 @@ export function WalletKeyPicker({
   return (
     <div>
       {label && <p className="text-sm font-semibold leading-[1.43]">{label}</p>}
-      {hint && <p className="text-muted text-xs font-light leading-[1.33]">{hint}</p>}
+      {hint && (
+        <p className="text-muted text-xs font-light leading-[1.33]">{hint}</p>
+      )}
       <div className="relative mt-2">
         <select
           value={selected}
@@ -62,12 +67,18 @@ export function WalletKeyPicker({
         >
           {loading && <option value={LOADING}>Loading your keys…</option>}
           {!loading && (
-            <option value="">{keys.length ? "Choose a key" : "No keys in your wallet"}</option>
+            <option value="">
+              {keys.length ? "Choose a key" : "No keys in your wallet"}
+            </option>
           )}
-          {!loading && offerDefault && <option value={defaultKeyId}>Default fleet key</option>}
+          {!loading && offerDefault && (
+            <option value={defaultKeyId}>Default fleet key</option>
+          )}
           {!loading && elsewhere && (
             <option value={ELSEWHERE}>
-              {value ? "A key from someone else's wallet" : "A key added before the wallet"}
+              {value
+                ? "A key from someone else's wallet"
+                : "A key added before the wallet"}
             </option>
           )}
           {keys.map((k) => (

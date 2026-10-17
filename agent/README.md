@@ -100,15 +100,17 @@ unclaimable by anyone else: no two quotes that could claim the same payment shar
 expired, unpaid quote's amount stays reserved for the 2-minute clock slack), and a quote
 made after a payment lands cannot claim it, so a stranger who copies a transaction id from the chain and quotes
 as its sender is refused. Where payments go is one
-EVM address (every EVM network) and one Solana address, set from the admin CLI's Overview
-tab (`GET|PATCH /api/admin/payment-addresses`, stored in `AgentDirectory`); a blank one
-switches that family off. Which RPC each network is read from is `PAYMENT_RPC` in
+EVM address (every EVM network) and one Solana address, set from the admin CLI's Payments
+tab with Reown's project id, which the browser's wallet modal is opened with (`GET|PATCH
+/api/admin/payments`, stored in `AgentDirectory`; `GET /api/wallet` hands the id to the
+page). A blank address switches that family off; without a Reown project id the wallet
+lists no networks. Which RPC each network is read from is `PAYMENT_RPC` in
 `wrangler.jsonc`. Base Sepolia (`base-sepolia`) is a testnet for
 trying a purchase with faucet coins; it has an RPC on staging only, never production. Purchases are capped at
 `max_wallet_purchase_usd`.
 
 A counted payment is delivered with the deployment's OpenRouter provisioning key, set from
-the admin CLI's Overview tab (`GET|PUT|DELETE /api/admin/provisioning-key`; stored in
+the admin CLI's Payments tab (`GET|PUT|DELETE /api/admin/provisioning-key`; stored in
 `AgentDirectory`, write-only: GET returns only whether it is set and its last four
 characters). Each purchase makes a new OpenRouter key whose limit is the credit bought
 (not the fee), named `Salts <buyer email> <purchase id>` so the OpenRouter dashboard says

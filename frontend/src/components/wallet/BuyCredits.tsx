@@ -8,9 +8,6 @@ const PRESETS = [5, 10, 25, 50];
 
 /** The most credit one payment buys, in US dollars. */
 
-/** Wallet payments need Reown's project id; without one the screen offers none. */
-export const WALLETS_ON = !!process.env.NEXT_PUBLIC_REOWN_PROJECT_ID;
-
 // The wallet libraries are heavy and browser-only, so they load with this view.
 const CryptoCheckout = dynamic(() => import("./CryptoCheckout"), {
   ssr: false,
@@ -59,6 +56,7 @@ export function BuyCredits({
   networks,
   feeBps,
   maxUsd,
+  reownProjectId,
   calls,
   onPaid,
 }: {
@@ -67,6 +65,8 @@ export function BuyCredits({
   feeBps: number;
   /** The most credit one purchase may buy, in dollars. */
   maxUsd: number;
+  /** Reown's project id, set from the admin CLI; blank leaves wallet payments off. */
+  reownProjectId: string;
   /** The checkout's calls, with the amount still to be added to each quote. */
   calls: {
     quote: (
@@ -159,7 +159,7 @@ export function BuyCredits({
       </div>
 
       <div className="mt-8">
-        {!WALLETS_ON || networks.length === 0 ? (
+        {!reownProjectId || networks.length === 0 ? (
           <>
             <Step title={PAY_TITLE} />
             <p className="text-muted text-sm leading-[1.43]">
@@ -168,6 +168,7 @@ export function BuyCredits({
           </>
         ) : (
           <CryptoCheckout
+            projectId={reownProjectId}
             total={valid ? total : null}
             networks={networks}
             calls={{
