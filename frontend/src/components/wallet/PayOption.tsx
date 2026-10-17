@@ -30,10 +30,14 @@ export function PayOption({
         {icon}
       </span>
       <span className="min-w-0 flex-1">
-        <span className={`block text-base font-semibold leading-[1.38] ${soon ? "text-muted" : ""}`}>
+        <span
+          className={`block text-base font-semibold leading-[1.38] ${soon ? "text-muted" : ""}`}
+        >
           {title}
         </span>
-        <span className="text-muted mt-0.5 block text-xs leading-[1.33]">{note}</span>
+        <span className="text-muted mt-0.5 block text-xs leading-[1.33]">
+          {note}
+        </span>
       </span>
       {soon ? (
         <span className="bg-canvas-soft text-muted shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold">

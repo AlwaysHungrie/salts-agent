@@ -32,7 +32,7 @@ export async function handleAdmin(
     "stats",
     "users",
     "provisioning-key",
-    "payment-addresses",
+    "payments",
   ];
   if (!known.includes(route)) return undefined;
   if (!trustedCaller(request, env)) return jsonError("unauthorized", 401);
@@ -40,7 +40,7 @@ export async function handleAdmin(
   if (route === "business-account") return await setAgentLimit(request, env);
   if (route === "settings") return await handleSettings(request, env);
   if (route === "provisioning-key") return await handleProvisioningKey(request, env);
-  if (route === "payment-addresses") return await handlePaymentAddresses(request, env);
+  if (route === "payments") return await handlePayments(request, env);
   if (route === "business-requests")
     return await handleBusinessRequests(request, env, url, segments);
   if (route === "stats") {
@@ -113,28 +113,44 @@ async function handleProvisioningKey(request: Request, env: Env): Promise<Respon
 }
 
 /**
- * Where wallet purchases are paid to: one EVM address (every EVM network) and one Solana
- * address. Public, like any address, so GET returns them in full. PATCH sets either or
- * both; a blank one switches that family's networks off.
+ * The payment settings, read together for the admin CLI's Payments tab: where purchases
+ * are paid to (one EVM address for every EVM network, one Solana address), Reown's
+ * project id (the browser's wallet modal), and whether a provisioning key is set (set
+ * through its own route, which checks it with OpenRouter). All but the key are public.
+ * PATCH sets any of `evm`, `solana`, `reown_project_id`; a blank one switches it off.
  */
-async function handlePaymentAddresses(request: Request, env: Env): Promise<Response> {
+async function handlePayments(request: Request, env: Env): Promise<Response> {
   const dir = directory(env);
-  if (request.method === "GET") return json(await dir.paymentAddresses());
+  const view = async () => {
+    const key = await dir.provisioningKey();
+    return {
+      ...(await dir.paymentAddresses()),
+      reown_project_id: await dir.reownProjectId(),
+      provisioning_key: { set: Boolean(key), hint: key ? key.slice(-4) : "" },
+    };
+  };
+  if (request.method === "GET") return json(await view());
   if (request.method !== "PATCH") return methodNotAllowed();
-  const body = await readJson<{ evm?: unknown; solana?: unknown }>(request);
-  const families = (["evm", "solana"] as const).filter((f) => body[f] !== undefined);
-  if (!families.length) return jsonError("Give an evm or solana address.", 400);
-  const set: { family: "evm" | "solana"; address: string }[] = [];
-  for (const family of families) {
-    const given = typeof body[family] === "string" ? (body[family] as string).trim() : "";
+  const body = await readJson<{ evm?: unknown; solana?: unknown; reown_project_id?: unknown }>(request);
+  const given = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+  const fields = (["evm", "solana", "reown_project_id"] as const).filter((f) => body[f] !== undefined);
+  if (!fields.length) return jsonError("Give evm, solana or reown_project_id.", 400);
+  for (const family of ["evm", "solana"] as const) {
+    const value = given(body[family]);
     // Kept as typed (an EVM checksum stays readable); compared lowercased.
-    if (given && !payerAddress(family, given)) {
+    if (value && !payerAddress(family, value)) {
       return jsonError(`That isn't ${family === "evm" ? "an EVM" : "a Solana"} address.`, 400);
     }
-    set.push({ family, address: given });
   }
-  for (const { family, address } of set) await dir.setPaymentAddress(family, address);
-  return json(await dir.paymentAddresses());
+  const reown = given(body.reown_project_id);
+  if (reown && !/^[0-9a-f]{32}$/i.test(reown)) {
+    return jsonError("A Reown project id is 32 hex characters, from its dashboard.", 400);
+  }
+  for (const family of ["evm", "solana"] as const) {
+    if (body[family] !== undefined) await dir.setPaymentAddress(family, given(body[family]));
+  }
+  if (body.reown_project_id !== undefined) await dir.setReownProjectId(reown);
+  return json(await view());
 }
 
 /** The owner's queue of requests for a higher agent ceiling. */

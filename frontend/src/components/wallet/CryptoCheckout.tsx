@@ -30,7 +30,7 @@ import {
   WagmiProvider,
 } from "wagmi";
 import type { PayNetwork, PayQuote } from "@/lib/agent";
-import { wagmiAdapter } from "./appkit";
+import { appKitFor } from "./appkit";
 import { PAY_TITLE, Step, supported } from "./BuyCredits";
 
 const queryClient = new QueryClient();
@@ -53,7 +53,12 @@ const POLL_FOR_MS = 15 * 60 * 1000;
  * Pay from the buyer's own wallet: connect, choose the coin and network, send. The
  * Worker reads the transaction back from the chain before it counts.
  */
-export default function CryptoCheckout(props: {
+export default function CryptoCheckout({
+  projectId,
+  ...props
+}: {
+  /** Reown's project id, from the Worker: what the wallet modal is opened with. */
+  projectId: string;
   /** What the buyer pays, credit plus fee; null while the amount isn't valid. */
   total: number | null;
   networks: PayNetwork[];
@@ -63,7 +68,7 @@ export default function CryptoCheckout(props: {
   onLock: (locked: boolean) => void;
 }) {
   return (
-    <WagmiProvider config={wagmiAdapter.wagmiConfig}>
+    <WagmiProvider config={appKitFor(projectId).wagmiConfig}>
       <QueryClientProvider client={queryClient}>
         <Checkout {...props} />
       </QueryClientProvider>
@@ -331,7 +336,10 @@ function PayStep({
               {payer.slice(0, 6)}…{payer.slice(-4)}
             </span>{" "}
             (
-            <button onClick={onChange} className="hover:text-ink underline transition">
+            <button
+              onClick={onChange}
+              className="hover:text-ink underline transition"
+            >
               change
             </button>
             )

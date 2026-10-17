@@ -463,6 +463,17 @@ export class AgentDirectory extends DurableObject {
     };
   }
 
+  /** Reown's project id, which the browser's wallet modal is opened with; "" when not set. */
+  reownProjectId(): string {
+    this.ensureSchema();
+    return deploymentValue(this.ctx.storage, "reown_project_id");
+  }
+
+  setReownProjectId(value: string) {
+    this.ensureSchema();
+    setDeploymentValue(this.ctx.storage, "reown_project_id", value);
+  }
+
   /** Set one family's payment address; blank switches that family off. */
   setPaymentAddress(family: "evm" | "solana", value: string) {
     this.ensureSchema();

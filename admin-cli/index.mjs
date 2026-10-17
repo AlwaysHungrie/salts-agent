@@ -1,17 +1,19 @@
 #!/usr/bin/env node
 // Interactive CLI dashboard for the salt-agent deployment.
 //
-// Five tabs, each a list of rows — a row either holds a value that `enter` edits, or
+// Six tabs, each a list of rows — a row either holds a value that `enter` edits, or
 // is information only:
 //
-//   1 Overview   the deployment's counts, the OpenRouter provisioning key bought keys
-//                are made with (never shown back), and the EVM and Solana addresses
-//                purchases are paid to — `enter` sets one, `x` removes it
+//   1 Overview   the deployment's counts
 //   2 Users      every address, paged and searchable; `enter` opens one — its agent
 //                limit (editable) and its agents with their session counts
 //   3 Requests   the queue of accounts asking for a higher agent limit
 //   4 Defaults   the values every agent starts out holding
 //   5 Limits     every ceiling the deployment enforces
+//   6 Payments   what key purchases need: the OpenRouter provisioning key bought keys
+//                are made with (never shown back), the EVM and Solana addresses they
+//                are paid to, and Reown's project id for the wallet modal — `enter`
+//                sets one, `x` removes it
 //
 // The settings rows, the ranges the Worker refuses and the prose beside each row all
 // come from `/api/admin/settings`, so a field added to the Worker's `settings.ts` shows
@@ -212,7 +214,7 @@ function parseValue(name, kind, text) {
 /* ------------------------------------------------------------------ dashboard */
 
 const PAGE = 20;
-const TABS = ["Overview", "Users", "Requests", "Defaults", "Limits"];
+const TABS = ["Overview", "Users", "Requests", "Defaults", "Limits", "Payments"];
 /**
  * The settings that are objects, each merged key by key on the Worker — so each key
  * gets a row of its own rather than one row of JSON.
@@ -243,14 +245,20 @@ const state = {
   fields: [],
   users: pager("/api/admin/users", "users"),
   requests: pager("/api/admin/business-requests", "requests"),
-  /** Whether a provisioning key is set, and its last four characters; null until read. */
-  provisioning: null,
-  /** Where purchases are paid to, `{ evm, solana }`; null until read. */
-  addresses: null,
+  /**
+   * The payment settings: `{ evm, solana, reown_project_id, provisioning_key: { set,
+   * hint } }`; null until read, or when the Worker predates them.
+   */
+  payments: null,
   /** The user opened from the Users tab, or null while the list is showing. */
   user: null,
   /** Selection and scroll for the tabs that are not paged lists. */
-  pos: { 0: { sel: 0, top: 0 }, 3: { sel: 0, top: 0 }, 4: { sel: 0, top: 0 } },
+  pos: {
+    0: { sel: 0, top: 0 },
+    3: { sel: 0, top: 0 },
+    4: { sel: 0, top: 0 },
+    5: { sel: 0, top: 0 },
+  },
   /** Non-null while a value is being typed: `{ label, buffer, submit(text) }`. */
   edit: null,
   /** Non-null while a y/n is pending: `{ prompt, run() }`. */
@@ -279,57 +287,51 @@ async function loadSettings() {
   render();
 }
 
-async function loadProvisioning() {
+async function loadPayments() {
   try {
-    state.provisioning = await call("/api/admin/provisioning-key");
+    state.payments = await call("/api/admin/payments");
   } catch (err) {
-    // A Worker from before key purchases has no such route: leave the row out.
-    state.provisioning = null;
-    if (err.status !== 401 && err.status !== 404) state.status = `could not read the provisioning key — ${err.message}`;
+    // A Worker from before key purchases has no such route: the tab says so.
+    state.payments = null;
+    if (err.status !== 401 && err.status !== 404) state.status = `could not read the payment settings — ${err.message}`;
   }
   render();
 }
 
-async function loadAddresses() {
-  try {
-    state.addresses = await call("/api/admin/payment-addresses");
-  } catch (err) {
-    // A Worker from before configurable addresses has no such route: leave the rows out.
-    state.addresses = null;
-    if (err.status !== 401 && err.status !== 404) state.status = `could not read the payment addresses — ${err.message}`;
-  }
-  render();
-}
+/** The payment settings the tab edits, besides the provisioning key. */
+const PAYMENT_FIELDS = [
+  { key: "evm", label: "EVM pay address", off: "EVM payments are closed" },
+  { key: "solana", label: "Solana pay address", off: "Solana payments are closed" },
+  { key: "reown_project_id", label: "Reown project id", off: "the wallet modal can't open" },
+];
 
-const FAMILY = { evm: "EVM", solana: "Solana" };
-
-/** Set where one family's purchases are paid to; the Worker checks it is an address. */
-async function setAddress(family, text) {
-  const address = text.trim();
-  if (!address || address === state.addresses?.[family]) {
+/** Set one payment setting; the Worker checks it is the right shape. */
+async function setPayment(field, text) {
+  const value = text.trim();
+  if (!value || value === state.payments?.[field.key]) {
     state.status = "nothing changed";
     return render();
   }
-  state.addresses = await call("/api/admin/payment-addresses", {
+  state.payments = await call("/api/admin/payments", {
     method: "PATCH",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ [family]: address }),
+    body: JSON.stringify({ [field.key]: value }),
   });
-  state.status = `${FAMILY[family]} payments now go to ${address}`;
+  state.status = `${field.label} set`;
   render();
 }
 
-function removeAddress(family) {
+function removePayment(field) {
   state.confirm = {
-    prompt: `Remove the ${FAMILY[family]} payment address? ${FAMILY[family]} payments close until one is set.`,
+    prompt: `Remove the ${field.label}? Until one is set, ${field.off}.`,
     run: async () => {
       try {
-        state.addresses = await call("/api/admin/payment-addresses", {
+        state.payments = await call("/api/admin/payments", {
           method: "PATCH",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ [family]: "" }),
+          body: JSON.stringify({ [field.key]: "" }),
         });
-        state.status = `${FAMILY[family]} payment address removed — ${FAMILY[family]} payments are closed`;
+        state.status = `${field.label} removed — ${field.off}`;
       } catch (err) {
         state.status = err.message;
       }
@@ -348,12 +350,13 @@ async function setProvisioningKey(text) {
   }
   state.status = "checking with OpenRouter…";
   render();
-  state.provisioning = await call("/api/admin/provisioning-key", {
+  const shown = await call("/api/admin/provisioning-key", {
     method: "PUT",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ key }),
   });
-  state.status = "provisioning key set — key purchases are open";
+  state.payments = { ...state.payments, provisioning_key: shown };
+  state.status = "provisioning key set";
   render();
 }
 
@@ -362,7 +365,8 @@ function removeProvisioningKey() {
     prompt: "Remove the provisioning key? Key purchases close until one is set.",
     run: async () => {
       try {
-        state.provisioning = await call("/api/admin/provisioning-key", { method: "DELETE" });
+        const shown = await call("/api/admin/provisioning-key", { method: "DELETE" });
+        state.payments = { ...state.payments, provisioning_key: shown };
         state.status = "provisioning key removed — key purchases are closed";
       } catch (err) {
         state.status = err.message;
@@ -609,40 +613,11 @@ function view() {
           unset: state.missing.length > 0,
         });
       }
-      const p = state.provisioning;
-      if (c && p) {
-        rows.push({
-          cells: [
-            "provisioning key",
-            p.set ? `set (…${p.hint})` : "not set — key purchases are closed",
-          ],
-          unset: !p.set,
-          enter: () => startEdit("OpenRouter provisioning key", "", setProvisioningKey, true),
-          remove: p.set ? removeProvisioningKey : undefined,
-        });
-      }
-      const a = state.addresses;
-      if (c && a) {
-        for (const family of ["evm", "solana"]) {
-          rows.push({
-            cells: [
-              `${FAMILY[family]} pay address`,
-              a[family] || `not set — ${FAMILY[family]} payments are closed`,
-            ],
-            unset: !a[family],
-            enter: () =>
-              startEdit(`${FAMILY[family]} payment address`, a[family], (t) => setAddress(family, t)),
-            remove: a[family] ? () => removeAddress(family) : undefined,
-          });
-        }
-      }
       return {
         columns: [["", 22], ["", 0]],
         rows,
         pos: state.pos[0],
         empty: "loading…",
-        hint: p || a ? "enter set   x remove" : "",
-        keys: { x: (row) => row?.remove?.() },
       };
     }
 
@@ -719,6 +694,36 @@ function view() {
           a: (row) => row && resolveRequest(row.request, true),
           x: (row) => row && resolveRequest(row.request, false),
         },
+      };
+    }
+
+    case 5: {
+      const pay = state.payments;
+      const rows = [];
+      if (pay) {
+        const key = pay.provisioning_key ?? { set: false, hint: "" };
+        rows.push({
+          cells: ["provisioning key", key.set ? `set (…${key.hint})` : "not set — key purchases are closed"],
+          unset: !key.set,
+          enter: () => startEdit("OpenRouter provisioning key", "", setProvisioningKey, true),
+          remove: key.set ? removeProvisioningKey : undefined,
+        });
+        for (const field of PAYMENT_FIELDS) {
+          rows.push({
+            cells: [field.label, pay[field.key] || `not set — ${field.off}`],
+            unset: !pay[field.key],
+            enter: () => startEdit(field.label, pay[field.key] ?? "", (t) => setPayment(field, t)),
+            remove: pay[field.key] ? () => removePayment(field) : undefined,
+          });
+        }
+      }
+      return {
+        columns: [["", 22], ["", 0]],
+        rows,
+        pos: state.pos[5],
+        empty: "the deployment predates payment settings, or they could not be read.",
+        hint: "enter set   x remove",
+        keys: { x: (row) => row?.remove?.() },
       };
     }
 
@@ -1003,8 +1008,7 @@ process.on("SIGINT", quit);
 
 await Promise.all([
   loadSettings(),
-  loadProvisioning(),
-  loadAddresses(),
+  loadPayments(),
   loadMore(state.users),
   loadMore(state.requests),
 ]);

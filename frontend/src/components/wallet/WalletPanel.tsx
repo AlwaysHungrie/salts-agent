@@ -140,6 +140,7 @@ function WalletSidebar({ onClose }: { onClose: () => void }) {
               networks={wallet.networks}
               feeBps={wallet.feeBps}
               maxUsd={wallet.maxUsd}
+              reownProjectId={wallet.reownProjectId}
               calls={{
                 quote: wallet.quote,
                 confirm: wallet.confirm,
@@ -339,7 +340,8 @@ function RemoveBoughtKey({
   const [typed, setTyped] = useState("");
   const field = useRef<HTMLInputElement>(null);
   const matches = typed === key.nickname;
-  const left = key.valid && key.remaining !== null ? formatUsdShort(key.remaining) : null;
+  const left =
+    key.valid && key.remaining !== null ? formatUsdShort(key.remaining) : null;
 
   // Escape keeps the key and leaves the sidebar open: caught before the sidebar's own.
   useEffect(() => {
@@ -360,10 +362,15 @@ function RemoveBoughtKey({
         aria-modal="true"
         className="bg-canvas text-ink w-full max-w-sm rounded-[20px] px-6 py-6 shadow-xl"
       >
-        <p className="text-base font-semibold leading-[1.38]">Remove {key.nickname}?</p>
+        <p className="text-base font-semibold leading-[1.38]">
+          Remove {key.nickname}?
+        </p>
         <p className="text-muted mt-2 text-sm font-light leading-[1.43]">
-          {left ? `The ${left} of credit left on this key` : "Any credit left on this key"} will
-          be lost forever. It can&rsquo;t be refunded or moved to another key.
+          {left
+            ? `The ${left} of credit left on this key`
+            : "Any credit left on this key"}{" "}
+          will be lost forever. It can&rsquo;t be refunded or moved to another
+          key.
           {key.agents > 0 &&
             ` ${key.agents === 1 ? "1 agent" : `${key.agents} agents`} using it will stop replying until given another.`}
           <br />
@@ -372,7 +379,8 @@ function RemoveBoughtKey({
         </p>
         <label className="mt-4 block">
           <span className="text-muted block text-xs leading-[1.33]">
-            Type <span className="text-ink font-semibold">{key.nickname}</span> to confirm
+            Type <span className="text-ink font-semibold">{key.nickname}</span>{" "}
+            to confirm
           </span>
           <input
             ref={field}

@@ -219,7 +219,7 @@ export const AGENT_DIRECTORY_MIGRATIONS: readonly Migration[] = [
       // When a paid purchase was taken up for delivery, so two confirms cannot both deliver.
       addColumnIfMissing(sql, "wallet_purchases", `claimed_at INTEGER NOT NULL DEFAULT 0`);
       // Values the owner sets for the deployment from the admin CLI: the OpenRouter
-      // provisioning key and the payment addresses.
+      // provisioning key, the payment addresses and Reown's project id.
       sql.exec(
         `CREATE TABLE IF NOT EXISTS deployment_secrets (
            name TEXT PRIMARY KEY,

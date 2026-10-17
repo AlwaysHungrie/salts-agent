@@ -232,10 +232,13 @@ const PAYER = "0x00000000000000000000000000000000000000b0";
 const OURS = "0x00000000000000000000000000000000000000aa";
 const OURS_ON_SOLANA = "Sa1tsPaymentsReceiver1111111111111111111111";
 
-/** Open purchases: a provisioning key to deliver with, and addresses to be paid at. */
+const REOWN_ID = "0123456789abcdef0123456789abcdef";
+
+/** Open purchases: a provisioning key, addresses to be paid at, a wallet modal to pay from. */
 async function openPurchases() {
   const dir = directory();
   await dir.setProvisioningKey(PROVISIONING_KEY);
+  await dir.setReownProjectId(REOWN_ID);
   await dir.setPaymentAddress("evm", OURS);
   await dir.setPaymentAddress("solana", OURS_ON_SOLANA);
 }
@@ -618,22 +621,40 @@ describe("the payment addresses", () => {
   beforeEach(openPurchases);
 
   it("are the owner's to set, checked per family", async () => {
-    expect((await SELF.fetch(`${BASE}/api/admin/payment-addresses`)).status).toBe(401);
+    expect((await SELF.fetch(`${BASE}/api/admin/payments`)).status).toBe(401);
     const set = (body: unknown) =>
-      admin("payment-addresses", { method: "PATCH", body: JSON.stringify(body) });
+      admin("payments", { method: "PATCH", body: JSON.stringify(body) });
     expect((await set({ evm: "not-an-address" })).status).toBe(400);
     expect((await set({ solana: OURS })).status).toBe(400);
 
     const evm = "0x00000000000000000000000000000000000000Ab";
-    expect(await json(set({ evm }))).toEqual({ evm, solana: OURS_ON_SOLANA });
-    expect(await json(admin("payment-addresses"))).toEqual({ evm, solana: OURS_ON_SOLANA });
+    const shown = {
+      evm,
+      solana: OURS_ON_SOLANA,
+      reown_project_id: REOWN_ID,
+      provisioning_key: { set: true, hint: PROVISIONING_KEY.slice(-4) },
+    };
+    expect(await json(set({ evm }))).toEqual(shown);
+    expect(await json(admin("payments"))).toEqual(shown);
     // Quotes ask for payment at the address set, compared lowercased.
     const q = await json<QuoteView>(buy(someone("owner"), { ...USDC_ON_BASE, amount: 10 }));
     expect(q.to).toBe(evm.toLowerCase());
   });
 
+  it("hand the browser Reown's project id, and close payments without one", async () => {
+    const owner = someone("owner");
+    const read = () =>
+      json<{ networks: unknown[]; reown_project_id: string }>(SELF.fetch(`${BASE}/api/wallet`, as(owner)));
+    expect((await read()).reown_project_id).toBe(REOWN_ID);
+    const set = (reown_project_id: string) =>
+      admin("payments", { method: "PATCH", body: JSON.stringify({ reown_project_id }) });
+    expect((await set("not-a-project")).status).toBe(400);
+    expect((await set("")).status).toBe(200);
+    expect(await read()).toMatchObject({ reown_project_id: "", networks: [] });
+  });
+
   it("switch a family off when blank", async () => {
-    await admin("payment-addresses", { method: "PATCH", body: JSON.stringify({ solana: "" }) });
+    await admin("payments", { method: "PATCH", body: JSON.stringify({ solana: "" }) });
     const { networks } = await json<{ networks: { id: string }[] }>(
       SELF.fetch(`${BASE}/api/wallet`, as(someone("owner")))
     );
