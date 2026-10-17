@@ -1,8 +1,7 @@
-import { useState } from "react";
 import { Wallet } from "lucide-react";
 import { formatUsdShort } from "@/lib/format";
 import { useWallet } from "./useWallet";
-import { WalletDialog } from "./WalletDialog";
+import { useWalletPanel } from "./WalletPanel";
 
 /** Stands for a key that is set but was not picked from this wallet. */
 const ELSEWHERE = "__elsewhere";
@@ -26,7 +25,7 @@ export function WalletKeyPicker({
   hint?: string;
 }) {
   const wallet = useWallet();
-  const [managing, setManaging] = useState(false);
+  const openWallet = useWalletPanel();
   const keys = wallet.keys ?? [];
   const known = keys.some((k) => k.id === value);
   // A key someone else picked, or one pasted before the wallet existed.
@@ -61,7 +60,7 @@ export function WalletKeyPicker({
           ))}
         </select>
         <button
-          onClick={() => setManaging(true)}
+          onClick={() => openWallet(() => void wallet.load())}
           title="Open your OpenRouter wallet"
           aria-label="Open your OpenRouter wallet"
           className="text-muted hover:text-ink absolute top-1/2 right-4 -translate-y-1/2 transition"
@@ -69,15 +68,6 @@ export function WalletKeyPicker({
           <Wallet size={16} />
         </button>
       </div>
-
-      {managing && (
-        <WalletDialog
-          onClose={() => {
-            setManaging(false);
-            void wallet.load();
-          }}
-        />
-      )}
     </div>
   );
 }
