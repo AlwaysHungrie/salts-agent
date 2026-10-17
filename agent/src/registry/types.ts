@@ -376,3 +376,25 @@ export type WalletKeyRow = {
   /** How many agents hold it. */
   agents: number;
 };
+
+/**
+ * A quote a buyer pays against: exactly `units` of `asset` to `to_address` on `network`,
+ * from `payer`, before `expires_at`. `key_id` is blank for a new key, else the bought key
+ * the credit tops up.
+ */
+export type WalletPurchase = {
+  id: string;
+  email: string;
+  key_id: string;
+  amount_usd: number;
+  network: string;
+  asset: "usdc" | "eth";
+  to_address: string;
+  payer: string;
+  /** Base units, as a decimal string: they outgrow a JavaScript number. */
+  units: string;
+  status: "pending" | "paid";
+  tx: string | null;
+  created_at: number;
+  expires_at: number;
+};

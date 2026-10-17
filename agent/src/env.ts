@@ -28,4 +28,12 @@ export type Env = {
 
   /** Graph's host. Only set to point the channel at a stand-in. */
   WHATSAPP_API_BASE?: string;
+
+  /**
+   * Where wallet purchases are paid to: one EVM address for every EVM network, one Solana
+   * address. A blank one switches that family's networks off.
+   */
+  PAYMENT_ADDRESSES?: { evm?: string; solana?: string };
+  /** A JSON-RPC endpoint per payment network id (see `PAY_NETWORKS`); missing = off. */
+  PAYMENT_RPC?: Record<string, string>;
 };

@@ -787,8 +787,58 @@ function chosenTools(catalog: string): Response {
  * Handle one outbound request. Returns a 503 for any host that is not OpenRouter, so
  * a test that reaches for the network fails loudly instead of going out to it.
  */
+/* --------------------------------------------------------------------- rpc -- */
+
+/**
+ * Transactions the payment tests put on the chain, by hash (EVM) or signature (Solana).
+ * A test loads one with `POST https://rpc.test/__tx { hash, ...answers }`; the Worker then
+ * reads it back through the ordinary JSON-RPC calls, at `https://rpc.test/<network>`.
+ */
+const chainTxs = new Map<string, Record<string, unknown>>();
+
+/** Mainnet's ETH/USD answer, $2,000 with Chainlink's 8 decimals. */
+export const MOCK_ETH_USD = 2000;
+/** Every EVM chain stands at this block. */
+export const MOCK_BLOCK = 100;
+
+async function rpcMock(request: Request, url: URL): Promise<Response> {
+  if (url.pathname === "/__tx") {
+    const body = (await request.json()) as { hash: string };
+    chainTxs.set(body.hash, body);
+    return json({ ok: true });
+  }
+  const { id, method, params } = (await request.json()) as {
+    id: number;
+    method: string;
+    params: unknown[];
+  };
+  const word = (n: bigint) => n.toString(16).padStart(64, "0");
+  const known = chainTxs.get(String(params?.[0] ?? ""));
+  const result = (() => {
+    switch (method) {
+      case "eth_call":
+        return `0x${word(1n)}${word(BigInt(MOCK_ETH_USD) * 100_000_000n)}${word(0n)}${word(0n)}${word(1n)}`;
+      case "eth_blockNumber":
+        return `0x${MOCK_BLOCK.toString(16)}`;
+      case "eth_getTransactionReceipt":
+        return known?.receipt ?? null;
+      case "eth_getTransactionByHash":
+        return known?.tx ?? null;
+      case "eth_getBlockByNumber":
+        return { timestamp: `0x${Math.floor(Date.now() / 1000).toString(16)}` };
+      case "getTransaction":
+        return known?.solana ?? null;
+      default:
+        return undefined;
+    }
+  })();
+  if (result === undefined) return json({ jsonrpc: "2.0", id, error: { message: `unmocked ${method}` } });
+  return json({ jsonrpc: "2.0", id, result });
+}
+
 export async function openrouterMock(request: Request): Promise<Response> {
   const url = new URL(request.url);
+  if (url.hostname === "rpc.test") return rpcMock(request, url);
   if (url.hostname === "graph.facebook.com") return graphMock(request, url);
   if (url.hostname === "telegram.test") return telegramMock(request, url);
   if (url.hostname === "mcp.test") return mcpMock(request, url);

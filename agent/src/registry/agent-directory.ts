@@ -58,6 +58,7 @@ import {
   startPairing,
 } from "./directory-computers";
 import { AGENT_DIRECTORY_MIGRATIONS, migrateMembership } from "./directory-schema";
+import { createPurchase, markPurchasePaid, purchase, txCounted } from "./wallet-purchases";
 import {
   addWalletKey,
   removeWalletKey,
@@ -82,6 +83,7 @@ import type {
   UserPage,
   WalletKeyKind,
   WalletKeyRow,
+  WalletPurchase,
 } from "./types";
 
 /**
@@ -390,6 +392,28 @@ export class AgentDirectory extends DurableObject {
   setWalletKeyUse(agentId: string, keyId: string) {
     this.ensureSchema();
     return setWalletKeyUse(this.ctx.storage, agentId, keyId);
+  }
+
+  /** Record a quote; `{ error }` when its amount clashes with another open one. */
+  createPurchase(p: Omit<WalletPurchase, "id" | "status" | "tx">): WalletPurchase | { error: string } {
+    this.ensureSchema();
+    return createPurchase(this.ctx.storage, p);
+  }
+
+  purchase(email: string, id: string): WalletPurchase | undefined {
+    this.ensureSchema();
+    return purchase(this.ctx.storage, email, id);
+  }
+
+  txCounted(tx: string): boolean {
+    this.ensureSchema();
+    return txCounted(this.ctx.storage, tx);
+  }
+
+  /** Count a verified payment once: false when `tx` already paid for something. */
+  markPurchasePaid(id: string, tx: string): boolean {
+    this.ensureSchema();
+    return markPurchasePaid(this.ctx.storage, id, tx);
   }
 
   // ─── salts-tools computers (see directory-computers.ts) ─────────────────────────
