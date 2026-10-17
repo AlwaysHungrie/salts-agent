@@ -807,6 +807,8 @@ async function rpcMock(request: Request, url: URL): Promise<Response> {
     chainTxs.set(body.hash, body);
     return json({ ok: true });
   }
+  // A public endpoint that turns the Worker away, as Solana's does Cloudflare.
+  if (url.pathname.includes("refuses")) return new Response("forbidden", { status: 403 });
   const { id, method, params } = (await request.json()) as {
     id: number;
     method: string;

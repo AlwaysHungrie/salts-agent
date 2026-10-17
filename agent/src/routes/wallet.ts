@@ -98,7 +98,7 @@ export async function handleWallet(
       const reownProjectId = await dir.reownProjectId();
       const open = Boolean(await dir.provisioningKey()) && Boolean(reownProjectId);
       const addresses = await dir.paymentAddresses();
-      const networks = (open ? enabledNetworks(env, addresses) : []).map(({ id, label, family, chain_id, usdc, eth }) => ({
+      const networks = (open ? enabledNetworks(await withRpc(env), addresses) : []).map(({ id, label, family, chain_id, usdc, eth }) => ({
         id,
         label,
         family,
@@ -146,6 +146,16 @@ export async function handleWallet(
 }
 
 /**
+ * The deployment's RPC endpoints, with the Solana one set from the admin CLI in place of
+ * the configured one: a keyed endpoint stays out of the repository, and Solana's public
+ * one refuses Cloudflare.
+ */
+async function withRpc(env: Env): Promise<Env> {
+  const solana = await directory(env).solanaRpc();
+  return solana ? { ...env, PAYMENT_RPC: { ...env.PAYMENT_RPC, solana } } : env;
+}
+
+/**
  * Quote a new key. The amount asked for carries a little dust of its own, so the payment
  * can only match this quote.
  */
@@ -164,6 +174,7 @@ async function quote(request: Request, env: Env, email: string): Promise<Respons
     return jsonError(`A wallet holds at most ${settings.max_wallet_keys} keys.`, 400);
   }
   const addresses = await dir.paymentAddresses();
+  env = await withRpc(env);
   const network = enabledNetworks(env, addresses).find((n) => n.id === body.network);
   if (!network) return jsonError("Payments on that network aren't available.", 400);
   const asset = body.asset as PayAsset;
@@ -226,7 +237,7 @@ async function confirm(request: Request, env: Env, email: string, id: string): P
 
   let verdict;
   try {
-    verdict = await verifyPayment(env, found, tx);
+    verdict = await verifyPayment(await withRpc(env), found, tx);
   } catch (err) {
     if (err instanceof PaymentError) return jsonError(err.message, 502);
     throw err;
