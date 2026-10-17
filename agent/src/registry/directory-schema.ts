@@ -186,6 +186,31 @@ export const AGENT_DIRECTORY_MIGRATIONS: readonly Migration[] = [
       sql.exec(`CREATE INDEX IF NOT EXISTS idx_wallet_key_uses_key ON wallet_key_uses(key_id)`);
     },
   },
+  {
+    name: "wallet purchases",
+    up: (sql) => {
+      // A quote a buyer pays against. `tx` is unique, so one payment counts once.
+      sql.exec(
+        `CREATE TABLE IF NOT EXISTS wallet_purchases (
+           id TEXT PRIMARY KEY,
+           email TEXT NOT NULL,
+           key_id TEXT NOT NULL DEFAULT '',
+           amount_usd REAL NOT NULL,
+           network TEXT NOT NULL,
+           asset TEXT NOT NULL,
+           to_address TEXT NOT NULL,
+           payer TEXT NOT NULL,
+           units TEXT NOT NULL,
+           status TEXT NOT NULL DEFAULT 'pending',
+           tx TEXT,
+           created_at INTEGER NOT NULL,
+           expires_at INTEGER NOT NULL
+         )`
+      );
+      sql.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_wallet_purchases_tx ON wallet_purchases(tx)`);
+      sql.exec(`CREATE INDEX IF NOT EXISTS idx_wallet_purchases_email ON wallet_purchases(email)`);
+    },
+  },
 ];
 
 export function migrateMembership(storage: DurableObjectStorage) {
