@@ -77,7 +77,7 @@ export function BuyCredits({
   onPaid: () => void;
 }) {
   const [text, setText] = useState(String(PRESETS[0]));
-  /** A payment is under way or done: the amount it was quoted for can't change. */
+  /** A payment is under way or done: the amount it was quoted for is no longer asked. */
   const [locked, setLocked] = useState(false);
 
   const amount = Number(text);
@@ -94,49 +94,51 @@ export function BuyCredits({
 
   return (
     <div>
-      <Step title="LLM Credits" />
-      <label
-        className={`border-hairline focus-within:border-ink flex h-14 items-center gap-1 rounded-2xl border px-4 transition ${locked ? "opacity-50" : ""}`}
-      >
-        <span className="text-muted text-2xl font-semibold">$</span>
-        <input
-          type="number"
-          inputMode="decimal"
-          min={1}
-          max={maxUsd}
-          step={1}
-          value={text}
-          disabled={locked}
-          onChange={(e) => setText(e.target.value)}
-          aria-label="Credit in US dollars"
-          className="placeholder:text-faint min-w-0 flex-1 bg-transparent text-2xl font-semibold outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-          placeholder="0"
-        />
-        <span className="text-faint text-xs font-semibold">USD</span>
-      </label>
-      <div className="mt-2 flex flex-wrap items-center gap-1.5">
-        {PRESETS.filter((p) => p <= maxUsd).map((p) => (
-          <button
-            key={p}
-            onClick={() => setText(String(p))}
-            disabled={locked}
-            className={`h-7 rounded-full px-3 text-xs font-semibold transition disabled:opacity-50 ${
-              amount === p
-                ? "bg-ink text-on-primary"
-                : "bg-canvas-soft hover:bg-hairline"
-            }`}
-          >
-            ${p}
-          </button>
-        ))}
-        <span
-          className={`ml-auto text-xs ${valid || !text ? "text-faint" : "text-red-600"}`}
-        >
-          Max ${maxUsd}
-        </span>
-      </div>
+      {!locked && (
+        <>
+          <Step title="LLM Credits" />
+          <label className="border-hairline focus-within:border-ink flex h-14 items-center gap-1 rounded-2xl border px-4 transition">
+            <span className="text-muted text-2xl font-semibold">$</span>
+            <input
+              type="number"
+              inputMode="decimal"
+              min={1}
+              max={maxUsd}
+              step={1}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              aria-label="Credit in US dollars"
+              className="placeholder:text-faint min-w-0 flex-1 bg-transparent text-2xl font-semibold outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              placeholder="0"
+            />
+            <span className="text-faint text-xs font-semibold">USD</span>
+          </label>
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            {PRESETS.filter((p) => p <= maxUsd).map((p) => (
+              <button
+                key={p}
+                onClick={() => setText(String(p))}
+                className={`h-7 rounded-full px-3 text-xs font-semibold transition ${
+                  amount === p
+                    ? "bg-ink text-on-primary"
+                    : "bg-canvas-soft hover:bg-hairline"
+                }`}
+              >
+                ${p}
+              </button>
+            ))}
+            <span
+              className={`ml-auto text-xs ${valid || !text ? "text-faint" : "text-red-600"}`}
+            >
+              Max ${maxUsd}
+            </span>
+          </div>
+        </>
+      )}
 
-      <div className="bg-canvas-soft mt-4 rounded-2xl px-4 py-3 text-sm leading-[1.43]">
+      <div
+        className={`bg-canvas-soft rounded-2xl ${locked ? "" : "mt-4"} px-4 py-3 text-sm leading-[1.43]`}
+      >
         <div className="flex justify-between">
           <span className="text-muted">Credit added to your key</span>
           <span>{valid ? usd(amount) : "—"}</span>
