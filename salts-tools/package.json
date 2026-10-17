@@ -3,7 +3,7 @@
   "version": "3.1.2",
   "type": "module",
   "description": "Run free web search, the matchmaker and the spreadsheet analyst for a Salts agent on your own computer, behind one token-gated cloudflared tunnel.",
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/AlwaysHungrie/salts-agent.git",
