@@ -200,9 +200,17 @@ function WalletSidebar({ onClose }: { onClose: () => void }) {
                 />
               )}
 
-              <p className="text-muted mt-8 mb-3 text-xs font-medium">
-                Already have a key?
-              </p>
+              <div className="text-muted mt-8 mb-3 text-xs font-medium flex">
+                <span>Already have a key?</span>
+                <a
+                  href="/guide/openrouter"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-ink ml-auto"
+                >
+                  (OpenRouter guide)
+                </a>
+              </div>
               <AddKey onAdd={wallet.add} />
             </>
           )}
@@ -558,11 +566,7 @@ function RecoverPayment({
         Paid but didn&apos;t get a key?
       </button>
       {open && (
-        <RecoverDialog
-          networks={networks}
-          recover={recover}
-          onClose={close}
-        />
+        <RecoverDialog networks={networks} recover={recover} onClose={close} />
       )}
     </>
   );

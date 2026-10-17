@@ -28,7 +28,7 @@ Once the key is created, copy it and keep it somewhere safe. It starts with `sk-
 
 ## 4. Add the key to your wallet
 
-On the Salts home page, click **OpenRouter wallet** in the top right corner. Paste the key at the bottom and click **Add key**. Salts checks the key with OpenRouter before keeping it, and gives it a nickname, such as "Amber Falcon", so you can tell your keys apart.
+On the Salts home page, click **OpenRouter wallet** in the top right corner. Paste the key at the bottom and click **Add key**. Salts checks the key with OpenRouter before keeping it, and gives it a nickname, such as "Amber Falcon", so you can tell your keys apart. If you would rather skip OpenRouter's own checkout, you can also [buy a key with crypto](/guide/wallet-crypto) straight from your wallet.
 
 Your wallet holds every key you add, and shows how much credit each one has left. You can see or remove a key from there at any time. Removing a key also takes it away from every agent that uses it.
 

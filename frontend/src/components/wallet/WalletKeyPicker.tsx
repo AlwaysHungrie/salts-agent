@@ -100,14 +100,15 @@ export function WalletKeyPicker({
       {/* An empty wallet leaves nothing to pick: say where a key comes from. */}
       {!loading && !keys.length && !offerDefault && !elsewhere && (
         <p className="text-muted mt-2 text-xs font-light leading-[1.33]">
-          Your wallet has no OpenRouter keys yet. The agent needs one to answer.{" "}
           <button
             onClick={() => openWallet(() => void wallet.load())}
             className="text-ink font-normal underline underline-offset-2"
           >
-            Open your wallet
+            Your wallet
           </button>{" "}
-          to add a key you have or buy one.
+          does not have any OpenRouter API keys. In order to use your agent,
+          either add your own key created from your OpenRouter account or get a
+          new one from us.
         </p>
       )}
     </div>
