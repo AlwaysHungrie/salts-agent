@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import { ArrowLeft, Check, Copy, CreditCard, Wallet, X } from "lucide-react";
 import type { WalletKey } from "@/lib/agent";
 import { formatUsdShort } from "@/lib/format";
@@ -55,16 +56,13 @@ const SLIDE_MS = 200;
 
 /**
  * The caller's OpenRouter wallet, as a sidebar from the right: every key they may give an
- * agent, by nickname, and the ways to buy credit. A pasted key can be seen and removed; a
- * bought one is never shown, and takes more credit.
+ * agent, by nickname, and the ways to get one. A pasted key can be seen and removed; a
+ * bought one is never shown.
  */
 function WalletSidebar({ onClose }: { onClose: () => void }) {
   const wallet = useWallet();
-  /** The crypto checkout, when open: for a new key, or to top up the bought key named. */
-  const [buying, setBuying] = useState<{
-    keyId?: string;
-    nickname?: string;
-  } | null>(null);
+  /** Whether the crypto checkout for a new key is open. */
+  const [buying, setBuying] = useState(false);
   const [shown, setShown] = useState(false);
 
   // Slide in once mounted; slide out before unmounting.
@@ -81,7 +79,7 @@ function WalletSidebar({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
-      if (buying) setBuying(null);
+      if (buying) setBuying(false);
       else dismiss();
     };
     window.addEventListener("keydown", onKey);
@@ -110,7 +108,7 @@ function WalletSidebar({ onClose }: { onClose: () => void }) {
         <div className="border-hairline-soft flex items-center gap-2 border-b px-6 py-4">
           {buying && (
             <button
-              onClick={() => setBuying(null)}
+              onClick={() => setBuying(false)}
               aria-label="Back to wallet"
               className="text-muted hover:bg-canvas-soft hover:text-ink -ml-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition"
             >
@@ -119,18 +117,12 @@ function WalletSidebar({ onClose }: { onClose: () => void }) {
           )}
           <div className="min-w-0 flex-1">
             <p className="truncate text-lg font-semibold leading-[1.38]">
-              {!buying
-                ? "OpenRouter wallet"
-                : buying.nickname
-                  ? `Top up ${buying.nickname}`
-                  : "Buy credits"}
+              {buying ? "Get key" : "OpenRouter wallet"}
             </p>
             <p className="text-muted text-xs font-light leading-[1.33]">
-              {!buying
-                ? "Manage your OpenRouter API keys."
-                : buying.nickname
-                  ? "Every agent using this key keeps replying."
-                  : "A new key appears in your wallet, ready for any agent."}
+              {buying
+                ? "Provision a new Openrouter API key"
+                : "Manage your OpenRouter API keys."}
             </p>
           </div>
           <button
@@ -145,11 +137,11 @@ function WalletSidebar({ onClose }: { onClose: () => void }) {
         <div className="flex-1 overflow-y-auto overscroll-contain px-6 py-6 flex flex-col">
           {buying ? (
             <BuyCredits
-              key={buying.keyId ?? "new"}
               networks={wallet.networks}
               feeBps={wallet.feeBps}
+              maxUsd={wallet.maxUsd}
               calls={{
-                quote: (body) => wallet.quote(body, buying.keyId),
+                quote: wallet.quote,
                 confirm: wallet.confirm,
               }}
               onPaid={() => void wallet.load()}
@@ -162,7 +154,7 @@ function WalletSidebar({ onClose }: { onClose: () => void }) {
 
               <div className="space-y-3 flex flex-1 flex-col">
                 {wallet.keys === null && (
-                  <p className="text-muted text-sm leading-[1.43]">
+                  <p className="text-muted py-4 my-auto text-center flex-1 text-sm leading-[1.43]">
                     Loading your keys…
                   </p>
                 )}
@@ -176,22 +168,19 @@ function WalletSidebar({ onClose }: { onClose: () => void }) {
                     key={key.id}
                     walletKey={key}
                     onRemove={() => wallet.remove(key.id)}
-                    onAddCredits={() =>
-                      setBuying({ keyId: key.id, nickname: key.nickname })
-                    }
                   />
                 ))}
               </div>
 
               <p className="text-muted mt-8 mb-3 text-xs font-medium">
-                Buy credits
+                Get new key
               </p>
               <div className="space-y-3">
                 <PayOption
                   icon={<Wallet className="h-4 w-4" />}
                   title="Pay with crypto"
                   note="USDC or ETH on Ethereum, Base, Solana and more"
-                  onClick={() => setBuying({})}
+                  onClick={() => setBuying(true)}
                 />
                 <PayOption
                   icon={<CreditCard className="h-4 w-4" />}
@@ -217,11 +206,9 @@ function WalletSidebar({ onClose }: { onClose: () => void }) {
 function KeyRow({
   walletKey: key,
   onRemove,
-  onAddCredits,
 }: {
   walletKey: WalletKey;
   onRemove: () => Promise<string | null>;
-  onAddCredits: () => void;
 }) {
   const [copied, setCopied] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -256,14 +243,6 @@ function KeyRow({
         </p>
         {!confirming && (
           <div className="flex shrink-0 gap-2">
-            {key.kind === "provisioned" && (
-              <button
-                onClick={onAddCredits}
-                className="border-hairline text-ink hover:bg-canvas-soft h-9 rounded-full border px-4 text-xs font-semibold transition"
-              >
-                Add credits
-              </button>
-            )}
             <button
               onClick={() => setConfirming(true)}
               className="bg-canvas-soft text-ink h-9 rounded-full px-4 text-xs font-semibold transition hover:opacity-70"
@@ -291,17 +270,32 @@ function KeyRow({
             </button>
           </div>
         ) : (
-          <span className="shrink-0">Key hidden</span>
+          <span className="shrink-0">
+            Purchased{" "}
+            {new Date(key.created_at).toLocaleDateString(undefined, {
+              day: "numeric",
+              month: "short",
+              year: "2-digit",
+            })}
+          </span>
         )}
       </div>
 
-      {confirming && (
+      {confirming && key.kind === "provisioned" && (
+        <RemoveBoughtKey
+          walletKey={key}
+          busy={busy}
+          onKeep={() => setConfirming(false)}
+          onRemove={() => void run(onRemove)}
+        />
+      )}
+
+      {confirming && key.kind !== "provisioned" && (
         <div className="bg-canvas-soft mt-5 rounded-2xl px-4 py-4">
           <p className="text-sm leading-[1.43]">
             {key.agents === 0
               ? "Remove this key from your wallet?"
               : `Remove this key? ${key.agents === 1 ? "1 agent" : `${key.agents} agents`} will stop replying until given another.`}
-            {key.kind === "provisioned" && " Its remaining credit is lost."}
           </p>
           <div className="mt-3 flex justify-end gap-2">
             <button
@@ -323,6 +317,91 @@ function KeyRow({
 
       {error && <p className="mt-3 text-sm leading-[1.43]">{error}</p>}
     </div>
+  );
+}
+
+/**
+ * Removing a bought key: its credit was paid for and goes with it, so the nickname must be
+ * typed exactly, as for deleting an agent. Drawn on the page body, as the sidebar's slide
+ * would otherwise contain it.
+ */
+function RemoveBoughtKey({
+  walletKey: key,
+  busy,
+  onKeep,
+  onRemove,
+}: {
+  walletKey: WalletKey;
+  busy: boolean;
+  onKeep: () => void;
+  onRemove: () => void;
+}) {
+  const [typed, setTyped] = useState("");
+  const field = useRef<HTMLInputElement>(null);
+  const matches = typed === key.nickname;
+  const left = key.valid && key.remaining !== null ? formatUsdShort(key.remaining) : null;
+
+  // Escape keeps the key and leaves the sidebar open: caught before the sidebar's own.
+  useEffect(() => {
+    field.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopImmediatePropagation();
+      onKeep();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [onKeep]);
+
+  return createPortal(
+    <div className="fixed inset-0 z-70 flex items-center justify-center bg-black/30 px-5">
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        className="bg-canvas text-ink w-full max-w-sm rounded-[20px] px-6 py-6 shadow-xl"
+      >
+        <p className="text-base font-semibold leading-[1.38]">Remove {key.nickname}?</p>
+        <p className="text-muted mt-2 text-sm font-light leading-[1.43]">
+          {left ? `The ${left} of credit left on this key` : "Any credit left on this key"} will
+          be lost forever. It can&rsquo;t be refunded or moved to another key.
+          {key.agents > 0 &&
+            ` ${key.agents === 1 ? "1 agent" : `${key.agents} agents`} using it will stop replying until given another.`}
+          <br />
+          <br />
+          This action cannot be undone. Proceed with caution.
+        </p>
+        <label className="mt-4 block">
+          <span className="text-muted block text-xs leading-[1.33]">
+            Type <span className="text-ink font-semibold">{key.nickname}</span> to confirm
+          </span>
+          <input
+            ref={field}
+            value={typed}
+            onChange={(e) => setTyped(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && matches && !busy) onRemove();
+            }}
+            className="bg-field placeholder:text-faint mt-2 w-full rounded-2xl px-4 py-3 text-sm outline-none"
+          />
+        </label>
+        <div className="mt-6 flex justify-end gap-2">
+          <button
+            onClick={onKeep}
+            className="border-hairline text-ink hover:bg-canvas-soft h-10 rounded-full border px-5 text-sm font-semibold transition"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onRemove}
+            disabled={!matches || busy}
+            className="bg-ink text-on-primary h-10 rounded-full px-5 text-sm font-semibold transition hover:opacity-85 disabled:opacity-40"
+          >
+            {busy ? "Removing…" : "Remove"}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 }
 

@@ -836,6 +836,39 @@ async function rpcMock(request: Request, url: URL): Promise<Response> {
   return json({ jsonrpc: "2.0", id, result });
 }
 
+/* --------------------------------------------------------- provisioned keys -- */
+
+/**
+ * Keys made with a provisioning key, by hash. A provisioning key is any bearer starting
+ * `sk-or-prov`; one containing `down` is refused, as an OpenRouter outage. Tests read the
+ * keys back at `GET https://openrouter.ai/__keys`.
+ */
+const madeKeys = new Map<string, { name: string; limit: number; key: string }>();
+
+export const PROVISIONING_KEY = "sk-or-prov-test";
+
+async function provisionedKeysMock(request: Request, url: URL): Promise<Response> {
+  if (url.pathname === "/__keys") return json(Object.fromEntries(madeKeys));
+  const auth = request.headers.get("authorization") ?? "";
+  if (!auth.startsWith("Bearer sk-or-prov")) return json({ error: "not a provisioning key" }, 401);
+  if (auth.includes("down")) return json({ error: "down" }, 503);
+  const hash = decodeURIComponent(url.pathname.slice("/api/v1/keys/".length));
+  if (request.method === "GET") return json({ data: [...madeKeys.keys()].map((h) => ({ hash: h })) });
+  if (request.method === "POST") {
+    const body = (await request.json()) as { name: string; limit: number };
+    const made = { hash: crypto.randomUUID(), key: `sk-or-v1-${crypto.randomUUID()}` };
+    madeKeys.set(made.hash, { name: body.name, limit: body.limit, key: made.key });
+    return json({ data: { hash: made.hash, name: body.name, limit: body.limit }, key: made.key });
+  }
+  const known = madeKeys.get(hash);
+  if (!known) return json({ error: "no such key" }, 404);
+  if (request.method === "DELETE") {
+    madeKeys.delete(hash);
+    return json({ deleted: true });
+  }
+  return json({ error: "unmocked" }, 405);
+}
+
 export async function openrouterMock(request: Request): Promise<Response> {
   const url = new URL(request.url);
   if (url.hostname === "rpc.test") return rpcMock(request, url);
@@ -854,6 +887,10 @@ export async function openrouterMock(request: Request): Promise<Response> {
     const auth = request.headers.get("authorization") ?? "";
     if (auth.includes("sk-invalid")) return json({ error: "invalid" }, 401);
     return json({ data: { label: "mock key" } });
+  }
+
+  if (url.pathname.startsWith("/api/v1/keys") || url.pathname === "/__keys") {
+    return provisionedKeysMock(request, url);
   }
 
   if (url.pathname === "/__requests") {

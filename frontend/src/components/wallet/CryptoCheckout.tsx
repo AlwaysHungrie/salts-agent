@@ -1,26 +1,47 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, ChevronDown, Loader2, Wallet } from "lucide-react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useAppKit, useAppKitAccount, useAppKitProvider, useDisconnect } from "@reown/appkit/react";
-import { type Provider as SolanaProvider, useAppKitConnection } from "@reown/appkit-adapter-solana/react";
+import {
+  useAppKit,
+  useAppKitAccount,
+  useAppKitProvider,
+  useDisconnect,
+} from "@reown/appkit/react";
+import {
+  type Provider as SolanaProvider,
+  useAppKitConnection,
+} from "@reown/appkit-adapter-solana/react";
+import type { Connection } from "@solana/web3.js";
 import {
   createAssociatedTokenAccountIdempotentInstruction,
   createTransferCheckedInstruction,
   getAssociatedTokenAddressSync,
 } from "@solana/spl-token";
 import { PublicKey, Transaction } from "@solana/web3.js";
-import { erc20Abi } from "viem";
-import { useSendTransaction, useSwitchChain, useWriteContract, WagmiProvider } from "wagmi";
+import { erc20Abi, formatUnits } from "viem";
+import {
+  useBalance,
+  useReadContract,
+  useSendTransaction,
+  useSwitchChain,
+  useWriteContract,
+  WagmiProvider,
+} from "wagmi";
 import type { PayNetwork, PayQuote } from "@/lib/agent";
 import { wagmiAdapter } from "./appkit";
+import { PAY_TITLE, Step, supported } from "./BuyCredits";
 
 const queryClient = new QueryClient();
 
 /** Asks the Worker for a quote, and to count a sent payment. */
 export type CheckoutCalls = {
-  quote: (body: { network: string; asset: string; payer: string }) => Promise<PayQuote | string>;
+  quote: (body: {
+    network: string;
+    asset: string;
+    payer: string;
+  }) => Promise<PayQuote | string>;
   confirm: (id: string, tx: string) => Promise<"paid" | "pending" | string>;
 };
 
@@ -38,6 +59,8 @@ export default function CryptoCheckout(props: {
   networks: PayNetwork[];
   calls: CheckoutCalls;
   onPaid: () => void;
+  /** Told when a payment starts (and stays started once paid), so the amount is locked. */
+  onLock: (locked: boolean) => void;
 }) {
   return (
     <WagmiProvider config={wagmiAdapter.wagmiConfig}>
@@ -48,22 +71,26 @@ export default function CryptoCheckout(props: {
   );
 }
 
+// eslint-disable-next-line max-lines-per-function
 function Checkout({
   total,
   networks,
   calls,
   onPaid,
+  onLock,
 }: {
   total: number | null;
   networks: PayNetwork[];
   calls: CheckoutCalls;
   onPaid: () => void;
+  onLock: (locked: boolean) => void;
 }) {
   const { open } = useAppKit();
   const { disconnect } = useDisconnect();
   const evm = useAppKitAccount({ namespace: "eip155" });
   const sol = useAppKitAccount({ namespace: "solana" });
-  const { walletProvider: solanaWallet } = useAppKitProvider<SolanaProvider>("solana");
+  const { walletProvider: solanaWallet } =
+    useAppKitProvider<SolanaProvider>("solana");
   const { connection } = useAppKitConnection();
   const switchChain = useSwitchChain();
   const sendTransaction = useSendTransaction();
@@ -76,6 +103,8 @@ function Checkout({
   const [networkId, setNetworkId] = useState("");
   const [asset, setAsset] = useState<"usdc" | "eth">("usdc");
   const [stage, setStage] = useState<"idle" | "sign" | "wait" | "paid">("idle");
+  // The quote is for this amount: changing it mid-payment would show one and charge another.
+  useEffect(() => onLock(stage !== "idle"), [stage, onLock]);
   const [error, setError] = useState<string | null>(null);
 
   const network = choices.find((n) => n.id === networkId) ?? choices[0];
@@ -84,13 +113,19 @@ function Checkout({
   /** Send exactly what the quote asks for, from the connected wallet. */
   const send = async (q: PayQuote): Promise<string> => {
     if (q.family === "solana") {
-      if (!solanaWallet || !connection || !q.token) throw new Error("Reconnect your wallet.");
+      if (!solanaWallet || !connection || !q.token)
+        throw new Error("Reconnect your wallet.");
       const owner = new PublicKey(payer);
       const mint = new PublicKey(q.token);
       const to = new PublicKey(q.to);
       const destination = getAssociatedTokenAddressSync(mint, to);
       const tx = new Transaction().add(
-        createAssociatedTokenAccountIdempotentInstruction(owner, destination, to, mint),
+        createAssociatedTokenAccountIdempotentInstruction(
+          owner,
+          destination,
+          to,
+          mint,
+        ),
         createTransferCheckedInstruction(
           getAssociatedTokenAddressSync(mint, owner),
           mint,
@@ -150,48 +185,50 @@ function Checkout({
     onPaid();
   };
 
-  if (stage === "paid") return <Paid />;
+  const busy = stage !== "idle";
+
+  const step = (
+    <PayStep
+      networks={networks}
+      payer={family ? payer : null}
+      busy={busy}
+      onChange={() => void disconnect()}
+    />
+  );
+
+  if (stage === "paid")
+    return (
+      <>
+        {step}
+        <Paid />
+      </>
+    );
 
   if (!family)
     return (
-      <button
-        onClick={() => void open({ view: "Connect" })}
-        className="bg-ink text-on-primary flex h-12 w-full items-center justify-center gap-2 rounded-full px-6 text-sm font-semibold transition hover:opacity-85"
-      >
-        <Wallet className="h-4 w-4" /> Connect wallet
-      </button>
+      <>
+        {step}
+        <button
+          onClick={() => void open({ view: "Connect" })}
+          className="bg-ink text-on-primary flex h-12 w-full items-center justify-center gap-2 rounded-full px-6 text-sm font-semibold transition hover:opacity-85"
+        >
+          <Wallet className="h-4 w-4" /> Connect wallet
+        </button>
+      </>
     );
-
-  const busy = stage !== "idle";
 
   return (
     <div>
-      <div className="bg-canvas-soft flex h-12 items-center justify-between gap-3 rounded-2xl px-4 text-sm leading-[1.43]">
-        <span className="flex min-w-0 items-center gap-2">
-          <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
-          <span className="text-muted shrink-0 text-xs">Connected</span>
-          <span className="truncate font-mono text-[13px]">
-            {payer.slice(0, 6)}…{payer.slice(-4)}
-          </span>
-        </span>
-        <button
-          onClick={() => void disconnect()}
-          disabled={busy}
-          className="text-muted hover:text-ink shrink-0 text-xs font-semibold transition disabled:opacity-40"
-        >
-          Change
-        </button>
-      </div>
-
+      {step}
       {choices.length === 0 ? (
         <p className="text-muted mt-4 text-sm leading-[1.43]">
-          Payments from this wallet aren&apos;t open yet. Connect another wallet.
+          Payments from this wallet aren&apos;t open yet. Connect another
+          wallet.
         </p>
       ) : (
         <>
-          <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
+          <div className="mt-5 grid grid-cols-[1fr_auto] gap-2">
             <label className="min-w-0">
-              <span className="text-muted mb-1 block text-xs">Network your funds are on</span>
               <span className="relative block">
                 <select
                   value={network?.id ?? ""}
@@ -209,8 +246,11 @@ function Checkout({
               </span>
             </label>
             <div>
-              <span className="text-muted mb-1 block text-xs">Pay in</span>
-              <div className="bg-field flex h-11 rounded-xl p-1" role="radiogroup" aria-label="Coin">
+              <div
+                className="bg-field flex h-11 rounded-xl p-1"
+                role="radiogroup"
+                aria-label="Coin"
+              >
                 {(network?.assets ?? ["usdc"]).map((a) => (
                   <button
                     key={a}
@@ -219,7 +259,9 @@ function Checkout({
                     disabled={busy}
                     onClick={() => setAsset(a)}
                     className={`rounded-lg px-4 text-sm font-semibold transition ${
-                      coin === a ? "bg-canvas shadow-sm" : "text-muted hover:text-ink"
+                      coin === a
+                        ? "bg-canvas shadow-sm"
+                        : "text-muted hover:text-ink"
                     }`}
                   >
                     {a.toUpperCase()}
@@ -228,10 +270,14 @@ function Checkout({
               </div>
             </div>
           </div>
-          {coin === "eth" && (
-            <p className="text-muted mt-2 text-xs leading-[1.33]">
-              The ETH amount is worked out at the live price when you press pay.
-            </p>
+          {network && (
+            <Balance
+              network={network}
+              coin={coin}
+              payer={payer}
+              total={total}
+              connection={connection ?? null}
+            />
           )}
 
           <button
@@ -260,19 +306,179 @@ function Checkout({
   );
 }
 
+/** Step 2's heading: what can be paid with, or the connected wallet and a way to change it. */
+function PayStep({
+  networks,
+  payer,
+  busy,
+  onChange,
+}: {
+  networks: PayNetwork[];
+  /** The connected address; null before a wallet connects. */
+  payer: string | null;
+  busy: boolean;
+  onChange: () => void;
+}) {
+  return (
+    <Step
+      title={PAY_TITLE}
+      hint={
+        // Once a payment starts the line goes: no "change" to log the wallet out mid-payment.
+        busy ? undefined : payer ? (
+          <>
+            Wallet connected{" "}
+            <span className="text-ink font-mono text-[13px] font-medium tracking-wide">
+              {payer.slice(0, 6)}…{payer.slice(-4)}
+            </span>{" "}
+            (
+            <button onClick={onChange} className="hover:text-ink underline transition">
+              change
+            </button>
+            )
+          </>
+        ) : (
+          supported(networks)
+        )
+      }
+    />
+  );
+}
+
 function Paid() {
   return (
     <div className="bg-canvas-soft flex items-center gap-3 rounded-2xl px-4 py-4">
       <span className="bg-ink text-on-primary flex h-8 w-8 items-center justify-center rounded-full">
         <Check className="h-4 w-4" />
       </span>
-      <p className="text-sm font-semibold leading-[1.43]">Payment received.</p>
+      <p className="text-sm font-semibold leading-[1.43]">
+        Payment received. Your key is in your wallet.
+      </p>
     </div>
   );
 }
 
+/** Chainlink's ETH/USD feed on Ethereum mainnet (8 decimals), as the Worker prices ETH. */
+const ETH_USD_FEED = "0x5f4ec3df9cbd43714fe2740f5e3616155c5b8419";
+const FEED_ABI = [
+  {
+    type: "function",
+    name: "latestRoundData",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [
+      { name: "roundId", type: "uint80" },
+      { name: "answer", type: "int256" },
+      { name: "startedAt", type: "uint256" },
+      { name: "updatedAt", type: "uint256" },
+      { name: "answeredInRound", type: "uint80" },
+    ],
+  },
+] as const;
+
+/**
+ * What the connected wallet holds of the chosen coin on the chosen network, and whether
+ * it covers the total. ETH is valued at the same feed the Worker quotes from.
+ */
+function Balance({
+  network,
+  coin,
+  payer,
+  total,
+  connection,
+}: {
+  network: PayNetwork;
+  coin: "usdc" | "eth";
+  payer: string;
+  total: number | null;
+  connection: Connection | null;
+}) {
+  const evm = network.family === "evm";
+  const address = payer as `0x${string}`;
+  const eth = useBalance({
+    address,
+    chainId: network.chain_id,
+    query: { enabled: evm && coin === "eth" },
+  });
+  const usdc = useReadContract({
+    address: network.usdc as `0x${string}`,
+    abi: erc20Abi,
+    functionName: "balanceOf",
+    args: [address],
+    chainId: network.chain_id,
+    query: { enabled: evm && coin === "usdc" },
+  });
+  const price = useReadContract({
+    address: ETH_USD_FEED,
+    abi: FEED_ABI,
+    functionName: "latestRoundData",
+    chainId: 1,
+    query: { enabled: evm && coin === "eth" },
+  });
+  const sol = useSolanaUsdc(evm ? null : connection, payer, network.usdc);
+
+  const held = !evm
+    ? sol
+    : coin === "eth"
+      ? eth.data && Number(formatUnits(eth.data.value, 18))
+      : usdc.data !== undefined
+        ? Number(formatUnits(usdc.data, 6))
+        : undefined;
+  if (held === undefined || held === null) return null;
+
+  const usd =
+    coin === "eth"
+      ? price.data
+        ? (held * Number(price.data[1])) / 1e8
+        : null
+      : held;
+  const short = total !== null && usd !== null && usd < total;
+  const shown =
+    coin === "eth"
+      ? `${held.toFixed(4)} ETH${usd !== null ? ` ($${usd.toFixed(2)})` : ""}`
+      : `${held.toFixed(2)} USDC`;
+
+  return (
+    <p
+      className={`mt-2 text-xs leading-[1.33] ${short ? "text-red-600" : "text-muted"}`}
+    >
+      {short
+        ? `Insufficient funds. Current balance ${shown}`
+        : `Current balance ${shown}`}
+    </p>
+  );
+}
+
+/** The wallet's USDC on Solana; 0 when it has no USDC account, null while loading. */
+function useSolanaUsdc(
+  connection: Connection | null,
+  payer: string,
+  mint: string,
+) {
+  const [held, setHeld] = useState<number | null>(null);
+  useEffect(() => {
+    if (!connection || !payer) return;
+    let live = true;
+    const account = getAssociatedTokenAddressSync(
+      new PublicKey(mint),
+      new PublicKey(payer),
+    );
+    connection
+      .getTokenAccountBalance(account)
+      .then((r) => live && setHeld(r.value.uiAmount ?? 0))
+      .catch(() => live && setHeld(0));
+    return () => {
+      live = false;
+    };
+  }, [connection, payer, mint]);
+  return held;
+}
+
 /** Check a sent payment until the Worker counts it, or gives up waiting: null once paid. */
-async function settle(confirm: CheckoutCalls["confirm"], id: string, tx: string) {
+async function settle(
+  confirm: CheckoutCalls["confirm"],
+  id: string,
+  tx: string,
+) {
   const until = Date.now() + POLL_FOR_MS;
   while (Date.now() < until) {
     const verdict = await confirm(id, tx);
@@ -286,7 +492,9 @@ async function settle(confirm: CheckoutCalls["confirm"], id: string, tx: string)
 /** A wallet's refusal, in a sentence: most are the buyer pressing reject. */
 function declined(err: unknown): string {
   const message = err instanceof Error ? err.message : String(err);
-  if (/reject|denied|cancel/i.test(message)) return "The payment was cancelled in your wallet.";
-  if (/insufficient/i.test(message)) return "This wallet doesn't hold enough to pay that.";
+  if (/reject|denied|cancel/i.test(message))
+    return "The payment was cancelled in your wallet.";
+  if (/insufficient/i.test(message))
+    return "This wallet doesn't hold enough to pay that.";
   return `Your wallet couldn't send the payment: ${message.split("\n")[0]}`;
 }

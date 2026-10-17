@@ -3,7 +3,8 @@
   "max_agent_bytes": 50000000,
   "max_members": 200,
   "max_wallet_keys": 20,
-  "wallet_fee_bps": 600,
+  "wallet_fee_bps": 800,
+  "max_wallet_purchase_usd": 50,
   "default_agent_limit": 5,
   "max_upload_bytes": {
     "text": 1000000,

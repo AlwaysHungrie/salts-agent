@@ -375,12 +375,13 @@ export type WalletKeyRow = {
   created_at: number;
   /** How many agents hold it. */
   agents: number;
+  /** A bought key's handle at OpenRouter; blank for a pasted one. */
+  openrouter_hash: string;
 };
 
 /**
  * A quote a buyer pays against: exactly `units` of `asset` to `to_address` on `network`,
- * from `payer`, before `expires_at`. `key_id` is blank for a new key, else the bought key
- * the credit tops up.
+ * from `payer`, before `expires_at`. `key_id` is blank until the key it bought is made.
  */
 export type WalletPurchase = {
   id: string;
@@ -393,8 +394,11 @@ export type WalletPurchase = {
   payer: string;
   /** Base units, as a decimal string: they outgrow a JavaScript number. */
   units: string;
-  status: "pending" | "paid";
+  /** Quoted; paid (the payment is counted); fulfilled (the key has its credit). */
+  status: "pending" | "paid" | "fulfilled";
   tx: string | null;
   created_at: number;
   expires_at: number;
+  /** When delivery was last taken up; 0 when no one holds it. */
+  claimed_at: number;
 };

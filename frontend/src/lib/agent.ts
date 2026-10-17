@@ -591,6 +591,8 @@ export type PayNetwork = {
   label: string;
   family: "evm" | "solana";
   chain_id: number;
+  /** The USDC contract (EVM) or mint (Solana). */
+  usdc: string;
   assets: ("usdc" | "eth")[];
 };
 

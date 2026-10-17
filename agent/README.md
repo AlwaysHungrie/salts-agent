@@ -91,11 +91,31 @@ Keys are bought with crypto and no processor in between. The buyer asks for a qu
 ETH/USD feed) to the deployment's address, for the credit plus the `wallet_fee_bps` service
 fee (rounded up to the cent; the quote returns `amount_usd`, `fee_usd`, `total_usd`), with a little dust so no two open quotes ask for
 the same amount. Their wallet sends it, and the Worker reads the transaction back over
-JSON-RPC: right sender, recipient, token and amount, enough confirmations (Solana:
-finalized), inside the quote's 30 minutes, and never counted before. Where payments go and
-which RPC each network is read from are `PAYMENT_ADDRESSES` and `PAYMENT_RPC` in
-`wrangler.jsonc`; a blank address switches that family off. Turning a paid purchase into a
-provisioned key is not built yet.
+JSON-RPC: right sender, recipient, token and exactly the quoted amount, enough
+confirmations (Solana: finalized), landed inside the quote's 30 minutes (not before the
+quote was made), and never counted before. The exact amount is what makes a payment
+unclaimable by anyone else: no two quotes that could claim the same payment share one (an
+expired, unpaid quote's amount stays reserved for the 2-minute clock slack), and a quote
+made after a payment lands cannot claim it, so a stranger who copies a transaction id from the chain and quotes
+as its sender is refused. Where payments go is one
+EVM address (every EVM network) and one Solana address, set from the admin CLI's Overview
+tab (`GET|PATCH /api/admin/payment-addresses`, stored in `AgentDirectory`); a blank one
+switches that family off. Which RPC each network is read from is `PAYMENT_RPC` in
+`wrangler.jsonc`. Base Sepolia (`base-sepolia`) is a testnet for
+trying a purchase with faucet coins; it has an RPC on staging only, never production. Purchases are capped at
+`max_wallet_purchase_usd`.
+
+A counted payment is delivered with the deployment's OpenRouter provisioning key, set from
+the admin CLI's Overview tab (`GET|PUT|DELETE /api/admin/provisioning-key`; stored in
+`AgentDirectory`, write-only: GET returns only whether it is set and its last four
+characters). Each purchase makes a new OpenRouter key whose limit is the credit bought
+(not the fee), named `Salts <buyer email> <purchase id>` so the OpenRouter dashboard says
+whose each key is. Keys are not topped up: more credit is a new key. Delivery is held by one confirm at a time (`claimed_at`), so concurrent confirms make one
+key; if OpenRouter fails, the purchase stays paid and the confirm answers 202, and the
+next confirm with the same transaction delivers it. While no provisioning key is set the
+wallet lists no networks and quotes answer 503. Removing a bought key deletes it at
+OpenRouter too. The keys spend the deployment's OpenRouter credit, so that balance has to
+be kept funded.
 
 Attachment bytes (images, voice-note clips) live in R2, not in the session's SQLite.
 Create the bucket once before deploying — `wrangler dev` simulates it locally:
@@ -154,7 +174,7 @@ curl -X POST http://localhost:8787/agents/session-agent/my-session/chat \
 | `POST /api/business-requests` | A signed-in account asks for a higher agent limit |
 | `GET\|POST /api/wallet` | The caller's OpenRouter wallet / add a pasted key `{ key }`, checked with OpenRouter first and given a random nickname. At most `max_wallet_keys` |
 | `DELETE /api/wallet/:id` | Remove a key, clearing it from every agent that holds it |
-| `POST /api/wallet/purchases`, `POST /api/wallet/:id/credits` | Quote a new key / credit for a bought one: `{ amount, network, asset, payer }` → what to send, where, and the `amount_usd` + `fee_usd` = `total_usd` breakdown. `GET /api/wallet` lists the open `networks` and `fee_bps` |
+| `POST /api/wallet/purchases` | Quote a new key: `{ amount, network, asset, payer }` → what to send, where, and the `amount_usd` + `fee_usd` = `total_usd` breakdown. `GET /api/wallet` lists the open `networks` (with each one's USDC contract) and `fee_bps` |
 | `POST /api/wallet/purchases/:id/confirm` | `{ tx }`: read the payment back from the chain. 200 paid, 202 not final yet, 400 not a match, 409 already counted |
 | `POST /telegram/webhook/:agentId` | One route per agent, because one bot per agent |
 | `GET\|POST /whatsapp/webhook/:agentId` | WhatsApp's subscription handshake (`GET`) and deliveries (`POST`) |

@@ -29,7 +29,7 @@ function freshNickname(taken: Set<string>): string {
 export function walletKeys(storage: DurableObjectStorage, email: string): WalletKeyRow[] {
   const rows = storage.sql
     .exec(
-      `SELECT k.id, k.email, k.nickname, k.kind, k.secret, k.created_at,
+      `SELECT k.id, k.email, k.nickname, k.kind, k.secret, k.created_at, k.openrouter_hash,
               (SELECT COUNT(*) FROM wallet_key_uses u WHERE u.key_id = k.id) AS agents
          FROM wallet_keys k
         WHERE k.email = ?
@@ -56,7 +56,7 @@ export function walletKey(
 export function addWalletKey(
   storage: DurableObjectStorage,
   email: string,
-  key: { kind: WalletKeyKind; secret: string },
+  key: { kind: WalletKeyKind; secret: string; openrouter_hash?: string },
   max: number
 ): WalletKeyRow | { error: string } {
   const owner = email.trim().toLowerCase();
@@ -70,16 +70,18 @@ export function addWalletKey(
     secret: key.secret,
     created_at: Date.now(),
     agents: 0,
+    openrouter_hash: key.openrouter_hash ?? "",
   };
   storage.sql.exec(
-    `INSERT INTO wallet_keys (id, email, nickname, kind, secret, created_at)
-     VALUES (?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO wallet_keys (id, email, nickname, kind, secret, created_at, openrouter_hash)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
     row.id,
     row.email,
     row.nickname,
     row.kind,
     row.secret,
-    row.created_at
+    row.created_at,
+    row.openrouter_hash
   );
   return row;
 }

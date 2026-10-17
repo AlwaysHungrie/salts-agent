@@ -7,6 +7,7 @@ import {
   type AppKitNetwork,
   arbitrum,
   base,
+  baseSepolia,
   mainnet,
   optimism,
   polygon,
@@ -24,6 +25,7 @@ const networks: [AppKitNetwork, ...AppKitNetwork[]] = [
   optimism,
   polygon,
   solana,
+  baseSepolia,
 ];
 
 export const wagmiAdapter = new WagmiAdapter({ projectId: REOWN_PROJECT_ID, networks });

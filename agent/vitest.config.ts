@@ -61,14 +61,10 @@ export default defineConfig({
           API_SECRET: "test-secret",
           TELEGRAM_API_BASE: "https://telegram.test",
           CLERK_ISSUER: TEST_CLERK_ISSUER,
-          // Payments go to these addresses, and every network's chain is the stand-in
-          // in the mock, which the payment tests load transactions into.
-          PAYMENT_ADDRESSES: {
-            evm: "0x00000000000000000000000000000000000000aa",
-            solana: "Sa1tsPaymentsReceiver1111111111111111111111",
-          },
+          // Every network's chain is the stand-in in the mock, which the payment tests
+          // load transactions into. The tests set where payments go.
           PAYMENT_RPC: Object.fromEntries(
-            ["ethereum", "base", "arbitrum", "optimism", "polygon", "solana"].map((id) => [
+            ["ethereum", "base", "arbitrum", "optimism", "polygon", "solana", "base-sepolia"].map((id) => [
               id,
               `https://rpc.test/${id}`,
             ])
