@@ -5,7 +5,7 @@ tile fills in the add-server form with the provider's name, URL and auth type. T
 frontend and the Worker ship no templates of their own: every tile comes from the
 `mcp_catalog` deployment setting.
 
-Shipped entries: Notion (`oauth`), GitHub (`headers`), Bonfire (`headers`), and the
+Shipped entries: Notion (`oauth`), Swiggy (`oauth`), GitHub (`headers`), Bonfire (`headers`), and the
 salts-tools servers `matchmaker` and `analyst` (`headers`, with a placeholder tunnel URL
 that salts-tools repoints once the token matches).
 
