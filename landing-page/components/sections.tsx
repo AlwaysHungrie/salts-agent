@@ -51,7 +51,8 @@ export function Hero() {
         <Reveal delay={0.05}>
           <h1 className="mx-auto mt-5 text-[clamp(32px,6vw,64px)] font-[650] leading-[1.04] tracking-[-0.03em] text-balance sm:mt-6 sm:leading-[1.02]">
             {HERO.title[0]} <br className="hidden sm:block" />
-            {HERO.title[1]}
+            {HERO.title[1]}{" "}
+            <span className="text-muted/35">{HERO.title[2]}</span>
           </h1>
         </Reveal>
 

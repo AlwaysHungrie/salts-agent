@@ -86,15 +86,16 @@ export const LINKS = {
 export const HERO = {
   eyebrow: "In your browser, Telegram & WhatsApp",
   /** Two lines, broken where the phrase breaks on wide screens. */
-  title: ["AI agents that run without a subscription.", "Or your machine."],
+  /** The last part renders a shade lighter than the rest. */
+  title: ["Personal AI agents", "that stay with you", "forever."],
   body: [
     "",
-    "Always on.",
-    "Create one for every job and pay only for what they use.",
+    "No subscription. No hardware.",
+    "Salts agents live in the cloud for free and are yours to personalize. Create as many as you want and pay just a few cents when they respond.",
   ],
   primaryCta: "Get my agent",
   secondaryCta: "See what it can do",
-  footnote: "Runs on your own OpenRouter API key. Usage limits apply.",
+  footnote: "We're open source. Feel free to bring your own keys or self-host your agents.",
 } as const;
 
 export const STATS = [
