@@ -22,6 +22,8 @@ export function CapabilityPanel() {
   // The light works in steps, not a smooth share: at or below LIGHT_OFF switches
   // the bulb is dark, at LIGHT_FULL or more it is at full strength, and each switch
   // in between is one large step.
+  const toggle = (c: string) => setOn((s) => ({ ...s, [c]: !s[c] }));
+
   const count = CAPABILITIES.items.filter((c) => on[c]).length;
   const share = Math.min(
     1,
@@ -29,11 +31,11 @@ export function CapabilityPanel() {
   );
 
   return (
-    <div className="relative overflow-hidden rounded-[32px] bg-canvas-soft px-5 py-7 sm:p-8 lg:p-12">
-      {/* The light: a bulb in the top-right corner and the glow it throws, centred on
-          it. With few switches on the bulb is an unlit grey and the glow is faint;
+    <div className="relative overflow-hidden rounded-[32px] bg-canvas-soft px-5 py-8 sm:p-8 lg:p-12">
+      {/* The light: a bulb in the top-right corner and the glow it throws, centred
+          on it. Left off on a phone, where it has no room to read as light. With few switches on the bulb is an unlit grey and the glow is faint;
           each switch warms the bulb and widens and brightens the glow. */}
-      <div aria-hidden className="pointer-events-none absolute top-10 right-10">
+      <div aria-hidden className="pointer-events-none absolute top-10 right-10 hidden sm:block">
         <div
           className="absolute top-0 left-0 aspect-square w-[min(160vw,1800px)] rounded-full bg-[radial-gradient(closest-side,rgba(255,240,200,1)_0%,rgba(255,220,150,0.7)_8%,rgba(255,210,130,0.32)_26%,rgba(255,210,130,0.1)_45%,rgba(255,210,130,0)_65%)] transition-[opacity,transform] duration-700 ease-out"
           style={{
@@ -51,7 +53,7 @@ export function CapabilityPanel() {
       </div>
 
       <div className="relative max-w-[560px]">
-        <h2 className="text-[clamp(26px,3.5vw,34px)] font-[650] leading-[1.1] tracking-[-0.025em]">
+        <h2 className="text-[clamp(26px,3.5vw,34px)] font-[650] leading-[1.1] tracking-[-0.025em] text-balance">
           {CAPABILITIES.title}
         </h2>
         <p className="mt-3 text-[15px] leading-relaxed text-muted sm:mt-4 sm:text-base">
@@ -65,8 +67,8 @@ export function CapabilityPanel() {
             key={c}
             role="switch"
             aria-checked={on[c]}
-            onClick={() => setOn((s) => ({ ...s, [c]: !s[c] }))}
-            className={`cursor-pointer rounded-full px-3 py-1.5 text-[13px] ring-1 transition-colors sm:px-4 sm:py-2 sm:text-sm ${
+            onClick={() => toggle(c)}
+            className={`cursor-pointer rounded-full px-2.5 py-1.5 text-xs ring-1 transition-colors sm:px-4 sm:py-2 sm:text-sm ${
               on[c]
                 ? "bg-canvas text-ink ring-hairline-soft"
                 : "bg-transparent text-faint ring-hairline"
@@ -75,7 +77,7 @@ export function CapabilityPanel() {
             {c}
           </button>
         ))}
-        <span className="rounded-full px-3 py-1.5 text-[13px] text-faint ring-1 ring-hairline sm:px-4 sm:py-2 sm:text-sm">
+        <span className="rounded-full px-2.5 py-1.5 text-xs text-faint ring-1 ring-hairline sm:px-4 sm:py-2 sm:text-sm">
           {CAPABILITIES.more}
         </span>
       </div>

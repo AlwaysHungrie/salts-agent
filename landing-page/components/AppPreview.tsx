@@ -376,7 +376,7 @@ function TelegramToast({
 
   return createPortal(
     // Clear of the fixed header, which owns the very top of the page.
-    <div className="pointer-events-none fixed top-[14px] right-4 sm:right-8 z-[60] w-[304px] max-w-[calc(100vw-2rem)] sm:top-[86px]">
+    <div className="pointer-events-none fixed top-[80px] right-4 sm:right-8 z-[60] w-[304px] max-w-[calc(100vw-2rem)] sm:top-[86px]">
       <AnimatePresence>
         {open && (
           <motion.div
