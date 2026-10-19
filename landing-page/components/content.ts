@@ -219,7 +219,7 @@ export const FLEET = {
   /** The community around the owner; sample names only. */
   members: ["Alex", "Marty", "Gloria", "Melman", "Julien", "Kowalski", "Rico", "Private"],
   cta: "Learn about fleets",
-  note: "Sign in and send us a request to increase your agent limit to operate a fleet for your community.",
+  note: "By default, accounts are limited to 5 agents. Request an increase to your account's agent limit before creating a fleet.",
 } as const;
 
 /**
