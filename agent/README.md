@@ -187,7 +187,7 @@ curl -X POST http://localhost:8787/agents/session-agent/my-session/chat \
 | `POST /api/fleets/:fleetId/agents` | Add agents to a fleet, one per address |
 | `DELETE /api/agents?fleet=:fleetId` | Delete a fleet's agents, a page at a time. Fleet admin only |
 | `POST /api/business-requests` | A signed-in account asks for a higher agent limit |
-| `GET\|POST /api/wallet` | The caller's OpenRouter wallet / add a pasted key `{ key }`, checked with OpenRouter first and given a random nickname. At most `max_wallet_keys` |
+| `GET\|POST /api/wallet` | The caller's OpenRouter wallet / add a pasted key `{ key, connected? }`, checked with OpenRouter first and given a random nickname. A key already in the wallet is refused ("Key already imported"); `connected` (a key just made through OpenRouter's PKCE flow) also requires the key to carry a credit limit. At most `max_wallet_keys` |
 | `DELETE /api/wallet/:id` | Remove a key, clearing it from every agent that holds it |
 | `POST /api/wallet/purchases` | Quote a new key: `{ amount, network, asset, payer }` → what to send, where, and the `amount_usd` + `fee_usd` = `total_usd` breakdown. `GET /api/wallet` lists the open `networks` (with each one's USDC contract) and `fee_bps` |
 | `POST /api/wallet/purchases/:id/confirm` | `{ tx }`: read the payment back from the chain. 200 paid, 202 not final yet, 400 not a match, 409 already counted |
