@@ -22,7 +22,7 @@ function as(email: string, init: RequestInit = {}) {
   };
 }
 
-type Server = { id: string; url: string; headers: Record<string, string> };
+type Server = { id: string; name: string; url: string; headers: Record<string, string> };
 
 async function withHeadersServer() {
   const email = someone();
@@ -107,5 +107,39 @@ describe("MCP header values", () => {
     expect((await list(agentId, email, "?meta=1"))[0].headers).toEqual({
       Authorization: "Bearer first",
     });
+  });
+});
+
+describe("a server the admin gave, with adding servers off", () => {
+  it("can be repointed and reconfigured by the user, but not renamed, added to or removed", async () => {
+    const { email, agentId, server } = await withHeadersServer();
+    await SELF.fetch(
+      `${BASE}/api/agents/${agentId}/meta`,
+      as(email, { method: "PATCH", body: JSON.stringify({ mcp: { user_servers: false } }) })
+    );
+    const patch = (body: unknown) =>
+      SELF.fetch(
+        `${BASE}/api/agents/${agentId}/mcp/${server.id}`,
+        as(email, { method: "PATCH", body: JSON.stringify(body) })
+      );
+
+    const moved = await patch({ url: "https://mcp.test/moved", headers: { Authorization: "Bearer mine" } });
+    expect(moved.status).toBe(200);
+    expect(((await moved.json()) as { server: Server }).server.url).toBe("https://mcp.test/moved");
+    expect((await list(agentId, email, "?meta=1"))[0].headers).toEqual({ Authorization: "Bearer mine" });
+    // The name as it stands may ride along with an edit; a new one is the admin's.
+    expect((await patch({ name: server.name, url: "https://mcp.test/again" })).status).toBe(200);
+    expect((await patch({ name: "Renamed" })).status).toBe(403);
+
+    const added = await SELF.fetch(
+      `${BASE}/api/agents/${agentId}/mcp`,
+      as(email, { method: "POST", body: JSON.stringify({ name: "Another", url: "https://mcp.test/x" }) })
+    );
+    expect(added.status).toBe(403);
+    const removed = await SELF.fetch(
+      `${BASE}/api/agents/${agentId}/mcp/${server.id}`,
+      as(email, { method: "DELETE" })
+    );
+    expect(removed.status).toBe(403);
   });
 });

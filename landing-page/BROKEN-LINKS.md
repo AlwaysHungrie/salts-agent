@@ -9,7 +9,8 @@ plain text. **To fix one, set its value in `LINKS` — nothing else changes.**
 
 | Key | Where it appears | Was | Status |
 | --- | --- | --- | --- |
-| `contact` | Footer → Company | `href="#"` | Unbuilt |
+| `x` | Footer → Company (X icon) | none | Account not created yet |
+| `telegram` | Footer → Company (Telegram icon) | none | Account not created yet |
 
 ## Links that do work
 
@@ -17,7 +18,7 @@ plain text. **To fix one, set its value in `LINKS` — nothing else changes.**
 | --- | --- | --- |
 | `signIn`, `signUp` (the web app) | Header `Sign in` and `Get my agent`, hero and closing CTA | Built |
 | `guide`, `fleetGuide`, `openRouterGuide` (the app's `/guide`) | How it works, Fleet section, closing CTA, footer → Resources | Built — the user guide lives in the web app, not on this site |
-| `#skills` `#how` `#costs` `#fleet` `#faq` `#mission` `#start` `#top` | Header, hero, footer | All resolve to a section that exists |
+| `#skills` `#how` `#fleet` `#faq` `#mission` `#start` `#top` | Header, hero, footer | All resolve to a section that exists |
 | `/privacy` `/terms` | Footer → Company | Built — `app/privacy` and `app/terms`, copy in `components/legal.ts` |
 
 ## Removed

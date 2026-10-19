@@ -19,6 +19,8 @@ import { readConfig } from "../worker/stores";
 import { type AgentCall, AgentParams, agentRoute } from "./agent";
 import { redirectUri, startMcpOauth } from "./mcp-oauth";
 import { recommendMcpTools } from "./mcp-recommend";
+import { forgetRemovedTool } from "./salts";
+import { rememberRemoval } from "./searxng";
 
 /**
  * A server as the browser may see it: tokens stay in the Worker. Header values go back
@@ -51,9 +53,6 @@ export function mcpView(row: McpServerRow, reveal: boolean): McpServerView {
   };
 }
 
-/** The fields of an MCP server that are the list rather than the use of it. */
-const LIST_FIELDS = ["name", "url", "auth", "headers"] as const;
-
 /** Fields whose change the server itself would answer differently, so tools are re-read. */
 const REREAD_FIELDS = ["url", "auth", "headers", "enabled"] as const;
 
@@ -64,7 +63,8 @@ type McpCall = {
   reg: AgentCall["reg"];
   /**
    * Whether this call may change which servers exist: the `user_servers` meta setting,
-   * or `?meta=1` from the admin dialog. Using existing servers is never refused.
+   * or `?meta=1` from the admin dialog. Using and reconfiguring existing servers (URL,
+   * auth, headers, tools) is never refused; adding, removing and renaming are.
    */
   manages: () => Promise<boolean>;
 };
@@ -220,6 +220,11 @@ export function mcpRoutes(app: ApiApp) {
   app.openapi(deleteServerRoute, async (c) => {
     const call = mcpCall(c.var.call);
     if (!(await call.manages())) throw refused();
+    const row = await call.reg.mcpServer(c.req.valid("param").serverId);
+    if (row) {
+      await rememberRemoval(call.env, call.reg, row);
+      await forgetRemovedTool(call.env, call.agentId, row);
+    }
     await call.reg.removeMcpServer(c.req.valid("param").serverId);
     return c.json({ ok: true }, 200);
   });
@@ -302,6 +307,8 @@ async function addServer({ reg, manages }: McpCall, body: Record<string, unknown
     enabled: patch.enabled ?? 1,
   };
   await reg.addMcpServer(row);
+  // Added back by hand: salts-tools may repoint it again.
+  await reg.clearMcpRemoved(row.name);
   // OAuth has nothing to list until the user approves it.
   const synced = row.auth === "oauth" ? row : await syncMcpTools(reg, row);
   return { server: mcpView(synced, true) };
@@ -385,7 +392,8 @@ async function patchServer({ reg, manages }: McpCall, id: string, body: Record<s
   } catch (err) {
     throw new ApiError(400, errorMessage(err));
   }
-  if (LIST_FIELDS.some((key) => patch[key] !== undefined) && !(await manages())) {
+  // The name is what the admin's list knows the server by, so it is theirs to change.
+  if (patch.name !== undefined && patch.name !== existing.name && !(await manages())) {
     throw refused();
   }
   if (patch.name && patch.name !== existing.name) {

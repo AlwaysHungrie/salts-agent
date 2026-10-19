@@ -85,11 +85,18 @@ function useActiveNav() {
     const seen = new Map<string, number>();
     const observer = new IntersectionObserver(
       (entries) => {
-        for (const e of entries) seen.set(e.target.id, e.intersectionRatio);
+        // Visible pixels, not the visible share: a share punishes tall sections,
+        // which can never fill much of the band and so never won.
+        for (const e of entries)
+          seen.set(e.target.id, e.isIntersecting ? e.intersectionRect.height : 0);
         const [best] = [...seen.entries()].sort((a, b) => b[1] - a[1]);
         setActive(best && best[1] > 0 ? (NAV_OWNER[best[0]] ?? null) : null);
       },
-      { rootMargin: "-25% 0px -55% 0px", threshold: [0, 0.25, 0.5, 1] },
+      {
+        rootMargin: "-25% 0px -55% 0px",
+        // Fine steps, so a tall section reports as it scrolls through the band.
+        threshold: Array.from({ length: 21 }, (_, i) => i / 20),
+      },
     );
 
     NAV_SECTION_IDS.map((id) => document.getElementById(id)).forEach(

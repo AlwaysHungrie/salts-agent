@@ -79,7 +79,6 @@ async function agentFixture(patch: Record<string, unknown> = {}) {
       body: JSON.stringify({
         cap_telegram: 1,
         telegram_bot_token: BOT_TOKEN,
-        telegram_bot_username: "mock_bot",
         // The whitelists ship as placeholders that match nobody, which is the whole
         // point of them; these tests are the owner talking to their own bot.
         telegram_user_whitelist: "",
@@ -166,6 +165,15 @@ async function waitForReply(chat: number, count = 1, tries = 120) {
   }
   return await sentTo(chat);
 }
+
+describe("the bot username", () => {
+  it("is asked of Telegram when the token is saved, not typed", async () => {
+    const { agentId, email } = await agentFixture();
+    const res = await SELF.fetch(`${BASE}/api/agents/${agentId}/config`, as(email));
+    const { config } = (await res.json()) as { config: { telegram_bot_username: string } };
+    expect(config.telegram_bot_username).toBe("mock_bot");
+  });
+});
 
 describe("a whole round trip", () => {
   it("answers the chat with a real model reply, quoting the message", async () => {
@@ -260,6 +268,17 @@ describe("a whole round trip", () => {
       expect(ids).toContain(after);
       expect(ids.includes(before as string)).toBe(command === "!new");
     }
+  });
+
+  it("runs a !new the model asked for after its reply, as its own message", async () => {
+    const { hook, chat } = await agentFixture();
+    const before = (await post(hook, update(chat, "!!command new"))).headers.get("x-session");
+    const [announced, done] = await waitForReply(chat, 2);
+    expect(announced.text).toContain("Queued");
+    expect(done.text).toContain("Starting fresh");
+
+    const after = (await post(hook, update(chat, "again"))).headers.get("x-session");
+    expect(after).not.toBe(before);
   });
 
   it("refuses an update that is not signed with the bot's secret", async () => {

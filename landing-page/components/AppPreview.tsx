@@ -6,6 +6,8 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
 import monstera from "@/public/preview/monstera.jpg";
+import chefIcon from "@/public/preview/session-chef.png";
+import wheelbarrowIcon from "@/public/preview/session-wheelbarrow.png";
 import snakePlant from "@/public/preview/snake-plant.jpg";
 
 /**
@@ -19,15 +21,50 @@ type Session = {
   id: string;
   title: string;
   when: string;
+  icon: "chef" | "wheelbarrow";
 };
 
 const SESSIONS: Session[] = [
-  { id: "bakery", title: "Friday flour order", when: "Today, 08:12" },
-  { id: "plants", title: "Water the plants", when: "Sat, 19:40" },
+  { id: "bakery", title: "Friday flour order", when: "Today, 08:12", icon: "chef" },
+  { id: "plants", title: "Water the plants", when: "Sat, 19:40", icon: "wheelbarrow" },
 ];
+
+/** How long a visitor rests on the hero before the reminder arrives by itself. */
+const NUDGE_DELAY_MS = 4000;
+
+/** How far a visitor scrolls before the reminder arrives by itself. */
+const NUDGE_SCROLL_PX = 120;
 
 export function AppPreview({ className = "" }: { className?: string }) {
   const [selected, setSelected] = useState<string>("bakery");
+  const [toast, setToast] = useState(false);
+
+  // Few visitors open the second session, so the reminder also arrives on its own
+  // once: after a short rest on the hero, or the first bit of scroll. The open
+  // session stays the bakery one.
+  useEffect(() => {
+    const stop = () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("scroll", onScroll);
+    };
+    // Once only, so a dismissed reminder is not brought back by the next scroll.
+    const show = () => {
+      stop();
+      setToast(true);
+    };
+    const onScroll = () => {
+      if (window.scrollY > NUDGE_SCROLL_PX) show();
+    };
+    const timer = window.setTimeout(show, NUDGE_DELAY_MS);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return stop;
+  }, []);
+
+  // Clearing the reminder opens the conversation that scheduled it.
+  const dismiss = () => {
+    setToast(false);
+    setSelected("plants");
+  };
 
   return (
     <div className={`z-20 relative mx-auto w-full max-w-[860px] ${className}`}>
@@ -46,13 +83,14 @@ export function AppPreview({ className = "" }: { className?: string }) {
             key={s.id}
             onClick={() => setSelected(s.id)}
             aria-pressed={selected === s.id}
-            className={`flex-1 rounded-full px-3 py-2 text-[12px] font-semibold transition ${
+            className={`flex flex-1 items-center justify-center gap-2 rounded-full py-1.5 pr-3 pl-1.5 text-[12px] font-semibold transition ${
               selected === s.id
                 ? "bg-ink text-white"
                 : "bg-canvas text-muted ring-1 ring-hairline"
             }`}
           >
-            {s.title}
+            <SessionIcon icon={s.icon} className="size-7" />
+            <span className="truncate">{s.title}</span>
           </button>
         ))}
       </div>
@@ -74,9 +112,9 @@ export function AppPreview({ className = "" }: { className?: string }) {
         </div>
       </div>
 
-      {/* The reminder belongs to the plant session: it arrives when that conversation
-          is opened, and stays until it is dismissed. */}
-      <TelegramToast armed={selected === "plants"} />
+      {/* The reminder belongs to the plant session: it arrives on its own once, and
+          dismissing it switches the preview to that conversation. */}
+      <TelegramToast open={toast} onDismiss={dismiss} />
     </div>
   );
 }
@@ -120,15 +158,18 @@ function Sidebar({
           <button
             key={s.id}
             onClick={() => onSelect(s.id)}
-            className={`w-full rounded-[10px] px-2.5 py-2 text-left transition ${
+            className={`flex w-full items-center gap-2.5 rounded-[10px] px-2 py-2 text-left transition ${
               selected === s.id ? "bg-canvas-soft" : "hover:bg-canvas-soft/60"
             }`}
           >
-            <div className="truncate text-[12px] font-semibold leading-[1.35]">
-              {s.title}
-            </div>
-            <div className="tnum truncate text-[10px] leading-[1.35] text-faint">
-              {s.when}
+            <SessionIcon icon={s.icon} className="size-9" />
+            <div className="min-w-0">
+              <div className="truncate text-[12px] font-semibold leading-[1.35]">
+                {s.title}
+              </div>
+              <div className="tnum truncate text-[10px] leading-[1.35] text-faint">
+                {s.when}
+              </div>
             </div>
           </button>
         ))}
@@ -316,29 +357,28 @@ function PlantPhoto({ src, alt }: { src: StaticImageData; alt: string }) {
  * portalled to the body, because a fixed child of a transformed ancestor is fixed to
  * that ancestor instead of the viewport.
  *
- * Opening the plant session brings it in; nothing but the dismiss button takes it
- * away, so it cannot vanish while it is being read. Reopening that session brings it
- * back, since it is the one thing in the preview worth seeing twice.
+ * The preview decides when it arrives; nothing but the dismiss button takes it
+ * away, so it cannot vanish while it is being read.
  */
-function TelegramToast({ armed }: { armed: boolean }) {
+function TelegramToast({
+  open,
+  onDismiss,
+}: {
+  open: boolean;
+  onDismiss: () => void;
+}) {
   const reduced = useReducedMotion();
-  const [dismissed, setDismissed] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => setMounted(true), []);
-
-  // Leaving the session and coming back is a fresh arrival, not the dismissed one.
-  useEffect(() => {
-    if (!armed) setDismissed(false);
-  }, [armed]);
 
   if (!mounted) return null;
 
   return createPortal(
     // Clear of the fixed header, which owns the very top of the page.
-    <div className="pointer-events-none fixed top-[14px] right-4 sm:right-8 z-[60] w-[304px] max-w-[calc(100vw-2rem)] sm:top-[86px]">
+    <div className="pointer-events-none fixed top-[80px] right-4 sm:right-8 z-[60] w-[304px] max-w-[calc(100vw-2rem)] sm:top-[86px]">
       <AnimatePresence>
-        {armed && !dismissed && (
+        {open && (
           <motion.div
             initial={reduced ? false : { opacity: 0, x: 24, scale: 0.97 }}
             animate={{ opacity: 1, x: 0, scale: 1 }}
@@ -348,7 +388,7 @@ function TelegramToast({ armed }: { armed: boolean }) {
           >
             {/* Overhanging the corner, the way macOS hangs its close badge. */}
             <button
-              onClick={() => setDismissed(true)}
+              onClick={onDismiss}
               aria-label="Dismiss notification"
               className="absolute -top-2 -right-2 flex size-6 items-center justify-center rounded-full bg-white text-muted shadow-[0_2px_8px_rgba(0,0,0,0.18)] ring-1 ring-black/5 transition hover:text-ink"
             >
@@ -378,6 +418,24 @@ function TelegramToast({ armed }: { armed: boolean }) {
 }
 
 /* --------------------------------------------------------------- Icons -- */
+
+/** Each session's mark: a generated icon, cropped to a circle. */
+function SessionIcon({
+  icon,
+  className,
+}: {
+  icon: Session["icon"];
+  className: string;
+}) {
+  return (
+    <Image
+      src={icon === "chef" ? chefIcon : wheelbarrowIcon}
+      alt=""
+      sizes="36px"
+      className={`shrink-0 rounded-full object-cover ${className}`}
+    />
+  );
+}
 
 function SearchIcon() {
   return (

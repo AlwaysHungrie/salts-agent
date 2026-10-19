@@ -1,10 +1,20 @@
 ---
-title: Salts is different.
+title: What is Salts
 section: Get started
-order: 3
-summary: An AI chatbot can only answer questions. Salts can do much more...
+order: 1
+summary: What an AI agent is, how it is different from a chatbot, what it costs, and the few words this guide uses, in plain language. Start here if you are new to AI.
 featured: true
 ---
+
+Salts gives you an AI agent of your own. An agent is a program you talk to in plain words, the same way you would message a person. You ask it a question or give it a job, and it writes back. You do not need to know anything about AI to use one, and this page explains everything you need before you start.
+
+## How your agent works
+
+Your agent does not write its replies on its own. Every time you send it a message, it passes your message to an AI model, which reads it and writes the answer. A model is the part that actually understands language. There are many of them, made by different companies, and some are cleverer, faster or cheaper than others. You can pick which one your agent uses.
+
+Your agent reaches these models through a service called OpenRouter. You create an OpenRouter account, add some credit, and give your agent the key to that account. Every reply is then paid for from your credit, so there is no subscription, and an agent you do not use costs nothing. On the model your agent starts with, an everyday reply costs a fraction of a cent.
+
+## Salts is different
 
 Most AI apps you might know are chatbots. You open them, ask a question, read the answer and close them. Your Salts agent can do a lot more than that. It can take actions for you in other apps, it keeps running when you are not around, and you decide exactly how it behaves and how much it spends.
 
@@ -26,7 +36,7 @@ A chatbot can tell you how to do something. Your agent can do it for you. From t
 - Remind you of something, or run a task at a time you choose.
 - Create images and reply with voice notes.
 
-Your agent can also be connected to apps you already use, such as Gmail, Notion and GitHub. Once connected, you can ask it to add something to your Notion reading list from Telegram, or to open a GitHub issue from a voice note. These connections are called MCP servers, and you can add them from the **Capabilities** page.
+Your agent can also be connected to apps you already use, such as Gmail, Notion and GitHub. Once connected, you can ask it to add something to your Notion reading list from Telegram, or to open a GitHub issue from a voice note. These connections are called MCP servers, and you can add them from the **Capabilities** page. See [What your agent can do](/guide/capabilities) for the full list.
 
 ## It does not need your device
 
@@ -36,6 +46,26 @@ You can talk to your agent from wherever is most convenient: your browser at you
 
 ## You are in control
 
-Your agent uses your own OpenRouter API key, so you pay the model's price directly and only for what your agent actually uses. A quiet week costs almost nothing, and an agent you do not use costs nothing at all. Every reply shows what it cost, and you can set a spending limit on your key so there are never any surprises.
+Your agent uses your own OpenRouter API key, so you pay the model's price directly and only for what your agent actually uses. A quiet week costs almost nothing. Every reply shows what it cost, and you can set a spending limit on your key so there are never any surprises.
 
 You also decide how your agent behaves. You can pick the model it uses, give it custom instructions on how to answer, switch on only the capabilities you want, and choose who it is allowed to talk to. To learn more, read [Choose the right model](/guide/choosing-a-model).
+
+## Words you will see in this guide
+
+| Word | What it means |
+|---|---|
+| **Agent** | Your own AI helper on Salts. You can create more than one, each with its own settings. |
+| **Model** | The AI that reads your messages and writes the replies. You pick it in your agent's **Settings**. |
+| **OpenRouter** | The service your agent uses to reach the models. Your credit there pays for every reply. |
+| **API key** | A long password that lets one program use another on your behalf, such as your agent using your OpenRouter account. Keep every API key private. |
+| **Token** | The unit models are paid by. A token is roughly three quarters of a word, and you pay for every token the model reads and writes. |
+| **Session** | One conversation with your agent. Your sessions are listed in the sidebar in your browser. |
+| **Capability** | Something extra your agent can do, such as searching the web or setting reminders. You switch them on in **Capabilities**. |
+| **MCP server** | A connection to another app, such as Notion or GitHub, so your agent can do things in it. See [What is an MCP server](/guide/mcp). |
+| **Command** | A short message starting with `!`, such as `!new`, that controls the conversation itself. See [Commands](/guide/commands). |
+
+## Where to start
+
+1. Follow [Step-by-step: a basic agent](/guide/step-by-step-agent) to get a key, create your agent and send it a message.
+2. [Connect your agent to Telegram](/guide/telegram) or [WhatsApp](/guide/whatsapp), so you can talk to it from your phone.
+3. If you want agents for other people, follow [Step-by-step: a fleet](/guide/step-by-step-fleet).

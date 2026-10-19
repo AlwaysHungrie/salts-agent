@@ -58,7 +58,17 @@
       ],
       "vars": {
         "CLERK_ISSUER": "https://rich-horse-1284.clerk.accounts.dev",
-        "APP_URL": "https://salts-agent-app-git-staging-dhairyashah98-gmailcoms-projects.vercel.app"
+        "APP_URL": "https://salts-agent-app-git-staging-dhairyashah98-gmailcoms-projects.vercel.app",
+        "PAYMENT_RPC": {
+          "ethereum": "https://ethereum-rpc.publicnode.com",
+          "base": "https://base-rpc.publicnode.com",
+          "arbitrum": "https://arbitrum-one-rpc.publicnode.com",
+          "optimism": "https://optimism-rpc.publicnode.com",
+          "polygon": "https://polygon-bor-rpc.publicnode.com",
+          "solana": "https://api.mainnet-beta.solana.com",
+          // Testnet: faucet coins buy real credit, so staging only.
+          "base-sepolia": "https://base-sepolia-rpc.publicnode.com"
+        }
       }
     }
   },
@@ -70,6 +80,17 @@
     // the same Clerk instance.
     "CLERK_ISSUER": "https://rich-horse-1284.clerk.accounts.dev",
     // The web app the `!docs`, `!settings` and `!mcp` links point at.
-    "APP_URL": "https://salts-agent-app.vercel.app"
+    "APP_URL": "https://salts-agent-app.vercel.app",
+    // The JSON-RPC endpoint each payment network's transactions are read back from. Where
+    // payments go is set from the admin CLI (`/api/admin/payment-addresses`), not here.
+    // Ethereum's also serves the Chainlink ETH/USD price. A missing one switches it off.
+    "PAYMENT_RPC": {
+      "ethereum": "https://ethereum-rpc.publicnode.com",
+      "base": "https://base-rpc.publicnode.com",
+      "arbitrum": "https://arbitrum-one-rpc.publicnode.com",
+      "optimism": "https://optimism-rpc.publicnode.com",
+      "polygon": "https://polygon-bor-rpc.publicnode.com",
+      "solana": "https://api.mainnet-beta.solana.com"
+    }
   }
 }

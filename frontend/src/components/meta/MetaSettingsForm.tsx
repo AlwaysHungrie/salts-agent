@@ -1,4 +1,4 @@
-import { Field } from "@/components/CapabilitySection";
+import { WalletKeyPicker } from "@/components/wallet/WalletKeyPicker";
 import type {
   Capability,
   Config,
@@ -10,7 +10,7 @@ import type {
 import { CapabilitiesSection } from "./CapabilitiesSection";
 import { McpServersSection, McpTemplatesSection } from "./McpSections";
 import { metaEditor } from "./metaEditor";
-import { OPENROUTER_KEY, Section } from "./pieces";
+import { Section } from "./pieces";
 import { LimitsSection, ModelOptionSections } from "./PolicySections";
 import { TuningSections } from "./TuningSections";
 
@@ -58,17 +58,15 @@ export function MetaSettingsForm({
     models,
     capabilities,
   });
-  const key = editor.valueOf("openrouter_api_key") ?? "";
-  const setKey = (v: string) => editor.setValue("openrouter_api_key", v);
+  // Keys are picked from the wallet by nickname; the Worker copies the key itself in.
+  const keyId = editor.valueOf("openrouter_key_id") ?? "";
+  const hasKey = !!editor.valueOf("openrouter_api_key");
+  const setKeyId = (id: string) => editor.setValue("openrouter_key_id", id);
 
   if (onlyOpenrouter)
     return (
       // Bare: the dialog around it is already titled with what this box is for.
-      <Field
-        field={{ ...OPENROUTER_KEY, label: undefined, hint: undefined }}
-        value={key}
-        onChange={setKey}
-      />
+      <WalletKeyPicker value={keyId} hasKey={hasKey} onChange={setKeyId} />
     );
 
   return (
@@ -78,7 +76,7 @@ export function MetaSettingsForm({
         hint="The key every model call is billed to."
         {...editor.lock("openrouter_api_key")}
       >
-        <Field field={OPENROUTER_KEY} value={key} onChange={setKey} />
+        <WalletKeyPicker value={keyId} hasKey={hasKey} onChange={setKeyId} />
       </Section>
       <LimitsSection editor={editor} spend={spend} />
       <ModelOptionSections editor={editor} catalog={models} />

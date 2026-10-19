@@ -62,6 +62,15 @@ export type DeploymentSettings = {
   max_members: number;
   /** How many agents an account with no `account_limits` row may administer. */
   default_agent_limit: number;
+  /** How many keys one account's OpenRouter wallet may hold. */
+  max_wallet_keys: number;
+  /**
+   * The service fee on a credit purchase, in basis points of the credit (600 = 6%). It
+   * covers OpenRouter's own charge when the Worker tops up a key, and moving the funds.
+   */
+  wallet_fee_bps: number;
+  /** The most credit one purchase may buy, in dollars. */
+  max_wallet_purchase_usd: number;
   /** Attachment ceilings, per kind. */
   max_upload_bytes: UploadLimits;
   /** Past this, a first-page render is not a thumbnail. */
@@ -142,6 +151,9 @@ export const SETTINGS_FIELDS: readonly SettingsField[] = [
   INT("max_agent_bytes", 1, 1_000_000_000_000, "file storage one agent may hold, in bytes"),
   INT("max_members", 1, 100_000, "addresses one agent's access list may hold"),
   INT("default_agent_limit", 1, 100_000, "agents an ordinary account may administer"),
+  INT("max_wallet_keys", 1, 1000, "keys one account's OpenRouter wallet may hold"),
+  INT("wallet_fee_bps", 0, 5000, "service fee on a credit purchase, in basis points (600 = 6%)"),
+  INT("max_wallet_purchase_usd", 1, 10_000, "most credit one wallet purchase may buy, in dollars"),
   {
     key: "max_upload_bytes",
     kind: "json",
@@ -340,6 +352,17 @@ export function validateSettingsPatch(input: unknown, current: StoredSettings): 
           if (entry.icon !== undefined) out.icon = svgIcon(entry.icon, `mcp_catalog[${i}].icon`);
           if (entry.letter !== undefined) out.letter = String(entry.letter).trim().slice(0, 1);
           if (entry.color !== undefined) out.color = String(entry.color).trim();
+          if (entry.headers !== undefined) {
+            out.headers = catalogHeaders(entry.headers, `mcp_catalog[${i}].headers`);
+          }
+          if (entry.description !== undefined) {
+            out.description = catalogDescription(
+              entry.description,
+              `mcp_catalog[${i}].description`
+            );
+          }
+          if (entry.guide !== undefined)
+            out.guide = guideSlug(entry.guide, `mcp_catalog[${i}].guide`);
           return out;
         });
         break;
@@ -547,6 +570,43 @@ export function svgIcon(value: unknown, name: string): string {
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
   return SVG_DATA_URL + btoa(binary);
+}
+
+/**
+ * An MCP template's starting headers: up to eight plain header names, each with a string
+ * value (a placeholder such as `Bearer API-KEY` for the user to replace).
+ */
+export function catalogHeaders(value: unknown, name: string): Record<string, string> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new SettingsError(`${name} must be an object of header names to values`);
+  }
+  const entries = Object.entries(value);
+  if (entries.length > 8) throw new SettingsError(`${name} may name at most 8 headers`);
+  const out: Record<string, string> = {};
+  for (const [key, v] of entries) {
+    if (!/^[A-Za-z0-9-]{1,64}$/.test(key) || typeof v !== "string") {
+      throw new SettingsError(`${name} must map plain header names to strings`);
+    }
+    out[key] = v.slice(0, 500);
+  }
+  return out;
+}
+
+/** An MCP template's one-line description: plain text, at most 200 characters. */
+export function catalogDescription(value: unknown, name: string): string {
+  if (typeof value !== "string") throw new SettingsError(`${name} must be a string`);
+  const text = value.trim();
+  if (text.length > 200) throw new SettingsError(`${name} may be at most 200 characters`);
+  return text;
+}
+
+/** A user guide slug (`/guide/<slug>`): lowercase letters, digits and dashes. */
+export function guideSlug(value: unknown, name: string): string {
+  const slug = typeof value === "string" ? value.trim() : "";
+  if (!/^[a-z0-9-]{1,64}$/.test(slug)) {
+    throw new SettingsError(`${name} must be a guide slug such as mcp-github`);
+  }
+  return slug;
 }
 
 /** Refuse an icon past the deployment's `max_icon_bytes`, counted as SVG bytes. */

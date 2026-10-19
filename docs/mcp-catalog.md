@@ -5,7 +5,9 @@ tile fills in the add-server form with the provider's name, URL and auth type. T
 frontend and the Worker ship no templates of their own: every tile comes from the
 `mcp_catalog` deployment setting.
 
-Shipped entries: Notion (`oauth`) and GitHub (`headers`).
+Shipped entries: Notion (`oauth`), Swiggy (`oauth`), GitHub (`headers`), Bonfire (`headers`), and the
+salts-tools servers `matchmaker` and `analyst` (`headers`, with a placeholder tunnel URL
+that salts-tools repoints once the token matches).
 
 ## What an entry looks like
 
@@ -27,6 +29,9 @@ Shipped entries: Notion (`oauth`) and GitHub (`headers`).
 | `auth` | `oauth`, `headers` or `none`. See the next section. |
 | `icon` | Optional SVG. Stored as a data URL, capped by the `max_icon_bytes` limit (20000 shipped). |
 | `letter`, `color` | Optional. Used for the tile only when there is no `icon`. |
+| `headers` | Optional. Header names and placeholder values the add form starts with, e.g. `{"Authorization": "Bearer API-KEY"}`. At most 8 plain names. |
+| `description` | Optional. One line, at most 200 characters, shown in the popup when the tile is hovered. Every shipped entry has one. |
+| `guide` | Optional. A user guide slug (`mcp-github` for `/guide/mcp-github`). Once the server is added, its card links to that article as **Open manual**. |
 
 ## Choosing `auth`
 

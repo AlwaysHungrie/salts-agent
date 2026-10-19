@@ -10,7 +10,14 @@ import {
   type MetaSettings,
   type MetaTunableKey,
 } from "../registry";
-import { checkIconSize, type DeploymentSettings, svgIcon } from "../settings";
+import {
+  catalogDescription,
+  catalogHeaders,
+  checkIconSize,
+  type DeploymentSettings,
+  guideSlug,
+  svgIcon,
+} from "../settings";
 import { CAPABILITY_FIELDS, CORE_SECRETS, MODEL_ID, validateConfig } from "./config";
 import { validateMcpBody } from "./mcp";
 
@@ -23,6 +30,7 @@ export const META_TUNABLES = [
   "reasoning_effort",
   "context_messages",
   "openrouter_api_key",
+  "openrouter_key_id",
 ] as const satisfies readonly MetaTunableKey[];
 
 /**
@@ -41,6 +49,8 @@ export function lockedColumns(locked: string[]): Set<string> {
       for (const field of capability.fields) columns.add(String(field.key));
     } else {
       columns.add(key);
+      // The key and the wallet entry it came from are one setting.
+      if (key === "openrouter_api_key") columns.add("openrouter_key_id");
     }
   }
   return columns;
@@ -293,6 +303,18 @@ export function validateCatalogEntry(entry: unknown): McpCatalogEntry {
     icon: raw.icon === undefined ? undefined : svgIcon(raw.icon, `MCP template ${text("id")} icon`),
     letter: optional("letter"),
     color: optional("color"),
+    headers:
+      raw.headers === undefined
+        ? undefined
+        : catalogHeaders(raw.headers, `MCP template ${text("id")} headers`),
+    description:
+      raw.description === undefined
+        ? undefined
+        : catalogDescription(raw.description, `MCP template ${text("id")} description`),
+    guide:
+      raw.guide === undefined
+        ? undefined
+        : guideSlug(raw.guide, `MCP template ${text("id")} guide`),
   };
 }
 

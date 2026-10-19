@@ -16,3 +16,5 @@ out/
 terraform.tfvars
 
 notes/
+# Generated from frontend/content/guide by agent/scripts/guide.mjs
+agent/src/guide.json

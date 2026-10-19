@@ -4,7 +4,7 @@ import { ModelList } from "./ModelList";
 import { IdList, inputClass, Section } from "./pieces";
 
 const SLUG_HINT =
-  "Enter any valid Openrouter model slug. An empty list will offer all default options to the user.";
+  "Enter any OpenRouter model ID. Leave the list empty to offer the default models.";
 
 /** The administrator's ceilings: monthly spend, and how far the access list may grow. */
 export function LimitsSection({
@@ -18,7 +18,7 @@ export function LimitsSection({
   return (
     <Section
       title="Limits"
-      hint="Control agent spending. Especially important when agent's are sharing your OpenRouter key"
+      hint="Control how much each agent can spend. This matters most when agents share your OpenRouter key."
     >
       <label className="block">
         <span className="block text-sm font-semibold leading-[1.43]">
@@ -46,8 +46,8 @@ export function LimitsSection({
           Member limit
         </span>
         <span className="text-muted block text-xs font-light leading-[1.33]">
-          Number of users who can be added as members of this agent. Leave as 0
-          for no limit.
+          How many people can be added to this agent. Leave as 0 for no
+          limit.
         </span>
         <input
           type="number"

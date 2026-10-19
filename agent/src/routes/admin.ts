@@ -2,6 +2,8 @@ import type { Env } from "../env";
 import { forgetCachedSettings, missingSettings, SETTINGS_FIELDS } from "../settings";
 import { callerEmail, trustedCaller } from "../worker/auth";
 import { json, jsonError, readJson } from "../worker/http";
+import { PAY_NETWORKS, payerAddress } from "../payments";
+import { isProvisioningKey } from "../worker/provisioned-keys";
 import { directory, syncSessionCount } from "../worker/stores";
 
 const methodNotAllowed = () => jsonError("method not allowed", 405);
@@ -23,12 +25,22 @@ export async function handleAdmin(
   segments: string[]
 ): Promise<Response | undefined> {
   const route = segments[2];
-  const known = ["business-account", "settings", "business-requests", "stats", "users"];
+  const known = [
+    "business-account",
+    "settings",
+    "business-requests",
+    "stats",
+    "users",
+    "provisioning-key",
+    "payments",
+  ];
   if (!known.includes(route)) return undefined;
   if (!trustedCaller(request, env)) return jsonError("unauthorized", 401);
 
   if (route === "business-account") return await setAgentLimit(request, env);
   if (route === "settings") return await handleSettings(request, env);
+  if (route === "provisioning-key") return await handleProvisioningKey(request, env);
+  if (route === "payments") return await handlePayments(request, env);
   if (route === "business-requests")
     return await handleBusinessRequests(request, env, url, segments);
   if (route === "stats") {
@@ -72,6 +84,103 @@ async function handleSettings(request: Request, env: Env): Promise<Response> {
     return json({ ...saved, fields: SETTINGS_FIELDS });
   }
   return methodNotAllowed();
+}
+
+/**
+ * The OpenRouter provisioning key bought keys are made with. Write-only: GET says whether
+ * one is set and its last four characters, never the key. PUT checks it with OpenRouter
+ * first; DELETE removes it, which closes key purchases.
+ */
+async function handleProvisioningKey(request: Request, env: Env): Promise<Response> {
+  const dir = directory(env);
+  const shown = (key: string) => ({ set: Boolean(key), hint: key ? key.slice(-4) : "" });
+  if (request.method === "GET") return json(shown(await dir.provisioningKey()));
+  if (request.method === "PUT") {
+    const body = await readJson<{ key?: string }>(request);
+    const key = (body.key ?? "").trim().slice(0, 1000);
+    if (!key) return jsonError("Paste an OpenRouter provisioning key.", 400);
+    if (!(await isProvisioningKey(key))) {
+      return jsonError("OpenRouter didn't accept that as a provisioning key.", 400);
+    }
+    await dir.setProvisioningKey(key);
+    return json(shown(key));
+  }
+  if (request.method === "DELETE") {
+    await dir.setProvisioningKey("");
+    return json(shown(""));
+  }
+  return methodNotAllowed();
+}
+
+/**
+ * The payment settings, read together for the admin CLI's Payments tab: where purchases
+ * are paid to (one EVM address for every EVM network, one Solana address), Reown's
+ * project id (the browser's wallet modal), RPC URLs by network overriding the configured
+ * ones (write-only: only hosts are shown, as a URL may carry an API key), and whether a provisioning key is set (set
+ * through its own route, which checks it with OpenRouter). All but the key are public.
+ * PATCH sets any of `evm`, `solana`, `reown_project_id`, `rpc: { [network]: url }`; a blank one switches it off.
+ */
+async function handlePayments(request: Request, env: Env): Promise<Response> {
+  const dir = directory(env);
+  const view = async () => {
+    const key = await dir.provisioningKey();
+    return {
+      ...(await dir.paymentAddresses()),
+      reown_project_id: await dir.reownProjectId(),
+      // Every network's RPC set here, by id ("" for the configured one); only the host,
+      // as the URL may carry an API key.
+      rpc: await (async () => {
+        const set = await dir.paymentRpcs(PAY_NETWORKS.map((n) => n.id));
+        return Object.fromEntries(PAY_NETWORKS.map((n) => [n.id, rpcHost(set[n.id] ?? "")]));
+      })(),
+      provisioning_key: { set: Boolean(key), hint: key ? key.slice(-4) : "" },
+    };
+  };
+  if (request.method === "GET") return json(await view());
+  if (request.method !== "PATCH") return methodNotAllowed();
+  const body = await readJson<{
+    evm?: unknown;
+    solana?: unknown;
+    reown_project_id?: unknown;
+    rpc?: Record<string, unknown>;
+  }>(request);
+  const given = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+  const fields = (["evm", "solana", "reown_project_id", "rpc"] as const).filter((f) => body[f] !== undefined);
+  if (!fields.length) return jsonError("Give evm, solana, reown_project_id or rpc.", 400);
+  const rpcs = Object.entries(body.rpc && typeof body.rpc === "object" ? body.rpc : {}).map(
+    ([id, url]) => [id, given(url)] as const
+  );
+  for (const [id, url] of rpcs) {
+    if (!PAY_NETWORKS.some((n) => n.id === id)) return jsonError(`There is no network ${id}.`, 400);
+    if (url && !rpcHost(url)) return jsonError("An RPC is an https:// URL.", 400);
+  }
+  for (const family of ["evm", "solana"] as const) {
+    const value = given(body[family]);
+    // Kept as typed (an EVM checksum stays readable); compared lowercased.
+    if (value && !payerAddress(family, value)) {
+      return jsonError(`That isn't ${family === "evm" ? "an EVM" : "a Solana"} address.`, 400);
+    }
+  }
+  const reown = given(body.reown_project_id);
+  if (reown && !/^[0-9a-f]{32}$/i.test(reown)) {
+    return jsonError("A Reown project id is 32 hex characters, from its dashboard.", 400);
+  }
+  for (const family of ["evm", "solana"] as const) {
+    if (body[family] !== undefined) await dir.setPaymentAddress(family, given(body[family]));
+  }
+  if (body.reown_project_id !== undefined) await dir.setReownProjectId(reown);
+  for (const [id, url] of rpcs) await dir.setPaymentRpc(id, url.slice(0, 2000));
+  return json(await view());
+}
+
+/** An https URL's host, or "" for anything else. */
+function rpcHost(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" ? parsed.host : "";
+  } catch {
+    return "";
+  }
 }
 
 /** The owner's queue of requests for a higher agent ceiling. */

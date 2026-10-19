@@ -8,6 +8,7 @@ import {
   visionBlockedNote,
 } from "@/components/CapabilitySection";
 import { McpServers } from "@/components/McpServers";
+import { SaltsToolsInfo } from "@/components/SaltsToolsInfo";
 import type { Capability, Config, ModelOption } from "@/lib/agent";
 import { cached, keys, remember, revise } from "@/lib/cache";
 
@@ -35,7 +36,9 @@ function shownCapabilities(payload: ConfigPayload | undefined): Capability[] {
   if (!payload) return [];
   const locked = new Set(payload.locked ?? []);
   return payload.capabilities
-    .filter((c) => c.id !== "telegram" && c.id !== "whatsapp" && !locked.has(c.id))
+    .filter(
+      (c) => c.id !== "telegram" && c.id !== "whatsapp" && !locked.has(c.id),
+    )
     .sort((a, b) => Number(b.id === "mcp") - Number(a.id === "mcp"));
 }
 
@@ -58,13 +61,25 @@ export default function Capabilities({
   const [saving, setSaving] = useState(false);
   // Credentials save on a timer so a PATCH does not fire on every keystroke.
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** A debounced patch not sent yet: shown as unsaved, and sent if the page is left. */
+  const pending = useRef<Partial<Config> | null>(null);
+  /** Saves sent so far, so an answer to an older one is not applied over a newer. */
+  const sent = useRef(0);
+  const [unsaved, setUnsaved] = useState(false);
 
   useEffect(() => {
     void (async () => {
-      const res = await fetch(`/api/agents/${encodeURIComponent(agentId)}/config`);
-      const payload = (await res.json().catch(() => null)) as ConfigPayload | null;
+      const res = await fetch(
+        `/api/agents/${encodeURIComponent(agentId)}/config`,
+      );
+      const payload = (await res
+        .json()
+        .catch(() => null)) as ConfigPayload | null;
       if (!res.ok || !payload) {
-        setError(payload?.error ?? "Couldn't load your capabilities. Refresh the page to try again.");
+        setError(
+          payload?.error ??
+            "Couldn't load your capabilities. Refresh the page to try again.",
+        );
         return;
       }
       remember(keys.config(agentId), payload);
@@ -75,13 +90,18 @@ export default function Capabilities({
   }, [agentId]);
 
   const save = async (patch: Partial<Config>) => {
+    // Saves can overlap; only the latest one may speak for the page.
+    const seq = ++sent.current;
     setSaving(true);
-    const res = await fetch(`/api/agents/${encodeURIComponent(agentId)}/config`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(patch),
-    });
-    setSaving(false);
+    const res = await fetch(
+      `/api/agents/${encodeURIComponent(agentId)}/config`,
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(patch),
+      },
+    );
+    if (seq === sent.current) setSaving(false);
     const payload = (await res.json().catch(() => null)) as {
       config: Config;
       error?: string;
@@ -93,7 +113,10 @@ export default function Capabilities({
       );
       return;
     }
-    setConfig(payload.config);
+    // The server's row is as of when this save left: keystrokes since, and any later
+    // save's answer, stay on top of it.
+    if (seq === sent.current)
+      setConfig({ ...payload.config, ...pending.current });
     revise<ConfigPayload>(keys.config(agentId), (held) => ({
       ...held,
       config: payload.config,
@@ -106,12 +129,43 @@ export default function Capabilities({
     touched.current = true;
     setConfig((c) => (c ? { ...c, ...patch } : c));
     if (debounce.current) clearTimeout(debounce.current);
+    // A patch still waiting is folded into this one rather than dropped.
+    const merged = { ...pending.current, ...patch };
     if (wait === 0) {
-      void save(patch);
+      pending.current = null;
+      setUnsaved(false);
+      void save(merged);
       return;
     }
-    debounce.current = setTimeout(() => void save(patch), wait);
+    pending.current = merged;
+    setUnsaved(true);
+    debounce.current = setTimeout(flush, wait);
   };
+
+  /** Send a debounced patch now: when its field is left, or the page is. */
+  const flush = () => {
+    if (debounce.current) clearTimeout(debounce.current);
+    const patch = pending.current;
+    if (!patch) return;
+    pending.current = null;
+    setUnsaved(false);
+    void save(patch);
+  };
+
+  // Leaving the page mid-debounce still saves what was typed.
+  useEffect(
+    () => () => {
+      const patch = pending.current;
+      if (!patch) return;
+      void fetch(`/api/agents/${encodeURIComponent(agentId)}/config`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(patch),
+        keepalive: true,
+      });
+    },
+    [agentId],
+  );
 
   const model = models.find((m) => m.id === config?.model) ?? null;
 
@@ -126,17 +180,26 @@ export default function Capabilities({
           Sessions
         </Link>
 
-        <div className="flex items-baseline justify-between gap-4">
+        {/* Stuck to the top, so the save status is in view however far down the
+            edit is. */}
+        <div className="bg-canvas sticky top-0 z-20 -mx-5 flex items-baseline justify-between gap-4 px-5 py-3 md:-mx-8 md:px-8">
           <h1 className="text-[32px] font-[650] leading-[1.2]">
             Capabilities.
           </h1>
           <span className="text-faint text-xs leading-[1.33]">
-            {saving ? "Saving…" : "Saved"}
+            {saving ? "Saving…" : unsaved ? "Unsaved changes" : "Saved"}
           </span>
         </div>
         <p className="text-muted mt-1 text-sm font-light leading-[1.43]">
-          Choose what this agent can do besides write. Applies to every one of
-          its sessions, and to nothing another agent does.
+          Choose what this agent can do besides write. To change its model,
+          instructions and general settings, go to{" "}
+          <Link
+            href={`/a/${encodeURIComponent(agentId)}/settings`}
+            className="text-ink underline"
+          >
+            Settings
+          </Link>
+          .
         </p>
 
         {error && (
@@ -170,6 +233,17 @@ export default function Capabilities({
                 // MCP is the one section the user builds out themselves, so it is
                 // marked the way the Telegram section is, in ember.
                 tint={capability.id === "mcp" ? EMBER : undefined}
+                summaryExtra={
+                  capability.id === "mcp" && (
+                    <>
+                      Salts also has tools that run on your own computer, for
+                      web search, spreadsheet analysis, screening candidates
+                      and more. Set them up by running{" "}
+                      <code className="text-ink">npx salts-tools</code>.
+                      <SaltsToolsInfo />
+                    </>
+                  )
+                }
               >
                 {/* MCP is configured by the servers themselves, not by fields. */}
                 {capability.id === "mcp" && <McpServers agentId={agentId} />}

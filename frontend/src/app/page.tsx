@@ -16,6 +16,7 @@ import { FrontDoor } from "@/components/agents/FrontDoor";
 import { ListTabs } from "@/components/agents/ListTabs";
 import { NewAgent } from "@/components/agents/NewAgent";
 import { useAgentList } from "@/components/agents/useAgentList";
+import { useWalletPanel } from "@/components/wallet/WalletPanel";
 import { claim } from "@/lib/cache";
 import { useIdentity } from "@/lib/identity";
 import type { AgentRow, FleetRow, MetaSettings } from "@/lib/agent";
@@ -43,27 +44,42 @@ export default function Agents() {
   const [metaFor, setMetaFor] = useState<AgentRow | null>(null);
   const [authing, setAuthing] = useState(false);
   const [businessAsking, setBusinessAsking] = useState(false);
+  const openWallet = useWalletPanel();
   /** The fleets tab exists only while there is a fleet. */
   const [tab, setTab] = useState<"agents" | "fleets">("agents");
   const shownTab = fleets.length > 0 ? tab : "agents";
 
-  const create = (name: string, emails: string, meta: MetaSettings, fleetName: string) =>
-    list.create(name, emails, meta, fleetName, () => setCreating(false));
+  const create = (
+    name: string,
+    emails: string,
+    meta: MetaSettings,
+    fleetName: string,
+  ) => list.create(name, emails, meta, fleetName, () => setCreating(false));
 
   return (
     <div className="bg-canvas text-ink relative min-h-screen">
-      <Link
-        href="/guide"
-        className="text-muted hover:text-ink absolute top-4 right-5 text-sm font-semibold transition-colors md:right-8"
-      >
-        User guide
-      </Link>
+      <div className="absolute top-4 right-5 flex flex-col items-end gap-1 md:right-8">
+        <Link
+          href="/guide"
+          className="text-muted hover:text-ink text-sm font-semibold transition-colors"
+        >
+          User guide
+        </Link>
+        {signedIn && (
+          <button
+            onClick={() => openWallet()}
+            className="text-muted hover:text-ink text-sm font-semibold transition-colors"
+          >
+            OpenRouter wallet
+          </button>
+        )}
+      </div>
       <div className="mx-auto w-full max-w-2xl px-5 py-10 md:px-8 md:py-14">
         <div className="border-b border-canvas-soft pb-4 flex items-center justify-between gap-4">
           <div>
             <h1 className="text-[32px] font-[650] leading-[1.2]">Salts.</h1>
             <p className="text-muted mt-1 text-sm font-light leading-[1.43]">
-              Personal, Always Accessible AI Agents
+              Personal AI agents that stay with you forever
             </p>
           </div>
           {signedIn && (
@@ -79,7 +95,9 @@ export default function Agents() {
           <p className="text-muted py-4 text-sm leading-[1.43]">Loading…</p>
         )}
 
-        {isLoaded && !isSignedIn && <FrontDoor onConnect={() => setAuthing(true)} />}
+        {isLoaded && !isSignedIn && (
+          <FrontDoor onConnect={() => setAuthing(true)} />
+        )}
 
         {signedIn && (
           <>
@@ -141,7 +159,9 @@ export default function Agents() {
         )}
       </div>
 
-      {authing && <AuthModal mode="sign-in" onClose={() => setAuthing(false)} />}
+      {authing && (
+        <AuthModal mode="sign-in" onClose={() => setAuthing(false)} />
+      )}
 
       {metaFor && (
         <MetaSettingsDialog agent={metaFor} onClose={() => setMetaFor(null)} />

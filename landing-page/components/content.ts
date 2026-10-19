@@ -49,8 +49,7 @@ export const STORAGE_MB = 50;
 export const NAV = [
   { id: "skills", label: "What it does", sections: ["stats", "skills", "capabilities"] },
   { id: "how", label: "How it works", sections: ["how"] },
-  { id: "costs", label: "Pricing", sections: ["costs", "mission", "fleet"] },
-  { id: "faq", label: "FAQ", sections: ["faq", "start"] },
+  { id: "fleet", label: "Fleet", sections: ["mission", "fleet", "faq", "start"] },
 ] as const;
 
 /** Every observed section id, flattened. */
@@ -73,119 +72,101 @@ const APP_URL = "https://salts-agent-app.vercel.app";
 export const LINKS = {
   signIn: APP_URL as string | null,
   signUp: APP_URL as string | null,
-  contact: null as string | null,
+  /** Our accounts. Not created yet: null renders the icon as disabled. */
+  x: null as string | null,
+  telegram: null as string | null,
   privacy: "/privacy",
   terms: "/terms",
   guide: `${APP_URL}/guide`,
+  stepByStepGuide: `${APP_URL}/guide/step-by-step-agent`,
+  github: "https://github.com/AlwaysHungrie/salts-agent",
+  githubIssues: "https://github.com/AlwaysHungrie/salts-agent/issues/new",
   fleetGuide: `${APP_URL}/guide/fleets`,
-  openRouterGuide: `${APP_URL}/guide/openrouter`,
 } as const;
 
 /* ----------------------------------------------------------------- Copy -- */
 
 export const HERO = {
   eyebrow: "In your browser, Telegram & WhatsApp",
-  title: "Your personal AI agent, always online.",
+  /** Two lines, broken where the phrase breaks on wide screens. */
+  /** The last part renders a shade lighter than the rest. */
+  title: ["Personal AI agents", "that stay with you", "forever."],
   body: [
-    `${BRAND.name} is an AI agent that`,
-    "doesn't need a subscription or your computer to run.",
-    "So you can use it as much as you want, any way you want, and pay only for what you use.",
+    "",
+    "No subscription. No hardware.",
+    "Salts agents live in the cloud for free and are yours to personalize. Create as many as you want and pay just a few cents when they respond.",
   ],
   primaryCta: "Get my agent",
-  secondaryCta: "See what can it do",
-  footnote: "Free to run with your own OpenRouter API key. Usage limits apply.",
+  secondaryCta: "See what it can do",
+  footnote: "We're open source. Feel free to bring your own keys or self-host your agents.",
 } as const;
 
 export const STATS = [
   {
     value: "$0",
     label:
-      "To run your agent. You only pay your model provider for tokens your agent uses.",
+      "to run. You only pay per message, from about $0.001 up to $0.03 on the most advanced models.",
   },
   {
-    value: "24/7",
+    value: "Full control",
     label:
-      "Your agent runs online, so it keeps working when your phone and laptop are switched off.",
+      "over costs, only use as much or as little as you need. Switch to any model, toggle capabilities, and gate access anytime you want.",
   },
   {
-    value: "3 interfaces",
+    value: "All features",
     label:
-      "Chat via Browser, Whatsapp or use Telegram to make your agent publicly accessible.",
+      "including image, audio, memory, scheduling and external connectors that you'd expect from any competent agent. Plus any custom connector you build.",
   },
 ] as const;
 
 export const FEATURES = {
   eyebrow: "What it can do for you",
-  title: "Goes beyond answering questions.",
-  body: `Your ${BRAND.name} agent acts on what you ask, not just replies to it. Turn on only the skills you need.`,
+  title: `${BRAND.name} was destined to be your perfect personal assistant.`,
+  body: "So we packed in every feature and setting we could think of, and even made it open source. It'll fit right into your life.",
   cards: [
     {
-      title: "It works in your apps",
-      body: "Connect Notion, Gmail, GitHub or any other app you use, and your agent can work it for you. Ask it to add a task, find a page or open an issue, and it takes care of the clicks.",
+      title: "The world is your stage, and you play many roles",
+      body: "Your agent switches roles with you. Tell it what you care about and turn on web search, and it becomes your news reporter. Give it your diet plan and a delivery app, and it becomes your nutritionist.",
       wide: true,
     },
     {
-      title: "It remembers",
-      body: "Your dog's name, your coffee order, the thing you asked it to follow up on next week. You only have to tell it once.",
+      title: "It remembers and reminds",
+      body: "Your dog's name, your coffee order, your pills at 9am. Tell it once and it messages you when it matters.",
     },
     {
-      title: "It looks things up",
-      body: "It searches the web, reads the links and files you send it, and tells you where the answer came from.",
+      title: "Run your life",
+      body: "Plan a weekend trip, compare two phones, draft the email you keep putting off. Ask it the way you'd ask a friend who knows a bit about everything.",
     },
     {
-      title: "It reminds you",
-      body: "Ask it to check in at 8am, every Monday, or before your flight, and it will message you first.",
+      title: "Run your business",
+      body: "Let it answer customers, keep your orders in Notion and read your stock sheets. Salts is open source, so you can build a connector for any software your business runs on.",
     },
     {
-      title: "It lives where you already chat",
-      body: "Message it on Telegram or WhatsApp like you would a friend. Send text, links, photos or voice notes, and see every conversation in your browser too.",
+      title: "It lives with you",
+      body: "Message it on Telegram or WhatsApp like you would a friend. Send text, links, photos or voice notes, and it replies the same way.",
+    },
+    {
+      title: "Share it with the world",
+      body: "Add it to a Telegram group with your friends, family, clients or customers, and it answers anyone who mentions it. You choose exactly who it talks to.",
     },
   ],
   /** The one dark card at the end of the grid. */
   highlight: {
-    title: "You are in control",
-    body: "You choose the model, what your agent can do, who it talks to and how much it can spend.",
+    title: "There's always more",
+    body: "Host the whole project on your own Cloudflare account to run your agent without our usage limits, and with full control over it.",
   },
 } as const;
 
 export const MISSION = {
-  eyebrow: "We're on track for",
-  titleSuffix: "agents.",
-  subtitle: "One for each person.",
-  body: "We believe every person on the planet should have open and equal access to AI.",
-  coverageSuffix: "covered so far.",
-} as const;
-
-export const PRICING = {
-  eyebrow: "Pricing",
-  title: "Free to run. You only pay for the model.",
-  body: `${BRAND.name} does not charge a subscription. Your agent uses your own OpenRouter API key, so you pay OpenRouter directly for the tokens your agent uses, and nothing when it is quiet. We recommend setting a spending limit on your key, so you are never surprised by your bill.`,
-  bullets: [
-    "See exactly what every reply cost, right under the reply",
-    "Switch to a cheaper or a stronger model whenever you like",
-    `Keep up to ${SESSION_LIMIT} chat sessions and ${STORAGE_MB} MB of files per agent`,
-    "Self-host on your own Cloudflare account to remove every usage limit",
-  ],
-  placeholder: "Placeholder — a reply with its cost shown underneath",
-} as const;
-
-export const OWNERSHIP = {
-  eyebrow: "Own your agent",
-  title: "Make it yours, and decide who can use it.",
-  body: "Your agent's conversations and memories belong to you. You decide how it behaves, what it can do and who is allowed to talk to it.",
-  bullets: [
-    "Give it custom instructions, and it follows them in every conversation",
-    "Choose exactly which people and groups it answers on Telegram",
-    "Invite people you trust to help manage your agent",
-    "Delete any conversation, or the whole agent, whenever you want",
-  ],
-  placeholder: "Placeholder — the settings screen for one agent",
+  title: `${BRAND.name} is making AI accessible for all.`,
+  body: "When everyone has open and equal access to AI, people coordinate better, and resources are distributed more fairly.",
+  coveragePrefix: "We've covered",
+  coverageSuffix: "of the planet so far",
 } as const;
 
 export const CAPABILITIES = {
-  eyebrow: "Capabilities",
-  title: "Switch on what you need, whenever you need it.",
-  body: "Every capability is one switch away. Turn it on when you need it, and off again when you are done, so you only pay for what you use.",
+  title: "Every capability is a switch you can turn on.",
+  body: "There's a switch for almost anything, and your agent can find them for you. Remember to turn off the switches when not in use.",
   items: [
     "Search the web",
     "Read a link you send",
@@ -198,32 +179,50 @@ export const CAPABILITIES = {
     "Remember what matters",
     "Connect to Notion",
     "Connect to GitHub",
-    "Connect any MCP server",
+    "Analyse spreadsheets",
+    "Screen candidates",
+    "Connect your own tools",
   ],
-  more: "More to be added over time.",
+  /** Shown switched off when the page loads, so the light starts part-way. */
+  offByDefault: [
+    "Listen to voice notes",
+    "Reply with voice notes",
+    "Create images",
+    "Connect to GitHub",
+    "Screen candidates",
+  ],
+  more: "More added every day.",
 } as const;
 
 /** A short section for Fleet Accounts. Kept modest on purpose: the page is about personal agents. */
 export const FLEET = {
   eyebrow: "Fleet Accounts",
-  title: "Give an agent to everyone you work with.",
-  body: "Create agents for your team, your customers, or friends and family, one for each person. Your agents can share your OpenRouter API key, each with its own spending limit, so they work out of the box.",
+  title: "Give your whole community personal agents.",
+  body: "Create agents for everyone in your community. These agents can share your OpenRouter key, so they work out of the box.",
   points: [
     {
-      title: "Every agent stays private",
-      body: "Each person gets their own agent, with their own chats, memories and bot. You cannot read their conversations.",
+      title: "Shared API key, with individual limits",
+      body: "As the admin, you control how much each person can use your API key.",
     },
     {
-      title: "Users can still make it their own",
-      body: "Your users can customise their agents, within the settings you allow them to change.",
+      title: "Customize and ease their experience",
+      body: "You control which settings and capabilities your community members see. Depending on your community, you can hide a few features to make the agents easier to use.",
     },
     {
-      title: "Manage them in one place",
-      body: "Get additional options to give your users an agent experience you feel they would find useful.",
+      title: "Agents stay private to their owners",
+      body: "Community members still own their agents. Their conversations are never shared with other agents or with the admin.",
     },
   ],
+  /** The owner in the middle of the diagram. */
+  owner: {
+    name: "Skipper",
+    role: "Fleet Owner",
+    key: "Skipper's OpenRouter API key",
+  },
+  /** The community around the owner; sample names only. */
+  members: ["Alex", "Marty", "Gloria", "Melman", "Julien", "Kowalski", "Rico", "Private"],
   cta: "Learn about fleets",
-  note: "Upgrades to Fleet Accounts are free for a limited time. Request from the app.",
+  note: "By default, accounts are limited to 5 agents. Request an increase to your account's agent limit before creating a fleet.",
 } as const;
 
 /**
@@ -233,18 +232,19 @@ export const STEPS = [
   {
     n: "01",
     title: "Get an OpenRouter API key",
-    body: "Create an OpenRouter account, buy a few dollars of credit, and create an API key. Your agent uses it to reply to you.",
+    body: "Get your own key by purchasing credits directly from openrouter.ai. Or use any crypto wallet to get a key from us. You can start with just $5.",
+    /** The phrase in `body` that links out. */
+    link: { text: "openrouter.ai", href: "https://openrouter.ai" },
   },
   {
     n: "02",
     title: "Create your agent",
-    body: "Sign in to Salts, give your agent a name and paste your key. Your agent is ready to chat in your browser straight away.",
+    body: "Sign in and add or buy a key in your OpenRouter wallet. Then create an agent, give it a name and pick that key. That's it.",
   },
   {
     n: "03",
-    optional: true,
-    title: "Take it with you",
-    body: "Connect Telegram or WhatsApp to talk to your agent from your phone, and switch on the capabilities you want.",
+    title: "Discover more as you go",
+    body: "Connect it to Telegram or WhatsApp, and find new capabilities and commands as you use your agent.",
   },
 ] as const;
 
@@ -257,55 +257,70 @@ export const HOW = {
 export const FAQ = {
   eyebrow: "FAQ",
   title: "Something on your mind?",
+  /** An answer can link one of its phrases out, the same way the steps do. */
   items: [
     {
       q: "Is it really free?",
-      a: `Yes. Running your ${BRAND.name} agent is free, within the usage limits. You only pay OpenRouter for the model tokens your agent uses, and any apps you connect that have paid plans of their own.`,
-    },
-    {
-      q: "Why do I need my own OpenRouter API key?",
-      a: "So you stay in control of what you spend. Instead of paying a fixed monthly subscription, you pay only for what your agent actually uses, and you can set your own spending limit. OpenRouter also lets you pick from hundreds of models, so you are never tied to one company.",
-    },
-    {
-      q: "Do I have to use Telegram or WhatsApp?",
-      a: "No. You can talk to your agent in your browser at any time. Telegram and WhatsApp are there so you can reach it from your phone, and every conversation shows up in your browser too.",
+      a: `Yes. Running your ${BRAND.name} agent is free, within the usage limits. You only pay for the model tokens it uses, and for any connected apps that have paid plans of their own.`,
     },
     {
       q: "What are the usage limits?",
-      a: `Each account can create one agent. Each agent can keep up to ${SESSION_LIMIT} chat sessions and ${STORAGE_MB} MB of files. When you reach a limit, delete older sessions to make room. Keep in mind that the longer a conversation gets, the more each reply costs, so we recommend starting a new one whenever you change the subject.`,
+      a: `Up to 5 agents per account, and ${SESSION_LIMIT} chat sessions and ${STORAGE_MB} MB of files per agent. Need more agents? Request a higher limit from the app, or host ${BRAND.name} yourself on Cloudflare with no limits.`,
     },
     {
-      q: "Can I send it files?",
-      a: "Yes. You can send photos, screenshots, PDFs, text files and voice notes, as long as the matching capability is switched on.",
+      q: "Do I need an OpenRouter account?",
+      a: "No. You can bring your own key from openrouter.ai, or buy one from us with any crypto wallet. Either way, every reply is paid from that key's credit, and you can switch models at any time.",
+      link: { text: "openrouter.ai", href: "https://openrouter.ai" },
     },
     {
-      q: "What if I need more agents or higher limits?",
-      a: "If you want to give agents to other people, request a Fleet Account from the app. If you want to remove the usage limits altogether, you can host Salts on your own Cloudflare account and pay Cloudflare for what you use.",
+      q: "How is it different from ChatGPT or OpenClaw?",
+      a: `ChatGPT charges a monthly subscription and only answers while you have it open. OpenClaw runs on your own computer, so it stops when your computer does. Your ${BRAND.name} agent runs online all the time, can message you first, and lives in the chat apps you already use.`,
     },
     {
-      q: "I already have a coding agent.",
-      a: `${BRAND.name} does not replace a coding agent that runs on your computer with access to your terminal and files. What it does is run without a computer or a subscription, so it can take care of your everyday tasks while you and your coding agent focus on the work that matters.`,
+      q: "Who can read my conversations?",
+      a: "Only you, and anyone you add under Manage access. If your agent is part of a fleet, the fleet owner can see what it spends but not what you say. Your messages go through OpenRouter to the model you picked, under that company's privacy policy.",
+    },
+    {
+      q: "What apps can it connect to?",
+      a: "We offer one-click integrations for Notion, GitHub, Swiggy and a few other MCP servers we've built ourselves. You can connect any app that has a public MCP server, or one hosted by a third party. Ask your agent about an app you use.",
+    },
+    {
+      q: "What if the app I use isn't supported?",
+      a: `Open an issue on GitHub and tell us what you need. ${BRAND.name} is open source, so we and the community can help build a connector for it.`,
+      link: { text: "Open an issue on GitHub", href: LINKS.githubIssues },
+    },
+    {
+      q: "Can I send it videos?",
+      a: "Not at the moment. You can send photos, screenshots, PDFs, text files and voice notes, as long as the matching capability is switched on.",
+    },
+    {
+      q: "What happens when my credit runs out?",
+      a: "Your agent stops replying until its key has credit again. Top up on OpenRouter, or buy a new key with crypto, since a bought key cannot be topped up.",
+    },
+    {
+      q: "Do I have to use Telegram or WhatsApp?",
+      a: "No. You can talk to your agent in your browser at any time, and every conversation shows up there too, wherever it started.",
     },
   ],
 } as const;
 
 export const CTA = {
-  title: "Your agent is a few minutes away.",
-  body: "All you need is an OpenRouter API key. Everything else can be set up later.",
+  title: "Your agent is waiting for you.",
+  /** Two lines on wide screens, broken where the sentences break. */
+  body: ["Start with a $5 OpenRouter API key.", "It might be more than enough to last a lifetime."],
   primary: "Get my agent",
   secondary: "Read the user guide",
 } as const;
 
 export const FOOTER = {
-  tagline: `${BRAND.name} is a personal AI agent that doesn't need a subscription or your computer to run. Use it as much as you want and pay only for what you use. Talk to it in your browser, on Telegram or on WhatsApp.`,
-  note: "Free to run. Self-host for higher usage limits.",
+  tagline: "Personal AI agents that stay with you forever. Free to run, open source, and in the chat apps you already use.",
+  note: "Open and equal AI, for everyone.",
   columns: [
     {
       title: "Product",
       links: [
         { href: "#skills", label: "What it does" },
         { href: "#how", label: "How it works" },
-        { href: "#costs", label: "Pricing" },
         { href: "#fleet", label: "Fleet Accounts" },
       ],
     },
@@ -313,14 +328,19 @@ export const FOOTER = {
       title: "Resources",
       links: [
         { href: LINKS.guide, label: "User guide" },
-        { href: LINKS.openRouterGuide, label: "Get an OpenRouter key" },
+        { href: LINKS.stepByStepGuide, label: "Get a key" },
+        { href: LINKS.github, label: "GitHub" },
         { href: "#faq", label: "FAQ" },
       ],
     },
     {
       title: "Company",
+      /** Icon links, shown in a row above the text links. */
+      social: [
+        { href: LINKS.x, label: "Salts on X", icon: "x" },
+        { href: LINKS.telegram, label: "Salts on Telegram", icon: "telegram" },
+      ],
       links: [
-        { href: LINKS.contact, label: "Contact" },
         { href: LINKS.privacy, label: "Privacy" },
         { href: LINKS.terms, label: "Terms" },
       ],

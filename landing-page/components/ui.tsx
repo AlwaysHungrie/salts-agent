@@ -51,46 +51,6 @@ export function Button({
 }
 
 /**
- * Every image on this page is a labelled slot, not a mocked-up screenshot.
- * `frame` adds browser chrome so product shots read as product shots.
- */
-export function Placeholder({
-  label,
-  className = "",
-  frame = false,
-}: {
-  label: string;
-  className?: string;
-  frame?: boolean;
-}) {
-  if (frame) {
-    return (
-      <div
-        className={`overflow-hidden rounded-[24px] bg-canvas-soft ring-1 ring-hairline-soft ${className}`}
-      >
-        <div className="flex items-center gap-1.5 border-b border-hairline-soft bg-white/60 px-4 py-3">
-          <span className="size-2.5 rounded-full bg-hairline" />
-          <span className="size-2.5 rounded-full bg-hairline" />
-          <span className="size-2.5 rounded-full bg-hairline" />
-          <span className="ml-3 h-5 w-48 rounded-full bg-canvas-soft" />
-        </div>
-        <div className="flex min-h-[220px] items-center justify-center p-6 text-center text-sm text-faint">
-          {label}
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className={`flex items-center justify-center rounded-[16px] bg-canvas-soft p-6 text-center text-sm text-faint ring-1 ring-hairline-soft ${className}`}
-    >
-      {label}
-    </div>
-  );
-}
-
-/**
  * A destination that may not exist yet. Real href renders a link; `null`
  * renders plain text, so the page never ships a `#` that goes nowhere.
  * Unbuilt destinations are listed in BROKEN-LINKS.md.
@@ -122,5 +82,31 @@ export function MaybeLink({
     >
       {children}
     </a>
+  );
+}
+
+/** `text` with the first occurrence of `link.text` as an outbound link. */
+export function LinkedText({
+  text,
+  link,
+}: {
+  text: string;
+  link: { text: string; href: string };
+}) {
+  const at = text.indexOf(link.text);
+  if (at < 0) return text;
+  return (
+    <>
+      {text.slice(0, at)}
+      <a
+        href={link.href}
+        target="_blank"
+        rel="noreferrer"
+        className="text-ink underline decoration-hairline underline-offset-2 transition-colors hover:decoration-ink"
+      >
+        {link.text}
+      </a>
+      {text.slice(at + link.text.length)}
+    </>
   );
 }

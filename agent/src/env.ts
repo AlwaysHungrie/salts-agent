@@ -28,4 +28,7 @@ export type Env = {
 
   /** Graph's host. Only set to point the channel at a stand-in. */
   WHATSAPP_API_BASE?: string;
+
+  /** A JSON-RPC endpoint per payment network id (see `PAY_NETWORKS`); missing = off. */
+  PAYMENT_RPC?: Record<string, string>;
 };

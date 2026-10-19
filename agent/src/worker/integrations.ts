@@ -30,7 +30,7 @@ export async function checkOpenrouterKey(
       headers: { Authorization: `Bearer ${key}` },
     });
     if (res.status === 401 || res.status === 403) {
-      return { ok: false, error: "Key was rejected by OpenRouter" };
+      return { ok: false, error: "Failed to validate OpenRouter API key" };
     }
     if (!res.ok) return { ok: false, error: `OpenRouter answered ${res.status}.` };
     const json = (await res.json()) as { data?: { label?: string } };

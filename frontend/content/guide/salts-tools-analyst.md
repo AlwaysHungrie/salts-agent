@@ -9,22 +9,15 @@ The analyst lets your agent work with spreadsheets. You attach an Excel or CSV f
 
 This guide will help you start the analyst and connect it to your agent. You will need salts-tools installed with uv (see [Install salts-tools](/guide/salts-tools-install)). The analyst does not need Docker.
 
-## 1. Start the analyst
+## 1. Switch the analyst on
 
-In your terminal, run:
-
-```
-salts-tools start analyst
-```
-
-The first start takes a minute or two while salts-tools sets the analyst up. If salts-tools is already running another tool, the analyst joins it and nothing else changes.
+Run `npx salts-tools`, open your agent in the **Agents** tab and switch on **Spreadsheet analyst**. The first time salts-tools starts, it takes a minute or two to set the analyst up on your computer. Your agent then has a new MCP server called **analyst**, already connected.
 
 ## 2. Switch on files and MCP servers
 
-Open your agent and go to **Capabilities**.
+The analyst needs **File ingest**, so you can attach files in the chat, and **MCP servers** switched on for your agent. If either is off, your agent in the salts-tools screen shows it as **to do**: press **Enter** on it to switch it on.
 
-1. Switch on **File ingest**, so you can attach files in the chat.
-2. Switch on **MCP servers**. You will find a new server called **analyst** there, already connected with your token.
+If you delete the **analyst** server from your agent, salts-tools switches the analyst off for that agent. To bring it back, switch it on again in the salts-tools screen.
 
 ## You are done
 
@@ -32,4 +25,4 @@ Attach an .xlsx or .csv file in the chat and ask your agent a question about it.
 
 The analyst keeps related files together in a **project**, for example a rate sheet and three months of data, so you can ask questions across all of them at once. Just tell your agent which project you are working on, such as "switch to the dialysis project", and it will keep using those files.
 
-You can also drop files straight into the analyst's inbox folder on your computer, instead of attaching them in the chat. The folder is `local-mcps/analyst-mcp/data/inbox` inside the salts-agent folder you downloaded, and the salts-tools screen shows the full path when you open **analyst** on the **Services** tab.
+You can also drop files straight into the analyst's inbox folder on your computer, instead of attaching them in the chat. The salts-tools screen (`npx salts-tools`) shows the folder when you open **Spreadsheet analyst** on the **Services** tab.

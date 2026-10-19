@@ -1,8 +1,7 @@
-import { ApiKeysPreview } from "./ApiKeysPreview";
-import { TelegramSettingsPreview } from "./TelegramSettingsPreview";
 import { AppPreview } from "./AppPreview";
+import { CapabilityPanel } from "./CapabilityPanel";
+import { FleetDiagram } from "./FleetDiagram";
 import {
-  CAPABILITIES as CAPABILITIES_COPY,
   COVERAGE_PERCENT,
   CTA as CTA_COPY,
   FEATURES as FEATURES_COPY,
@@ -11,16 +10,12 @@ import {
   HOW,
   LINKS,
   MISSION,
-  OWNERSHIP,
-  PRICING,
   STATS as STATS_COPY,
   STEPS,
-  WORLD_POPULATION_B,
 } from "./content";
 import { Globe } from "./Globe";
 import { CountUp, HeroSquircles, Reveal } from "./motion";
-import { Button, Eyebrow, Placeholder, Wrap } from "./ui";
-import type { ReactNode } from "react";
+import { Button, Eyebrow, LinkedText, Wrap } from "./ui";
 
 /*
  * Every string on this page comes from ./content.ts. These components only
@@ -49,8 +44,10 @@ export function Hero() {
         </Reveal>
 
         <Reveal delay={0.05}>
-          <h1 className="mx-auto mt-5 max-w-[15ch] text-[clamp(34px,9vw,84px)] font-[650] leading-[1.02] tracking-[-0.03em] text-balance sm:mt-6 sm:leading-[0.98]">
-            {HERO.title}
+          <h1 className="mx-auto mt-5 text-[clamp(32px,6vw,64px)] font-[650] leading-[1.04] tracking-[-0.03em] text-balance sm:mt-6 sm:leading-[1.02]">
+            {HERO.title[0]} <br className="hidden sm:block" />
+            {HERO.title[1]}{" "}
+            <span className="text-muted/35">{HERO.title[2]}</span>
           </h1>
         </Reveal>
 
@@ -90,8 +87,8 @@ export function Stats() {
         <Reveal>
           <div className="grid gap-px overflow-hidden rounded-[24px] bg-hairline-soft sm:grid-cols-3">
             {STATS_COPY.map((s) => (
-              <div key={s.value} className="bg-canvas p-8">
-                <p className="tnum text-[40px] font-[650] leading-none tracking-[-0.03em]">
+              <div key={s.value} className="bg-canvas p-6 sm:p-8">
+                <p className="tnum text-[32px] font-[650] leading-none tracking-[-0.03em] sm:text-[40px]">
                   {s.value}
                 </p>
                 <p className="mt-3 text-sm leading-relaxed text-muted">
@@ -124,14 +121,14 @@ export function Features() {
           </div>
         </Reveal>
 
-        <div className="mt-8 grid gap-4 sm:mt-12 md:grid-cols-3">
+        <div className="mt-8 grid gap-3 sm:mt-12 sm:gap-4 md:grid-cols-3">
           {FEATURES_COPY.cards.map((f, i) => (
             <Reveal
               key={f.title}
               delay={i * 0.05}
               className={"wide" in f && f.wide ? "md:col-span-2" : ""}
             >
-              <article className="flex h-full flex-col rounded-[24px] bg-canvas p-7 ring-1 ring-hairline-soft transition-colors hover:bg-canvas-soft">
+              <article className="flex h-full flex-col rounded-[24px] bg-canvas p-6 ring-1 sm:p-7 ring-hairline-soft transition-colors hover:bg-canvas-soft">
                 <h3 className="text-xl font-semibold tracking-[-0.01em]">
                   {f.title}
                 </h3>
@@ -164,109 +161,26 @@ export function Mission() {
     <section id="mission" className="mt-20 scroll-mt-28 sm:mt-28 lg:mt-32">
       <Wrap>
         <Reveal>
-          <div className="relative overflow-hidden rounded-[32px] bg-ink px-5 py-12 text-center text-white sm:px-12 sm:py-16 lg:py-20">
+          <div className="relative overflow-hidden rounded-[32px] bg-ink px-7 py-14 text-white sm:px-12 sm:py-16 lg:px-16 lg:py-20">
             {/* Cropped by the card edge, so it reads as a world still turning. */}
             <Globe className="pointer-events-none absolute right-0 top-1/2 hidden h-[520px] w-[520px] -translate-y-1/2 translate-x-[45%] lg:block" />
-            <div className="relative">
-              <p className="text-xs tracking-[0.08em] text-faint">
-                {MISSION.eyebrow}
-              </p>
-              <h2 className="mx-auto mt-3 max-w-[18ch] text-[clamp(26px,3.5vw,38px)] font-[650] leading-[1.1] tracking-[-0.025em] text-balance">
-                <CountUp to={WORLD_POPULATION_B} decimals={2} suffix="B" />{" "}
-                {MISSION.titleSuffix}
-              </h2>
-              <h2 className="mx-auto max-w-[18ch] text-[clamp(26px,3.5vw,38px)] font-[650] leading-[1.1] tracking-[-0.025em] text-balance">
-                {MISSION.subtitle}
-              </h2>
-              <p className="mx-auto mt-4 max-w-[540px] text-lg font-light leading-[1.45] text-faint text-balance">
-                {MISSION.body}
-              </p>
-              <p className="mt-8 text-sm text-faint">
+            <div className="relative max-w-[600px]">
+              <p className="text-sm text-faint text-balance">
+                {MISSION.coveragePrefix}{" "}
                 <span className="font-semibold text-white">
                   <CountUp to={COVERAGE_PERCENT} decimals={6} suffix="%" />
                 </span>{" "}
                 {MISSION.coverageSuffix}
               </p>
+              <h2 className="mt-5 text-[clamp(26px,3.5vw,38px)] sm:mt-3 font-[650] leading-[1.1] tracking-[-0.025em] text-balance">
+                {MISSION.title}
+              </h2>
+              <p className="mt-6 text-lg font-light leading-[1.45] text-faint text-balance sm:mt-4">
+                {MISSION.body}
+              </p>
             </div>
           </div>
         </Reveal>
-      </Wrap>
-    </section>
-  );
-}
-
-/* --------------------------------------------------------------- Split -- */
-
-function Split({
-  eyebrow,
-  title,
-  body,
-  bullets,
-  label,
-  visual,
-  reverse = false,
-}: {
-  eyebrow: string;
-  title: string;
-  body: string;
-  bullets: readonly string[];
-  label: string;
-  /** A drawn stand-in, where there is one; otherwise the labelled slot. */
-  visual?: ReactNode;
-  reverse?: boolean;
-}) {
-  return (
-    <div className="grid items-center gap-8 sm:gap-12 md:grid-cols-2">
-      <Reveal className={reverse ? "md:order-2" : ""}>
-        <Eyebrow>{eyebrow}</Eyebrow>
-        <h2 className="mt-3 text-[clamp(26px,3.5vw,34px)] font-[650] leading-[1.1] tracking-[-0.025em]">
-          {title}
-        </h2>
-        <p className="mt-4 leading-relaxed text-muted">{body}</p>
-        <ul className="mt-6">
-          {bullets.map((b) => (
-            <li
-              key={b}
-              className="border-t border-hairline-soft py-3 text-sm leading-relaxed"
-            >
-              {b}
-            </li>
-          ))}
-        </ul>
-      </Reveal>
-      <Reveal delay={0.08}>
-        {visual ?? <Placeholder frame label={label} />}
-      </Reveal>
-    </div>
-  );
-}
-
-export function Costs() {
-  return (
-    <section
-      id="costs"
-      className="mt-20 scroll-mt-28 space-y-16 sm:mt-28 sm:space-y-20 lg:mt-32 lg:space-y-24"
-    >
-      <Wrap>
-        <Split
-          eyebrow={PRICING.eyebrow}
-          title={PRICING.title}
-          body={PRICING.body}
-          bullets={PRICING.bullets}
-          label={PRICING.placeholder}
-          visual={<ApiKeysPreview />}
-        />
-      </Wrap>
-      <Wrap>
-        <Split
-          reverse
-          eyebrow={OWNERSHIP.eyebrow}
-          title={OWNERSHIP.title}
-          body={OWNERSHIP.body}
-          bullets={OWNERSHIP.bullets}
-          label={OWNERSHIP.placeholder}
-          visual={<TelegramSettingsPreview />}
-        />
       </Wrap>
     </section>
   );
@@ -279,30 +193,7 @@ export function Capabilities() {
     <section id="capabilities" className="mt-20 scroll-mt-28 sm:mt-28 lg:mt-32">
       <Wrap>
         <Reveal>
-          <div className="rounded-[32px] bg-canvas-soft px-5 py-7 sm:p-8 lg:p-12">
-            <div className="max-w-[560px]">
-              <Eyebrow>{CAPABILITIES_COPY.eyebrow}</Eyebrow>
-              <h2 className="mt-3 text-[clamp(26px,3.5vw,34px)] font-[650] leading-[1.1] tracking-[-0.025em]">
-                {CAPABILITIES_COPY.title}
-              </h2>
-              <p className="mt-3 text-[15px] leading-relaxed text-muted sm:mt-4 sm:text-base">
-                {CAPABILITIES_COPY.body}
-              </p>
-            </div>
-            <div className="mt-6 flex flex-wrap gap-1.5 sm:mt-8 sm:gap-2">
-              {CAPABILITIES_COPY.items.map((c) => (
-                <span
-                  key={c}
-                  className="rounded-full bg-canvas px-3 py-1.5 text-[13px] ring-1 ring-hairline-soft sm:px-4 sm:py-2 sm:text-sm"
-                >
-                  {c}
-                </span>
-              ))}
-              <span className="rounded-full px-3 py-1.5 text-[13px] text-faint ring-1 ring-hairline sm:px-4 sm:py-2 sm:text-sm">
-                {CAPABILITIES_COPY.more}
-              </span>
-            </div>
-          </div>
+          <CapabilityPanel />
         </Reveal>
       </Wrap>
     </section>
@@ -316,39 +207,39 @@ export function Fleet() {
   return (
     <section id="fleet" className="mt-20 scroll-mt-28 sm:mt-28 lg:mt-32">
       <Wrap>
-        <Reveal>
-          <div className="max-w-[640px]">
+        {/* On a phone the diagram sits between the pitch and the points, so the
+            picture comes before the detail; on desktop it spans both rows. */}
+        <div className="grid gap-10 lg:grid-cols-2 lg:gap-x-16 lg:gap-y-8">
+          <Reveal className="self-end lg:col-start-1 lg:row-start-1">
             <Eyebrow>{FLEET.eyebrow}</Eyebrow>
-            <h2 className="mt-3 text-[clamp(26px,3.5vw,34px)] font-[650] leading-[1.1] tracking-[-0.025em]">
+            <h2 className="mt-3 text-[clamp(30px,4.5vw,44px)] font-[650] leading-[1.08] tracking-[-0.025em] text-balance">
               {FLEET.title}
             </h2>
-            <p className="mt-4 leading-relaxed text-muted">{FLEET.body}</p>
-          </div>
-        </Reveal>
+            <p className="mt-4 text-base font-light leading-[1.45] text-muted sm:text-lg">
+              {FLEET.body}
+            </p>
+          </Reveal>
 
-        <div className="mt-8 grid gap-6 sm:mt-10 md:grid-cols-3">
-          {FLEET.points.map((p, i) => (
-            <Reveal key={p.title} delay={i * 0.05}>
-              <div className="border-t border-hairline pt-5">
-                <h3 className="text-base font-semibold tracking-[-0.01em]">
-                  {p.title}
-                </h3>
-                <p className="mt-2 text-sm leading-relaxed text-muted">
-                  {p.body}
-                </p>
-              </div>
-            </Reveal>
-          ))}
+          <FleetDiagram className="self-center lg:col-start-2 lg:row-span-2 lg:row-start-1" />
+
+          <Reveal className="self-start lg:col-start-1 lg:row-start-2">
+            <ul className="space-y-5">
+              {FLEET.points.map((p) => (
+                <li key={p.title} className="border-l-2 border-hairline pl-4">
+                  <h3 className="text-base font-semibold tracking-[-0.01em]">{p.title}</h3>
+                  <p className="mt-1 text-sm leading-relaxed text-muted">{p.body}</p>
+                </li>
+              ))}
+            </ul>
+
+            <div className="mt-8 flex flex-col items-center gap-3 text-center lg:items-start lg:text-left">
+              <Button href={LINKS.fleetGuide} variant="outline">
+                {FLEET.cta}
+              </Button>
+              <p className="text-sm text-faint">{FLEET.note}</p>
+            </div>
+          </Reveal>
         </div>
-
-        <Reveal>
-          <div className="mt-8 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-5">
-            <Button href={LINKS.fleetGuide} variant="outline">
-              {FLEET.cta}
-            </Button>
-            <p className="text-sm text-faint">{FLEET.note}</p>
-          </div>
-        </Reveal>
       </Wrap>
     </section>
   );
@@ -370,7 +261,9 @@ export function StepList() {
             <h3 className="mt-2 text-xl font-semibold tracking-[-0.01em]">
               {s.title}
             </h3>
-            <p className="mt-2 text-sm leading-relaxed text-muted">{s.body}</p>
+            <p className="mt-2 text-sm leading-relaxed text-muted">
+              {"link" in s ? <LinkedText text={s.body} link={s.link} /> : s.body}
+            </p>
           </div>
         </Reveal>
       ))}
@@ -397,7 +290,7 @@ export function Steps() {
 
         <Reveal>
           <div className="mt-10 text-center">
-            <Button href={LINKS.guide} variant="outline">
+            <Button href={LINKS.stepByStepGuide} variant="outline">
               {HOW.guideCta}
             </Button>
           </div>
@@ -422,8 +315,9 @@ export function Cta() {
               <h2 className="text-[clamp(30px,4.5vw,44px)] font-[650] leading-[1.08] tracking-[-0.025em]">
                 {CTA_COPY.title}
               </h2>
-              <p className="mx-auto mt-4 max-w-[520px] text-xl font-light leading-[1.4] text-muted text-balance">
-                {CTA_COPY.body}
+              <p className="mx-auto mt-4 text-base font-light leading-[1.45] text-muted text-balance sm:text-xl sm:leading-[1.4]">
+                {CTA_COPY.body[0]} <br className="hidden sm:block" />
+                {CTA_COPY.body[1]}
               </p>
             </div>
 

@@ -115,6 +115,119 @@ export const AGENT_DIRECTORY_MIGRATIONS: readonly Migration[] = [
       sql.exec(`CREATE INDEX IF NOT EXISTS idx_agents_guests ON agents(guests)`);
     },
   },
+  {
+    // salts-tools computers: paired from the browser, linked to agents, each link with the
+    // tools that agent gets from that computer.
+    name: "salts-tools computers",
+    up: (sql) => {
+      sql.exec(
+        `CREATE TABLE IF NOT EXISTS salts_pairings (
+           user_code TEXT PRIMARY KEY,
+           device_hash TEXT NOT NULL UNIQUE,
+           name TEXT NOT NULL,
+           created_at INTEGER NOT NULL,
+           expires_at INTEGER NOT NULL,
+           computer_id TEXT NOT NULL DEFAULT '',
+           credential TEXT NOT NULL DEFAULT ''
+         )`
+      );
+      sql.exec(
+        `CREATE TABLE IF NOT EXISTS salts_computers (
+           id TEXT PRIMARY KEY,
+           owner_email TEXT NOT NULL,
+           name TEXT NOT NULL,
+           cred_hash TEXT NOT NULL,
+           tunnel_url TEXT NOT NULL DEFAULT '',
+           gateway_token TEXT NOT NULL DEFAULT '',
+           old_gateway_token TEXT NOT NULL DEFAULT '',
+           tools TEXT NOT NULL DEFAULT '{}',
+           version TEXT NOT NULL DEFAULT '',
+           last_seen INTEGER NOT NULL DEFAULT 0,
+           created_at INTEGER NOT NULL
+         )`
+      );
+      sql.exec(
+        `CREATE INDEX IF NOT EXISTS idx_salts_computers_owner ON salts_computers(owner_email)`
+      );
+      sql.exec(
+        `CREATE TABLE IF NOT EXISTS salts_links (
+           computer_id TEXT NOT NULL,
+           agent_id TEXT NOT NULL,
+           tools TEXT NOT NULL DEFAULT '[]',
+           synced TEXT NOT NULL DEFAULT '',
+           PRIMARY KEY (computer_id, agent_id)
+         )`
+      );
+      sql.exec(`CREATE INDEX IF NOT EXISTS idx_salts_links_agent ON salts_links(agent_id)`);
+    },
+  },
+  {
+    name: "openrouter wallet",
+    up: (sql) => {
+      // Each account's OpenRouter keys. A provisioned key's secret never leaves the Worker.
+      sql.exec(
+        `CREATE TABLE IF NOT EXISTS wallet_keys (
+           id TEXT PRIMARY KEY,
+           email TEXT NOT NULL,
+           nickname TEXT NOT NULL,
+           kind TEXT NOT NULL,
+           secret TEXT NOT NULL,
+           created_at INTEGER NOT NULL
+         )`
+      );
+      sql.exec(`CREATE INDEX IF NOT EXISTS idx_wallet_keys_email ON wallet_keys(email)`);
+      // Which agent holds which wallet key, so removing a key reaches every copy of it.
+      sql.exec(
+        `CREATE TABLE IF NOT EXISTS wallet_key_uses (
+           agent_id TEXT PRIMARY KEY,
+           key_id TEXT NOT NULL
+         )`
+      );
+      sql.exec(`CREATE INDEX IF NOT EXISTS idx_wallet_key_uses_key ON wallet_key_uses(key_id)`);
+    },
+  },
+  {
+    name: "wallet purchases",
+    up: (sql) => {
+      // A quote a buyer pays against. `tx` is unique, so one payment counts once.
+      sql.exec(
+        `CREATE TABLE IF NOT EXISTS wallet_purchases (
+           id TEXT PRIMARY KEY,
+           email TEXT NOT NULL,
+           key_id TEXT NOT NULL DEFAULT '',
+           amount_usd REAL NOT NULL,
+           network TEXT NOT NULL,
+           asset TEXT NOT NULL,
+           to_address TEXT NOT NULL,
+           payer TEXT NOT NULL,
+           units TEXT NOT NULL,
+           status TEXT NOT NULL DEFAULT 'pending',
+           tx TEXT,
+           created_at INTEGER NOT NULL,
+           expires_at INTEGER NOT NULL
+         )`
+      );
+      sql.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_wallet_purchases_tx ON wallet_purchases(tx)`);
+      sql.exec(`CREATE INDEX IF NOT EXISTS idx_wallet_purchases_email ON wallet_purchases(email)`);
+    },
+  },
+  {
+    name: "wallet provisioning",
+    up: (sql) => {
+      // A bought key's handle at OpenRouter, to remove it there too.
+      addColumnIfMissing(sql, "wallet_keys", `openrouter_hash TEXT NOT NULL DEFAULT ''`);
+      // When a paid purchase was taken up for delivery, so two confirms cannot both deliver.
+      addColumnIfMissing(sql, "wallet_purchases", `claimed_at INTEGER NOT NULL DEFAULT 0`);
+      // Values the owner sets for the deployment from the admin CLI: the OpenRouter
+      // provisioning key, the payment addresses and Reown's project id.
+      sql.exec(
+        `CREATE TABLE IF NOT EXISTS deployment_secrets (
+           name TEXT PRIMARY KEY,
+           value TEXT NOT NULL
+         )`
+      );
+    },
+  },
 ];
 
 export function migrateMembership(storage: DurableObjectStorage) {

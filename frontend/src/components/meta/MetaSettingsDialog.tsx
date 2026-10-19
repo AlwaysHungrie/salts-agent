@@ -42,7 +42,7 @@ export function MetaSettingsDialog({
         error?: string;
       } | null;
       if (!metaRes.ok || !payload?.config) {
-        setError(payload?.error ?? "Couldn't load meta settings.");
+        setError(payload?.error ?? "Couldn't load admin settings.");
         return;
       }
       setMeta({ ...EMPTY_META, ...payload.meta });
@@ -79,7 +79,7 @@ export function MetaSettingsDialog({
       error?: string;
     } | null;
     if (!res.ok || !payload?.meta) {
-      setError(payload?.error ?? "Couldn't save meta settings.");
+      setError(payload?.error ?? "Couldn't save admin settings.");
       return;
     }
     setMeta(payload.meta);
@@ -101,7 +101,7 @@ export function MetaSettingsDialog({
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-lg font-semibold leading-[1.38]">
-              Meta settings
+              Admin settings
             </p>
             <p className="text-muted mt-1 text-xs font-light leading-[1.33]">
               Default settings for {agent.name}, can be changed later. A locked
@@ -126,7 +126,7 @@ export function MetaSettingsDialog({
 
         {!meta && !error && (
           <p className="text-muted py-10 text-sm leading-[1.43]">
-            Loading meta settings…
+            Loading admin settings…
           </p>
         )}
 

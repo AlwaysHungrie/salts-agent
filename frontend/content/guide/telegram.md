@@ -2,7 +2,7 @@
 title: Connect your agent to Telegram
 section: Telegram
 order: 1
-summary: Create a Telegram bot for your agent and talk to it from your phone, in a private chat or in a group.
+summary: Create a Telegram bot for your agent and talk to it from your phone, in a private chat or in a group, and what to check when the bot does not answer.
 featured: true
 ---
 
@@ -25,10 +25,9 @@ Telegram bots are created using [@BotFather](https://t.me/BotFather), Telegram's
 Open your agent and go to **Settings**. In the **Telegram** section:
 
 1. Paste the token into **Bot token**.
-2. Enter your bot's username into **Bot username**, starting with `@`, for example `@ada_salt_bot`.
-3. Save your settings.
+2. Click **Save**, or click anywhere outside the box.
 
-Your agent connects to Telegram as soon as the token is saved.
+Your agent connects to Telegram as soon as the token is saved. It reads your bot's username from Telegram, so there is nothing else to fill in. A link to your bot, for example **Open @ada_salt_bot in Telegram**, appears in the section so you can start a chat with it straight away.
 
 ## 3. Allow yourself to talk to it
 

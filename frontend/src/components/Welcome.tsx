@@ -27,8 +27,8 @@ export function Welcome({
           Hi. I&rsquo;m {agentName || "your agent"}.
         </h1>
         <p className="text-muted mt-2 text-base font-light leading-normal">
-          Your agent in the cloud. Ask a question, hand me a file, or set
-          something to run later. Every chat keeps its own memory.
+          Your agent in the cloud. Ask a question, send me a file, or set
+          something to run later.
         </p>
 
         <button

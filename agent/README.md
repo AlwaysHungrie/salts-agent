@@ -73,10 +73,64 @@ they are written. With `npm run dev` running:
 cd ../admin-cli && npm run init -- --dev
 ```
 
-Every agent needs an OpenRouter key of its own, pasted under **Settings**, and there is
+Every agent needs an OpenRouter key of its own, picked under **Settings**, and there is
 no deployment-wide fallback to stand in for it. One agent's spend and rate limits are
 its own, and an agent with no key says so instead of answering. That is deliberate: a
 fallback would mean any agent anyone creates here spends the deployment's own credit.
+
+Keys live in each account's OpenRouter wallet (`wallet_keys` in `AgentDirectory`), and
+agents are given one by its id, `openrouter_key_id`. The Worker copies the key into the
+agent's `openrouter_api_key`, so turns never look the wallet up, and records which agents
+hold which key (`wallet_key_uses`) so removing a key clears it from every one of them. A
+pasted key is shown to its owner; a provisioned one (bought here) never leaves the Worker.
+Only the caller's own keys can be picked, and meta defaults are resolved from the admin's
+wallet. The one exception is the admin's default key itself: the settings view returns it
+as `default_key_id` (while it is still in the admin's wallet), and anyone using the agent
+may pick it again.
+
+Keys are bought with crypto and no processor in between. The buyer asks for a quote
+(`wallet_purchases`): exactly `units` of USDC (or ETH, priced from Chainlink's on-chain
+ETH/USD feed) to the deployment's address, for the credit plus the `wallet_fee_bps` service
+fee (rounded up to the cent; the quote returns `amount_usd`, `fee_usd`, `total_usd`), with a little dust so no two open quotes ask for
+the same amount. Their wallet sends it, and the Worker reads the transaction back over
+JSON-RPC: right sender, recipient, token and exactly the quoted amount, enough
+confirmations (Solana: finalized), landed inside the quote's 30 minutes (not before the
+quote was made), and never counted before. The exact amount is what makes a payment
+unclaimable by anyone else: no two quotes that could claim the same payment share one (an
+expired, unpaid quote's amount stays reserved for the 2-minute clock slack), and a quote
+made after a payment lands cannot claim it, so a stranger who copies a transaction id from the chain and quotes
+as its sender is refused. Where payments go is one
+EVM address (every EVM network) and one Solana address, set from the admin CLI's Payments
+tab with Reown's project id, which the browser's wallet modal is opened with (`GET|PATCH
+/api/admin/payments`, stored in `AgentDirectory`; `GET /api/wallet` hands the id to the
+page). A blank address switches that family off; without a Reown project id the wallet
+lists no networks. Which RPC each network is read from is `PAYMENT_RPC` in
+`wrangler.jsonc`; an RPC URL set for a network in the Payments tab replaces it (`rpc` on
+`/api/admin/payments`). The free public endpoints answer Cloudflare with 403, so a
+deployment needs keyed ones (Alchemy, Helius, QuickNode); a keyed URL stays out of the
+repository and only its host is ever shown. Base Sepolia (`base-sepolia`) is a testnet for
+trying a purchase with faucet coins; it has an RPC on staging only, never production. Purchases are capped at
+`max_wallet_purchase_usd`.
+
+A counted payment is delivered with the deployment's OpenRouter provisioning key, set from
+the admin CLI's Payments tab (`GET|PUT|DELETE /api/admin/provisioning-key`; stored in
+`AgentDirectory`, write-only: GET returns only whether it is set and its last four
+characters). Each purchase makes a new OpenRouter key whose limit is the credit bought
+(not the fee), named `Salts <buyer email> <purchase id>` so the OpenRouter dashboard says
+whose each key is. Keys are not topped up: more credit is a new key. Delivery is held by one confirm at a time (`claimed_at`), so concurrent confirms make one
+key; if OpenRouter fails, the purchase stays paid and the confirm answers 202, and the
+next confirm with the same transaction delivers it. While no provisioning key is set the
+wallet lists no networks and quotes answer 503. Removing a bought key deletes it at
+OpenRouter too. The keys spend the deployment's OpenRouter credit, so that balance has to
+be kept funded.
+
+A payment the page lost track of (a refresh, a closed tab, an RPC that was down) is
+recovered with `POST /api/wallet/purchases/recover { network, tx }`: the transaction is
+checked, exactly as a confirm checks it, against the caller's own unpaid purchases on that
+network from the last 30 days, newest first, and delivers the one it pays for. The page
+keeps each sent payment in the browser until a key comes of it and checks it again when
+the wallet opens; the wallet also takes a pasted transaction id ("Paid but didn't get a
+key?").
 
 Attachment bytes (images, voice-note clips) live in R2, not in the session's SQLite.
 Create the bucket once before deploying — `wrangler dev` simulates it locally:
@@ -118,7 +172,7 @@ curl -X POST http://localhost:8787/agents/session-agent/my-session/chat \
 | `GET\|DELETE /agents/session-agent/:id/files/:fileId` | Image bytes / drop a pending attachment |
 | `GET /agents/session-agent/:id/tasks` | Tasks this session scheduled |
 | `DELETE /agents/session-agent/:id/tasks/:taskId` | Cancel one |
-| `GET\|POST /api/agents` | List / create agents — `{ name, openrouter_api_key?, allowed_emails? }`, and a key that OpenRouter rejects is a 400 that creates nothing. `GET` lists only what the caller may open |
+| `GET\|POST /api/agents` | List / create agents — `{ name, openrouter_api_key?, allowed_emails?, meta? }` (`meta.defaults.openrouter_key_id` picks a wallet key), and a key that OpenRouter rejects is a 400 that creates nothing. `GET` lists only what the caller may open |
 | `GET\|PATCH\|DELETE /api/agents/:agentId` | Read / rename / delete an agent and everything it owns. `PATCH` takes `{ name?, allowed_emails? }` |
 | `GET\|PATCH /api/agents/:agentId/config` | That agent's settings, capabilities and their metadata |
 | `GET\|PATCH\|POST /api/agents/:agentId/meta` | The admin's meta settings: defaults and which of them users may change. `POST` re-applies them. Admin only |
@@ -133,8 +187,23 @@ curl -X POST http://localhost:8787/agents/session-agent/my-session/chat \
 | `POST /api/fleets/:fleetId/agents` | Add agents to a fleet, one per address |
 | `DELETE /api/agents?fleet=:fleetId` | Delete a fleet's agents, a page at a time. Fleet admin only |
 | `POST /api/business-requests` | A signed-in account asks for a higher agent limit |
+| `GET\|POST /api/wallet` | The caller's OpenRouter wallet / add a pasted key `{ key }`, checked with OpenRouter first and given a random nickname. At most `max_wallet_keys` |
+| `DELETE /api/wallet/:id` | Remove a key, clearing it from every agent that holds it |
+| `POST /api/wallet/purchases` | Quote a new key: `{ amount, network, asset, payer }` → what to send, where, and the `amount_usd` + `fee_usd` = `total_usd` breakdown. `GET /api/wallet` lists the open `networks` (with each one's USDC contract) and `fee_bps` |
+| `POST /api/wallet/purchases/:id/confirm` | `{ tx }`: read the payment back from the chain. 200 paid, 202 not final yet, 400 not a match, 409 already counted |
 | `POST /telegram/webhook/:agentId` | One route per agent, because one bot per agent |
 | `GET\|POST /whatsapp/webhook/:agentId` | WhatsApp's subscription handshake (`GET`) and deliveries (`POST`) |
+| `POST /salts/pair` | A salts-tools computer starts pairing `{ name }`: returns `{ user_code, device_code, expires_in, interval }`. The user approves `user_code` in the browser |
+| `POST /salts/pair/poll` | `{ device_code }`: `pending`, `gone`, or once approved `{ status: "approved", computer_id, credential }` (handed over once) |
+| `PUT /salts/computer` | The computer's report, every 30 s, with its credential as bearer: `{ tunnel_url, gateway_token, tools, version }`. Every linked agent is brought in step (SearXNG URL and token, one MCP server per MCP tool, `Authorization: Bearer <gateway_token>`); answers `{ computer, agents, wanted }` |
+| `DELETE /salts/computer` | The computer unpairs itself (`salts-tools disconnect`, `reset`); what it put on every agent is removed |
+| `GET /api/salts/pair/:code` | Clerk. The pairing behind a code: `{ name, approved }` |
+| `POST /api/salts/pair/:code` | Clerk. Approve; the computer is the caller's. `{ agent_ids }` (optional) serves those at once |
+| `GET /salts/computer/agents` | Computer credential. Every agent the owner is a member of: `linked`, the tools on, and what is still to do on each (`todos`) |
+| `PUT /salts/computer/agents/:agentId` | Computer credential. Serve the agent with exactly `{ tools }` on, synced at once |
+| `DELETE /salts/computer/agents/:agentId` | Computer credential. Stop serving it; what the computer put there is removed |
+| `POST /salts/computer/agents/:agentId/capability` | Computer credential. Switch on `{ flag }`, a capability a tool on there needs (not one the admin locked) |
+| `PUT /salts/computer/agents/:agentId/headers` | Computer credential. `{ tool, headers }`: values for the header names that tool asks for, on its server there. Never sent back |
 | `POST /searxng/:agentId/url` | salts-tools reports its tunnel address. Bearer token must match the agent's SearXNG token |
 | `POST /searxng/:agentId/mcp` | salts-tools points the agent's MCP server `{ name }` at its tunnel `{ url }`: creates it with `Authorization: Bearer <token>`, or repoints one whose Authorization is already that token (409 otherwise). Same token proof |
 | `GET /api/mcp/oauth/callback` | Where an MCP provider's OAuth sends the browser back |
@@ -274,9 +343,23 @@ in the browser, Telegram and WhatsApp: `!new`, `!clear`, `!delete`, `!stop`, `!u
 sets the agent's model to the offered one whose label holds the nickname in brackets
 (refused when meta locks `model`). Bare `!model` names the current model and lists the nicknames and `!mcp` lists the
 agent's MCP servers with the command that flips each. `!help` explains sessions and lists
-every command; `!new` and `!clear` point at it. `!docs` and `!settings` link the user guide
-and the agent's settings page under `APP_URL` (a `var` in `wrangler.jsonc`; unset, they
-say there is none). See [`src/commands.ts`](src/commands.ts).
+every command; `!new` and `!clear` point at it. `!settings` links the agent's settings page
+under `APP_URL` (a `var` in `wrangler.jsonc`; unset, it says there is none). `!docs` lists
+the user guide's pages (and links it under `APP_URL`); `!docs <page>` sends one page's
+markdown. See [`src/commands.ts`](src/commands.ts).
+
+The guide is bundled from `frontend/content/guide/*.md` into `src/guide.json` by
+`scripts/guide.mjs`, which `npm run dev|typecheck|test` run first; the JSON is generated and
+not committed.
+
+The model can run the same commands through the always-on `run_command` tool
+([`src/session/command-tool.ts`](src/session/command-tool.ts)): `docs`, `help`, `settings`
+(link plus model and MCP lists), `mcp`, `enable-mcp`/`disable-mcp`, `model`, and `new`,
+`clear`, `compact`. Its description is the only thing the model is told about Salts itself:
+it reads the guide on demand, so nothing is added to the system prompt. `new`, `clear` and
+`compact` change the session the turn runs in, so they are queued on the turn and run once
+the reply is out (appended to it in the browser, a separate message in a chat); a turn that
+fails or is stopped drops them. `stop`, `unstick`, `delete` and `oom` are not offered.
 
 Each user message reaches the model prefixed with when it was sent (`[Sent YYYY-MM-DD
 HH:MM UTC]`, from the time its turn opened), not today's date in the system prompt: a
@@ -299,7 +382,7 @@ that page renders, so a new capability needs no frontend change.
 | Audio input | a transcription model | `transcribe_audio` |
 | Voice notes | a voice model; Telegram or WhatsApp | `send_voice_note` |
 | Schedule tasks | — | `schedule_task`, `list_scheduled_tasks`, `cancel_scheduled_task` |
-| Telegram | bot token and username, whitelists | — |
+| Telegram | bot token (the username is read from Telegram on save), whitelists | — |
 | WhatsApp | a Meta app and number ([docs/whatsapp-setup.md](../docs/whatsapp-setup.md)) | — |
 | MCP servers | the server's URL, or a catalogue template | the server's own |
 | Private Memory | — | `remember`, `recall` |

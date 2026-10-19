@@ -16,17 +16,17 @@ salts-tools can run three tools, and you can switch on as many of them as you li
 | Tool | What it gives your agent |
 |---|---|
 | **web** | Free web search, using a private search engine called SearXNG. There is no account to make and no bill for searches. See [Set up web search](/guide/web-search). |
-| **matchmaker** | Reads resumes and matches candidates to job descriptions, for recruiters. See [Add the matchmaker](/guide/salts-tools-matchmaker). |
+| **matchmaker** | Reads resumes and cover letters and finds the best people for a job, for recruiters. See [Add the matchmaker](/guide/salts-tools-matchmaker). |
 | **analyst** | Reads Excel and CSV files sent in the chat, answers questions about them, and builds new sheets with tables and charts. See [Add the spreadsheet analyst](/guide/salts-tools-analyst). |
 
-One salts-tools can serve several agents at once, and every agent you connect gets every tool you switch on.
+One salts-tools can serve several agents at once, and you choose which tools each agent gets in the salts-tools screen in your terminal.
 
 ## What you need
 
-salts-tools works on Mac, Windows and Linux. You will need to use a terminal (the Terminal app on a Mac, PowerShell on Windows), but every command you need is in these guides. [Install salts-tools](/guide/salts-tools-install) walks you through it.
+salts-tools works on Mac, Windows and Linux. You will need to use a terminal (the Terminal app on a Mac, PowerShell on Windows) for one command, `npx salts-tools`, which opens a screen where you do everything else. The browser is only used once, to connect your computer to your account. [Install salts-tools](/guide/salts-tools-install) walks you through it. If you would like a hand, click the **ⓘ** next to salts-tools on your agent's **Capabilities** page and copy the prompt into an assistant you already use, such as Claude or ChatGPT.
 
 Your agent can only use these tools while your computer is on, awake and connected to the internet. We recommend letting salts-tools start when you log in, so your agent gets its tools back on its own after a restart.
 
 ## Keeping it private
 
-Each tool only listens on your own computer, and the address your agent uses refuses anyone who does not have your **token**, a long password that salts-tools makes for you. Keep the token in your agent's settings only. If you think someone else has seen it, you can make a new one from the salts-tools screen (see [Everyday use](/guide/salts-tools-everyday)).
+Each tool only listens on your own computer, and the address your agent uses refuses anyone who does not have a long password that salts-tools makes for you. You never need to see or copy it: salts-tools and your agent exchange it themselves. Your computer connects to your account once, when you approve it in the browser, and you can disconnect it at any time with `npx salts-tools disconnect`.

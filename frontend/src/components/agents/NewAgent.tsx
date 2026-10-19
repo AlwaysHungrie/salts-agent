@@ -103,7 +103,7 @@ export function NewAgent({
         >
           <p className="text-faint text-xs leading-[1.33]">Step 2 of 2</p>
           <p className="text-lg font-semibold leading-[1.38]">
-            {fleet ? "Meta settings" : "OpenRouter key"}
+            {fleet ? "Admin settings" : "OpenRouter key"}
           </p>
           <p className="text-muted mt-1 text-xs font-light leading-[1.33]">
             {fleet
@@ -187,8 +187,8 @@ export function NewAgent({
               Create a fleet of agents
             </span>
             <span className="text-muted block text-xs font-light leading-[1.33]">
-              Deploy multiple agents, 1 per user that can share an OpenRouter
-              key and can be managed by you.
+              One agent for each person in your community. They can share your
+              OpenRouter key, and you manage them all.
             </span>
           </span>
         </label>
@@ -266,11 +266,11 @@ function FleetFields({
 
       <label className="mt-4 block">
         <span className="block text-sm font-semibold leading-[1.43]">
-          User Emails
+          User emails
         </span>
         <span className="text-muted block text-xs font-light leading-[1.33]">
-          Space separated. You can manage agents individually or as a
-          fleet but only a user will have access to their agent.
+          Separate them with spaces. You can manage the agents one by one or
+          as a fleet, but only each person can read their own chats.
         </span>
         <textarea
           value={emails}

@@ -21,6 +21,8 @@
  * - `!!fail500` — the provider answers 500.
  * - `!!fail401` — the provider rejects the key.
  * - `!!toolcall` — the model calls the `list` tool, then answers using its result.
+ * - `!!command <command> [argument]` — the model calls `run_command`, then answers
+ *   `Command said: <its result>`.
  * - `!!toolloop` — the model calls `list` again and again until it may no longer call tools.
  *   The second leg is recognised by the tool message the SDK sends back, so the whole
  *   two-step exchange stays deterministic.
@@ -785,8 +787,93 @@ function chosenTools(catalog: string): Response {
  * Handle one outbound request. Returns a 503 for any host that is not OpenRouter, so
  * a test that reaches for the network fails loudly instead of going out to it.
  */
+/* --------------------------------------------------------------------- rpc -- */
+
+/**
+ * Transactions the payment tests put on the chain, by hash (EVM) or signature (Solana).
+ * A test loads one with `POST https://rpc.test/__tx { hash, ...answers }`; the Worker then
+ * reads it back through the ordinary JSON-RPC calls, at `https://rpc.test/<network>`.
+ */
+const chainTxs = new Map<string, Record<string, unknown>>();
+
+/** Mainnet's ETH/USD answer, $2,000 with Chainlink's 8 decimals. */
+export const MOCK_ETH_USD = 2000;
+/** Every EVM chain stands at this block. */
+export const MOCK_BLOCK = 100;
+
+async function rpcMock(request: Request, url: URL): Promise<Response> {
+  if (url.pathname === "/__tx") {
+    const body = (await request.json()) as { hash: string };
+    chainTxs.set(body.hash, body);
+    return json({ ok: true });
+  }
+  // A public endpoint that turns the Worker away, as Solana's does Cloudflare.
+  if (url.pathname.includes("refuses")) return new Response("forbidden", { status: 403 });
+  const { id, method, params } = (await request.json()) as {
+    id: number;
+    method: string;
+    params: unknown[];
+  };
+  const word = (n: bigint) => n.toString(16).padStart(64, "0");
+  const known = chainTxs.get(String(params?.[0] ?? ""));
+  const result = (() => {
+    switch (method) {
+      case "eth_call":
+        return `0x${word(1n)}${word(BigInt(MOCK_ETH_USD) * 100_000_000n)}${word(0n)}${word(0n)}${word(1n)}`;
+      case "eth_blockNumber":
+        return `0x${MOCK_BLOCK.toString(16)}`;
+      case "eth_getTransactionReceipt":
+        return known?.receipt ?? null;
+      case "eth_getTransactionByHash":
+        return known?.tx ?? null;
+      case "eth_getBlockByNumber":
+        return { timestamp: `0x${Math.floor(Date.now() / 1000).toString(16)}` };
+      case "getTransaction":
+        return known?.solana ?? null;
+      default:
+        return undefined;
+    }
+  })();
+  if (result === undefined) return json({ jsonrpc: "2.0", id, error: { message: `unmocked ${method}` } });
+  return json({ jsonrpc: "2.0", id, result });
+}
+
+/* --------------------------------------------------------- provisioned keys -- */
+
+/**
+ * Keys made with a provisioning key, by hash. A provisioning key is any bearer starting
+ * `sk-or-prov`; one containing `down` is refused, as an OpenRouter outage. Tests read the
+ * keys back at `GET https://openrouter.ai/__keys`.
+ */
+const madeKeys = new Map<string, { name: string; limit: number; key: string }>();
+
+export const PROVISIONING_KEY = "sk-or-prov-test";
+
+async function provisionedKeysMock(request: Request, url: URL): Promise<Response> {
+  if (url.pathname === "/__keys") return json(Object.fromEntries(madeKeys));
+  const auth = request.headers.get("authorization") ?? "";
+  if (!auth.startsWith("Bearer sk-or-prov")) return json({ error: "not a provisioning key" }, 401);
+  if (auth.includes("down")) return json({ error: "down" }, 503);
+  const hash = decodeURIComponent(url.pathname.slice("/api/v1/keys/".length));
+  if (request.method === "GET") return json({ data: [...madeKeys.keys()].map((h) => ({ hash: h })) });
+  if (request.method === "POST") {
+    const body = (await request.json()) as { name: string; limit: number };
+    const made = { hash: crypto.randomUUID(), key: `sk-or-v1-${crypto.randomUUID()}` };
+    madeKeys.set(made.hash, { name: body.name, limit: body.limit, key: made.key });
+    return json({ data: { hash: made.hash, name: body.name, limit: body.limit }, key: made.key });
+  }
+  const known = madeKeys.get(hash);
+  if (!known) return json({ error: "no such key" }, 404);
+  if (request.method === "DELETE") {
+    madeKeys.delete(hash);
+    return json({ deleted: true });
+  }
+  return json({ error: "unmocked" }, 405);
+}
+
 export async function openrouterMock(request: Request): Promise<Response> {
   const url = new URL(request.url);
+  if (url.hostname === "rpc.test") return rpcMock(request, url);
   if (url.hostname === "graph.facebook.com") return graphMock(request, url);
   if (url.hostname === "telegram.test") return telegramMock(request, url);
   if (url.hostname === "mcp.test") return mcpMock(request, url);
@@ -802,6 +889,10 @@ export async function openrouterMock(request: Request): Promise<Response> {
     const auth = request.headers.get("authorization") ?? "";
     if (auth.includes("sk-invalid")) return json({ error: "invalid" }, 401);
     return json({ data: { label: "mock key" } });
+  }
+
+  if (url.pathname.startsWith("/api/v1/keys") || url.pathname === "/__keys") {
+    return provisionedKeysMock(request, url);
   }
 
   if (url.pathname === "/__requests") {
@@ -907,6 +998,21 @@ export async function openrouterMock(request: Request): Promise<Response> {
   if (message.startsWith("!!toolloop")) {
     if (body.tool_choice === "none") return streamedText(TOOLLOOP_REPLY);
     return streamedToolCall("list", { path: "/" });
+  }
+
+  // `!!command <command> [argument]`: call `run_command`, then repeat what it said.
+  if (message.startsWith("!!command")) {
+    if (carriesToolResult(body)) {
+      const result = (body.messages ?? []).filter((m) => m.role === "tool").at(-1)?.content;
+      return streamedText(
+        `Command said: ${typeof result === "string" ? result : JSON.stringify(result)}`
+      );
+    }
+    const [, command, ...rest] = message.split(/\s+/);
+    return streamedToolCall(
+      "run_command",
+      rest.length ? { command, argument: rest.join(" ") } : { command }
+    );
   }
 
   if (message.startsWith("!!toolcall")) {

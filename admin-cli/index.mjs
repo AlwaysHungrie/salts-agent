@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Interactive CLI dashboard for the salt-agent deployment.
 //
-// Five tabs, each a list of rows — a row either holds a value that `enter` edits, or
+// Six tabs, each a list of rows — a row either holds a value that `enter` edits, or
 // is information only:
 //
 //   1 Overview   the deployment's counts
@@ -10,6 +10,10 @@
 //   3 Requests   the queue of accounts asking for a higher agent limit
 //   4 Defaults   the values every agent starts out holding
 //   5 Limits     every ceiling the deployment enforces
+//   6 Payments   what key purchases need: the OpenRouter provisioning key bought keys
+//                are made with (never shown back), the EVM and Solana addresses they
+//                are paid to, and Reown's project id for the wallet modal — `enter`
+//                sets one, `x` removes it
 //
 // The settings rows, the ranges the Worker refuses and the prose beside each row all
 // come from `/api/admin/settings`, so a field added to the Worker's `settings.ts` shows
@@ -210,7 +214,7 @@ function parseValue(name, kind, text) {
 /* ------------------------------------------------------------------ dashboard */
 
 const PAGE = 20;
-const TABS = ["Overview", "Users", "Requests", "Defaults", "Limits"];
+const TABS = ["Overview", "Users", "Requests", "Defaults", "Limits", "Payments"];
 /**
  * The settings that are objects, each merged key by key on the Worker — so each key
  * gets a row of its own rather than one row of JSON.
@@ -241,10 +245,20 @@ const state = {
   fields: [],
   users: pager("/api/admin/users", "users"),
   requests: pager("/api/admin/business-requests", "requests"),
+  /**
+   * The payment settings: `{ evm, solana, reown_project_id, rpc: { [network]: host },
+   * provisioning_key: { set, hint } }`; null until read, or when the Worker predates them.
+   */
+  payments: null,
   /** The user opened from the Users tab, or null while the list is showing. */
   user: null,
   /** Selection and scroll for the tabs that are not paged lists. */
-  pos: { 0: { sel: 0, top: 0 }, 3: { sel: 0, top: 0 }, 4: { sel: 0, top: 0 } },
+  pos: {
+    0: { sel: 0, top: 0 },
+    3: { sel: 0, top: 0 },
+    4: { sel: 0, top: 0 },
+    5: { sel: 0, top: 0 },
+  },
   /** Non-null while a value is being typed: `{ label, buffer, submit(text) }`. */
   edit: null,
   /** Non-null while a y/n is pending: `{ prompt, run() }`. */
@@ -270,6 +284,104 @@ async function loadSettings() {
   } catch (err) {
     state.status = `could not load settings — ${err.message}`;
   }
+  render();
+}
+
+async function loadPayments() {
+  try {
+    state.payments = await call("/api/admin/payments");
+  } catch (err) {
+    // A Worker from before key purchases has no such route: the tab says so.
+    state.payments = null;
+    if (err.status !== 401 && err.status !== 404) state.status = `could not read the payment settings — ${err.message}`;
+  }
+  render();
+}
+
+/** The payment settings the tab edits, besides the provisioning key. */
+const PAYMENT_FIELDS = [
+  { key: "evm", label: "EVM pay address", off: "EVM payments are closed" },
+  { key: "solana", label: "Solana pay address", off: "Solana payments are closed" },
+  { key: "reown_project_id", label: "Reown project id", off: "the wallet modal can't open" },
+];
+
+/** A network's RPC URL, edited like the other payment settings. */
+const rpcField = (network) => ({
+  key: `rpc:${network}`,
+  label: `${network} RPC URL`,
+  off: `${network} uses the configured RPC`,
+  body: (value) => ({ rpc: { [network]: value } }),
+});
+
+/** Set one payment setting; the Worker checks it is the right shape. */
+async function setPayment(field, text) {
+  const value = text.trim();
+  if (!value || value === state.payments?.[field.key]) {
+    state.status = "nothing changed";
+    return render();
+  }
+  state.payments = await call("/api/admin/payments", {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(field.body ? field.body(value) : { [field.key]: value }),
+  });
+  state.status = `${field.label} set`;
+  render();
+}
+
+function removePayment(field) {
+  state.confirm = {
+    prompt: `Remove the ${field.label}? Until one is set, ${field.off}.`,
+    run: async () => {
+      try {
+        state.payments = await call("/api/admin/payments", {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(field.body ? field.body("") : { [field.key]: "" }),
+        });
+        state.status = `${field.label} removed — ${field.off}`;
+      } catch (err) {
+        state.status = err.message;
+      }
+      render();
+    },
+  };
+  render();
+}
+
+/** Set the provisioning key: the Worker checks it with OpenRouter before keeping it. */
+async function setProvisioningKey(text) {
+  const key = text.trim();
+  if (!key) {
+    state.status = "nothing changed";
+    return render();
+  }
+  state.status = "checking with OpenRouter…";
+  render();
+  const shown = await call("/api/admin/provisioning-key", {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ key }),
+  });
+  state.payments = { ...state.payments, provisioning_key: shown };
+  state.status = "provisioning key set";
+  render();
+}
+
+function removeProvisioningKey() {
+  state.confirm = {
+    prompt: "Remove the provisioning key? Key purchases close until one is set.",
+    run: async () => {
+      try {
+        const shown = await call("/api/admin/provisioning-key", { method: "DELETE" });
+        state.payments = { ...state.payments, provisioning_key: shown };
+        state.status = "provisioning key removed — key purchases are closed";
+      } catch (err) {
+        state.status = err.message;
+      }
+      render();
+    },
+  };
   render();
 }
 
@@ -328,8 +440,8 @@ async function fillUnset() {
 }
 
 /** Open a line editor on the status bar, starting from the value in force. */
-function startEdit(label, value, submit) {
-  state.edit = { label, buffer: value, submit };
+function startEdit(label, value, submit, secret = false) {
+  state.edit = { label, buffer: value, submit, secret };
   state.status = "";
   render();
 }
@@ -509,7 +621,12 @@ function view() {
           unset: state.missing.length > 0,
         });
       }
-      return { columns: [["", 22], ["", 0]], rows, pos: state.pos[0], empty: "loading…" };
+      return {
+        columns: [["", 22], ["", 0]],
+        rows,
+        pos: state.pos[0],
+        empty: "loading…",
+      };
     }
 
     case 1: {
@@ -585,6 +702,45 @@ function view() {
           a: (row) => row && resolveRequest(row.request, true),
           x: (row) => row && resolveRequest(row.request, false),
         },
+      };
+    }
+
+    case 5: {
+      const pay = state.payments;
+      const rows = [];
+      if (pay) {
+        const key = pay.provisioning_key ?? { set: false, hint: "" };
+        rows.push({
+          cells: ["provisioning key", key.set ? `set (…${key.hint})` : "not set — key purchases are closed"],
+          unset: !key.set,
+          enter: () => startEdit("OpenRouter provisioning key", "", setProvisioningKey, true),
+          remove: key.set ? removeProvisioningKey : undefined,
+        });
+        for (const field of PAYMENT_FIELDS) {
+          rows.push({
+            cells: [field.label, pay[field.key] || `not set — ${field.off}`],
+            unset: !pay[field.key],
+            enter: () => startEdit(field.label, pay[field.key] ?? "", (t) => setPayment(field, t)),
+            remove: pay[field.key] ? () => removePayment(field) : undefined,
+          });
+        }
+        // Write-only: the Worker shows only the host, as the URL may carry an API key.
+        for (const [network, host] of Object.entries(pay.rpc ?? {})) {
+          const field = rpcField(network);
+          rows.push({
+            cells: [field.label, host ? `set (${host})` : "configured — the free public endpoint"],
+            enter: () => startEdit(field.label, "", (t) => setPayment(field, t), true),
+            remove: host ? () => removePayment(field) : undefined,
+          });
+        }
+      }
+      return {
+        columns: [["", 22], ["", 0]],
+        rows,
+        pos: state.pos[5],
+        empty: "the deployment predates payment settings, or they could not be read.",
+        hint: "enter set   x remove",
+        keys: { x: (row) => row?.remove?.() },
       };
     }
 
@@ -671,7 +827,8 @@ function render() {
   if (state.edit) {
     // The cursor is drawn rather than moved: the screen is repainted whole on every
     // keypress, so a real cursor position would be lost on the next paint.
-    out.push(`  ${BOLD}${state.edit.label}${OFF} ${state.edit.buffer}${INV} ${OFF}`);
+    const typed = state.edit.secret ? "•".repeat(state.edit.buffer.length) : state.edit.buffer;
+    out.push(`  ${BOLD}${state.edit.label}${OFF} ${typed}${INV} ${OFF}`);
     out.push(`${DIM}  enter save   esc cancel${OFF}`);
   } else if (state.confirm) {
     out.push(`  ${BOLD}${state.confirm.prompt}${OFF}`);
@@ -866,7 +1023,12 @@ process.stdin.on("data", async (chunk) => {
 process.stdout.on("resize", render);
 process.on("SIGINT", quit);
 
-await Promise.all([loadSettings(), loadMore(state.users), loadMore(state.requests)]);
+await Promise.all([
+  loadSettings(),
+  loadPayments(),
+  loadMore(state.users),
+  loadMore(state.requests),
+]);
 // A deployment with settings unset refuses every ordinary request, so say so first.
 if (state.missing.length) {
   state.status = "settings incomplete — press i to fill every unset row with the shipped value";

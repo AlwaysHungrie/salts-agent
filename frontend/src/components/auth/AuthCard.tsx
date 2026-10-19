@@ -166,8 +166,8 @@ export function AuthCard({
         {step === "code"
           ? `We sent a six-digit code to ${email.trim()}`
           : signingIn
-            ? "Sign in, your agents are waiting on you"
-            : "Personal, always accessible AI agents"}
+            ? "Sign in. Your agents are waiting for you."
+            : "Personal AI agents that stay with you forever"}
       </p>
 
       {step === "email" && (
