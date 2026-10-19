@@ -22,7 +22,7 @@ Once your request is approved, your limit goes up automatically. [Get a Fleet Ac
 
 ## 2. Put a key in your OpenRouter wallet
 
-If your agents will use your OpenRouter key, so your users do not need their own, you need a key in your wallet before you create the fleet. Click **OpenRouter wallet** in the top right corner of the home page, and either paste your own key under **Already have a key?** or click **Pay with crypto** under **Get new key** to buy one. [Get an OpenRouter API key](/guide/openrouter) and [Buy a key with crypto](/guide/wallet-crypto) walk you through each way.
+If your agents will use your OpenRouter key, so your users do not need their own, you need a key in your wallet before you create the fleet. Click **OpenRouter wallet** in the top right corner of the home page, and either paste your own key under **Already have a OpenRouter key?** or click **Pay with crypto** under **Get new key** to buy one. [Get an OpenRouter API key](/guide/openrouter) and [Buy a key with crypto](/guide/wallet-crypto) walk you through each way.
 
 Every agent in the fleet spends from this one key, so we recommend giving it enough credit for all your users.
 

@@ -18,7 +18,7 @@ If this is your first time on Salts, click **Create one** at the bottom of the w
 
 Your agent needs an OpenRouter key to pay for its replies, and Salts keeps your keys in your OpenRouter wallet. Open it by clicking **OpenRouter wallet** in the top right corner of the home page. There are two ways to get a key into it, and you only need one.
 
-**Add your own OpenRouter key.** Create an account on [openrouter.ai](https://openrouter.ai), buy some credit and create a key. Then paste the key under **Already have a key?** in your wallet and click **Add key**. [Get an OpenRouter API key](/guide/openrouter) walks you through each step.
+**Add your own OpenRouter key.** Create an account on [openrouter.ai](https://openrouter.ai), buy some credit and create a key. Then paste the key under **Already have a OpenRouter key?** in your wallet and click **Add key**. [Get an OpenRouter API key](/guide/openrouter) walks you through each step.
 
 **Buy a key with crypto.** If you would rather not create an OpenRouter account, click **Pay with crypto** under **Get new key**, choose how much credit you want and pay with USDC or ETH from your crypto wallet. The key appears in your wallet once your payment is confirmed. [Buy a key with crypto](/guide/wallet-crypto) walks you through each step.
 

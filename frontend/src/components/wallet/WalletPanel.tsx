@@ -186,32 +186,25 @@ function WalletSidebar({ onClose }: { onClose: () => void }) {
                   note="USDC or ETH on Ethereum, Base, Solana and more"
                   onClick={() => setBuying(true)}
                 />
+                {wallet.networks.length > 0 && (
+                  <div>
+                    <RecoverPayment
+                      networks={wallet.networks}
+                      recover={wallet.recover}
+                    />
+                  </div>
+                )}
                 <PayOption
                   icon={<Link2 className="h-4 w-4" />}
-                  title="Connect OpenRouter"
-                  note="Sign in to OpenRouter and approve a key"
+                  title="From OpenRouter"
+                  note="Sign in to OpenRouter and create a new key"
                   onClick={() => void startConnect()}
                 />
               </div>
 
-              {wallet.networks.length > 0 && (
-                <RecoverPayment
-                  networks={wallet.networks}
-                  recover={wallet.recover}
-                />
-              )}
-
-              <div className="text-muted mt-8 mb-3 text-xs font-medium flex">
-                <span>Already have a key?</span>
-                <a
-                  href="/guide/openrouter"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hover:text-ink ml-auto"
-                >
-                  (OpenRouter guide)
-                </a>
-              </div>
+              <p className="text-muted mt-8 mb-3 text-xs font-medium">
+                Already have a OpenRouter key?
+              </p>
               <AddKey onAdd={wallet.add} />
             </>
           )}
@@ -562,7 +555,7 @@ function RecoverPayment({
     <>
       <button
         onClick={() => setOpen(true)}
-        className="text-muted hover:text-ink mt-3 text-xs underline underline-offset-2"
+        className="text-muted hover:text-ink text-xs underline underline-offset-2"
       >
         Paid but didn&apos;t get a key?
       </button>
@@ -649,8 +642,8 @@ function RecoverDialog({
           </button>
         </div>
         <p className="text-muted mt-2 mb-4 text-sm font-light leading-[1.43]">
-          Paid, but no key showed up in your wallet? Enter the payment details
-          below and we&rsquo;ll look for it.
+          Share your transaction id incase If your transaction was successful
+          but no key was issued to you.
         </p>
         <div className="flex flex-col gap-2">
           <select
