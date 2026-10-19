@@ -87,8 +87,8 @@ export function Stats() {
         <Reveal>
           <div className="grid gap-px overflow-hidden rounded-[24px] bg-hairline-soft sm:grid-cols-3">
             {STATS_COPY.map((s) => (
-              <div key={s.value} className="bg-canvas p-8">
-                <p className="tnum text-[40px] font-[650] leading-none tracking-[-0.03em]">
+              <div key={s.value} className="bg-canvas p-6 sm:p-8">
+                <p className="tnum text-[32px] font-[650] leading-none tracking-[-0.03em] sm:text-[40px]">
                   {s.value}
                 </p>
                 <p className="mt-3 text-sm leading-relaxed text-muted">
@@ -121,14 +121,14 @@ export function Features() {
           </div>
         </Reveal>
 
-        <div className="mt-8 grid gap-4 sm:mt-12 md:grid-cols-3">
+        <div className="mt-8 grid gap-3 sm:mt-12 sm:gap-4 md:grid-cols-3">
           {FEATURES_COPY.cards.map((f, i) => (
             <Reveal
               key={f.title}
               delay={i * 0.05}
               className={"wide" in f && f.wide ? "md:col-span-2" : ""}
             >
-              <article className="flex h-full flex-col rounded-[24px] bg-canvas p-7 ring-1 ring-hairline-soft transition-colors hover:bg-canvas-soft">
+              <article className="flex h-full flex-col rounded-[24px] bg-canvas p-6 ring-1 sm:p-7 ring-hairline-soft transition-colors hover:bg-canvas-soft">
                 <h3 className="text-xl font-semibold tracking-[-0.01em]">
                   {f.title}
                 </h3>
@@ -161,21 +161,21 @@ export function Mission() {
     <section id="mission" className="mt-20 scroll-mt-28 sm:mt-28 lg:mt-32">
       <Wrap>
         <Reveal>
-          <div className="relative overflow-hidden rounded-[32px] bg-ink px-5 py-12 text-white sm:px-12 sm:py-16 lg:px-16 lg:py-20">
+          <div className="relative overflow-hidden rounded-[32px] bg-ink px-7 py-14 text-white sm:px-12 sm:py-16 lg:px-16 lg:py-20">
             {/* Cropped by the card edge, so it reads as a world still turning. */}
             <Globe className="pointer-events-none absolute right-0 top-1/2 hidden h-[520px] w-[520px] -translate-y-1/2 translate-x-[45%] lg:block" />
             <div className="relative max-w-[600px]">
-              <p className="text-sm text-faint">
+              <p className="text-sm text-faint text-balance">
                 {MISSION.coveragePrefix}{" "}
                 <span className="font-semibold text-white">
                   <CountUp to={COVERAGE_PERCENT} decimals={6} suffix="%" />
                 </span>{" "}
                 {MISSION.coverageSuffix}
               </p>
-              <h2 className="mt-3 text-[clamp(26px,3.5vw,38px)] font-[650] leading-[1.1] tracking-[-0.025em] text-balance">
+              <h2 className="mt-5 text-[clamp(26px,3.5vw,38px)] sm:mt-3 font-[650] leading-[1.1] tracking-[-0.025em] text-balance">
                 {MISSION.title}
               </h2>
-              <p className="mt-4 text-lg font-light leading-[1.45] text-faint text-balance">
+              <p className="mt-6 text-lg font-light leading-[1.45] text-faint text-balance sm:mt-4">
                 {MISSION.body}
               </p>
             </div>
@@ -207,8 +207,10 @@ export function Fleet() {
   return (
     <section id="fleet" className="mt-20 scroll-mt-28 sm:mt-28 lg:mt-32">
       <Wrap>
-        <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
-          <Reveal>
+        {/* On a phone the diagram sits between the pitch and the points, so the
+            picture comes before the detail; on desktop it spans both rows. */}
+        <div className="grid gap-10 lg:grid-cols-2 lg:gap-x-16 lg:gap-y-8">
+          <Reveal className="self-end lg:col-start-1 lg:row-start-1">
             <Eyebrow>{FLEET.eyebrow}</Eyebrow>
             <h2 className="mt-3 text-[clamp(30px,4.5vw,44px)] font-[650] leading-[1.08] tracking-[-0.025em] text-balance">
               {FLEET.title}
@@ -216,8 +218,12 @@ export function Fleet() {
             <p className="mt-4 text-base font-light leading-[1.45] text-muted sm:text-lg">
               {FLEET.body}
             </p>
+          </Reveal>
 
-            <ul className="mt-8 space-y-5">
+          <FleetDiagram className="self-center lg:col-start-2 lg:row-span-2 lg:row-start-1" />
+
+          <Reveal className="self-start lg:col-start-1 lg:row-start-2">
+            <ul className="space-y-5">
               {FLEET.points.map((p) => (
                 <li key={p.title} className="border-l-2 border-hairline pl-4">
                   <h3 className="text-base font-semibold tracking-[-0.01em]">{p.title}</h3>
@@ -226,15 +232,13 @@ export function Fleet() {
               ))}
             </ul>
 
-            <div className="mt-8 flex flex-col items-start gap-3">
+            <div className="mt-8 flex flex-col items-center gap-3 text-center lg:items-start lg:text-left">
               <Button href={LINKS.fleetGuide} variant="outline">
                 {FLEET.cta}
               </Button>
               <p className="text-sm text-faint">{FLEET.note}</p>
             </div>
           </Reveal>
-
-          <FleetDiagram />
         </div>
       </Wrap>
     </section>
@@ -311,7 +315,7 @@ export function Cta() {
               <h2 className="text-[clamp(30px,4.5vw,44px)] font-[650] leading-[1.08] tracking-[-0.025em]">
                 {CTA_COPY.title}
               </h2>
-              <p className="mx-auto mt-4 text-xl font-light leading-[1.4] text-muted text-balance">
+              <p className="mx-auto mt-4 text-base font-light leading-[1.45] text-muted text-balance sm:text-xl sm:leading-[1.4]">
                 {CTA_COPY.body[0]} <br className="hidden sm:block" />
                 {CTA_COPY.body[1]}
               </p>

@@ -102,7 +102,7 @@ export function FleetDiagram({ className = "" }: { className?: string }) {
             transition={{ duration: 0.45, delay: 0.5 + i * 0.08, ease: [0.22, 1, 0.36, 1] }}
           >
             <span
-              className="flex size-11 items-center justify-center rounded-full text-[15px] font-semibold ring-4 ring-canvas sm:size-12"
+              className="flex size-10 items-center justify-center rounded-full text-sm sm:size-12 sm:text-[15px] font-semibold ring-4 ring-canvas sm:size-12"
               style={{ background: bg, color: fg }}
             >
               {name[0]}
@@ -121,16 +121,16 @@ export function FleetDiagram({ className = "" }: { className?: string }) {
 
       {/* The owner: whose key every agent in the fleet runs on. */}
       <motion.div
-        className="absolute top-1/2 left-1/2 flex w-[46%] -translate-x-1/2 -translate-y-1/2 flex-col items-center text-center"
+        className="absolute top-1/2 left-1/2 flex w-[70%] -translate-x-1/2 sm:w-[46%] -translate-y-1/2 flex-col items-center text-center"
         initial={reduced ? false : { opacity: 0, y: 8 }}
         animate={seen ? { opacity: 1, y: 0 } : undefined}
         transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
       >
-        <span className="flex items-center gap-1.5 rounded-full bg-canvas-soft px-2.5 py-1 text-[10px] font-medium text-muted text-balance sm:text-[11px]">
+        <span className="flex items-center gap-1.5 rounded-full bg-canvas-soft px-2.5 py-1 text-[10px] font-medium whitespace-nowrap text-muted sm:text-[11px]">
           <KeyIcon />
           {FLEET.owner.key}
         </span>
-        <span className="mt-3 flex size-16 items-center justify-center rounded-full bg-ink text-2xl font-semibold text-white shadow-[0_14px_30px_-12px_rgba(20,20,20,0.5)] sm:size-20 sm:text-[28px]">
+        <span className="mt-2 flex size-14 items-center sm:mt-3 justify-center rounded-full bg-ink text-2xl font-semibold text-white shadow-[0_14px_30px_-12px_rgba(20,20,20,0.5)] sm:size-20 sm:text-[28px]">
           {FLEET.owner.name[0]}
         </span>
         <span className="mt-2.5 text-sm font-semibold sm:text-base">{FLEET.owner.name}</span>
