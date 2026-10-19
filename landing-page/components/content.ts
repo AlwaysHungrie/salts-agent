@@ -100,19 +100,19 @@ export const HERO = {
 
 export const STATS = [
   {
-    value: "$0 a month",
+    value: "$0",
     label:
-      "Agents like this usually cost $20 or more a month. You only pay the model provider for what yours uses.",
+      "to run. You only pay per message, from about $0.001 up to $0.03 on the most advanced models.",
   },
   {
-    value: "Up to 5",
+    value: "Full control",
     label:
-      "Agents on one account, each with its own job. Need more? Ask, or host it yourself with no limit.",
+      "over costs, only use as much or as little as you need. Switch to any model, toggle capabilities, and gate access anytime you want.",
   },
   {
-    value: "Open source",
+    value: "All features",
     label:
-      "Anyone can build on it, so it works with tools no one else supports, including the ones you built.",
+      "including image, audio, memory, scheduling and external connectors that you'd expect from any competent agent. Plus any custom connector you build.",
   },
 ] as const;
 
