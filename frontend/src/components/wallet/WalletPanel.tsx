@@ -203,7 +203,7 @@ function WalletSidebar({ onClose }: { onClose: () => void }) {
               </div>
 
               <p className="text-muted mt-8 mb-3 text-xs font-medium">
-                Already have a OpenRouter key?
+                Already have an OpenRouter key?
               </p>
               <AddKey onAdd={wallet.add} />
             </>
@@ -642,8 +642,8 @@ function RecoverDialog({
           </button>
         </div>
         <p className="text-muted mt-2 mb-4 text-sm font-light leading-[1.43]">
-          Share your transaction id incase If your transaction was successful
-          but no key was issued to you.
+          Share your transaction id in case your transaction went through but
+          no key was issued to you.
         </p>
         <div className="flex flex-col gap-2">
           <select
