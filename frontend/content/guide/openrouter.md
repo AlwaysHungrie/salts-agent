@@ -20,7 +20,7 @@ Find and open the **Credits** page in the left sidebar and purchase API credits.
 
 ## 3. Create an API key
 
-The quickest way is to let Salts ask for one. On the Salts home page, click **OpenRouter wallet** in the top right corner, then choose **Connect OpenRouter**. OpenRouter asks you to approve a new key, then sends you back with the key in your wallet, and you can skip straight to step 5.
+The quickest way is to let Salts ask for one. On the Salts home page, click **OpenRouter wallet** in the top right corner, then choose **From OpenRouter**. OpenRouter asks you to create a new key, then sends you back with the key in your wallet, and you can skip straight to step 5.
 
 To create the key yourself instead, follow the steps below.
 

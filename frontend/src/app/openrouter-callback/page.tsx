@@ -40,7 +40,7 @@ export default function Page() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-5 text-center">
       <p className="text-muted text-sm leading-[1.43]">
-        {error ?? "Connecting your OpenRouter account…"}
+        {error ?? "Adding your new OpenRouter key…"}
       </p>
       {error && (
         <Link
