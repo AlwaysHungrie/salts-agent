@@ -85,52 +85,53 @@ export const LINKS = {
 
 export const HERO = {
   eyebrow: "In your browser, Telegram & WhatsApp",
-  title: "Your personal AI agent, always online.",
+  /** Two lines, broken where the phrase breaks on wide screens. */
+  title: ["AI agents that run without a subscription.", "Or your machine."],
   body: [
-    `${BRAND.name} is an AI agent that`,
-    "doesn't need a subscription or your computer to run.",
-    "So you can use it as much as you want, any way you want, and pay only for what you use.",
+    "",
+    "Always on.",
+    "Create one for every job and pay only for what they use.",
   ],
   primaryCta: "Get my agent",
-  secondaryCta: "See what can it do",
-  footnote: "Free to run with your own OpenRouter API key. Usage limits apply.",
+  secondaryCta: "See what it can do",
+  footnote: "Runs on your own OpenRouter API key. Usage limits apply.",
 } as const;
 
 export const STATS = [
   {
-    value: "$0",
+    value: "$0 a month",
     label:
-      "To run your agent. You only pay your model provider for tokens your agent uses.",
+      "Agents like this usually cost $20 or more a month. You only pay the model provider for what yours uses.",
   },
   {
-    value: "24/7",
+    value: "Up to 5",
     label:
-      "Your agent runs online, so it keeps working when your phone and laptop are switched off.",
+      "Agents on one account, each with its own job. Need more? Ask, or host it yourself with no limit.",
   },
   {
-    value: "3 interfaces",
+    value: "Open source",
     label:
-      "Chat via Browser, Whatsapp or use Telegram to make your agent publicly accessible.",
+      "Anyone can build on it, so it works with tools no one else supports, including the ones you built.",
   },
 ] as const;
 
 export const FEATURES = {
   eyebrow: "What it can do for you",
-  title: "Goes beyond answering questions.",
-  body: `Your ${BRAND.name} agent acts on what you ask, not just replies to it. Turn on only the skills you need.`,
+  title: "One assistant, or a whole team of them.",
+  body: `Give each ${BRAND.name} agent its own job, and it gets on with it while you get on with your day.`,
   cards: [
     {
-      title: "It works in your apps",
-      body: "Connect Notion, Gmail, GitHub or any other app you use, and your agent can work it for you. Ask it to add a task, find a page or open an issue, and it takes care of the clicks.",
+      title: "It works with your tools, even the ones only you use",
+      body: "Notion, GitHub, your company's internal app, or the product you built yourself. Closed assistants only connect to what is on their list. Salts is open source, so anything can plug in.",
       wide: true,
+    },
+    {
+      title: "It becomes a specialist",
+      body: "Add the analyst and it turns your spreadsheets into finished Excel reports. Add the recruiter and it screens CVs against your job posts. More are on the way.",
     },
     {
       title: "It remembers",
       body: "Your dog's name, your coffee order, the thing you asked it to follow up on next week. You only have to tell it once.",
-    },
-    {
-      title: "It looks things up",
-      body: "It searches the web, reads the links and files you send it, and tells you where the answer came from.",
     },
     {
       title: "It reminds you",
@@ -143,8 +144,8 @@ export const FEATURES = {
   ],
   /** The one dark card at the end of the grid. */
   highlight: {
-    title: "You are in control",
-    body: "You choose the model, what your agent can do, who it talks to and how much it can spend.",
+    title: "Run it yourself",
+    body: "Host the whole thing on your own servers. Your conversations, files and keys never leave them.",
   },
 } as const;
 
@@ -158,13 +159,13 @@ export const MISSION = {
 
 export const PRICING = {
   eyebrow: "Pricing",
-  title: "Free to run. You only pay for the model.",
+  title: "No monthly fee. You only pay for the model.",
   body: `${BRAND.name} does not charge a subscription. Your agent uses your own OpenRouter API key, so you pay OpenRouter directly for the tokens your agent uses, and nothing when it is quiet. We recommend setting a spending limit on your key, so you are never surprised by your bill.`,
   bullets: [
     "See exactly what every reply cost, right under the reply",
     "Switch to a cheaper or a stronger model whenever you like",
     `Keep up to ${SESSION_LIMIT} chat sessions and ${STORAGE_MB} MB of files per agent`,
-    "Self-host on your own Cloudflare account to remove every usage limit",
+    "Or host it yourself on Cloudflare, with no usage limits at all",
   ],
   placeholder: "Placeholder — a reply with its cost shown underneath",
 } as const;
@@ -198,7 +199,9 @@ export const CAPABILITIES = {
     "Remember what matters",
     "Connect to Notion",
     "Connect to GitHub",
-    "Connect any MCP server",
+    "Analyse spreadsheets",
+    "Screen candidates",
+    "Connect your own tools",
   ],
   more: "More to be added over time.",
 } as const;
@@ -218,8 +221,8 @@ export const FLEET = {
       body: "Your users can customise their agents, within the settings you allow them to change.",
     },
     {
-      title: "Manage them in one place",
-      body: "Get additional options to give your users an agent experience you feel they would find useful.",
+      title: "You run the setup, they just chat",
+      body: "Plug in tools like the analyst or the recruiter once, on your own machine, and everyone's agent can use them. Your users never need a computer.",
     },
   ],
   cta: "Learn about fleets",
@@ -272,7 +275,7 @@ export const FAQ = {
     },
     {
       q: "What are the usage limits?",
-      a: `Each account can create one agent. Each agent can keep up to ${SESSION_LIMIT} chat sessions and ${STORAGE_MB} MB of files. When you reach a limit, delete older sessions to make room. Keep in mind that the longer a conversation gets, the more each reply costs, so we recommend starting a new one whenever you change the subject.`,
+      a: `Each account can create up to 5 agents. Each agent can keep up to ${SESSION_LIMIT} chat sessions and ${STORAGE_MB} MB of files. When you reach a limit, delete older sessions to make room. Keep in mind that the longer a conversation gets, the more each reply costs, so we recommend starting a new one whenever you change the subject.`,
     },
     {
       q: "Can I send it files?",
@@ -280,7 +283,11 @@ export const FAQ = {
     },
     {
       q: "What if I need more agents or higher limits?",
-      a: "If you want to give agents to other people, request a Fleet Account from the app. If you want to remove the usage limits altogether, you can host Salts on your own Cloudflare account and pay Cloudflare for what you use.",
+      a: "Request a higher limit or a Fleet Account from the app. To remove the limits altogether, host Salts on your own Cloudflare account and pay Cloudflare for what you use.",
+    },
+    {
+      q: "Is it really open source?",
+      a: `Yes, under the Apache-2.0 licence. You can read every line, connect your own tools, or run all of ${BRAND.name} on your own servers so your data never leaves them.`,
     },
     {
       q: "I already have a coding agent.",
@@ -297,8 +304,8 @@ export const CTA = {
 } as const;
 
 export const FOOTER = {
-  tagline: `${BRAND.name} is a personal AI agent that doesn't need a subscription or your computer to run. Use it as much as you want and pay only for what you use. Talk to it in your browser, on Telegram or on WhatsApp.`,
-  note: "Free to run. Self-host for higher usage limits.",
+  tagline: `${BRAND.name} is an open source AI assistant with no monthly fee and nothing to install. Use it as much as you like and pay only for what it uses. Talk to it in your browser, on Telegram or on WhatsApp.`,
+  note: "No monthly fee. Self-host for no limits.",
   columns: [
     {
       title: "Product",
