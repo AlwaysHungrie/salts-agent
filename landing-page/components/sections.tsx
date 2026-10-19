@@ -1,8 +1,8 @@
 import { ApiKeysPreview } from "./ApiKeysPreview";
 import { TelegramSettingsPreview } from "./TelegramSettingsPreview";
 import { AppPreview } from "./AppPreview";
+import { CapabilityPanel } from "./CapabilityPanel";
 import {
-  CAPABILITIES as CAPABILITIES_COPY,
   COVERAGE_PERCENT,
   CTA as CTA_COPY,
   FEATURES as FEATURES_COPY,
@@ -281,30 +281,7 @@ export function Capabilities() {
     <section id="capabilities" className="mt-20 scroll-mt-28 sm:mt-28 lg:mt-32">
       <Wrap>
         <Reveal>
-          <div className="rounded-[32px] bg-canvas-soft px-5 py-7 sm:p-8 lg:p-12">
-            <div className="max-w-[560px]">
-              <Eyebrow>{CAPABILITIES_COPY.eyebrow}</Eyebrow>
-              <h2 className="mt-3 text-[clamp(26px,3.5vw,34px)] font-[650] leading-[1.1] tracking-[-0.025em]">
-                {CAPABILITIES_COPY.title}
-              </h2>
-              <p className="mt-3 text-[15px] leading-relaxed text-muted sm:mt-4 sm:text-base">
-                {CAPABILITIES_COPY.body}
-              </p>
-            </div>
-            <div className="mt-6 flex flex-wrap gap-1.5 sm:mt-8 sm:gap-2">
-              {CAPABILITIES_COPY.items.map((c) => (
-                <span
-                  key={c}
-                  className="rounded-full bg-canvas px-3 py-1.5 text-[13px] ring-1 ring-hairline-soft sm:px-4 sm:py-2 sm:text-sm"
-                >
-                  {c}
-                </span>
-              ))}
-              <span className="rounded-full px-3 py-1.5 text-[13px] text-faint ring-1 ring-hairline sm:px-4 sm:py-2 sm:text-sm">
-                {CAPABILITIES_COPY.more}
-              </span>
-            </div>
-          </div>
+          <CapabilityPanel />
         </Reveal>
       </Wrap>
     </section>
