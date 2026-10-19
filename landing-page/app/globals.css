@@ -14,7 +14,6 @@
   --color-accent: #0066ff;
 
   --font-sans: var(--font-inter), -apple-system, "Helvetica Neue", Arial, sans-serif;
-  --font-mono: var(--font-jetbrains-mono), ui-monospace, "SF Mono", Menlo, monospace;
 
   --radius-sm: 16px;
   --radius-md: 24px;
@@ -59,12 +58,6 @@ h3,
 h4 {
   font-weight: 650;
   letter-spacing: -0.01em;
-}
-
-/* OpenRouter's own face, for the card that stands in for its keys screen. */
-.font-or {
-  font-family: var(--font-figtree), var(--font-sans);
-  letter-spacing: -0.005em;
 }
 
 .tnum {
