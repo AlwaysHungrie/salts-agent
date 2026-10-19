@@ -31,7 +31,7 @@ export default function Page() {
         setError(result.error);
         return;
       }
-      const failed = await add(result.key);
+      const failed = await add(result.key, true);
       if (failed) setError(failed);
       else router.replace(result.back);
     })();
