@@ -194,20 +194,20 @@ export const CAPABILITIES = {
 /** A short section for Fleet Accounts. Kept modest on purpose: the page is about personal agents. */
 export const FLEET = {
   eyebrow: "Fleet Accounts",
-  title: "Give your whole community an agent.",
-  body: "Create agents for everyone in your community at once. You set them up and cover the cost. They sign in with their email and find an agent of their own waiting.",
+  title: "Give your whole community personal agents.",
+  body: "Create agents for everyone in your community. These agents can share your OpenRouter key, so they work out of the box.",
   points: [
     {
-      title: "One key, a limit each",
-      body: "Every agent runs on your OpenRouter key, and each has its own monthly spending limit.",
+      title: "Shared API key, with individual limits",
+      body: "As the admin, you control how much each person can use your API key.",
     },
     {
-      title: "Nothing for them to set up",
-      body: "No OpenRouter account and no settings to work out. They just start chatting.",
+      title: "Customize and ease their experience",
+      body: "You control which settings and capabilities your community members see. Depending on your community, you can hide a few features to make the agents easier to use.",
     },
     {
-      title: "Their chats stay theirs",
-      body: "You choose how the agents are set up, but you can't read anyone's conversations.",
+      title: "Agents stay private to their owners",
+      body: "Community members still own their agents. Their conversations are never shared with other agents or with the admin.",
     },
   ],
   /** The owner in the middle of the diagram. */
@@ -219,7 +219,7 @@ export const FLEET = {
   /** The community around the owner; sample names only. */
   members: ["Alex", "Marty", "Gloria", "Melman", "Julien", "Kowalski", "Rico", "Private"],
   cta: "Learn about fleets",
-  note: "Upgrades to Fleet Accounts are free for a limited time. Request from the app.",
+  note: "Sign in and send us a request to increase your agent limit to operate a fleet for your community.",
 } as const;
 
 /**
