@@ -84,3 +84,29 @@ export function MaybeLink({
     </a>
   );
 }
+
+/** `text` with the first occurrence of `link.text` as an outbound link. */
+export function LinkedText({
+  text,
+  link,
+}: {
+  text: string;
+  link: { text: string; href: string };
+}) {
+  const at = text.indexOf(link.text);
+  if (at < 0) return text;
+  return (
+    <>
+      {text.slice(0, at)}
+      <a
+        href={link.href}
+        target="_blank"
+        rel="noreferrer"
+        className="text-ink underline decoration-hairline underline-offset-2 transition-colors hover:decoration-ink"
+      >
+        {link.text}
+      </a>
+      {text.slice(at + link.text.length)}
+    </>
+  );
+}

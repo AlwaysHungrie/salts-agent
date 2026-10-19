@@ -15,7 +15,7 @@ import {
 } from "./content";
 import { Globe } from "./Globe";
 import { CountUp, HeroSquircles, Reveal } from "./motion";
-import { Button, Eyebrow, Wrap } from "./ui";
+import { Button, Eyebrow, LinkedText, Wrap } from "./ui";
 
 /*
  * Every string on this page comes from ./content.ts. These components only
@@ -244,32 +244,6 @@ export function Fleet() {
 /* --------------------------------------------------------------- Steps -- */
 
 /** The three-step setup, rendered identically wherever it appears. */
-/** `text` with the first occurrence of `link.text` as an outbound link. */
-function LinkedText({
-  text,
-  link,
-}: {
-  text: string;
-  link: { text: string; href: string };
-}) {
-  const at = text.indexOf(link.text);
-  if (at < 0) return text;
-  return (
-    <>
-      {text.slice(0, at)}
-      <a
-        href={link.href}
-        target="_blank"
-        rel="noreferrer"
-        className="text-ink underline decoration-hairline underline-offset-2 transition-colors hover:decoration-ink"
-      >
-        {link.text}
-      </a>
-      {text.slice(at + link.text.length)}
-    </>
-  );
-}
-
 export function StepList() {
   return (
     <div className="grid gap-6 text-left sm:gap-8 md:grid-cols-3">

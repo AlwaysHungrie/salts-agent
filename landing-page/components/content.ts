@@ -49,7 +49,7 @@ export const STORAGE_MB = 50;
 export const NAV = [
   { id: "skills", label: "What it does", sections: ["stats", "skills", "capabilities"] },
   { id: "how", label: "How it works", sections: ["how"] },
-  { id: "faq", label: "FAQ", sections: ["faq", "start"] },
+  { id: "fleet", label: "Fleet", sections: ["mission", "fleet", "faq", "start"] },
 ] as const;
 
 /** Every observed section id, flattened. */
@@ -77,6 +77,7 @@ export const LINKS = {
   terms: "/terms",
   guide: `${APP_URL}/guide`,
   stepByStepGuide: `${APP_URL}/guide/step-by-step-agent`,
+  githubIssues: "https://github.com/AlwaysHungrie/salts-agent/issues/new",
   fleetGuide: `${APP_URL}/guide/fleets`,
   openRouterGuide: `${APP_URL}/guide/openrouter`,
 } as const;
@@ -254,38 +255,49 @@ export const HOW = {
 export const FAQ = {
   eyebrow: "FAQ",
   title: "Something on your mind?",
+  /** An answer can link one of its phrases out, the same way the steps do. */
   items: [
     {
       q: "Is it really free?",
-      a: `Yes. Running your ${BRAND.name} agent is free, within the usage limits. You only pay OpenRouter for the model tokens your agent uses, and any apps you connect that have paid plans of their own.`,
-    },
-    {
-      q: "Why do I need my own OpenRouter API key?",
-      a: "So you stay in control of what you spend. Instead of paying a fixed monthly subscription, you pay only for what your agent actually uses, and you can set your own spending limit. OpenRouter also lets you pick from hundreds of models, so you are never tied to one company.",
-    },
-    {
-      q: "Do I have to use Telegram or WhatsApp?",
-      a: "No. You can talk to your agent in your browser at any time. Telegram and WhatsApp are there so you can reach it from your phone, and every conversation shows up in your browser too.",
+      a: `Yes. Running your ${BRAND.name} agent is free, within the usage limits. You only pay for the model tokens it uses, and for any connected apps that have paid plans of their own.`,
     },
     {
       q: "What are the usage limits?",
-      a: `Each account can create up to 5 agents. Each agent can keep up to ${SESSION_LIMIT} chat sessions and ${STORAGE_MB} MB of files. When you reach a limit, delete older sessions to make room. Keep in mind that the longer a conversation gets, the more each reply costs, so we recommend starting a new one whenever you change the subject.`,
+      a: `Up to 5 agents per account, and ${SESSION_LIMIT} chat sessions and ${STORAGE_MB} MB of files per agent. Need more agents? Request a higher limit from the app, or host ${BRAND.name} yourself on Cloudflare with no limits.`,
     },
     {
-      q: "Can I send it files?",
-      a: "Yes. You can send photos, screenshots, PDFs, text files and voice notes, as long as the matching capability is switched on.",
+      q: "Do I need an OpenRouter account?",
+      a: "No. You can bring your own key from openrouter.ai, or buy one from us with any crypto wallet. Either way, every reply is paid from that key's credit, and you can switch models at any time.",
+      link: { text: "openrouter.ai", href: "https://openrouter.ai" },
     },
     {
-      q: "What if I need more agents or higher limits?",
-      a: "Request a higher limit or a Fleet Account from the app. To remove the limits altogether, host Salts on your own Cloudflare account and pay Cloudflare for what you use.",
+      q: "How is it different from ChatGPT or OpenClaw?",
+      a: `ChatGPT charges a monthly subscription and only answers while you have it open. OpenClaw runs on your own computer, so it stops when your computer does. Your ${BRAND.name} agent runs online all the time, can message you first, and lives in the chat apps you already use.`,
     },
     {
-      q: "Is it really open source?",
-      a: `Yes, under the Apache-2.0 licence. You can read every line, connect your own tools, or run all of ${BRAND.name} on your own servers so your data never leaves them.`,
+      q: "Who can read my conversations?",
+      a: "Only you, and anyone you add under Manage access. If your agent is part of a fleet, the fleet owner can see what it spends but not what you say. Your messages go through OpenRouter to the model you picked, under that company's privacy policy.",
     },
     {
-      q: "I already have a coding agent.",
-      a: `${BRAND.name} does not replace a coding agent that runs on your computer with access to your terminal and files. What it does is run without a computer or a subscription, so it can take care of your everyday tasks while you and your coding agent focus on the work that matters.`,
+      q: "What apps can it connect to?",
+      a: "We offer one-click integrations for Notion, GitHub, Swiggy and a few other MCP servers we've built ourselves. You can connect any app that has a public MCP server, or one hosted by a third party. Ask your agent about an app you use.",
+    },
+    {
+      q: "What if the app I use isn't supported?",
+      a: `Open an issue on GitHub and tell us what you need. ${BRAND.name} is open source, so we and the community can help build a connector for it.`,
+      link: { text: "Open an issue on GitHub", href: LINKS.githubIssues },
+    },
+    {
+      q: "Can I send it videos?",
+      a: "Not at the moment. You can send photos, screenshots, PDFs, text files and voice notes, as long as the matching capability is switched on.",
+    },
+    {
+      q: "What happens when my credit runs out?",
+      a: "Your agent stops replying until its key has credit again. Top up on OpenRouter, or buy a new key with crypto, since a bought key cannot be topped up.",
+    },
+    {
+      q: "Do I have to use Telegram or WhatsApp?",
+      a: "No. You can talk to your agent in your browser at any time, and every conversation shows up there too, wherever it started.",
     },
   ],
 } as const;

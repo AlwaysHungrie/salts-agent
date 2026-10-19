@@ -5,7 +5,7 @@ import { useState } from "react";
 
 import { FAQ } from "./content";
 import { Reveal } from "./motion";
-import { Eyebrow, Wrap } from "./ui";
+import { Eyebrow, LinkedText, Wrap } from "./ui";
 
 /** The whole FAQ block, heading included, so app/page.tsx stays a list of sections. */
 export function FaqSection() {
@@ -66,7 +66,8 @@ function Faq() {
                   exit={{ height: 0, opacity: 0 }}
                   transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
                 >
-                  <p className="px-5 pb-6 text-sm leading-relaxed text-muted sm:px-6">{item.a}</p>
+                  <p className="px-5 pb-6 text-sm leading-relaxed text-muted sm:px-6">{"link" in item ? <LinkedText text={item.a} link={item.link} /> : item.a}
+                  </p>
                 </motion.div>
               )}
             </AnimatePresence>
