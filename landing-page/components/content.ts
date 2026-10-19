@@ -118,35 +118,39 @@ export const STATS = [
 
 export const FEATURES = {
   eyebrow: "What it can do for you",
-  title: "One assistant, or a whole team of them.",
-  body: `Give each ${BRAND.name} agent its own job, and it gets on with it while you get on with your day.`,
+  title: `${BRAND.name} was destined to be your perfect personal assistant.`,
+  body: "So we packed in every feature and setting we could think of, and even made it open source. It'll fit right into your life.",
   cards: [
     {
-      title: "It works with your tools, even the ones only you use",
-      body: "Notion, GitHub, your company's internal app, or the product you built yourself. Closed assistants only connect to what is on their list. Salts is open source, so anything can plug in.",
+      title: "The world is your stage, and you play many roles",
+      body: "Your agent switches roles with you. Tell it what you care about and turn on web search, and it becomes your news reporter. Give it your diet plan and a delivery app, and it becomes your nutritionist.",
       wide: true,
     },
     {
-      title: "It becomes a specialist",
-      body: "Add the analyst and it turns your spreadsheets into finished Excel reports. Add the recruiter and it screens CVs against your job posts. More are on the way.",
+      title: "It remembers and reminds",
+      body: "Your dog's name, your coffee order, your pills at 9am. Tell it once and it messages you when it matters.",
     },
     {
-      title: "It remembers",
-      body: "Your dog's name, your coffee order, the thing you asked it to follow up on next week. You only have to tell it once.",
+      title: "Run your life",
+      body: "Plan a weekend trip, compare two phones, draft the email you keep putting off. Ask it the way you'd ask a friend who knows a bit about everything.",
     },
     {
-      title: "It reminds you",
-      body: "Ask it to check in at 8am, every Monday, or before your flight, and it will message you first.",
+      title: "Run your business",
+      body: "Let it answer customers, keep your orders in Notion and read your stock sheets. Salts is open source, so you can build a connector for any software your business runs on.",
     },
     {
-      title: "It lives where you already chat",
-      body: "Message it on Telegram or WhatsApp like you would a friend. Send text, links, photos or voice notes, and see every conversation in your browser too.",
+      title: "It lives with you",
+      body: "Message it on Telegram or WhatsApp like you would a friend. Send text, links, photos or voice notes, and it replies the same way.",
+    },
+    {
+      title: "Share it with the world",
+      body: "Add it to a Telegram group with your friends, family, clients or customers, and it answers anyone who mentions it. You choose exactly who it talks to.",
     },
   ],
   /** The one dark card at the end of the grid. */
   highlight: {
-    title: "Run it yourself",
-    body: "Host the whole thing on your own servers. Your conversations, files and keys never leave them.",
+    title: "There's always more",
+    body: "Host the whole project on your own Cloudflare account to run your agent without our usage limits, and with full control over it.",
   },
 } as const;
 
