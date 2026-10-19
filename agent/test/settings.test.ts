@@ -248,6 +248,44 @@ describe("validating a patch", () => {
     ).not.toThrow();
   });
 
+  it("ships Bonfire with its logo and a bearer header to fill in", () => {
+    const bonfire = SHIPPED.mcp_catalog.find((t) => t.id === "bonfire");
+    expect(bonfire?.icon).toMatch(/^data:image\/svg\+xml;base64,/);
+    expect(bonfire?.headers).toEqual({ Authorization: "Bearer API-KEY" });
+    const saved = validateSettingsPatch({ mcp_catalog: SHIPPED.mcp_catalog }, SHIPPED as never);
+    expect(saved.mcp_catalog?.find((t) => t.id === "matchmaker")?.headers).toHaveProperty(
+      "X-OpenRouter-Api-Key",
+      ""
+    );
+  });
+
+  it("refuses template headers that are not plain names mapped to strings", () => {
+    const entry = { id: "x", name: "X", url: "https://x.example/mcp", auth: "headers" };
+    for (const headers of [["Authorization"], { "bad name": "v" }, { Authorization: 1 }]) {
+      expect(() => validateSettingsPatch({ mcp_catalog: [{ ...entry, headers }] }, {})).toThrow(
+        /headers/
+      );
+    }
+  });
+
+  it("keeps a template's description and guide slug, and refuses a bad slug", () => {
+    const entry = { id: "x", name: "X", url: "https://x.example/mcp", auth: "none" };
+    const saved = validateSettingsPatch(
+      { mcp_catalog: [{ ...entry, description: " Reads X. ", guide: "mcp-x" }] },
+      {}
+    );
+    expect(saved.mcp_catalog![0]).toMatchObject({ description: "Reads X.", guide: "mcp-x" });
+    expect(() =>
+      validateSettingsPatch({ mcp_catalog: [{ ...entry, guide: "../etc" }] }, {})
+    ).toThrow(/guide slug/);
+  });
+
+  it("ships a description for every template", () => {
+    for (const entry of SHIPPED.mcp_catalog) {
+      expect(entry.description, entry.id).toBeTruthy();
+    }
+  });
+
   it("refuses mcp_templates, and drops it from a document saved before its removal", () => {
     expect(() => validateSettingsPatch({ mcp_templates: [] }, {})).toThrow(/unknown setting/);
     const stored = { max_sessions: 5, mcp_templates: ["notion"] } as never;

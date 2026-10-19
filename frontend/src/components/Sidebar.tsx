@@ -1,13 +1,16 @@
+/* eslint-disable max-lines-per-function */
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
+  Check,
   Home,
   Plus,
   Search,
   Settings,
   SlidersHorizontal,
+  Trash2,
   X,
 } from "lucide-react";
 import type { SessionRow } from "@/lib/agent";
@@ -15,6 +18,14 @@ import { formatDate } from "@/lib/format";
 
 /** How long typing has to settle before the list is filtered. */
 const SEARCH_DEBOUNCE_MS = 200;
+/** How long a row has to be held before it starts a selection. */
+const LONG_PRESS_MS = 500;
+/**
+ * Past this much movement a held row is being scrolled, not pressed. Looser for a
+ * mouse: a finger pressing a trackpad drifts a few pixels while it holds, and there
+ * is no scroll for a mouse drag to be mistaken for.
+ */
+const PRESS_SLOP = { touch: 8, mouse: 24 };
 
 export function Sidebar({
   agentId,
@@ -48,7 +59,8 @@ export function Sidebar({
   selected: string | null;
   onSelect: (id: string) => void;
   onCreate: () => void;
-  onDelete: (id: string) => void;
+  /** Delete these sessions. One from a row's ×, several from a selection. */
+  onDelete: (ids: string[]) => void;
   /** Whether the drawer is showing. Only meaningful below the md breakpoint. */
   open: boolean;
   onClose: () => void;
@@ -64,8 +76,21 @@ export function Sidebar({
   const [loadingMore, setLoadingMore] = useState(false);
   const sentinel = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState("");
-  /** The session the delete dialog is asking about, if it is open. */
-  const [confirming, setConfirming] = useState<SessionRow | null>(null);
+  /** The sessions the delete dialog is asking about, if it is open. */
+  const [confirming, setConfirming] = useState<SessionRow[] | null>(null);
+  /**
+   * The sessions picked for deleting together, or null outside selection mode. A long
+   * press on a row starts it; Done or Escape ends it.
+   */
+  const [picked, setPicked] = useState<Set<string> | null>(null);
+  /** The press being timed, and whether it already fired, so its click is not a pick. */
+  const press = useRef<{
+    timer: ReturnType<typeof setTimeout>;
+    x: number;
+    y: number;
+    slop: number;
+  } | null>(null);
+  const longPressed = useRef(false);
   // Filtering trails the keystrokes, so a fast typist re-renders the list once
   // rather than once per character.
   const [debounced, setDebounced] = useState("");
@@ -92,15 +117,70 @@ export function Sidebar({
     return () => observer.disconnect();
   }, [hasMore, loadingMore, onLoadMore]);
 
-  // A destructive dialog has to be as easy to leave as to open.
+  // A destructive dialog has to be as easy to leave as to open, and so does a
+  // selection: Escape closes the dialog first, then ends the selection.
   useEffect(() => {
-    if (!confirming) return;
+    if (!confirming && !picked) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setConfirming(null);
+      if (e.key !== "Escape") return;
+      if (confirming) setConfirming(null);
+      else setPicked(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [confirming]);
+  }, [confirming, picked]);
+
+  const toggle = (id: string) =>
+    setPicked((current) => {
+      const next = new Set(current ?? []);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const cancelPress = () => {
+    if (press.current) clearTimeout(press.current.timer);
+    press.current = null;
+  };
+
+  /** Start timing a hold on a row; held long enough, it starts a selection with it. */
+  const startPress = (id: string, e: React.PointerEvent) => {
+    // A mouse holds with its main button only; a right click is not a long press.
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    cancelPress();
+    longPressed.current = false;
+    press.current = {
+      x: e.clientX,
+      y: e.clientY,
+      slop: e.pointerType === "mouse" ? PRESS_SLOP.mouse : PRESS_SLOP.touch,
+      timer: setTimeout(() => {
+        press.current = null;
+        longPressed.current = true;
+        setPicked((current) => new Set(current ?? []).add(id));
+        // A short buzz where there is a motor for it, so the hold is felt as well as seen.
+        navigator.vibrate?.(10);
+      }, LONG_PRESS_MS),
+    };
+  };
+
+  const movePress = (e: React.PointerEvent) => {
+    const held = press.current;
+    if (!held) return;
+    if (Math.hypot(e.clientX - held.x, e.clientY - held.y) > held.slop)
+      cancelPress();
+  };
+
+  // A hold ends wherever the button is let go — off the row included — rather than
+  // the moment the pointer strays over its edge.
+  useEffect(() => {
+    const end = () => cancelPress();
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+    return () => {
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+    };
+  }, []);
 
   const visible = useMemo(() => {
     const needle = debounced.trim().toLowerCase();
@@ -149,9 +229,9 @@ export function Sidebar({
                 <span
                   key={String(copy)}
                   aria-hidden={copy || undefined}
-                  className="px-6 text-[11px] font-medium leading-[1.33]"
+                  className="pl-2 pr-6 text-[11px] font-medium leading-[1.33]"
                 >
-                  This agent is part of {fleetName}
+                  This agent is part of &quot;{fleetName}&quot; fleet.
                 </span>
               ))}
             </div>
@@ -170,21 +250,29 @@ export function Sidebar({
             >
               <Home size={16} strokeWidth={1.75} />
             </Link>
-            <button
-              onClick={() => {
-                onHome();
-                onClose();
-              }}
-              title={`${agentName || "Agent"} home`}
-              className="min-w-0 text-left"
-            >
-              <div className="truncate text-2xl font-[650] leading-tight">
-                {agentName || "Agent"}
-              </div>
-              <div className="text-muted text-sm font-light leading-[1.43]">
-                {fleetName || "Personal agent"}
-              </div>
-            </button>
+            <div className="min-w-0">
+              <button
+                onClick={() => {
+                  onHome();
+                  onClose();
+                }}
+                title={`${agentName || "Agent"} home`}
+                className="block w-full min-w-0 text-left"
+              >
+                <div className="truncate text-2xl font-[650] leading-tight">
+                  {agentName || "Agent"}
+                </div>
+              </button>
+
+              <a
+                href="/guide"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-muted hover:text-ink text-sm font-light leading-[1.43] underline underline-offset-2 transition"
+              >
+                User guide
+              </a>
+            </div>
           </div>
           <button
             onClick={onClose}
@@ -232,37 +320,75 @@ export function Sidebar({
               No sessions match “{debounced.trim()}”.
             </p>
           )}
-          {visible.map((s) => (
-            <div
-              key={s.id}
-              className={`group flex items-center gap-2 rounded-2xl px-4 py-3 transition ${
-                selected === s.id ? "bg-canvas-soft" : "hover:bg-canvas-soft/60"
-              }`}
-            >
-              <button
-                onClick={() => {
-                  onSelect(s.id);
-                  onClose();
+          {visible.map((s) => {
+            const isPicked = !!picked?.has(s.id);
+            return (
+              <div
+                key={s.id}
+                onPointerDown={(e) => startPress(s.id, e)}
+                onPointerMove={movePress}
+                // A held row on a phone would otherwise open the browser's own menu.
+                onContextMenu={(e) => {
+                  if (longPressed.current || picked) e.preventDefault();
                 }}
-                className="min-w-0 flex-1 text-left"
+                className={`group flex items-center gap-2 rounded-2xl px-4 py-3 transition select-none [-webkit-touch-callout:none] ${
+                  isPicked || (!picked && selected === s.id)
+                    ? "bg-canvas-soft"
+                    : "hover:bg-canvas-soft/60"
+                }`}
               >
-                <div className="truncate text-base font-semibold leading-[1.38]">
-                  {s.title}
-                </div>
-                <div className="text-faint tnum truncate text-xs leading-[1.33]">
-                  {formatDate(s.created_at)}
-                </div>
-              </button>
-              <button
-                onClick={() => setConfirming(s)}
-                title={`Delete ${s.title}`}
-                aria-label={`Delete ${s.title}`}
-                className="text-muted hover:bg-canvas hover:text-ink flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-base leading-none opacity-100 transition md:opacity-0 md:group-hover:opacity-100"
-              >
-                ×
-              </button>
-            </div>
-          ))}
+                <button
+                  onClick={(e) => {
+                    // The click that ends a long press is the press, not a pick.
+                    if (longPressed.current) {
+                      longPressed.current = false;
+                      return;
+                    }
+                    // Cmd, Ctrl or Shift picks on a desktop, the way a file list does.
+                    if (picked || e.metaKey || e.ctrlKey || e.shiftKey) {
+                      toggle(s.id);
+                      return;
+                    }
+                    onSelect(s.id);
+                    onClose();
+                  }}
+                  aria-pressed={picked ? isPicked : undefined}
+                  className="min-w-0 flex-1 text-left"
+                >
+                  <div className="truncate text-base font-semibold leading-[1.38]">
+                    {s.title}
+                  </div>
+                  <div className="text-faint tnum truncate text-xs leading-[1.33]">
+                    {formatDate(s.created_at)}
+                  </div>
+                </button>
+                {picked ? (
+                  <button
+                    onClick={() => toggle(s.id)}
+                    role="checkbox"
+                    aria-checked={isPicked}
+                    aria-label={`Select ${s.title}`}
+                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition ${
+                      isPicked
+                        ? "bg-ink border-ink text-on-primary"
+                        : "border-hairline bg-canvas"
+                    }`}
+                  >
+                    {isPicked && <Check size={12} strokeWidth={3} />}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setConfirming([s])}
+                    title={`Delete ${s.title}`}
+                    aria-label={`Delete ${s.title}`}
+                    className="text-muted hover:bg-canvas hover:text-ink flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-base leading-none opacity-100 transition md:opacity-0 md:group-hover:opacity-100"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            );
+          })}
           {hasMore && (
             <div
               ref={sentinel}
@@ -273,50 +399,77 @@ export function Sidebar({
           )}
         </div>
 
-        {/* Configuring the agent on one side, adding to it on the other. Only the
-            plus is filled: starting a session is what this sidebar is for, and two
-            solid circles competing for that would say neither. */}
-        <div className="absolute bottom-4 left-4 flex items-center gap-2">
-          <Link
-            href={`/a/${encodeURIComponent(agentId)}/capabilities`}
-            title="Capabilities"
-            aria-label="Capabilities"
-            className="border-hairline bg-canvas text-ink hover:bg-canvas-soft flex h-11 w-11 items-center justify-center rounded-full border shadow-sm transition"
-          >
-            <SlidersHorizontal size={18} strokeWidth={1.75} />
-          </Link>
-          <Link
-            href={`/a/${encodeURIComponent(agentId)}/settings`}
-            title="Settings"
-            aria-label="Settings"
-            className="border-hairline bg-canvas text-ink hover:bg-canvas-soft flex h-11 w-11 items-center justify-center rounded-full border shadow-sm transition"
-          >
-            <Settings size={18} strokeWidth={1.75} />
-          </Link>
-        </div>
+        {picked ? (
+          /* In a selection the corners finish it: Done on one side, and on the other,
+             where the plus was, the one thing a selection is for. */
+          <>
+            <button
+              onClick={() => setPicked(null)}
+              className="border-hairline bg-canvas text-ink hover:bg-canvas-soft absolute bottom-4 left-4 flex h-11 items-center rounded-full border px-5 text-sm font-semibold shadow-sm transition"
+            >
+              Done
+            </button>
+            <button
+              onClick={() =>
+                setConfirming(sessions.filter((s) => picked.has(s.id)))
+              }
+              disabled={picked.size === 0}
+              title="Delete selected"
+              aria-label={`Delete ${picked.size} selected session${picked.size === 1 ? "" : "s"}`}
+              className="bg-ink text-on-primary absolute right-4 bottom-4 flex h-12 w-12 items-center justify-center rounded-full shadow-lg transition hover:opacity-85 disabled:opacity-40"
+            >
+              <Trash2 size={18} strokeWidth={2} />
+            </button>
+          </>
+        ) : (
+          <>
+            {/* Configuring the agent on one side, adding to it on the other. Only the
+              plus is filled: starting a session is what this sidebar is for, and two
+              solid circles competing for that would say neither. */}
+            <div className="absolute bottom-4 left-4 flex items-center gap-2">
+              <Link
+                href={`/a/${encodeURIComponent(agentId)}/capabilities`}
+                title="Capabilities"
+                aria-label="Capabilities"
+                className="border-hairline bg-canvas text-ink hover:bg-canvas-soft flex h-11 w-11 items-center justify-center rounded-full border shadow-sm transition"
+              >
+                <SlidersHorizontal size={18} strokeWidth={1.75} />
+              </Link>
+              <Link
+                href={`/a/${encodeURIComponent(agentId)}/settings`}
+                title="Settings"
+                aria-label="Settings"
+                className="border-hairline bg-canvas text-ink hover:bg-canvas-soft flex h-11 w-11 items-center justify-center rounded-full border shadow-sm transition"
+              >
+                <Settings size={18} strokeWidth={1.75} />
+              </Link>
+            </div>
 
-        <button
-          onClick={async () => {
-            setBusy(true);
-            await onCreate();
-            setBusy(false);
-          }}
-          disabled={busy}
-          title="New session"
-          aria-label="New session"
-          className="bg-ink text-on-primary absolute right-4 bottom-4 flex h-12 w-12 items-center justify-center rounded-full shadow-lg transition hover:opacity-85 disabled:opacity-40"
-        >
-          <Plus size={20} strokeWidth={2} />
-        </button>
+            <button
+              onClick={async () => {
+                setBusy(true);
+                await onCreate();
+                setBusy(false);
+              }}
+              disabled={busy}
+              title="New session"
+              aria-label="New session"
+              className="bg-ink text-on-primary absolute right-4 bottom-4 flex h-12 w-12 items-center justify-center rounded-full shadow-lg transition hover:opacity-85 disabled:opacity-40"
+            >
+              <Plus size={20} strokeWidth={2} />
+            </button>
+          </>
+        )}
       </aside>
 
       {confirming && (
         <ConfirmDelete
-          session={confirming}
+          sessions={confirming}
           onCancel={() => setConfirming(null)}
           onConfirm={() => {
-            onDelete(confirming.id);
+            onDelete(confirming.map((s) => s.id));
             setConfirming(null);
+            setPicked(null);
           }}
         />
       )}
@@ -334,27 +487,36 @@ export function Sidebar({
  * someone who deletes a session expecting the chat to go with it has been misled.
  */
 function ConfirmDelete({
-  session,
+  sessions,
   onCancel,
   onConfirm,
 }: {
-  session: SessionRow;
+  /** One session from its row, or several from a selection. */
+  sessions: SessionRow[];
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const one = sessions.length === 1 ? sessions[0] : null;
   // Both channels keep their own copy of the conversation, so deleting the session
   // here does not delete anything there.
-  const channel =
-    session.source === "telegram"
-      ? "Telegram"
-      : session.source === "whatsapp"
-        ? "WhatsApp"
-        : "";
+  const channels = [
+    ...new Set(
+      sessions
+        .map((s) =>
+          s.source === "telegram"
+            ? "Telegram"
+            : s.source === "whatsapp"
+              ? "WhatsApp"
+              : "",
+        )
+        .filter(Boolean),
+    ),
+  ];
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-5">
       <button
         onClick={onCancel}
-        aria-label="Keep session"
+        aria-label={one ? "Keep session" : "Keep sessions"}
         className="absolute inset-0 bg-black/40"
       />
       <div
@@ -367,16 +529,19 @@ function ConfirmDelete({
           id="confirm-delete-title"
           className="text-ink text-lg font-[650] leading-[1.35]"
         >
-          Delete “{session.title}”?
+          {one
+            ? `Delete “${one.title}”?`
+            : `Delete ${sessions.length} sessions?`}
         </h2>
         <p className="text-muted mt-2 text-sm leading-normal">
-          Its messages, files, and stored data will be deleted permanently. This
-          can’t be undone.
+          {one ? "Its" : "Their"} messages, files, and stored data will be
+          deleted permanently. This can’t be undone.
         </p>
-        {channel && (
+        {channels.length > 0 && (
           <p className="text-muted mt-2 text-sm leading-normal">
-            Messages in the {channel} chat aren’t deleted. A new session starts
-            the next time someone writes there.
+            Messages in the {channels.join(" and ")} chat
+            {one ? "" : "s"} aren’t deleted. A new session starts the next time
+            someone writes there.
           </p>
         )}
         <div className="mt-5 flex justify-end gap-2">
@@ -393,7 +558,7 @@ function ConfirmDelete({
             onClick={onConfirm}
             className="bg-ink text-on-primary rounded-full px-4 py-2 text-sm font-medium transition hover:opacity-85"
           >
-            Delete session
+            {one ? "Delete session" : `Delete ${sessions.length} sessions`}
           </button>
         </div>
       </div>

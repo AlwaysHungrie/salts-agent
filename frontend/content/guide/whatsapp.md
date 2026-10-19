@@ -17,6 +17,14 @@ This guide will help you get a test phone number and set up your agent to use th
 > - Your agent will not work in WhatsApp groups, or with any account other than yours.
 > - Your agent cannot send you a message on its own unless there is an active chat session, and a session only lasts 24 hours. To make sure reminders and scheduled messages reach you, keep a session alive by sending at least one message every 24 hours.
 
+## Before you start
+
+Open your agent in the browser and go to **Settings**. Keep this tab open, since you will paste everything Meta gives you into the **WhatsApp** section here.
+
+1. Switch on **WhatsApp**. It is off by default.
+2. In **Your WhatsApp number**, enter the number you will message your agent from. Use the full number with the country code, digits only, for example `919876543210`.
+3. Click **WhatsApp setup guide** in the same section. It opens this page with your agent's own callback URL filled in, which you will need in step 7.
+
 ## 1. Create a Meta app
 
 Sign in to [developers.facebook.com](https://developers.facebook.com/apps) and create a new app.
@@ -122,11 +130,11 @@ Click **Show** next to App secret. Copy the value into the **App secret** field 
 
 Almost there. Go back to the first tab you left open in step 3, the one with the three-step overview. Click **Step 2. Production setup**.
 
-Add this callback URL:
+Add your agent's callback URL. It is shown below when you open this page from the **WhatsApp setup guide** link in your agent's settings, and it ends with your agent's ID.
 
 {{whatsapp-callback-url}}
 
-Generate a **verify token** below, then copy it into your agent settings **first**:
+Next you need a **verify token**, which is a password that you make up and enter in both places. Generate one below, or make up any long password, then copy it into the **Verify token** field in your agent settings **first**:
 
 {{verify-token}}
 

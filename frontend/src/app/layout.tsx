@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Inter } from "next/font/google";
+import { WalletPanelProvider } from "@/components/wallet/WalletPanel";
 import "./globals.css";
 
 // Saans is commercial; Inter variable carries the 300/450/650 weight positions.
@@ -11,7 +12,7 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: "Salts",
-  description: "Personal, Always Accessible AI Agents",
+  description: "Personal AI agents that stay with you forever",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -19,7 +20,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <ClerkProvider>
       <html lang="en" className={`${inter.variable} h-full antialiased`}>
         <body className="bg-canvas text-ink min-h-full flex flex-col">
-          {children}
+          <WalletPanelProvider>{children}</WalletPanelProvider>
         </body>
       </html>
     </ClerkProvider>

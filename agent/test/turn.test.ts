@@ -12,6 +12,7 @@ import {
   TOOLLOOP_REPLY,
   replyTo,
 } from "./openrouter-mock";
+import { GUIDE, guidePage } from "../src/guide";
 import { EMPTY_MCP_SERVER, agentIdOf } from "../src/registry";
 import { chatReply, OUT_OF_ROUNDS } from "../src/session/format";
 import { signedIn } from "./clerk";
@@ -206,8 +207,9 @@ describe("tools inside a turn", () => {
       messages: { role: string; steps: string }[];
     };
     const reply = body.messages.find((m) => m.role === "assistant")!;
-    const tools = (JSON.parse(reply.steps) as { kind: string; tools?: { ok: boolean }[] }[])
-      .flatMap((s) => s.tools ?? []);
+    const tools = (
+      JSON.parse(reply.steps) as { kind: string; tools?: { ok: boolean }[] }[]
+    ).flatMap((s) => s.tools ?? []);
     expect(tools.length).toBeGreaterThan(0);
     expect(tools.every((t) => !t.ok)).toBe(true);
   });
@@ -215,13 +217,18 @@ describe("tools inside a turn", () => {
 
 describe("a reply as a chat gets it", () => {
   it("cuts tool calls a model wrote out as text", () => {
-    const leaked = "Here it is.<tool_call>mcp_analyst_breakdown<arg_key>cell</arg_key><arg_value>C93</arg_value></tool_call>";
+    const leaked =
+      "Here it is.<tool_call>mcp_analyst_breakdown<arg_key>cell</arg_key><arg_value>C93</arg_value></tool_call>";
     expect(chatReply(leaked, false)).toBe("Here it is.");
-    expect(chatReply("<tool_call>mcp_analyst_breakdown<arg_key>cell</arg_key><arg_va", false)).toBe("");
+    expect(chatReply("<tool_call>mcp_analyst_breakdown<arg_key>cell</arg_key><arg_va", false)).toBe(
+      ""
+    );
   });
 
   it("says how to go on when the turn ran out of rounds", () => {
-    expect(chatReply("Let me look at the sheet.", true)).toBe(`Let me look at the sheet.\n\n${OUT_OF_ROUNDS}`);
+    expect(chatReply("Let me look at the sheet.", true)).toBe(
+      `Let me look at the sheet.\n\n${OUT_OF_ROUNDS}`
+    );
     expect(chatReply("<tool_call>breakdown", true)).toBe(OUT_OF_ROUNDS);
     expect(chatReply('Two sections left. Say "continue" to carry on.', true)).toBe(
       'Two sections left. Say "continue" to carry on.'
@@ -413,8 +420,7 @@ describe("bang commands over chat", () => {
 
   it("explains sessions and lists every command with !help", async () => {
     const { sessionId, email } = await chatFixture();
-    const help = ((await (await say(sessionId, email, "!help")).json()) as { reply: string })
-      .reply;
+    const help = ((await (await say(sessionId, email, "!help")).json()) as { reply: string }).reply;
     expect(help).toContain("session");
     for (const command of ["!new", "!clear", "!model", "!mcp", "!settings", "!docs"]) {
       expect(help).toContain(command);
@@ -425,10 +431,33 @@ describe("bang commands over chat", () => {
     const { sessionId, email, agentId } = await chatFixture();
     const reply = async (message: string) =>
       ((await (await say(sessionId, email, message)).json()) as { reply: string }).reply;
-    expect(await reply("!docs")).toBe("The user guide: https://salts-agent-app.vercel.app/guide");
+    expect(await reply("!docs")).toContain(
+      "The user guide: https://salts-agent-app.vercel.app/guide"
+    );
     expect(await reply("!settings")).toBe(
       `This agent's settings: https://salts-agent-app.vercel.app/a/${agentId}/settings`
     );
+  });
+
+  it("lists every guide page with !docs, and shows one with !docs <page>", async () => {
+    const { sessionId, email } = await chatFixture();
+    const reply = async (message: string) =>
+      ((await (await say(sessionId, email, message)).json()) as { reply: string }).reply;
+    const index = await reply("!docs");
+    for (const page of GUIDE) expect(index).toContain(`\`${page.slug}\``);
+
+    const page = await reply("!docs OpenRouter");
+    expect(page).toContain(`# ${guidePage("openrouter")?.title}`);
+    // The guide's own links open from a chat.
+    expect(page).not.toMatch(/\]\(\/guide\//);
+
+    // A web page's browser widgets have nothing to draw in a chat.
+    expect(guidePage("whatsapp")?.body).toContain("{{verify-token}}");
+    const whatsapp = await reply("!docs whatsapp");
+    expect(whatsapp).toContain("**Verify token**");
+    expect(whatsapp).not.toContain("{{");
+
+    expect(await reply("!docs nope")).toContain('No guide page named "nope"');
   });
 
   it("treats a sentence mentioning a command as an ordinary message", async () => {
@@ -468,11 +497,14 @@ describe("!enable-mcp and !disable-mcp", () => {
   it("refuses a tool call repeated with the same arguments, without running it", async () => {
     const { sessionId, email } = await withServer({ enabled: 1, disabled_tools: "[]" });
     await say(sessionId, email, "!enable-mcp docs");
-    const callsBefore = ((await (await fetch("https://mcp.test/__calls")).json()) as unknown[]).length;
+    const callsBefore = ((await (await fetch("https://mcp.test/__calls")).json()) as unknown[])
+      .length;
     const token = crypto.randomUUID().slice(0, 8);
     await say(sessionId, email, `!!repeat mcp_docs_search_pages ${token}`);
 
-    const calls = ((await (await fetch("https://mcp.test/__calls")).json()) as unknown[]).slice(callsBefore);
+    const calls = ((await (await fetch("https://mcp.test/__calls")).json()) as unknown[]).slice(
+      callsBefore
+    );
     expect(calls).toHaveLength(1);
     const requests = (await (
       await fetch(`https://openrouter.ai/__requests?contains=${token}`)
@@ -496,7 +528,9 @@ describe("!enable-mcp and !disable-mcp", () => {
       await fetch(`https://openrouter.ai/__requests?contains=${token}`)
     ).json()) as { messages: { role: string; content?: unknown }[] }[];
     const system = JSON.stringify(request.messages.filter((m) => m.role === "system"));
-    expect(system).toContain(`How to use the Docs tools, from that server:\\n\\n${MCP_INSTRUCTIONS}`);
+    expect(system).toContain(
+      `How to use the Docs tools, from that server:\\n\\n${MCP_INSTRUCTIONS}`
+    );
   });
 
   it("disables a server and keeps its tool selection", async () => {
@@ -1070,5 +1104,43 @@ describe("what the agent is told it can reach", () => {
     await say(sessionId, email, `hello ${token}`);
 
     expect(await systemPromptFor(token)).not.toContain("You are reachable on");
+  });
+});
+
+describe("the run_command tool", () => {
+  const reply = async (sessionId: string, email: string, message: string) =>
+    ((await (await say(sessionId, email, message)).json()) as { reply: string }).reply;
+
+  it("reads a guide page for the model", async () => {
+    const { sessionId, email } = await chatFixture();
+    const said = await reply(sessionId, email, "!!command docs openrouter");
+    expect(said).toContain(`Command said: # ${guidePage("openrouter")?.title}`);
+  });
+
+  it("lists the guide when no page is named", async () => {
+    const { sessionId, email } = await chatFixture();
+    expect(await reply(sessionId, email, "!!command docs")).toContain("`salts-tools`");
+  });
+
+  it("tells the model the agent's model and MCP servers for settings", async () => {
+    const { sessionId, email } = await chatFixture();
+    const said = await reply(sessionId, email, "!!command settings");
+    expect(said).toContain("This agent's settings:");
+    expect(said).toContain("Current model:");
+    expect(said).toContain("MCP server");
+  });
+
+  it("refuses !new for a browser session, which has no chat to hand over", async () => {
+    const { sessionId, email } = await chatFixture();
+    expect(await reply(sessionId, email, "!!command new")).toContain("Not available here");
+  });
+
+  it("compacts after the reply, not during it", async () => {
+    const { sessionId, email } = await chatFixture();
+    await say(sessionId, email, "hello");
+    const said = await reply(sessionId, email, "!!command compact");
+    // The reply that announced it, then what the command did once the turn was over.
+    expect(said).toMatch(/^Command said: Queued[\s\S]*\n\n(Compacted|Nothing to compact)/);
+    expect(said).not.toContain("A reply is still being written");
   });
 });

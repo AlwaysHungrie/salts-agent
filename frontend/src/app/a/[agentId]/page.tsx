@@ -144,8 +144,7 @@ export default function AgentPage({
   /** Reads a proxy response, surfacing the Worker-unreachable message as an error. */
   const readJson = useCallback(async <T,>(res: Response): Promise<T | null> => {
     const payload = (await res.json().catch(() => null)) as
-      | (T & { error?: string })
-      | null;
+      (T & { error?: string }) | null;
     if (!res.ok || !payload) {
       setError(payload?.error ?? `Request failed with ${res.status}.`);
       return null;
@@ -197,9 +196,7 @@ export default function AgentPage({
    */
   const loadSessions = useCallback(async () => {
     const payload = await readJson<SessionPage>(
-      await fetch(
-        `/api/agents/${encodeURIComponent(agentId)}/sessions`,
-      ),
+      await fetch(`/api/agents/${encodeURIComponent(agentId)}/sessions`),
     );
     setSessions(payload?.sessions ?? []);
     setSessionCursor({
@@ -272,7 +269,10 @@ export default function AgentPage({
       if (!payload) return;
       remember(keys.transcript(selected), payload);
       setLoaded((current) => {
-        if (current?.sessionId === selected && sameTranscript(current, payload)) {
+        if (
+          current?.sessionId === selected &&
+          sameTranscript(current, payload)
+        ) {
           return current;
         }
         return {
@@ -369,16 +369,29 @@ export default function AgentPage({
    * Gone from the list the moment it is confirmed. A refused delete reads the list
    * back, which returns the row along with the reason.
    */
-  const deleteSession = async (id: string) => {
-    const rest = sessions.filter((s) => s.id !== id);
+  /** Delete one session or several, all gone from the list at once. */
+  const deleteSessions = async (ids: string[]) => {
+    const gone = new Set(ids);
+    const rest = sessions.filter((s) => !gone.has(s.id));
     setSessions(rest);
-    if (selected === id) setSelected(rest[0]?.id ?? null);
-    forget(keys.transcript(id));
-    forget(keys.summary(id));
-    const res = await fetch(`/api/sessions/${encodeURIComponent(id)}`, {
-      method: "DELETE",
-    });
-    if (!res.ok) await settle(res, "Couldn't delete that session. Try again.");
+    if (selected && gone.has(selected)) setSelected(rest[0]?.id ?? null);
+    for (const id of ids) {
+      forget(keys.transcript(id));
+      forget(keys.summary(id));
+    }
+    const results = await Promise.all(
+      ids.map((id) =>
+        fetch(`/api/sessions/${encodeURIComponent(id)}`, { method: "DELETE" }),
+      ),
+    );
+    const failed = results.find((res) => !res.ok);
+    if (failed)
+      await settle(
+        failed,
+        ids.length === 1
+          ? "Couldn't delete that session. Try again."
+          : "Couldn't delete some of those sessions. Try again.",
+      );
   };
 
   const onTurnEnd = useCallback(() => {
@@ -389,7 +402,9 @@ export default function AgentPage({
   const current = sessions.find((s) => s.id === selected) ?? null;
 
   if (missing) {
-    return <PageNotice message="This agent doesn't exist, or isn't yours to open." />;
+    return (
+      <PageNotice message="This agent doesn't exist, or isn't yours to open." />
+    );
   }
 
   return (
@@ -404,7 +419,7 @@ export default function AgentPage({
         selected={selected}
         onSelect={setSelected}
         onCreate={createSession}
-        onDelete={deleteSession}
+        onDelete={deleteSessions}
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         onHome={() => setSelected(null)}
@@ -427,7 +442,7 @@ export default function AgentPage({
             />
             {loaded?.sessionId !== selected ? (
               <div className="text-muted flex flex-1 items-center justify-center text-xl font-light mb-16">
-                Connecting Session…
+                Connecting…
               </div>
             ) : (
               <Chat

@@ -6,3 +6,5 @@ data/
 .pytest_cache/
 !tests/synthetic/data/
 tests/synthetic/out/
+tests/benchmarks/data/
+tests/benchmarks/out/

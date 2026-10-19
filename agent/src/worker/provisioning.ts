@@ -19,6 +19,7 @@ import {
   registry,
   writeConfig,
 } from "./stores";
+import { adminOf, noteWalletUse, withWalletKey } from "./wallet";
 
 /**
  * Write the meta defaults into the agent: tuning, capabilities and missing MCP servers.
@@ -42,7 +43,10 @@ export async function applyMeta(
     }
   }
 
-  const config = await writeConfig(env, reg, validateConfig(patch));
+  // A wallet key named by the defaults comes from the admin's wallet, as it stands now.
+  const resolved = await withWalletKey(env, await adminOf(reg), validateConfig(patch), true);
+  const config = await writeConfig(env, reg, resolved);
+  await noteWalletUse(env, agentId, resolved);
 
   const existing = await reg.mcpServers();
   const taken = new Set(existing.map((s) => s.name.toLowerCase()));

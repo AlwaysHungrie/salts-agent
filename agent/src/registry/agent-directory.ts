@@ -39,7 +39,44 @@ import {
   removeFleetMeta,
   setFleetMeta,
 } from "./directory-listing";
+import {
+  approvePairing,
+  type ComputerLink,
+  type ComputerRow,
+  computer,
+  computersOf,
+  linksOf,
+  linksOfAgent,
+  markSynced,
+  type PairingPoll,
+  pairing,
+  pollPairing,
+  removeComputer,
+  removeLink,
+  reportComputer,
+  setLink,
+  startPairing,
+} from "./directory-computers";
 import { AGENT_DIRECTORY_MIGRATIONS, migrateMembership } from "./directory-schema";
+import {
+  claimPurchase,
+  createPurchase,
+  deploymentValue,
+  fulfilNewKey,
+  markPurchasePaid,
+  purchase,
+  recoverable,
+  releasePurchase,
+  setDeploymentValue,
+  txCounted,
+} from "./wallet-purchases";
+import {
+  addWalletKey,
+  removeWalletKey,
+  setWalletKeyUse,
+  walletKey,
+  walletKeys,
+} from "./wallet";
 import {
   clearSettings,
   directorySettings,
@@ -55,6 +92,9 @@ import type {
   MetadataFilter,
   UserDetail,
   UserPage,
+  WalletKeyKind,
+  WalletKeyRow,
+  WalletPurchase,
 } from "./types";
 
 /**
@@ -296,6 +336,8 @@ export class AgentDirectory extends DurableObject {
 
   remove(id: string) {
     this.ensureSchema();
+    this.ctx.storage.sql.exec(`DELETE FROM salts_links WHERE agent_id = ?`, id);
+    setWalletKeyUse(this.ctx.storage, id, "");
     return removeAgent(this.ctx.storage, id);
   }
 
@@ -327,5 +369,208 @@ export class AgentDirectory extends DurableObject {
   approveBusinessRequest(id: string): { email: string; agent_limit: number } | undefined {
     this.ensureSchema();
     return approveBusinessRequest(this.ctx.storage, id);
+  }
+
+  // ─── OpenRouter wallet (see wallet.ts) ──────────────────────────────────────────
+
+  /** Every key in `email`'s wallet, secrets included: the routes decide what is shown. */
+  walletKeys(email: string): WalletKeyRow[] {
+    this.ensureSchema();
+    return walletKeys(this.ctx.storage, email);
+  }
+
+  /** One of `email`'s keys; undefined when it is someone else's. */
+  walletKey(email: string, id: string): WalletKeyRow | undefined {
+    this.ensureSchema();
+    return walletKey(this.ctx.storage, email, id);
+  }
+
+  addWalletKey(
+    email: string,
+    key: { kind: WalletKeyKind; secret: string; openrouter_hash?: string },
+    max: number
+  ): WalletKeyRow | { error: string } {
+    this.ensureSchema();
+    return addWalletKey(this.ctx.storage, email, key, max);
+  }
+
+  /** Remove a key; the agents that held it are returned for the caller to clear. */
+  removeWalletKey(email: string, id: string): string[] | undefined {
+    this.ensureSchema();
+    return removeWalletKey(this.ctx.storage, email, id);
+  }
+
+  setWalletKeyUse(agentId: string, keyId: string) {
+    this.ensureSchema();
+    return setWalletKeyUse(this.ctx.storage, agentId, keyId);
+  }
+
+  /** Record a quote; `{ error }` when its amount clashes with another open one. */
+  createPurchase(p: Omit<WalletPurchase, "id" | "status" | "tx" | "claimed_at">): WalletPurchase | { error: string } {
+    this.ensureSchema();
+    return createPurchase(this.ctx.storage, p);
+  }
+
+  purchase(email: string, id: string): WalletPurchase | undefined {
+    this.ensureSchema();
+    return purchase(this.ctx.storage, email, id);
+  }
+
+  /** What `tx` could pay for among `email`'s purchases (see `recoverable`). */
+  recoverable(email: string, network: string, tx: string, since: number): WalletPurchase[] {
+    this.ensureSchema();
+    return recoverable(this.ctx.storage, email, network, tx, since);
+  }
+
+  txCounted(tx: string): boolean {
+    this.ensureSchema();
+    return txCounted(this.ctx.storage, tx);
+  }
+
+  /** Count a verified payment once: false when `tx` already paid for something. */
+  markPurchasePaid(id: string, tx: string): boolean {
+    this.ensureSchema();
+    return markPurchasePaid(this.ctx.storage, id, tx);
+  }
+
+  /** Take up a paid purchase for delivery: false while another confirm holds it. */
+  claimPurchase(id: string): boolean {
+    this.ensureSchema();
+    return claimPurchase(this.ctx.storage, id, Date.now());
+  }
+
+  releasePurchase(id: string) {
+    this.ensureSchema();
+    releasePurchase(this.ctx.storage, id);
+  }
+
+  /** Deliver a paid purchase as a new key; undefined when it is not waiting for one. */
+  fulfilNewKey(id: string, key: { secret: string; openrouter_hash: string }): WalletKeyRow | undefined {
+    this.ensureSchema();
+    return fulfilNewKey(this.ctx.storage, id, key);
+  }
+
+  /** The OpenRouter provisioning key bought keys are made with; "" when not set. */
+  provisioningKey(): string {
+    this.ensureSchema();
+    return deploymentValue(this.ctx.storage, "openrouter_provisioning_key");
+  }
+
+  setProvisioningKey(value: string) {
+    this.ensureSchema();
+    setDeploymentValue(this.ctx.storage, "openrouter_provisioning_key", value);
+  }
+
+  /** Where purchases are paid to, per family; "" where none is set. */
+  paymentAddresses(): { evm: string; solana: string } {
+    this.ensureSchema();
+    return {
+      evm: deploymentValue(this.ctx.storage, "payment_address_evm"),
+      solana: deploymentValue(this.ctx.storage, "payment_address_solana"),
+    };
+  }
+
+  /** Reown's project id, which the browser's wallet modal is opened with; "" when not set. */
+  reownProjectId(): string {
+    this.ensureSchema();
+    return deploymentValue(this.ctx.storage, "reown_project_id");
+  }
+
+  setReownProjectId(value: string) {
+    this.ensureSchema();
+    setDeploymentValue(this.ctx.storage, "reown_project_id", value);
+  }
+
+  /**
+   * The RPC URLs set from the admin CLI, by network id, overriding the deployment's (they
+   * may carry API keys). Networks with none set are left out.
+   */
+  paymentRpcs(networks: string[]): Record<string, string> {
+    this.ensureSchema();
+    const set: Record<string, string> = {};
+    for (const id of networks) {
+      const url = deploymentValue(this.ctx.storage, `payment_rpc_${id}`);
+      if (url) set[id] = url;
+    }
+    return set;
+  }
+
+  /** Set one network's RPC URL; blank goes back to the deployment's. */
+  setPaymentRpc(network: string, value: string) {
+    this.ensureSchema();
+    setDeploymentValue(this.ctx.storage, `payment_rpc_${network}`, value);
+  }
+
+  /** Set one family's payment address; blank switches that family off. */
+  setPaymentAddress(family: "evm" | "solana", value: string) {
+    this.ensureSchema();
+    setDeploymentValue(this.ctx.storage, `payment_address_${family}`, value);
+  }
+
+  // ─── salts-tools computers (see directory-computers.ts) ─────────────────────────
+
+  startPairing(p: Parameters<typeof startPairing>[1]): boolean {
+    this.ensureSchema();
+    return startPairing(this.ctx.storage, p);
+  }
+
+  pairing(userCode: string, now: number): { name: string; approved: boolean } | undefined {
+    this.ensureSchema();
+    return pairing(this.ctx.storage, userCode, now);
+  }
+
+  approvePairing(userCode: string, now: number, c: Parameters<typeof approvePairing>[3]): boolean {
+    this.ensureSchema();
+    return approvePairing(this.ctx.storage, userCode, now, c);
+  }
+
+  pollPairing(deviceHash: string, now: number): PairingPoll {
+    this.ensureSchema();
+    return pollPairing(this.ctx.storage, deviceHash, now);
+  }
+
+  computer(id: string): ComputerRow | undefined {
+    this.ensureSchema();
+    return computer(this.ctx.storage, id);
+  }
+
+  computersOf(email: string): ComputerRow[] {
+    this.ensureSchema();
+    return computersOf(this.ctx.storage, email);
+  }
+
+  reportComputer(id: string, r: Parameters<typeof reportComputer>[2]) {
+    this.ensureSchema();
+    return reportComputer(this.ctx.storage, id, r);
+  }
+
+  computerLinks(computerId: string): ComputerLink[] {
+    this.ensureSchema();
+    return linksOf(this.ctx.storage, computerId);
+  }
+
+  agentComputerLinks(agentId: string): ComputerLink[] {
+    this.ensureSchema();
+    return linksOfAgent(this.ctx.storage, agentId);
+  }
+
+  setComputerLink(computerId: string, agentId: string, tools: string[]) {
+    this.ensureSchema();
+    return setLink(this.ctx.storage, computerId, agentId, tools);
+  }
+
+  markComputerLinkSynced(computerId: string, agentId: string, synced: string) {
+    this.ensureSchema();
+    return markSynced(this.ctx.storage, computerId, agentId, synced);
+  }
+
+  removeComputerLink(computerId: string, agentId: string) {
+    this.ensureSchema();
+    return removeLink(this.ctx.storage, computerId, agentId);
+  }
+
+  removeComputer(id: string) {
+    this.ensureSchema();
+    return removeComputer(this.ctx.storage, id);
   }
 }

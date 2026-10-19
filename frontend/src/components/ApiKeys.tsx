@@ -9,7 +9,7 @@ type KeyInfo = { role: Role; hint: string; created_at: number };
 const LABEL: Record<Role, { title: string; hint: string }> = {
   admin: {
     title: "Admin key",
-    hint: "Does what this agent's admin can: meta settings, both keys, deletion.",
+    hint: "Does what this agent's admin can: admin settings, both keys, deletion.",
   },
   user: {
     title: "User key",
@@ -37,6 +37,21 @@ export function ApiKeys({
   const [shown, setShown] = useState<{ role: Role; key: string } | null>(null);
   const [busy, setBusy] = useState<Role | null>(null);
   const [error, setError] = useState("");
+  /** The replace or revoke being asked about, if the confirm dialog is open. */
+  const [confirming, setConfirming] = useState<{
+    role: Role;
+    action: "replace" | "revoke";
+  } | null>(null);
+
+  // A destructive dialog has to be as easy to leave as to open.
+  useEffect(() => {
+    if (!confirming) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setConfirming(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [confirming]);
 
   useEffect(() => {
     void (async () => {
@@ -47,15 +62,7 @@ export function ApiKeys({
     })();
   }, [base]);
 
-  async function generate(role: Role, replacing: boolean) {
-    if (
-      replacing &&
-      !confirm(
-        `Replace the ${role} key? The current one stops working at once.`,
-      )
-    ) {
-      return;
-    }
+  async function generate(role: Role) {
     setBusy(role);
     setError("");
     const res = await fetch(`${base}/${role}`, { method: "POST" });
@@ -71,12 +78,6 @@ export function ApiKeys({
   }
 
   async function revoke(role: Role) {
-    if (
-      !confirm(
-        `Revoke the ${role} key? Anything using it stops working at once.`,
-      )
-    )
-      return;
     setBusy(role);
     setError("");
     const res = await fetch(`${base}/${role}`, { method: "DELETE" });
@@ -105,7 +106,11 @@ export function ApiKeys({
               </div>
               <div className="flex shrink-0 gap-2">
                 <button
-                  onClick={() => void generate(role, !!info)}
+                  onClick={() =>
+                    info
+                      ? setConfirming({ role, action: "replace" })
+                      : void generate(role)
+                  }
                   disabled={busy !== null}
                   className={button}
                 >
@@ -113,7 +118,7 @@ export function ApiKeys({
                 </button>
                 {info && (
                   <button
-                    onClick={() => void revoke(role)}
+                    onClick={() => setConfirming({ role, action: "revoke" })}
                     disabled={busy !== null}
                     className={button}
                   >
@@ -126,6 +131,55 @@ export function ApiKeys({
         );
       })}
       {error && <p className="text-muted text-xs">{error}</p>}
+      {confirming && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-5">
+          <button
+            onClick={() => setConfirming(null)}
+            aria-label="Keep key"
+            className="absolute inset-0 bg-black/40"
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirm-key-title"
+            className="border-hairline bg-canvas text-ink relative w-full max-w-sm rounded-[20px] border p-6 shadow-xl"
+          >
+            <h2
+              id="confirm-key-title"
+              className="text-lg font-[650] leading-[1.35]"
+            >
+              {confirming.action === "replace" ? "Replace" : "Revoke"} the{" "}
+              {confirming.role} key?
+            </h2>
+            <p className="text-muted mt-2 text-sm leading-normal">
+              {confirming.action === "replace"
+                ? "The current key stops working at once."
+                : "Anything using it stops working at once."}{" "}
+              This can&rsquo;t be undone.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                onClick={() => setConfirming(null)}
+                // Focus starts on the way out: a stray Return keeps the key.
+                autoFocus
+                className="border-hairline text-ink hover:bg-canvas-soft rounded-full border px-4 py-2 text-sm font-medium transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  const { role, action } = confirming;
+                  setConfirming(null);
+                  void (action === "replace" ? generate(role) : revoke(role));
+                }}
+                className="bg-ink text-on-primary rounded-full px-4 py-2 text-sm font-medium transition hover:opacity-85"
+              >
+                {confirming.action === "replace" ? "Replace key" : "Revoke key"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {shown && (
         <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/30 px-5">
           <div
@@ -137,7 +191,7 @@ export function ApiKeys({
               Your new {LABEL[shown.role].title.toLowerCase()}
             </p>
             <p className="text-muted mt-1 text-xs font-light leading-[1.33]">
-              This token will not be shown again. Do not share this with anyone.
+              You won&rsquo;t see this key again. Copy it now and keep it private.
               It can be used to access this agent as{" "}
               {shown.role === "admin" ? "an admin" : "a member"}.
               <br />

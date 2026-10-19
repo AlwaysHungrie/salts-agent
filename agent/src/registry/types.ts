@@ -47,6 +47,11 @@ export type Config = {
    * agent cannot answer, which keeps the deployment's credit out of reach.
    */
   openrouter_api_key: string;
+  /**
+   * The wallet key `openrouter_api_key` was copied from, by id; blank when the key was
+   * pasted. Not secret: the browser maps it to the key's nickname.
+   */
+  openrouter_key_id: string;
   /** Brave Search API key. The default web search provider when set. */
   brave_api_key: string;
   /** Base URL of a self-hosted SearXNG instance. Only used when `brave_api_key` is empty. */
@@ -103,6 +108,7 @@ export const DEFAULT_CONFIG: Omit<Config, "model" | SettableConfigKey> = {
   private_notes: "",
   public_notes: "",
   openrouter_api_key: "",
+  openrouter_key_id: "",
   brave_api_key: "",
   searxng_url: "",
   searxng_token: "",
@@ -178,6 +184,12 @@ export type McpCatalogEntry = {
   /** Placeholder mark: this letter on this colour. Both optional — the name's first letter does. */
   letter?: string;
   color?: string;
+  /** Headers the add form starts with; values are placeholders to replace (`Bearer API-KEY`). */
+  headers?: Record<string, string>;
+  /** One line on what the server does, shown when the tile is hovered. */
+  description?: string;
+  /** User guide article (`/guide/<slug>`) for this server, linked from its card once added. */
+  guide?: string;
 };
 
 /**
@@ -194,7 +206,8 @@ export type MetaTunableKey =
   | "max_tokens"
   | "reasoning_effort"
   | "context_messages"
-  | "openrouter_api_key";
+  | "openrouter_api_key"
+  | "openrouter_key_id";
 
 export type MetaCapability = {
   /** Whether the capability is switched on when the defaults are applied. */
@@ -346,4 +359,46 @@ export type BusinessRequest = {
   email: string;
   requested_increase: number;
   created_at: number;
+};
+
+/** Pasted by the user, or provisioned by the deployment after a payment. */
+export type WalletKeyKind = "own" | "provisioned";
+
+/** One key in an account's OpenRouter wallet, as stored. Never sent to a browser as is. */
+export type WalletKeyRow = {
+  id: string;
+  email: string;
+  /** Given by the deployment, at random; what the key is picked by everywhere. */
+  nickname: string;
+  kind: WalletKeyKind;
+  secret: string;
+  created_at: number;
+  /** How many agents hold it. */
+  agents: number;
+  /** A bought key's handle at OpenRouter; blank for a pasted one. */
+  openrouter_hash: string;
+};
+
+/**
+ * A quote a buyer pays against: exactly `units` of `asset` to `to_address` on `network`,
+ * from `payer`, before `expires_at`. `key_id` is blank until the key it bought is made.
+ */
+export type WalletPurchase = {
+  id: string;
+  email: string;
+  key_id: string;
+  amount_usd: number;
+  network: string;
+  asset: "usdc" | "eth";
+  to_address: string;
+  payer: string;
+  /** Base units, as a decimal string: they outgrow a JavaScript number. */
+  units: string;
+  /** Quoted; paid (the payment is counted); fulfilled (the key has its credit). */
+  status: "pending" | "paid" | "fulfilled";
+  tx: string | null;
+  created_at: number;
+  expires_at: number;
+  /** When delivery was last taken up; 0 when no one holds it. */
+  claimed_at: number;
 };

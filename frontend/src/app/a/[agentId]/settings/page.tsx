@@ -2,16 +2,15 @@
 
 import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Check } from "lucide-react";
+import { ArrowLeft, Check, ExternalLink } from "lucide-react";
 import {
   CapabilitySection,
   ChipList,
-  Field,
+  SaveButton,
 } from "@/components/CapabilitySection";
 import type {
   AgentRow,
   Capability,
-  CapabilityField,
   Config,
   ModelOption,
   ReasoningEffort,
@@ -20,21 +19,9 @@ import type {
 import { formatUsdShort } from "@/lib/format";
 import { useIdentity } from "@/lib/identity";
 import { ApiKeys } from "@/components/ApiKeys";
+import { WalletKeyPicker } from "@/components/wallet/WalletKeyPicker";
 import { MetaSettingsDialog } from "@/components/MetaSettings";
 import { cached, keys, remember, revise } from "@/lib/cache";
-
-/**
- * The OpenRouter key is not a capability's credential — it is what every model call
- * is billed to, so the agent has one of its own and one agent's spend never lands on
- * another's. Described here in the shape `Field` already knows how to draw, so a
- * pasted key behaves exactly like every other secret on the capabilities page.
- */
-const OPENROUTER_KEY: CapabilityField = {
-  key: "openrouter_api_key",
-  secret: true,
-  required: true,
-  placeholder: "sk-or-v1-…",
-};
 
 const REASONING: { id: ReasoningEffort; label: string; hint: string }[] = [
   { id: "off", label: "Off", hint: "Answers right away. Cheapest." },
@@ -144,6 +131,8 @@ type ConfigPayload = {
   models: ModelOption[];
   capabilities: Capability[];
   locked?: string[];
+  /** The admin's default OpenRouter key, which may be picked again; blank when none. */
+  default_key_id?: string;
   spend?: SpendState;
   member_limit?: number;
   error?: string;
@@ -180,6 +169,8 @@ export default function Settings({
    * one thing on it that belongs to whoever provides the agent.
    */
   const [spend, setSpend] = useState<SpendState | null>(held?.spend ?? null);
+  /** The key whoever provides the agent gave it, offered beside the caller's own. */
+  const [defaultKeyId, setDefaultKeyId] = useState(held?.default_key_id ?? "");
   /**
    * How many addresses this agent's access list may hold, or 0 for no ceiling.
    * Set by whoever administers the agent; shown here so a list that is about to be
@@ -196,13 +187,13 @@ export default function Settings({
   );
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  /** What OpenRouter said about the key that was last pasted. Cleared on the next save. */
-  const [keyCheck, setKeyCheck] = useState<{
-    ok: boolean;
-    error?: string;
-    label?: string;
-  } | null>(null);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** A debounced patch not sent yet: shown as unsaved, and sent if the page is left. */
+  const pending = useRef<Partial<Config> | null>(null);
+  /** Saves sent so far, so an answer to an older one is not applied over a newer. */
+  const sent = useRef(0);
+  const [unsaved, setUnsaved] = useState(false);
+  const nameBox = useRef<HTMLInputElement>(null);
   const [metaOpen, setMetaOpen] = useState(false);
   /** Bumped when the meta dialog closes: what it saved (models, locks) is read back. */
   const [reloads, setReloads] = useState(0);
@@ -233,6 +224,7 @@ export default function Settings({
           : current,
       );
       setLocked(new Set(payload.locked ?? []));
+      setDefaultKeyId(payload.default_key_id ?? "");
       setSpend(payload.spend ?? null);
       setMemberLimit(payload.member_limit ?? 0);
       setAgent(payload.agent ?? null);
@@ -319,6 +311,8 @@ export default function Settings({
   };
 
   const save = async (patch: Partial<Config>) => {
+    // Saves can overlap; only the latest one may speak for the page.
+    const seq = ++sent.current;
     setSaving(true);
     const res = await fetch(
       `/api/agents/${encodeURIComponent(agentId)}/config`,
@@ -328,10 +322,9 @@ export default function Settings({
         body: JSON.stringify(patch),
       },
     );
-    setSaving(false);
+    if (seq === sent.current) setSaving(false);
     const payload = (await res.json().catch(() => null)) as {
       config: Config;
-      openrouter?: { ok: boolean; error?: string; label?: string };
       /** The WhatsApp account subscription the Worker makes on every save. */
       whatsapp?: { ok: boolean; error?: string };
       error?: string;
@@ -344,9 +337,10 @@ export default function Settings({
       return;
     }
     // Take the server's row back: it clamps values the UI could send out of range.
-    setConfig(payload.config);
-    // Only a save that carried a new key gets a verdict; the rest leave it alone.
-    if (payload.openrouter) setKeyCheck(payload.openrouter);
+    // But not over what is still being typed: that row is as of when this save left,
+    // so keystrokes since — and any later save's answer — stay on top of it.
+    if (seq === sent.current)
+      setConfig({ ...payload.config, ...pending.current });
     // The settings saved either way, but without the subscription no message is ever
     // delivered — so a refusal is said here rather than discovered as silence.
     if (payload.whatsapp && !payload.whatsapp.ok) {
@@ -381,12 +375,43 @@ export default function Settings({
   const set = (patch: Partial<Config>, wait = 0) => {
     setConfig((c) => (c ? { ...c, ...patch } : c));
     if (debounce.current) clearTimeout(debounce.current);
+    // A patch still waiting is folded into this one rather than dropped.
+    const merged = { ...pending.current, ...patch };
     if (wait === 0) {
-      void save(patch);
+      pending.current = null;
+      setUnsaved(false);
+      void save(merged);
       return;
     }
-    debounce.current = setTimeout(() => void save(patch), wait);
+    pending.current = merged;
+    setUnsaved(true);
+    debounce.current = setTimeout(flush, wait);
   };
+
+  /** Send a debounced patch now: when its field is left, or the page is. */
+  const flush = () => {
+    if (debounce.current) clearTimeout(debounce.current);
+    const patch = pending.current;
+    if (!patch) return;
+    pending.current = null;
+    setUnsaved(false);
+    void save(patch);
+  };
+
+  // Leaving the page mid-debounce still saves what was typed.
+  useEffect(
+    () => () => {
+      const patch = pending.current;
+      if (!patch) return;
+      void fetch(`/api/agents/${encodeURIComponent(agentId)}/config`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(patch),
+        keepalive: true,
+      });
+    },
+    [agentId],
+  );
 
   return (
     <div className="bg-canvas text-ink min-h-screen">
@@ -399,10 +424,12 @@ export default function Settings({
           Sessions
         </Link>
 
-        <div className="flex items-baseline justify-between gap-4">
+        {/* Stuck to the top, so the save status is in view however far down the
+            edit is. */}
+        <div className="bg-canvas sticky top-0 z-20 -mx-5 flex items-baseline justify-between gap-4 px-5 py-3 md:-mx-8 md:px-8">
           <h1 className="text-[32px] font-[650] leading-[1.2]">Settings.</h1>
           <span className="text-faint text-xs leading-[1.33]">
-            {saving ? "Saving…" : "Saved"}
+            {saving ? "Saving…" : unsaved ? "Unsaved changes" : "Saved"}
           </span>
         </div>
         <p className="text-muted mt-1 text-sm font-light leading-[1.43]">
@@ -483,7 +510,20 @@ export default function Settings({
                 config={config}
                 set={set}
                 tint="#229ED9"
-              />
+              >
+                {/* Read from Telegram when the token is saved, so it is never typed. */}
+                {config.telegram_bot_username && (
+                  <a
+                    href={`https://t.me/${encodeURIComponent(config.telegram_bot_username)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="bg-canvas border-hairline hover:bg-canvas-soft inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-xs font-semibold leading-[1.33] transition"
+                  >
+                    Open @{config.telegram_bot_username} in Telegram
+                    <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                  </a>
+                )}
+              </CapabilitySection>
             )}
 
             {whatsapp && !locked.has("whatsapp") && (
@@ -535,6 +575,7 @@ export default function Settings({
                 <textarea
                   value={config.system_prompt}
                   onChange={(e) => set({ system_prompt: e.target.value }, 600)}
+                  onBlur={flush}
                   rows={4}
                   maxLength={4000}
                   placeholder="Answer in short paragraphs. Show code before explaining it."
@@ -617,37 +658,26 @@ export default function Settings({
             {!locked.has("openrouter_api_key") && (
               <Row
                 title="OpenRouter"
-                hint="Your agent cannot function without this."
+                hint="Your agent needs a key to reply."
               >
-                <Field
-                  field={OPENROUTER_KEY}
-                  value={config.openrouter_api_key}
-                  onChange={(v) => {
-                    setKeyCheck(null);
-                    set({ openrouter_api_key: v });
-                  }}
+                <WalletKeyPicker
+                  value={config.openrouter_key_id}
+                  hasKey={!!config.openrouter_api_key}
+                  defaultKeyId={defaultKeyId}
+                  onChange={(id) => set({ openrouter_key_id: id })}
                 />
-                {keyCheck && (
-                  <p
-                    className={`mt-2 text-xs leading-[1.33] ${
-                      keyCheck.ok ? "text-muted" : "text-ink"
-                    }`}
-                  >
-                    {keyCheck.ok
-                      ? `This key${keyCheck.label ? ` (${keyCheck.label})` : ""} is valid.`
-                      : "Invalid key"}
-                  </p>
-                )}
-                {!config.openrouter_api_key && !keyCheck && (
+                {!config.openrouter_api_key && (
                   <p className="text-faint mt-2 text-xs leading-[1.33]">
-                    A valid Openrouter API key is required.
+                    Pick a key from your OpenRouter wallet.
                   </p>
                 )}
               </Row>
             )}
 
             <Row title="Name" hint="What this agent is called, everywhere">
+              <div className="flex gap-2">
               <input
+                ref={nameBox}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 onBlur={() => void rename(name)}
@@ -660,13 +690,17 @@ export default function Settings({
                 }}
                 maxLength={60}
                 placeholder="New agent"
-                className="bg-field placeholder:text-faint w-full rounded-2xl px-5 py-4 text-sm leading-[1.43] outline-none"
+                className="bg-field placeholder:text-faint min-w-0 flex-1 rounded-2xl px-5 py-4 text-sm leading-[1.43] outline-none"
               />
+              {name.trim() !== (agent?.name ?? "") && (
+                <SaveButton onSave={() => nameBox.current?.blur()} />
+              )}
+              </div>
             </Row>
 
             <Row
               title="Manage access"
-              hint="Users who have complete access to manage, chat and read all messages of this agent."
+              hint="People here can manage this agent, chat with it and read every conversation in it. Only add people you trust."
             >
               <ChipList
                 value={others}
@@ -688,7 +722,7 @@ export default function Settings({
               title="API key"
               hint={
                 <>
-                  Use this to get programatic access to your agent. Try it in
+                  Use this to reach your agent from your own code. Try it in
                   the{" "}
                   <a
                     href="/guide/api-playground"
@@ -705,20 +739,25 @@ export default function Settings({
               <ApiKeys agentId={agentId} roles={["user"]} />
             </Row>
 
-            {/* The agent's administrator also sees the meta dialog the home page opens
+            {/* The agent's administrator also sees the admin dialog the home page opens
                 for fleet agents; nobody else could save it. */}
             {isAdmin && agent && (
-              <Row
-                title="Meta settings"
-                hint="Advanced settings. Manage default options and lock settings from being changed."
-              >
+              <section className="border-hairline-soft flex items-center justify-between gap-4 border-t py-5">
+                <div className="min-w-0">
+                  <h2 className="text-base font-semibold leading-[1.38]">
+                    Admin settings
+                  </h2>
+                  <p className="text-muted text-xs font-light leading-[1.33]">
+                    Defaults, locks and limits.
+                  </p>
+                </div>
                 <button
                   onClick={() => setMetaOpen(true)}
-                  className="border-hairline text-ink hover:bg-canvas-soft h-10 rounded-full border px-5 text-sm font-semibold transition"
+                  className="border-hairline text-ink hover:bg-canvas-soft h-9 shrink-0 rounded-full border px-4 text-sm font-semibold transition"
                 >
-                  Open meta settings
+                  Open
                 </button>
-              </Row>
+              </section>
             )}
           </div>
         )}

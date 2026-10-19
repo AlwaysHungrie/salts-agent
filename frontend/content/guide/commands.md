@@ -1,11 +1,13 @@
 ---
 title: Commands
-section: Advanced use
-order: 2
+section: Using your agent
+order: 4
 summary: Short messages that control the conversation itself. They work in the browser, on Telegram and on WhatsApp.
 ---
 
 Commands are short messages that start with `!` and control the conversation itself, such as starting a new one or stopping a reply. They are most useful on Telegram and WhatsApp, where there are no buttons to press. Commands are free, except for `!compact`, which is billed like a normal reply.
+
+You can also just ask your agent in your own words, for example "switch to the cheaper model", "turn on Notion" or "how do I set up salts-tools?". Your agent can run most commands for you and reads this guide to answer questions about Salts. A request in your own words is billed like a normal reply. `!stop`, `!unstick` and `!delete` only work when you send them yourself.
 
 To use a command, send it as the whole message, for example `!new`. In a Telegram group, mention the bot first, for example `@ada_salt_bot !new`.
 
@@ -18,7 +20,8 @@ To use a command, send it as the whole message, for example `!new`. In a Telegra
 | `!unstick` | Fixes a conversation where your agent has stopped responding. |
 | `!delete` | Deletes this conversation and everything in it. |
 | `!help` | Lists every command. |
-| `!docs` | Sends a link to this guide. |
+| `!docs` | Lists the pages of this guide. |
+| `!docs <page>` | Sends one page of this guide. |
 | `!settings` | Sends a link to your agent's settings. |
 | `!mcp` | Lists your connected apps and whether each is on. |
 | `!enable-mcp <name>` | Switches on a connected app. |
@@ -56,7 +59,13 @@ Very rarely, a reply never finishes and your agent stops responding to anything 
 
 ## !help, !docs and !settings
 
-`!help` explains how conversations work and lists every command. `!docs` sends a link to this guide, and `!settings` sends a link to your agent's **Settings** page.
+`!help` explains how conversations work and lists every command. `!settings` sends a link to your agent's **Settings** page.
+
+`!docs` sends a link to this guide and lists its pages, each with a short name. Send that name after `!docs` to read the page right in the chat, for example:
+
+```
+!docs openrouter
+```
 
 ## !mcp, !enable-mcp and !disable-mcp
 

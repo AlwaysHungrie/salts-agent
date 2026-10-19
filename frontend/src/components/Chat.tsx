@@ -149,7 +149,7 @@ export function Chat({
         )}
         {messages.length === 0 && (
           <p className="text-muted mx-auto max-w-md text-center text-xl font-light leading-[1.38]">
-            Session Connected. Send a message.
+            Connected. Send a message to start.
           </p>
         )}
         {messages.map((m, i) => {

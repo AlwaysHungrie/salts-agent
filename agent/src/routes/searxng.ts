@@ -3,7 +3,7 @@ import { type McpServerRow, parseHeaders } from "../mcp";
 import { EMPTY_MCP_SERVER } from "../registry";
 import { readJson } from "../worker/http";
 import { syncMcpTools } from "../worker/integrations";
-import { directory, readConfig, registry, writeConfig } from "../worker/stores";
+import { directory, type Registry, readConfig, registry, writeConfig } from "../worker/stores";
 
 /** Equal strings, compared in time that does not depend on where they first differ. */
 export async function sameSecret(a: string, b: string): Promise<boolean> {
@@ -59,7 +59,7 @@ export async function handleSearxngUrl(
 }
 
 /** Whether a server's saved `Authorization` header is exactly this bearer token. */
-async function trustsToken(row: McpServerRow, token: string): Promise<boolean> {
+export async function trustsToken(row: McpServerRow, token: string): Promise<boolean> {
   const headers = parseHeaders(row.headers);
   const key = Object.keys(headers).find((k) => k.toLowerCase() === "authorization");
   return (
@@ -70,11 +70,49 @@ async function trustsToken(row: McpServerRow, token: string): Promise<boolean> {
 }
 
 /**
+ * Called as the user removes a server: one salts-tools set up (its `Authorization` is the
+ * agent's SearXNG token) is remembered, so the next push does not add it back.
+ */
+export async function rememberRemoval(env: Env, reg: Registry, row: McpServerRow): Promise<void> {
+  const token = (await readConfig(env, reg)).searxng_token.trim();
+  if (token && (await trustsToken(row, token))) await reg.markMcpRemoved(row.name);
+}
+
+export const HEADER_NAME = /^[A-Za-z0-9-]{1,64}$/;
+const MAX_SEEDED_HEADERS = 8;
+
+/**
+ * Header names to put on the server with empty values, for the user to fill in (an API
+ * key the server's tools need). Undefined when the list is not a short list of plain
+ * header names; `Authorization` is never one, since the token is.
+ */
+function seededHeaders(raw: unknown): string[] | undefined {
+  if (raw === undefined) return [];
+  if (!Array.isArray(raw) || raw.length > MAX_SEEDED_HEADERS) return undefined;
+  const names = raw.map((n) => (typeof n === "string" ? n.trim() : ""));
+  if (names.some((n) => !HEADER_NAME.test(n) || n.toLowerCase() === "authorization"))
+    return undefined;
+  return names;
+}
+
+/** `headers` with each of `names` it lacks (in any case) added empty; values it has stay. */
+export function withEmpty(
+  headers: Record<string, string>,
+  names: string[]
+): Record<string, string> {
+  const have = new Set(Object.keys(headers).map((k) => k.toLowerCase()));
+  const out = { ...headers };
+  for (const name of names) if (!have.has(name.toLowerCase())) out[name] = "";
+  return out;
+}
+
+/**
  * Point one of the agent's MCP servers at a local server behind the salts-tools tunnel,
- * with the SearXNG token as proof. A server of that name is created when there is none,
- * authenticated with the same token. An existing one is repointed only when its saved
+ * with the SearXNG token as proof. A server of that name is created when there is none
+ * (unless the user removed it: 410), authenticated with the same token. An existing one is repointed only when its saved
  * `Authorization` is that token, so the token never redirects a server (and the headers
- * it carries) that was set up for anything else.
+ * it carries) that was set up for anything else. `headers` names headers to add empty
+ * when missing, so the user only fills in their values; values already set are kept.
  */
 export async function handleSearxngMcp(
   request: Request,
@@ -85,10 +123,17 @@ export async function handleSearxngMcp(
   if (!holder) return unauthorized();
   const { reg, token } = holder;
 
-  const body = await readJson<{ name?: unknown; url?: unknown }>(request);
+  const body = await readJson<{ name?: unknown; url?: unknown; headers?: unknown }>(request);
   const name = String(body.name ?? "").trim();
   if (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(name)) {
     return Response.json({ error: "name must be a short lowercase slug" }, { status: 400 });
+  }
+  const seeded = seededHeaders(body.headers);
+  if (!seeded) {
+    return Response.json(
+      { error: `headers must be up to ${MAX_SEEDED_HEADERS} header names, not Authorization` },
+      { status: 400 }
+    );
   }
   let parsed: URL;
   try {
@@ -107,6 +152,12 @@ export async function handleSearxngMcp(
   }
 
   const existing = (await reg.mcpServers()).find((s) => s.name.toLowerCase() === name);
+  if (!existing && (await reg.mcpRemoved(name))) {
+    return Response.json(
+      { error: `MCP server "${name}" was removed in this agent; it is not added back` },
+      { status: 410 }
+    );
+  }
   if (!existing) {
     const row: McpServerRow = {
       ...EMPTY_MCP_SERVER,
@@ -115,7 +166,7 @@ export async function handleSearxngMcp(
       name,
       url,
       auth: "headers",
-      headers: JSON.stringify({ Authorization: `Bearer ${token}` }),
+      headers: JSON.stringify(withEmpty({ Authorization: `Bearer ${token}` }, seeded)),
       enabled: 1,
     };
     await reg.addMcpServer(row);
@@ -127,6 +178,11 @@ export async function handleSearxngMcp(
       { error: `MCP server "${existing.name}" does not use this token; it was not changed` },
       { status: 409 }
     );
+  }
+  const current = parseHeaders(existing.headers);
+  const headers = withEmpty(current, seeded);
+  if (Object.keys(headers).length !== Object.keys(current).length) {
+    await reg.updateMcpServer(existing.id, { headers: JSON.stringify(headers) });
   }
   if (existing.url !== url) {
     const updated = await reg.updateMcpServer(existing.id, { url, tools_json: "" });

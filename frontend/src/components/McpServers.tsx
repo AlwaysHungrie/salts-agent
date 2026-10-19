@@ -1,14 +1,22 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Loader2, Plus, Sparkles, Trash2, X } from "lucide-react";
+import {
+  BookOpen,
+  ChevronDown,
+  Loader2,
+  Plus,
+  Sparkles,
+  Trash2,
+  X,
+} from "lucide-react";
 import {
   SECRET_MASK,
   type McpAuth,
   type McpCatalogEntry,
   type McpServer,
 } from "@/lib/agent";
-import { Toggle } from "@/components/CapabilitySection";
+import { SaveButton, Toggle } from "@/components/CapabilitySection";
 import { McpPresetStrip, type McpPreset } from "@/components/McpPresets";
 import { cached, remember } from "@/lib/cache";
 
@@ -20,12 +28,12 @@ const AUTH_MODES: { id: McpAuth; label: string; hint?: string }[] = [
   {
     id: "headers",
     label: "API key",
-    hint: "Configure authentication headers that will be sent with every request.",
+    hint: "Headers sent with every request, such as an API key.",
   },
   {
     id: "oauth",
     label: "OAuth",
-    hint: "You will be redirected to the external provider and asked to authenticate via your account.",
+    hint: "You'll be sent to the app to sign in with your account.",
   },
 ];
 
@@ -90,15 +98,31 @@ function AuthPicker({
 function HeaderEditor({
   pairs,
   onChange,
+  onCommit,
+  dirty = false,
 }: {
   pairs: HeaderPair[];
   onChange: (pairs: HeaderPair[]) => void;
+  /**
+   * Save the headers as they stand. Called when focus leaves the editor and when a row
+   * is removed, so a saved server's headers save the way every other field does —
+   * without a button — but never half-typed, one keystroke at a time.
+   */
+  onCommit?: (pairs: HeaderPair[]) => void;
+  /** Whether the pairs differ from what is saved, which shows the Save button. */
+  dirty?: boolean;
 }) {
   const set = (i: number, patch: Partial<HeaderPair>) =>
     onChange(pairs.map((p, n) => (n === i ? { ...p, ...patch } : p)));
 
   return (
-    <div className="space-y-2">
+    <div
+      className="space-y-2"
+      onBlur={(e) => {
+        if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+        onCommit?.(pairs);
+      }}
+    >
       <span className="block text-[13px] font-semibold leading-[1.43]">
         Headers
       </span>
@@ -120,7 +144,11 @@ function HeaderEditor({
             className={`${input} flex-[3]`}
           />
           <button
-            onClick={() => onChange(pairs.filter((_, n) => n !== i))}
+            onClick={() => {
+              const next = pairs.filter((_, n) => n !== i);
+              onChange(next);
+              onCommit?.(next);
+            }}
             aria-label="Remove header"
             className="text-muted hover:text-ink shrink-0 px-2"
           >
@@ -128,12 +156,15 @@ function HeaderEditor({
           </button>
         </div>
       ))}
-      <button
-        onClick={() => onChange([...pairs, { key: "", value: "" }])}
-        className="text-muted hover:text-ink text-[13px] font-semibold"
-      >
-        + Add header
-      </button>
+      <div className="flex items-center justify-between gap-2">
+        <button
+          onClick={() => onChange([...pairs, { key: "", value: "" }])}
+          className="text-muted hover:text-ink text-[13px] font-semibold"
+        >
+          + Add header
+        </button>
+        {onCommit && dirty && <SaveButton onSave={() => onCommit(pairs)} />}
+      </div>
     </div>
   );
 }
@@ -149,6 +180,9 @@ function ServerCard({
   onRemove,
   busy,
   manage,
+  open,
+  onOpenChange,
+  guide,
 }: {
   server: McpServer;
   onPatch: (patch: Record<string, unknown>) => void;
@@ -162,19 +196,37 @@ function ServerCard({
   onRemove: () => void;
   busy: boolean;
   /**
-   * Whether what the server *is* may be changed here — its name, where it points,
-   * how it authenticates, and whether it stays at all. False leaves what it is *for*:
-   * the switch, its tools, and its OAuth. The Worker refuses the difference, so an
-   * editor shown here would be one that cannot save.
+   * Whether the list itself may be changed here: the server's name, and whether it stays
+   * at all. False still leaves everything about using it: where it points, how it
+   * authenticates, its headers, the switch, its tools and its OAuth. The Worker refuses
+   * the difference, so an editor shown here would be one that cannot save.
    */
   manage: boolean;
+  /**
+   * Whether the card is expanded. Held by the list, not the card: a saved change
+   * remounts the card, and it should stay open under the hand that changed it.
+   */
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  /** User guide slug for this server, when it came from a catalogue tile that has one. */
+  guide?: string;
 }) {
-  const [open, setOpen] = useState(false);
   const [name, setName] = useState(server.name);
   const [url, setUrl] = useState(server.url);
-  const [pairs, setPairs] = useState<HeaderPair[]>(
-    pairsFrom(server.headers),
-  );
+  const [pairs, setPairs] = useState<HeaderPair[]>(pairsFrom(server.headers));
+
+  // Each field saves when it is left, or from its Save button while it has edits.
+  const saveName = () => {
+    if (name.trim() && name !== server.name) onPatch({ name });
+  };
+  const saveUrl = () => {
+    if (url.trim() && url !== server.url) onPatch({ url });
+  };
+  const saveHeaders = (next: HeaderPair[]) => {
+    const headers = objectFrom(next);
+    if (JSON.stringify(headers) !== JSON.stringify(server.headers))
+      onPatch({ headers });
+  };
 
   const off = new Set(server.disabled_tools);
   const live = server.tools.filter((t) => !off.has(t.name)).length;
@@ -189,26 +241,52 @@ function ServerCard({
           : `${live} of ${server.tools.length} tools`;
 
   return (
-    <div className="bg-canvas border-hairline rounded-[20px] border p-4">
+    <div
+      // The whole card toggles, bar its controls and the open editor below.
+      onClick={(e) => {
+        const target = e.target as HTMLElement;
+        if (target.closest("button, a, input, textarea, select, label")) return;
+        if (target.closest("[data-card-body]")) return;
+        if (window.getSelection()?.toString()) return;
+        onOpenChange(!open);
+      }}
+      className="bg-canvas border-hairline relative cursor-pointer rounded-[20px] border p-4 pb-9"
+    >
       <div className="flex items-start justify-between gap-4">
-        <button
-          onClick={() => setOpen(!open)}
-          className="min-w-0 flex-1 text-left"
-        >
-          <span className="block truncate text-[15px] font-semibold leading-[1.4]">
-            {server.name}
-          </span>
-          <span className="text-muted block truncate text-xs font-light leading-[1.33]">
-            {server.url}
-          </span>
-          <span
-            className={`mt-3 inline-block text-xs leading-[1.33] ${
-              server.last_error ? "text-ink font-semibold" : "text-faint"
-            }`}
+        <div className="min-w-0 flex-1">
+          <button
+            onClick={() => onOpenChange(!open)}
+            className="block w-full min-w-0 text-left"
           >
-            {status}
-          </span>
-        </button>
+            <span className="block truncate text-[15px] font-semibold leading-[1.4]">
+              {server.name}
+            </span>
+            <span className="text-muted block truncate text-xs font-light leading-[1.33]">
+              {server.url}
+            </span>
+          </button>
+          <div className="mt-3 flex items-center gap-3 text-xs leading-[1.33]">
+            <button
+              onClick={() => onOpenChange(!open)}
+              className={
+                server.last_error ? "text-ink font-semibold" : "text-faint"
+              }
+            >
+              {status}
+            </button>
+            {guide && (
+              <a
+                href={`/guide/${guide}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-muted hover:text-ink inline-flex items-center gap-1 underline underline-offset-2 transition"
+              >
+                <BookOpen size={12} strokeWidth={2} />
+                Open manual
+              </a>
+            )}
+          </div>
+        </div>
         <Toggle
           on={!!server.enabled}
           onChange={(v) => onPatch({ enabled: v })}
@@ -282,18 +360,20 @@ function ServerCard({
       </div>
 
       {open && (
-        <div className="mt-5 space-y-4">
+        <div data-card-body className="mt-5 cursor-auto space-y-4">
           {manage && (
             <div className="flex gap-2">
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                onBlur={() =>
-                  name.trim() && name !== server.name && onPatch({ name })
-                }
+                onBlur={saveName}
+                onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
                 aria-label="Server name"
                 className={`${input} flex-1`}
               />
+              {name.trim() && name !== server.name && (
+                <SaveButton onSave={saveName} />
+              )}
             </div>
           )}
 
@@ -301,17 +381,21 @@ function ServerCard({
             Always editable: a server without OAuth counts as connected as soon as it
             is saved. Moving an OAuth server drops its tokens, so it reconnects.
           */}
-          {manage && (
+          <div className="flex gap-2">
             <input
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              onBlur={() => url.trim() && url !== server.url && onPatch({ url })}
+              onBlur={saveUrl}
+              onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
               aria-label="Server URL"
-              className={input}
+              className={`${input} flex-1`}
             />
-          )}
+            {url.trim() && url !== server.url && (
+              <SaveButton onSave={saveUrl} />
+            )}
+          </div>
 
-          {manage && !server.connected && (
+          {!server.connected && (
             <AuthPicker
               value={server.auth}
               onChange={(auth) => onPatch({ auth })}
@@ -322,17 +406,16 @@ function ServerCard({
             Outside the block above: a headers server counts as connected as soon as it
             is saved, and a key that has to be rotated is still a key worth editing.
           */}
-          {manage && server.auth === "headers" && (
-            <div className="space-y-3">
-              <HeaderEditor pairs={pairs} onChange={setPairs} />
-              <button
-                onClick={() => onPatch({ headers: objectFrom(pairs) })}
-                disabled={busy}
-                className={button}
-              >
-                Save headers
-              </button>
-            </div>
+          {server.auth === "headers" && (
+            <HeaderEditor
+              pairs={pairs}
+              onChange={setPairs}
+              onCommit={saveHeaders}
+              dirty={
+                JSON.stringify(objectFrom(pairs)) !==
+                JSON.stringify(server.headers)
+              }
+            />
           )}
 
           {server.tools.length > 0 && (
@@ -387,6 +470,19 @@ function ServerCard({
           )}
         </div>
       )}
+
+      <button
+        onClick={() => onOpenChange(!open)}
+        aria-expanded={open}
+        aria-label={open ? `Collapse ${server.name}` : `Expand ${server.name}`}
+        className="text-muted hover:text-ink absolute bottom-2 right-3 flex h-7 w-7 items-center justify-center rounded-full transition"
+      >
+        <ChevronDown
+          size={16}
+          strokeWidth={2}
+          className={`transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
     </div>
   );
 }
@@ -409,7 +505,9 @@ function AddServer({
   const [name, setName] = useState(preset?.name ?? "");
   const [url, setUrl] = useState(preset?.url ?? "");
   const [auth, setAuth] = useState<McpAuth>(preset?.auth ?? "oauth");
-  const [pairs, setPairs] = useState<HeaderPair[]>([{ key: "", value: "" }]);
+  const [pairs, setPairs] = useState<HeaderPair[]>(
+    pairsFrom(preset?.headers ?? {}),
+  );
 
   const reset = () => {
     setName("");
@@ -538,9 +636,21 @@ export function McpServers({
   /** Preset ids this agent's meta settings offer. Empty means every preset. */
   const [templates, setTemplates] = useState<string[]>(held?.templates ?? []);
   /** Templates provisioned for this agent, which replace the built-in strip. */
-  const [catalog, setCatalog] = useState<McpCatalogEntry[]>(held?.catalog ?? []);
+  const [catalog, setCatalog] = useState<McpCatalogEntry[]>(
+    held?.catalog ?? [],
+  );
   /** Whether the list itself may be changed from here. */
   const [manage, setManage] = useState(held?.manage ?? meta);
+  /** The cards expanded right now, by server id. */
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+
+  /** The guide for a server added from a catalogue tile: matched by name, else by URL. */
+  const guideFor = (server: McpServer) =>
+    (
+      catalog.find(
+        (t) => t.name.toLowerCase() === server.name.trim().toLowerCase(),
+      ) ?? catalog.find((t) => t.url === server.url)
+    )?.guide;
 
   useEffect(() => {
     if (!known.current) return;
@@ -737,6 +847,16 @@ export function McpServers({
           server={server}
           busy={busy}
           manage={manage}
+          open={expanded.has(server.id)}
+          onOpenChange={(open) =>
+            setExpanded((ids) => {
+              const next = new Set(ids);
+              if (open) next.add(server.id);
+              else next.delete(server.id);
+              return next;
+            })
+          }
+          guide={guideFor(server)}
           onPatch={(patch) =>
             void call(`${base}/${server.id}${asOwner}`, {
               method: "PATCH",
@@ -776,8 +896,8 @@ export function McpServers({
 
       {redirectUri && (
         <p className="text-faint text-xs leading-[1.33]">
-          Expect external providers to redirect to the following URL to complete
-          OAuth flow: <span className="break-all font-bold">{redirectUri}</span>
+          The app you connect will send you back to this URL to finish signing
+          in: <span className="break-all font-bold">{redirectUri}</span>
         </p>
       )}
     </div>

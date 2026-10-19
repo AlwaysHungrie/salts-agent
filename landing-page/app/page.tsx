@@ -3,7 +3,6 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader } from "@/components/SiteHeader";
 import {
   Capabilities,
-  Costs,
   Cta,
   Features,
   Fleet,
@@ -32,7 +31,6 @@ export default function Page() {
           <Features />
           <Capabilities />
           <Steps />
-          <Costs />
           <Mission />
           <Fleet />
           <FaqSection />

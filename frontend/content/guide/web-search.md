@@ -1,79 +1,43 @@
 ---
 title: Set up web search
-section: Advanced use
-order: 1
-summary: Give your agent the live web, for free, with a private search engine that runs on your own computer.
+section: Using your agent
+order: 3
+summary: Give your agent the live web, either free with a private search engine on your own computer (salts-tools), or with a Brave Search API key and no installing.
 ---
 
 Without web search, your agent only knows what its model learned when it was trained, so it cannot tell you today's news, a current price or whether a shop is open. With web search switched on, your agent can look things up and tell you where the answer came from.
 
-This guide will help you run your own free search engine, called SearXNG, on your computer and connect it to your agent. It works on Mac, Windows and Linux. You will need to use a terminal (the Terminal app on a Mac, PowerShell on Windows), but every command you need is on this page. If you would rather not run anything on your computer, skip to [Using Brave instead](#using-brave-instead).
+Your agent needs a search engine to search with, and there are two ways to give it one:
+
+| Option | Good for | What you need |
+|---|---|---|
+| **salts-tools** | Free searching with no limits | A computer that stays on, and about fifteen minutes in a terminal |
+| **Brave** | No installing at all | A Brave account and a card. The free plan is enough for one person |
+
+If you have never used a terminal before, we recommend starting with Brave. You can switch to salts-tools later.
+
+## Using Brave
+
+1. Create an account at [brave.com/search/api](https://brave.com/search/api/) and subscribe to the free plan. Brave asks for a card, and any searches beyond the free plan are billed by Brave.
+2. Copy your API key.
+3. Open your agent, go to **Capabilities** and switch on **Web search**.
+4. Paste your key into **Brave Search API key**.
+
+That is all. When a Brave key is set, your agent always uses Brave, even if salts-tools is also running.
+
+## Using salts-tools
+
+salts-tools is a small program that runs a private search engine called SearXNG on your computer and connects it to your agent. It works on Mac, Windows and Linux. If you are not sure what it is yet, read [What is salts-tools](/guide/salts-tools) first.
 
 > What to expect:
 >
 > - Your agent can only search while your computer is on, awake and connected to the internet.
 > - You will install three free tools: Docker, Node.js and cloudflared. You do not need an account for any of them.
 
-## 1. Install the tools
-
-1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/). If you already use OrbStack or Colima, those work too. On Linux you can use Docker Engine instead; we recommend starting it with `sudo systemctl enable --now docker` and adding yourself to the `docker` group, so salts-tools can use it without asking for your password.
-2. Install [Node.js](https://nodejs.org), version 20 or later.
-3. Install cloudflared. On a Mac with Homebrew, run this in Terminal:
-
-   ```
-   brew install cloudflared
-   ```
-
-   On Windows, run this in PowerShell:
-
-   ```
-   winget install --id Cloudflare.cloudflared
-   ```
-
-   Otherwise, download it from [Cloudflare's downloads page](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/).
-
-## 2. Download salts-tools
-
-salts-tools is a small program that starts the search engine and connects it to your agent. In your terminal, run these three commands one at a time:
-
-```
-git clone https://github.com/AlwaysHungrie/salts-agent.git
-cd salts-agent/salts-tools
-npm link
-```
-
-## 3. Start salts-tools
-
-First, open your agent in the browser and copy its agent ID. It is the part of the address after `/a/`:
-
-```
-https://salts-agent-app.vercel.app/a/<your-agent-id>
-```
-
-Then run:
-
-```
-salts-tools start
-```
-
-salts-tools will ask you a few questions:
-
-1. **Agent IDs**: paste your agent ID. To give several agents web search from the same computer, paste all their IDs with a space between each one.
-2. salts-tools will then show you a **token**. Copy it, and leave your terminal open while you do the next step.
-
-## 4. Add the token to your agent
-
-Open your agent, go to **Capabilities**, and find **Web search**. If you entered several agent IDs, do this for each of those agents, using the same token.
-
-1. Switch **Web search** on.
-2. Paste the token into **SearXNG token** and save.
-3. Leave **Brave Search API key** and **SearXNG URL** empty. salts-tools fills in the URL for you.
-
-Go back to your terminal and press **Enter**. When salts-tools is done, you will see green ticks for the tunnel and `web`, followed by `live for agent <your-agent-id>`.
-
-Finally, salts-tools asks whether it should start automatically when you log in. We recommend saying yes, otherwise your agent loses web search every time you restart your computer.
-
-To add or remove agents later, run `salts-tools setup` and enter the full list of agent IDs again.
+1. Follow [Install salts-tools](/guide/salts-tools-install). Make sure you install Docker in step 1, since the search engine needs it.
+2. In the salts-tools screen, open your agent in the **Agents** tab and press **Enter** on **Web search**. salts-tools connects it to that agent within a few seconds.
+3. If **Web search** is switched off in the agent's **Capabilities**, the agent shows it as **to do**: press **Enter** on it to switch it on.
+4. Leave **Brave Search API key** empty in **Capabilities**. When a Brave key is set, your agent uses Brave instead, and salts-tools reminds you of that.
 
 ## You are done
 
@@ -81,24 +45,8 @@ Ask your agent something that needs the web, for example "What is the weather in
 
 If you also want your agent to open search results and read the full page, switch on **Read a URL** in **Capabilities**.
 
-## Everyday commands
-
-| Command | What it does |
-|---|---|
-| `salts-tools` | Opens a screen that shows whether search is running and connected to each agent. Use the arrow keys to move, **s** to start or stop, **c** to copy the token, and **q** to quit. |
-| `salts-tools start` | Starts the search engine. |
-| `salts-tools stop` | Stops the search engine. |
-| `salts-tools restart` | Restarts the search engine and reconnects it to your agent. |
-| `salts-tools setup` | Asks the setup questions again, for example to connect a different agent. |
-| `salts-tools reset` | Forgets the token and agent ID. Run `salts-tools stop` first. |
-| `salts-tools autostart on` | Starts salts-tools when you log in. Use `off` to turn this off. |
-
-## Using Brave instead
-
-If you would rather not run anything on your computer, you can use Brave's search API instead. Brave has a free plan that is enough for one person. Create an account at [brave.com/search/api](https://brave.com/search/api/), subscribe to the free plan, and paste your key into **Brave Search API key** under **Web search** in your agent's **Capabilities**. Brave asks for a card, and any searches beyond the free plan are billed by Brave.
-
 ## Footnotes
 
-1. If your agent stops searching, check that your computer is awake and online, then run `salts-tools restart`.
-2. If salts-tools says your agent refused the token, paste the token into **SearXNG token** again, save, and choose **retry**.
+1. If your agent stops searching with salts-tools, check that your computer is awake and online, then run `npx salts-tools restart`. See [Everyday use](/guide/salts-tools-everyday) for the other commands.
+2. If the salts-tools screen says `disconnected`, run `npx salts-tools` to connect your computer again.
 3. If your agent is not searching when it should, add this to **Custom instructions** in **Settings**: "Search the web for anything about current events, prices or dates." A stronger model also helps.

@@ -62,7 +62,7 @@ export function TuningSections({ editor }: { editor: MetaEditor }) {
 
       <Section
         title="Custom instructions"
-        hint="Base instructions given to agent in every chat"
+        hint="Instructions the agent follows in every chat."
         {...lock("system_prompt")}
       >
         <textarea

@@ -2,48 +2,63 @@
 title: Add the matchmaker
 section: salts-tools
 order: 3
-summary: Let your agent read resumes and match candidates to job descriptions, using a tool that runs on your computer.
+summary: Let your agent read resumes and find the best people for a job, using a tool that runs on your computer.
 ---
 
-The matchmaker is a tool for recruiters. It reads resumes, remembers every candidate, and matches them against a job description, so you can ask your agent "Who are the best five candidates for this backend role?" and get an answer from your own pool of resumes. The resumes stay on your computer.
+The matchmaker is a tool for recruiters. It reads resumes and cover letters, remembers every person, and finds the best people in your pool for a job, so you can ask your agent "Who are the best candidates for this backend role?" and get an answer with reasons. The resumes stay on your computer.
 
-This guide will help you start the matchmaker and connect it to your agent. You will need salts-tools installed with Docker and uv (see [Install salts-tools](/guide/salts-tools-install)), and an [OpenRouter API key](/guide/openrouter), since the matchmaker uses a model to read resumes.
+This guide will help you start the matchmaker and connect it to your agent. You will need salts-tools installed with uv (see [Install salts-tools](/guide/salts-tools-install)), and an [OpenRouter API key](/guide/openrouter), since the matchmaker uses a model to read resumes and judge candidates.
 
-## 1. Start the matchmaker
+## 1. Switch the matchmaker on
 
-In your terminal, run:
+Run `npx salts-tools`, open your agent in the **Agents** tab and switch on **Matchmaker**. The first time salts-tools starts, it takes a minute or two to set up everything the matchmaker needs on your computer. Your agent then has a new MCP server called **matchmaker**, already connected.
 
-```
-salts-tools start matchmaker
-```
+## 2. Add your key and spending limit
 
-The first start takes a few minutes, because salts-tools downloads and sets up everything the matchmaker needs. If salts-tools is already running another tool, the matchmaker joins it and nothing else changes.
-
-Once it is live, open your agent's **Capabilities** page and look under **MCP servers**. You will find a new server called **matchmaker**, already connected with your token.
-
-## 2. Add your key and spending limits
-
-The matchmaker pays for its model calls with your OpenRouter key, and it only spends up to the limits you set. Click the **matchmaker** card to open it, click **+ Add header** for each row below, enter the **Header name** and **Header value**, and then click **Save headers**.
+The matchmaker pays for its model calls with your OpenRouter key. Until you add it, your agent in the salts-tools screen shows **to do: Matchmaker needs X-OpenRouter-Api-Key**. Press **Enter** on it, paste your key and press **Enter** again. You can also set the headers below yourself on the **matchmaker** card under **MCP servers** in your agent's **Capabilities**.
 
 | Header name | Value we recommend | What it covers |
 |---|---|---|
 | `X-OpenRouter-Api-Key` | your OpenRouter key | Pays for the matchmaker's model calls |
-| `X-Cost-Approved-Resume-Ingestion` | `0.01` | Reading one resume, which usually costs about $0.002 |
-| `X-Cost-Approved-Job-Match` | `0.10` | Matching one job, which usually costs $0.01 to $0.04 |
-| `X-Cost-Approved-Search` | `0.001` | Searching your candidates, which is almost free |
-| `X-Cost-Approved-Folder-Ingestion` | `5.00` | Reading a whole folder of resumes, about $0.004 a file |
+| `Tool-Call-Max-Charge` | `0.25` | The most one request may spend, in US dollars |
 
-Each limit is the most one request may spend, in US dollars. Setting a limit to `0` switches that tool off, so you can block anything you do not want your agent to do. You only need to add these once, since they stay in place when salts-tools reconnects.
+The limit is optional, and we recommend it. Reading one resume costs about $0.001, and checking a page of 50 candidates against a job costs about $0.10. A request that would cost more than your limit is stopped before it spends anything, and your agent tells you what to raise. You only need to add these once, since they stay in place when salts-tools reconnects.
 
-You do not have to type these out by hand. In the salts-tools screen, open **matchmaker** on the **Services** tab and press **Enter** on a header to copy its name.
+If you delete the **matchmaker** server from your agent, salts-tools switches the matchmaker off for that agent. To bring it back, switch it on again in the salts-tools screen.
 
 ## You are done
 
-Try it by sending your agent a resume, or asking it to read a folder of resumes on your computer, and then paste in a job description and ask who fits best.
+Try it by sending your agent a few resumes, and then paste in a job description and ask who fits best. Your agent shows you the best people first, with what each one has and lacks for the job. Ask for more when you want the next 50.
+
+## Telling it more about someone
+
+Anything you tell your agent about a person, such as "Asha is open to moving to Berlin" or "Ravi is available from March", goes into that person's notes in the matchmaker. Notes are kept with their resume, they count for more than the resume, and searches and job matches read them. A later note replaces an earlier one that says something different.
+
+## Getting someone's resume
+
+Ask your agent for a person's files, for example "send me Amir Soto's resume". Your agent replies with a link. Open it in your browser to see everything the matchmaker holds for that person: their original resume and cover letter, the text read from them, your notes and their profile. Click a file to open or download it.
+
+Each link works for 24 hours and only opens that one person's files. Anyone you forward it to can open it too, so share it only with people who should see the resume.
+
+## Adding many resumes at once
+
+Ask your agent to add a batch of resumes, for example "I want to add a folder of resumes". Your agent replies with a link to an upload page. Open it in your browser, choose your files or a whole folder (PDF, Word `.docx` or text files, up to 10 MB each), and wait until the page says it is done. Then tell your agent you are done. The matchmaker reads them in the background, and your agent tells you how it is going.
+
+The upload link works for 24 hours. If it runs out, ask your agent for a new one.
+
+Each resume costs about $0.001 to read, so 500 resumes cost about $0.50. If your `Tool-Call-Max-Charge` is lower than that, your agent tells you the amount to raise it to. Files you have already added are skipped, so you can upload more later and ask again.
+
+## Exporting everyone
+
+Ask your agent to "export all people" or "export all jobs", and it replies with a download link. People come as a zip with a spreadsheet (`people.csv`, one row per person with their contact details and profile) and a folder for each person with their resume, cover letter, notes and profile. Jobs come as a zip with `jobs.csv` and the full text of each posting. Like every link from the matchmaker, it works for 24 hours.
+
+## Starting again from empty
+
+To delete everything the matchmaker holds, ask your agent to "reset the matchmaker". This removes every person and their files, every job and anything waiting in the upload inbox, and it cannot be undone. Your agent first tells you what would be deleted and gives you a code such as `RESET 4F7K2Q`. Nothing is deleted until you reply with that code yourself. The code works once, for 10 minutes. We recommend exporting people and jobs first if you might want them later.
 
 As with every MCP server, keep only the tools you use switched on, since each one makes every reply a little more expensive. See [Must read: Managing costs and MCP tools](/guide/mcp-costs).
 
 ## Footnotes
 
-1. If the **Services** tab says `name taken`, your agent already has a different MCP server called **matchmaker**. Delete it from **MCP servers**, and salts-tools adds its own within a minute.
-2. If the matchmaker stays on `starting` for a long time on the first run, it is still installing. Check that Docker is running if it does not finish.
+1. If the salts-tools screen says your agent already has a different MCP server called **matchmaker**, delete that one from **MCP servers**, and salts-tools adds its own within a minute.
+2. If you used the matchmaker before this version, your earlier candidates are not carried over. Send the resumes to your agent again to add them.

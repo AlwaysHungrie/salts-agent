@@ -25,23 +25,20 @@ export default function Page() {
           Create and manage your own personal AI agent.
         </h1>
         <p className="text-muted mt-5 text-[17px] leading-relaxed">
-          Salts is a personal AI agent that is always online and can be accessed
-          via browser, telegram or whatsapp. It is yours to customize, and does
-          not need to be running on your machine or a subscription plan. You get
-          to decide how your agent behaves and only pay for what you use.
+          Salts gives you a personal AI agent that is always online. Talk to it
+          in your browser, on Telegram or on WhatsApp. It doesn&apos;t need your
+          computer or a subscription. You decide how it behaves, and you only
+          pay for what it uses.
         </p>
         <p className="text-muted mt-5 text-[17px] leading-relaxed">
-          Salts agents do a lot more than a regular chatbot. They come with
-          built-in capabilities such as web search, sending reminders,
-          scheduling tasks answering with audio and support for images, URL,
-          voice notes, PDFs.
+          It does a lot more than a chatbot. It can search the web, send you
+          reminders, run tasks on a schedule, reply with voice notes, and read
+          the photos, links, PDFs and voice notes you send it.
         </p>
         <p className="text-muted mt-5 text-[17px] leading-relaxed">
-          They can also connect to external apps such as Gmail, Notion, GitHub,
-          etc. giving your agent ability to perform personalized tasks such as
-          reading your emails, scheduling your calendar, and more. Reach out to
-          us to if you would like us to build a feature we have not covered so
-          far.
+          It can also connect to apps you already use, such as Notion, GitHub
+          and Swiggy, and do things for you in them. Missing an app you need?
+          Let us know and we&apos;ll look at building it.
         </p>
 
         {first && (

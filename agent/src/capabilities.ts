@@ -222,14 +222,6 @@ export const CAPABILITIES: Capability[] = [
         placeholder: "123456:ABC…",
       },
       {
-        key: "telegram_bot_username",
-        label: "Bot username",
-        hint: "A Telegram bot username will begin with an @ and ends with bot",
-        secret: false,
-        required: true,
-        placeholder: "@my_agent_bot",
-      },
-      {
         key: "telegram_user_whitelist",
         label: "DM whitelist",
         hint: "Usernames allowed to DM the bot. Empty list allows every user. (Wrap an entry in slashes for a regex, e.g. /^team_/)",
@@ -846,9 +838,7 @@ function takesUpload(tool: { inputSchema?: { properties?: unknown } }): boolean 
 export function acceptsUploads(server: McpServerRow): boolean {
   if (!mcpServerReady(server)) return false;
   const off = new Set(parseNames(server.disabled_tools));
-  return parseTools(server.tools_json).some(
-    (tool) => !off.has(tool.name) && takesUpload(tool)
-  );
+  return parseTools(server.tools_json).some((tool) => !off.has(tool.name) && takesUpload(tool));
 }
 
 /**
@@ -912,7 +902,8 @@ export function mcpToolSpecs(servers: McpServerRow[]): ToolSpec[] {
             try {
               result = await call(args);
             } catch (err) {
-              const retried = !args.upload_id && takesUpload(tool) ? await withLatestFile(args) : undefined;
+              const retried =
+                !args.upload_id && takesUpload(tool) ? await withLatestFile(args) : undefined;
               if (!retried) throw err;
               result = retried;
             }

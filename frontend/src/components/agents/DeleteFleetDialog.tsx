@@ -74,7 +74,7 @@ export function DeleteFleetDialog({
           answering.
           <br />
           <br />
-          This action cannot be undone. Proceed with caution.
+          This can&rsquo;t be undone.
         </p>
         <label className="mt-4 block">
           <span className="text-muted block text-xs leading-[1.33]">

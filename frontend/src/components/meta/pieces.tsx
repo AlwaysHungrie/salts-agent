@@ -1,21 +1,11 @@
 import { ChipList } from "@/components/CapabilitySection";
-import type { CapabilityField, ReasoningEffort } from "@/lib/agent";
+import type { ReasoningEffort } from "@/lib/agent";
 import { Lock, LockOpen } from "lucide-react";
 
 export const inputClass =
   "bg-field placeholder:text-faint text-ink w-full rounded-2xl px-4 py-3 text-sm outline-none";
 
 export const REASONING: ReasoningEffort[] = ["off", "low", "medium", "high"];
-
-/** The OpenRouter key, described the way a capability describes its own fields. */
-export const OPENROUTER_KEY: CapabilityField = {
-  key: "openrouter_api_key",
-  label: "OpenRouter API key",
-  hint: "Every model call this agent makes is billed to this key.",
-  secret: true,
-  required: false,
-  placeholder: "sk-or-v1-…",
-};
 
 /* --------------------------------------------------------------- pieces -- */
 

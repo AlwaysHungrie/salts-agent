@@ -223,4 +223,22 @@ export const SESSION_REGISTRY_MIGRATIONS: readonly Migration[] = [
       addColumnIfMissing(sql, "mcp_servers", `instructions TEXT NOT NULL DEFAULT ''`);
     },
   },
+  {
+    name: "removed salts-tools servers",
+    up: (sql) => {
+      // Names of salts-tools servers the user removed, so its push does not add them back.
+      sql.exec(
+        `CREATE TABLE IF NOT EXISTS mcp_removed (
+           name TEXT PRIMARY KEY,
+           removed_at INTEGER NOT NULL
+         )`
+      );
+    },
+  },
+  {
+    name: "openrouter wallet reference",
+    up: (sql) => {
+      addColumnIfMissing(sql, "config", `openrouter_key_id TEXT NOT NULL DEFAULT ''`);
+    },
+  },
 ];

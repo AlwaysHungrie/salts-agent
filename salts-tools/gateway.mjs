@@ -2,8 +2,13 @@
 // apart by the first path segment: `/web/search` reaches SearXNG as `/search`,
 // `/matchmaker/mcp` reaches the matchmaker as `/mcp`.
 //
-// Nothing gets past without `Authorization: Bearer <token>`. The header is passed on
-// unchanged, so each service checks the same token again behind it.
+// Nothing gets past without `Authorization: Bearer <token>`, except a share link
+// (`/<service>/share/…`): it opens in a browser, which has no token, and carries its own
+// unguessable code that the service checks. Every service checks the token again behind the
+// gateway, so a service without share links still refuses one.
+//
+// The header is passed on unchanged, with the address the request came in on
+// (X-Forwarded-Host, -Proto, -Prefix), so a service can write links back to itself.
 
 import { createHash, timingSafeEqual } from "node:crypto";
 import http from "node:http";
@@ -12,6 +17,16 @@ import http from "node:http";
 function sameSecret(a, b) {
   const digest = (s) => createHash("sha256").update(s).digest();
   return timingSafeEqual(digest(a), digest(b));
+}
+
+/** A link a service hands out to open in a browser; see the top of this file. */
+const SHARE = /^\/[a-z0-9-]+\/share\//;
+
+/** https behind the tunnel (cloudflared says so, or the Host is not this machine), http on loopback. */
+function forwardedProto(req) {
+  const said = String(req.headers["x-forwarded-proto"] ?? "").split(",")[0].trim();
+  if (said === "http" || said === "https") return said;
+  return /^(127\.0\.0\.1|localhost)(:\d+)?$/.test(req.headers.host ?? "") ? "http" : "https";
 }
 
 /**
@@ -25,11 +40,12 @@ export function startGateway(port, { token, routes }) {
       res.writeHead(status, { "content-type": "text/plain" });
       res.end(text);
     };
+    const url = new URL(req.url ?? "/", "http://gateway");
+    const share = SHARE.test(url.pathname) && (req.method === "GET" || req.method === "POST");
     const expected = token();
-    if (!expected || !sameSecret(req.headers.authorization ?? "", `Bearer ${expected}`)) {
+    if (!share && (!expected || !sameSecret(req.headers.authorization ?? "", `Bearer ${expected}`))) {
       return reply(401, "unauthorized");
     }
-    const url = new URL(req.url ?? "/", "http://gateway");
     if (url.pathname === "/healthz") return reply(200, "ok");
 
     const m = url.pathname.match(/^\/([a-z0-9-]+)(\/.*)?$/);
@@ -43,7 +59,13 @@ export function startGateway(port, { token, routes }) {
         method: req.method,
         path: `${m[2] ?? "/"}${url.search}`,
         // The services only answer to a loopback Host (the MCP SDK refuses any other).
-        headers: { ...req.headers, host: `127.0.0.1:${target}` },
+        headers: {
+          ...req.headers,
+          host: `127.0.0.1:${target}`,
+          "x-forwarded-host": req.headers.host ?? "",
+          "x-forwarded-proto": forwardedProto(req),
+          "x-forwarded-prefix": `/${m[1]}`,
+        },
       },
       (up) => {
         res.writeHead(up.statusCode ?? 502, up.headers);

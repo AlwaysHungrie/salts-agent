@@ -1,69 +1,38 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { agentStatus, serviceStatus } from "../status.mjs";
+import { connectionStatus, serviceStatus } from "../status.mjs";
 
 const URL = "https://a-b.trycloudflare.com";
-const live = (agents) => ({ up: true, port: 8180, pushedTo: URL, agents });
 
-test("a service that is not on, or with no supervisor, is off", () => {
-  const state = { services: ["web"], url: URL, svc: { web: live({ a: URL }) } };
-  assert.equal(serviceStatus(state, "matchmaker", true, ["a"]).label, "off");
-  assert.equal(serviceStatus(state, "web", false, ["a"]).label, "off");
+test("a running service is live when an agent uses it, and live · not in use otherwise", () => {
+  const state = { services: ["web"], url: URL, svc: { web: { up: true }, matchmaker: { up: true } } };
+  const live = serviceStatus(state, "web", true);
+  assert.equal(live.label, "live");
+  assert.equal(live.tone, "good");
+  const unused = serviceStatus(state, "matchmaker", true);
+  assert.equal(unused.label, "live · not in use");
+  assert.match(unused.note, /Agents tab/);
 });
 
-test("a service walks starting → opening tunnel → connecting → live", () => {
-  const base = { services: ["web"] };
-  assert.equal(serviceStatus({ ...base, svc: { web: { up: false } } }, "web", true, ["a"]).label, "starting");
-  assert.equal(serviceStatus({ ...base, url: "", svc: { web: { up: true } } }, "web", true, ["a"]).label, "opening tunnel");
-  const half = { ...base, url: URL, svc: { web: live({ a: URL }) } };
-  assert.deepEqual(serviceStatus(half, "web", true, ["a", "b"]).label, "connecting 1/2");
-  const st = serviceStatus(half, "web", true, ["a"]);
-  assert.equal(st.label, "live");
-  assert.equal(st.tone, "good");
+test("on the way up a service is starting, and with no supervisor it is stopped", () => {
+  assert.equal(serviceStatus({ svc: { web: { up: false } } }, "web", true).label, "starting");
+  assert.equal(serviceStatus({ url: "", svc: { web: { up: true } } }, "web", true).label, "starting");
+  assert.equal(serviceStatus({ url: URL, svc: { web: { up: true } } }, "web", false).label, "stopped");
 });
 
-test("a refused push names the agent and what to do", () => {
-  const svc = (pushStatus) => ({
-    services: ["matchmaker"],
-    url: URL,
-    svc: { matchmaker: { up: true, error: "push: …", pushStatus, failedAgent: "b" } },
-  });
-  const refused = serviceStatus(svc(401), "matchmaker", true, ["a", "b"]);
-  assert.equal(refused.label, "token refused");
-  assert.equal(refused.tone, "bad");
-  assert.match(refused.note, /agent b/);
-  assert.match(serviceStatus(svc(409), "matchmaker", true, ["b"]).note, /MCP server "matchmaker"/);
-  assert.equal(serviceStatus(svc(404), "matchmaker", true, ["b"]).label, "worker too old");
-  assert.equal(serviceStatus(svc(0), "matchmaker", true, ["b"]).tone, "busy");
+test("something missing to run it, or a failure, is an error that says why", () => {
+  const missing = serviceStatus({ tools: { web: { state: "missing", detail: "install Docker" } } }, "web", true);
+  assert.equal(missing.label, "error");
+  assert.match(missing.note, /install Docker/);
+  const failed = serviceStatus({ url: URL, svc: { analyst: { up: false, error: "uv sync failed" } } }, "analyst", true);
+  assert.deepEqual([failed.label, failed.note], ["error", "uv sync failed"]);
 });
 
-test("a service that failed to come up shows its error", () => {
-  const state = { services: ["web"], svc: { web: { up: false, error: "Docker did not come up within 180s" } } };
-  const st = serviceStatus(state, "web", true, ["a"]);
-  assert.equal(st.label, "failing");
-  assert.equal(st.note, "Docker did not come up within 180s");
-});
-
-test("an agent is connected once it holds every service's current address", () => {
-  const state = {
-    services: ["web", "analyst"],
-    url: URL,
-    svc: { web: live({ a: URL, b: URL }), analyst: live({ a: URL }) },
-  };
-  assert.equal(agentStatus(state, "a", true).label, "connected");
-  const b = agentStatus(state, "b", true);
-  assert.equal(b.label, "connecting 1/2");
-  assert.equal(b.note, "has web");
-  assert.equal(agentStatus(state, "a", false).label, "nothing running");
-});
-
-test("only the agent that refused is marked as refusing", () => {
-  const state = {
-    services: ["web"],
-    url: URL,
-    svc: { web: { up: true, agents: { a: URL }, error: "push: …", pushStatus: 401, failedAgent: "b" } },
-  };
-  assert.equal(agentStatus(state, "a", true).label, "connected");
-  assert.equal(agentStatus(state, "b", true).label, "token refused");
+test("the connection reads disconnected, connecting, can't report or connected", () => {
+  assert.equal(connectionStatus({ unpaired: true }, true).label, "disconnected");
+  assert.equal(connectionStatus({}, false).label, "not running");
+  assert.equal(connectionStatus({}, true).label, "connecting");
+  assert.equal(connectionStatus({ reportedAt: "x", reportError: "offline" }, true).tone, "busy");
+  assert.equal(connectionStatus({ reportedAt: "x" }, true).label, "connected");
 });

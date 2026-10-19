@@ -61,6 +61,14 @@ export default defineConfig({
           API_SECRET: "test-secret",
           TELEGRAM_API_BASE: "https://telegram.test",
           CLERK_ISSUER: TEST_CLERK_ISSUER,
+          // Every network's chain is the stand-in in the mock, which the payment tests
+          // load transactions into. The tests set where payments go.
+          PAYMENT_RPC: Object.fromEntries(
+            ["ethereum", "base", "arbitrum", "optimism", "polygon", "solana", "base-sepolia"].map((id) => [
+              id,
+              `https://rpc.test/${id}`,
+            ])
+          ),
         },
         // Every outbound `fetch` from the Worker and from its Durable Objects, routed
         // to a fake OpenRouter. This is what makes the turn loop testable: the real

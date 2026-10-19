@@ -91,13 +91,12 @@ export function BusinessRequestDialog({
               Fleet Account
             </span>
             <h1 className="mt-5 text-[clamp(30px,4.5vw,44px)] leading-[1.08] tracking-[-0.025em]">
-              Create agents for everyone you work with.
+              Give your whole community personal agents.
             </h1>
             <p className="text-muted mt-4 max-w-lg text-base font-light leading-[1.4] sm:text-xl">
-              Create agents for your team, your customers, or friends and
-              family, one for each person. These agents can share your
-              OpenRouter API key, each with its own spending limit, so they work
-              out of the box.
+              Create an agent for everyone in your community. They can share
+              your OpenRouter key, each with its own spending limit, so they
+              work out of the box.
             </p>
 
             {/* Three plain statements, not a feature grid. What is being asked for is
@@ -105,16 +104,16 @@ export function BusinessRequestDialog({
             <div className="mt-10 grid gap-3 sm:grid-cols-3">
               {[
                 [
-                  "Agents stay apart",
-                  "Every agent still keeps its own chats, memories, keys and bot. All agents run in isolation.",
+                  "One shared key",
+                  "Every agent can run on your OpenRouter key, and you decide how much each one can spend.",
                 ],
                 [
-                  "You are in control",
-                  "Your users can customise their agents, within the settings you allow them to change.",
+                  "Easier for them",
+                  "Choose which settings and capabilities your members see, and hide the rest to keep things simple.",
                 ],
                 [
-                  "Manage your fleet",
-                  "Get additional options to give your users an agent experience you feel they would find useful.",
+                  "Private to each person",
+                  "Every agent keeps its own chats, memories and bot. You can't read anyone's conversations.",
                 ],
               ].map(([title, body]) => (
                 <div key={title} className="rounded-[24px] py-6">
@@ -130,28 +129,21 @@ export function BusinessRequestDialog({
 
             <div className="bg-canvas-soft mt-8 rounded-[24px] px-6 py-7 sm:px-8">
               <h2 className="text-xl font-semibold tracking-[-0.01em]">
-                Request Access.
+                Request access.
               </h2>
               <p className="text-muted mt-2 text-sm leading-relaxed">
-                For a limited time period we are allowing free upgrades to Fleet
-                Accounts. All requests are approved on a case to case basis.
+                Upgrades are free for now. We review every request by hand.
               </p>
 
-              <div className="mt-6 space-y-5">
-                <label className="block">
-                  <span className="text-muted block text-xs leading-[1.33]">
-                    Your email
-                  </span>
-                  <div className="bg-canvas ring-hairline-soft mt-2 flex h-12 w-full items-center rounded-2xl px-4 text-sm ring-1">
-                    <span className="truncate">{email}</span>
-                  </div>
-                </label>
+              {/* No labels: the email is read-only and the number speaks for itself. */}
+              <div className="mt-6 space-y-3">
+                <div className="bg-canvas ring-hairline-soft flex h-12 w-full items-center rounded-2xl px-4 text-sm ring-1">
+                  <span className="truncate">{email}</span>
+                </div>
 
-                <label className="block">
-                  <span className="text-muted block text-xs leading-[1.33]">
-                    Request agents
-                  </span>
+                <div>
                   <input
+                    aria-label="Number of agents to request"
                     type="number"
                     min={1}
                     step={1}
@@ -160,17 +152,17 @@ export function BusinessRequestDialog({
                     onKeyDown={(e) => {
                       if (e.key === "Enter") void submit();
                     }}
-                    className="bg-canvas ring-hairline-soft placeholder:text-faint mt-2 h-12 w-full rounded-2xl px-4 text-sm ring-1 outline-none"
+                    className="bg-canvas ring-hairline-soft placeholder:text-faint h-12 w-full rounded-2xl px-4 text-sm ring-1 outline-none"
                   />
                   {quota && (
                     <span className="text-faint mt-2 block text-xs leading-[1.33]">
                       <span className="text-ink/50">
                         {quota.limit - quota.owned}
                       </span>{" "}
-                      agents remaining (Current limit: {quota.limit})
+                      agents remaining (current limit: {quota.limit})
                     </span>
                   )}
-                </label>
+                </div>
               </div>
 
               {error && <p className="mt-4 text-xs leading-[1.33]">{error}</p>}
@@ -218,8 +210,8 @@ function RequestSent({
       </h1>
       <p className="text-muted mt-4 max-w-lg text-base font-light leading-[1.4] sm:text-xl">
         You asked for {sent} more {sent === 1 ? "agent" : "agents"} on{" "}
-        <span className="text-ink font-medium">{email}</span>. We will get
-        back to you shortly.
+        <span className="text-ink font-medium">{email}</span>. We&apos;ll get
+        back to you soon.
       </p>
 
       <div className="ring-hairline-soft mt-10 rounded-[24px] p-7 ring-1">
@@ -227,10 +219,10 @@ function RequestSent({
           Once approved
         </h2>
         <p className="text-muted mt-2 text-sm leading-relaxed">
-          You will be able to launch agents for multiple users as a fleet.
-          Manage each agent on its own, or all of them from one place. Set
-          one shared OpenRouter API key, with per-agent usage limits, to
-          get every agent to work out of the box.
+          You&apos;ll be able to create agents for your community as a
+          fleet, and manage them one by one or all together. They can share
+          your OpenRouter key, each with its own spending limit, so every
+          agent works out of the box.
         </p>
       </div>
 

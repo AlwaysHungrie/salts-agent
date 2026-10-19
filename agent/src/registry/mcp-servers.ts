@@ -146,3 +146,23 @@ export function noteMcpError(storage: DurableObjectStorage, id: string, message:
 export function removeMcpServer(storage: DurableObjectStorage, id: string) {
   storage.sql.exec(`DELETE FROM mcp_servers WHERE id = ?`, id);
 }
+
+/** Remembers that the user removed this salts-tools server, by lowercase name. */
+export function markMcpRemoved(storage: DurableObjectStorage, name: string) {
+  storage.sql.exec(
+    `INSERT OR REPLACE INTO mcp_removed (name, removed_at) VALUES (?, ?)`,
+    name.toLowerCase(),
+    Date.now()
+  );
+}
+
+export function mcpRemoved(storage: DurableObjectStorage, name: string): boolean {
+  return (
+    storage.sql.exec(`SELECT 1 FROM mcp_removed WHERE name = ?`, name.toLowerCase()).toArray()
+      .length > 0
+  );
+}
+
+export function clearMcpRemoved(storage: DurableObjectStorage, name: string) {
+  storage.sql.exec(`DELETE FROM mcp_removed WHERE name = ?`, name.toLowerCase());
+}

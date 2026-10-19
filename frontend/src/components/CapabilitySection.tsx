@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { ExternalLink } from "lucide-react";
 import {
@@ -181,6 +181,33 @@ export function ChipList({
   );
 }
 
+/**
+ * Shown beside a text field while it holds edits that are not saved yet. Every field
+ * saves itself when it is left; this is the same save, made visible and clickable,
+ * so typing never leaves anyone wondering whether it stuck. Pressing it does not
+ * take focus first, so the field's own blur is not what saves twice.
+ */
+export function SaveButton({
+  onSave,
+  bordered = false,
+}: {
+  onSave: () => void;
+  bordered?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={onSave}
+      className={`bg-ink text-on-primary shrink-0 rounded-2xl px-5 py-2.5 text-sm font-semibold transition hover:opacity-85 ${
+        bordered ? "border-ink border" : ""
+      }`}
+    >
+      Save
+    </button>
+  );
+}
+
 export function Field({
   field,
   value,
@@ -200,6 +227,7 @@ export function Field({
   // blur keeps what is on screen the thing the user typed.
   const [draft, setDraft] = useState(value);
   const [focused, setFocused] = useState(false);
+  const box = useRef<HTMLInputElement>(null);
   // Whether the field was typed into since it was focused. Clearing a secret and a
   // secret left untouched both read as an empty draft on blur, so only this tells
   // "delete the key" apart from "keep the one already saved".
@@ -259,6 +287,7 @@ export function Field({
       ) : (
         <div className="mt-2 flex gap-2">
           <input
+            ref={box}
             type={field.secret && !masked ? "password" : "text"}
             value={draft}
             placeholder={field.placeholder}
@@ -293,6 +322,9 @@ export function Field({
               bordered ? "bg-canvas border-hairline border" : "bg-field"
             }`}
           />
+          {focused && edited && draft.trim() !== value && (
+            <SaveButton onSave={() => box.current?.blur()} bordered={bordered} />
+          )}
           {/* Focusing a saved secret empties the box, so there is nothing to delete:
             clearing the stored key needs its own control. */}
           {field.secret && value === SECRET_MASK && !focused && (
@@ -326,6 +358,7 @@ export function CapabilitySection({
   blocked = false,
   blockedNote,
   tint,
+  summaryExtra,
   children,
 }: {
   capability: Capability;
@@ -346,6 +379,8 @@ export function CapabilitySection({
    * the canvas, so its inputs are outlined to stay legible.
    */
   tint?: string;
+  /** More for the line under the label, after the capability's own summary. */
+  summaryExtra?: React.ReactNode;
   /**
    * An editor of the capability's own, shown under its fields. Some capabilities are
    * configured by more than a list of values — MCP is a set of servers, not settings.
@@ -381,6 +416,7 @@ export function CapabilitySection({
           </h2>
           <p className="text-muted mt-1 text-sm font-light leading-[1.43]">
             {capability.summary}
+            {summaryExtra && <> {summaryExtra}</>}
           </p>
         </div>
         {!capability.alwaysOn && (
