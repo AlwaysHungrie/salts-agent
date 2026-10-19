@@ -189,9 +189,8 @@ export const OWNERSHIP = {
 } as const;
 
 export const CAPABILITIES = {
-  eyebrow: "Capabilities",
-  title: "Switch on what you need, whenever you need it.",
-  body: "Every capability is one switch away. Turn it on when you need it, and off again when you are done, so you only pay for what you use.",
+  title: "Every capability is a switch you can turn on.",
+  body: "There's a switch for almost anything, and your agent can find them for you. Remember to turn off the switches when not in use.",
   items: [
     "Search the web",
     "Read a link you send",
@@ -208,7 +207,15 @@ export const CAPABILITIES = {
     "Screen candidates",
     "Connect your own tools",
   ],
-  more: "More to be added over time.",
+  /** Shown switched off when the page loads, so the light starts part-way. */
+  offByDefault: [
+    "Listen to voice notes",
+    "Reply with voice notes",
+    "Create images",
+    "Connect to GitHub",
+    "Screen candidates",
+  ],
+  more: "More added every day.",
 } as const;
 
 /** A short section for Fleet Accounts. Kept modest on purpose: the page is about personal agents. */
