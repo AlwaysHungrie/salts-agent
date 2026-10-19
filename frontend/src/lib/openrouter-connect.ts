@@ -38,6 +38,7 @@ export async function startConnect(): Promise<void> {
   url.searchParams.set("callback_url", window.location.origin + CALLBACK_PATH);
   url.searchParams.set("code_challenge", base64url(new Uint8Array(digest)));
   url.searchParams.set("code_challenge_method", "S256");
+  url.searchParams.set("key_label", "Salts");
   window.location.assign(url.toString());
 }
 
