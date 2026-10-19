@@ -14,7 +14,7 @@ On these pages, **you** are the **fleet admin**, and the people you create agent
 
 ## What your users get
 
-Each user gets a complete agent of their own, just like the one you created in [Create your first agent](/guide/getting-started). They sign in to Salts with their email address, and their agent is ready and waiting for them.
+Each user gets a complete agent of their own, just like the one you created in [Step-by-step: a basic agent](/guide/step-by-step-agent). They sign in to Salts with their email address, and their agent is ready and waiting for them.
 
 Each agent is private to its user. As the fleet admin, you can control how the agents are set up and how much they can spend, but you cannot open a user's agent or read their conversations.
 

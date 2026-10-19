@@ -66,6 +66,6 @@ You also decide how your agent behaves. You can pick the model it uses, give it 
 
 ## Where to start
 
-1. [Get an OpenRouter API key](/guide/openrouter), so your agent can pay for its replies.
-2. [Create your first agent](/guide/getting-started) and send it a message.
-3. [Connect your agent to Telegram](/guide/telegram) or [WhatsApp](/guide/whatsapp), so you can talk to it from your phone.
+1. Follow [Step-by-step: a basic agent](/guide/step-by-step-agent) to get a key, create your agent and send it a message.
+2. [Connect your agent to Telegram](/guide/telegram) or [WhatsApp](/guide/whatsapp), so you can talk to it from your phone.
+3. If you want agents for other people, follow [Step-by-step: a fleet](/guide/step-by-step-fleet).

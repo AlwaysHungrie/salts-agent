@@ -31,14 +31,11 @@ We recommend locking settings that cost you money, and leaving the rest unlocked
 | **MCP templates** | Which ready-made app connections your users can pick from. Selecting none shows all of them. |
 | **MCP servers** | App connections added to every agent. **Allow adding more MCP servers** decides whether users can add their own. Either way, users can change the URL, sign-in and headers of the servers you added, but not rename or remove them. |
 
-## Leave Telegram and WhatsApp empty
+## Only add apps your users sign in to themselves
 
-> [!warning]
-> Do not enter a Telegram bot token or WhatsApp details in fleet settings. A bot can only belong to one agent, so if every agent in the fleet gets the same one, only one of them will receive messages.
+Only add app connections that each user signs in to with their own account. An app connected with your own login would give every user access to your data.
 
-Leave **Telegram** and **WhatsApp** unlocked and empty, and let each user connect their own using [Connect your agent to Telegram](/guide/telegram) or [Connect your agent to WhatsApp](/guide/whatsapp).
-
-For the same reason, only add app connections that each user signs in to with their own account. An app connected with your own login would give every user access to your data.
+Each user connects their own Telegram or WhatsApp from their agent's **Settings**, using [Connect your agent to Telegram](/guide/telegram) or [Connect your agent to WhatsApp](/guide/whatsapp).
 
 ## A good starting point
 

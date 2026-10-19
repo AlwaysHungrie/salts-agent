@@ -1,7 +1,7 @@
 ---
 title: Get an OpenRouter API key
 section: Get started
-order: 2
+order: 4
 summary: Create an OpenRouter account, add credit and get an API key for your agent.
 featured: true
 ---
