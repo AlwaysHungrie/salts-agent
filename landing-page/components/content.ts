@@ -49,7 +49,6 @@ export const STORAGE_MB = 50;
 export const NAV = [
   { id: "skills", label: "What it does", sections: ["stats", "skills", "capabilities"] },
   { id: "how", label: "How it works", sections: ["how"] },
-  { id: "costs", label: "Pricing", sections: ["costs", "mission", "fleet"] },
   { id: "faq", label: "FAQ", sections: ["faq", "start"] },
 ] as const;
 
@@ -77,6 +76,7 @@ export const LINKS = {
   privacy: "/privacy",
   terms: "/terms",
   guide: `${APP_URL}/guide`,
+  stepByStepGuide: `${APP_URL}/guide/step-by-step-agent`,
   fleetGuide: `${APP_URL}/guide/fleets`,
   openRouterGuide: `${APP_URL}/guide/openrouter`,
 } as const;
@@ -162,32 +162,6 @@ export const MISSION = {
   coverageSuffix: "covered so far.",
 } as const;
 
-export const PRICING = {
-  eyebrow: "Pricing",
-  title: "No monthly fee. You only pay for the model.",
-  body: `${BRAND.name} does not charge a subscription. Your agent uses your own OpenRouter API key, so you pay OpenRouter directly for the tokens your agent uses, and nothing when it is quiet. We recommend setting a spending limit on your key, so you are never surprised by your bill.`,
-  bullets: [
-    "See exactly what every reply cost, right under the reply",
-    "Switch to a cheaper or a stronger model whenever you like",
-    `Keep up to ${SESSION_LIMIT} chat sessions and ${STORAGE_MB} MB of files per agent`,
-    "Or host it yourself on Cloudflare, with no usage limits at all",
-  ],
-  placeholder: "Placeholder — a reply with its cost shown underneath",
-} as const;
-
-export const OWNERSHIP = {
-  eyebrow: "Own your agent",
-  title: "Make it yours, and decide who can use it.",
-  body: "Your agent's conversations and memories belong to you. You decide how it behaves, what it can do and who is allowed to talk to it.",
-  bullets: [
-    "Give it custom instructions, and it follows them in every conversation",
-    "Choose exactly which people and groups it answers on Telegram",
-    "Invite people you trust to help manage your agent",
-    "Delete any conversation, or the whole agent, whenever you want",
-  ],
-  placeholder: "Placeholder — the settings screen for one agent",
-} as const;
-
 export const CAPABILITIES = {
   title: "Every capability is a switch you can turn on.",
   body: "There's a switch for almost anything, and your agent can find them for you. Remember to turn off the switches when not in use.",
@@ -248,18 +222,19 @@ export const STEPS = [
   {
     n: "01",
     title: "Get an OpenRouter API key",
-    body: "Create an OpenRouter account, buy a few dollars of credit, and create an API key. Your agent uses it to reply to you.",
+    body: "Get your own key by purchasing credits directly from openrouter.ai. Or use any crypto wallet to get a key from us. You can start with just $5.",
+    /** The phrase in `body` that links out. */
+    link: { text: "openrouter.ai", href: "https://openrouter.ai" },
   },
   {
     n: "02",
     title: "Create your agent",
-    body: "Sign in to Salts, give your agent a name and paste your key. Your agent is ready to chat in your browser straight away.",
+    body: "Sign in and add or buy a key in your OpenRouter wallet. Then create an agent, give it a name and pick that key. That's it.",
   },
   {
     n: "03",
-    optional: true,
-    title: "Take it with you",
-    body: "Connect Telegram or WhatsApp to talk to your agent from your phone, and switch on the capabilities you want.",
+    title: "Discover more as you go",
+    body: "Connect it to Telegram or WhatsApp, and find new capabilities and commands as you use your agent.",
   },
 ] as const;
 
@@ -324,7 +299,6 @@ export const FOOTER = {
       links: [
         { href: "#skills", label: "What it does" },
         { href: "#how", label: "How it works" },
-        { href: "#costs", label: "Pricing" },
         { href: "#fleet", label: "Fleet Accounts" },
       ],
     },

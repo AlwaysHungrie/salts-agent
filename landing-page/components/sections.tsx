@@ -1,5 +1,3 @@
-import { ApiKeysPreview } from "./ApiKeysPreview";
-import { TelegramSettingsPreview } from "./TelegramSettingsPreview";
 import { AppPreview } from "./AppPreview";
 import { CapabilityPanel } from "./CapabilityPanel";
 import {
@@ -11,16 +9,13 @@ import {
   HOW,
   LINKS,
   MISSION,
-  OWNERSHIP,
-  PRICING,
   STATS as STATS_COPY,
   STEPS,
   WORLD_POPULATION_B,
 } from "./content";
 import { Globe } from "./Globe";
 import { CountUp, HeroSquircles, Reveal } from "./motion";
-import { Button, Eyebrow, Placeholder, Wrap } from "./ui";
-import type { ReactNode } from "react";
+import { Button, Eyebrow, Wrap } from "./ui";
 
 /*
  * Every string on this page comes from ./content.ts. These components only
@@ -197,83 +192,6 @@ export function Mission() {
   );
 }
 
-/* --------------------------------------------------------------- Split -- */
-
-function Split({
-  eyebrow,
-  title,
-  body,
-  bullets,
-  label,
-  visual,
-  reverse = false,
-}: {
-  eyebrow: string;
-  title: string;
-  body: string;
-  bullets: readonly string[];
-  label: string;
-  /** A drawn stand-in, where there is one; otherwise the labelled slot. */
-  visual?: ReactNode;
-  reverse?: boolean;
-}) {
-  return (
-    <div className="grid items-center gap-8 sm:gap-12 md:grid-cols-2">
-      <Reveal className={reverse ? "md:order-2" : ""}>
-        <Eyebrow>{eyebrow}</Eyebrow>
-        <h2 className="mt-3 text-[clamp(26px,3.5vw,34px)] font-[650] leading-[1.1] tracking-[-0.025em]">
-          {title}
-        </h2>
-        <p className="mt-4 leading-relaxed text-muted">{body}</p>
-        <ul className="mt-6">
-          {bullets.map((b) => (
-            <li
-              key={b}
-              className="border-t border-hairline-soft py-3 text-sm leading-relaxed"
-            >
-              {b}
-            </li>
-          ))}
-        </ul>
-      </Reveal>
-      <Reveal delay={0.08}>
-        {visual ?? <Placeholder frame label={label} />}
-      </Reveal>
-    </div>
-  );
-}
-
-export function Costs() {
-  return (
-    <section
-      id="costs"
-      className="mt-20 scroll-mt-28 space-y-16 sm:mt-28 sm:space-y-20 lg:mt-32 lg:space-y-24"
-    >
-      <Wrap>
-        <Split
-          eyebrow={PRICING.eyebrow}
-          title={PRICING.title}
-          body={PRICING.body}
-          bullets={PRICING.bullets}
-          label={PRICING.placeholder}
-          visual={<ApiKeysPreview />}
-        />
-      </Wrap>
-      <Wrap>
-        <Split
-          reverse
-          eyebrow={OWNERSHIP.eyebrow}
-          title={OWNERSHIP.title}
-          body={OWNERSHIP.body}
-          bullets={OWNERSHIP.bullets}
-          label={OWNERSHIP.placeholder}
-          visual={<TelegramSettingsPreview />}
-        />
-      </Wrap>
-    </section>
-  );
-}
-
 /* -------------------------------------------------------- Capabilities -- */
 
 export function Capabilities() {
@@ -336,6 +254,32 @@ export function Fleet() {
 /* --------------------------------------------------------------- Steps -- */
 
 /** The three-step setup, rendered identically wherever it appears. */
+/** `text` with the first occurrence of `link.text` as an outbound link. */
+function LinkedText({
+  text,
+  link,
+}: {
+  text: string;
+  link: { text: string; href: string };
+}) {
+  const at = text.indexOf(link.text);
+  if (at < 0) return text;
+  return (
+    <>
+      {text.slice(0, at)}
+      <a
+        href={link.href}
+        target="_blank"
+        rel="noreferrer"
+        className="text-ink underline decoration-hairline underline-offset-2 transition-colors hover:decoration-ink"
+      >
+        {link.text}
+      </a>
+      {text.slice(at + link.text.length)}
+    </>
+  );
+}
+
 export function StepList() {
   return (
     <div className="grid gap-6 text-left sm:gap-8 md:grid-cols-3">
@@ -349,7 +293,9 @@ export function StepList() {
             <h3 className="mt-2 text-xl font-semibold tracking-[-0.01em]">
               {s.title}
             </h3>
-            <p className="mt-2 text-sm leading-relaxed text-muted">{s.body}</p>
+            <p className="mt-2 text-sm leading-relaxed text-muted">
+              {"link" in s ? <LinkedText text={s.body} link={s.link} /> : s.body}
+            </p>
           </div>
         </Reveal>
       ))}
@@ -376,7 +322,7 @@ export function Steps() {
 
         <Reveal>
           <div className="mt-10 text-center">
-            <Button href={LINKS.guide} variant="outline">
+            <Button href={LINKS.stepByStepGuide} variant="outline">
               {HOW.guideCta}
             </Button>
           </div>
