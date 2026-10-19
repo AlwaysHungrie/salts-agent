@@ -45,8 +45,11 @@ type ConfigView = { config: { openrouter_api_key: string; openrouter_key_id: str
 /** The directory the routes use, for what no route may do: provision a key. */
 const directory = () => env.AgentDirectory.get(env.AgentDirectory.idFromName("root"));
 
-function addKey(email: string, key = "sk-or-wallet") {
-  return SELF.fetch(`${BASE}/api/wallet`, as(email, { method: "POST", body: JSON.stringify({ key }) }));
+function addKey(email: string, key = "sk-or-wallet", connected?: boolean) {
+  return SELF.fetch(
+    `${BASE}/api/wallet`,
+    as(email, { method: "POST", body: JSON.stringify({ key, connected }) })
+  );
 }
 
 async function wallet(email: string) {
@@ -90,6 +93,25 @@ describe("OpenRouter wallet", () => {
     const owner = someone("owner");
     expect((await addKey(owner, "sk-invalid")).status).toBe(400);
     expect((await addKey(owner, "  ")).status).toBe(400);
+  });
+
+  it("refuses the same key twice in one wallet", async () => {
+    const owner = someone("owner");
+    expect((await addKey(owner)).status).toBe(200);
+    const again = await addKey(owner);
+    expect(again.status).toBe(400);
+    expect(await json(again)).toMatchObject({ error: "Key already imported" });
+    expect(await wallet(owner)).toHaveLength(1);
+    // Another wallet may still hold it.
+    expect((await addKey(someone("other"))).status).toBe(200);
+  });
+
+  it("refuses a key from OpenRouter with no credit limit, but not a pasted one", async () => {
+    const owner = someone("owner");
+    expect((await addKey(owner, "sk-or-unlimited-1", true)).status).toBe(400);
+    expect((await addKey(owner, "sk-or-limited", true)).status).toBe(200);
+    expect((await addKey(owner, "sk-or-unlimited-2")).status).toBe(200);
+    expect(await wallet(owner)).toHaveLength(2);
   });
 
   it("names every key itself, never twice in one wallet", async () => {
@@ -180,7 +202,7 @@ describe("OpenRouter wallet", () => {
     expect((await view()).config.openrouter_key_id).toBe(fleetKey);
 
     // Any other key of the admin's stays theirs.
-    const { id: otherOfOwner } = await json<KeyView>(addKey(owner));
+    const { id: otherOfOwner } = await json<KeyView>(addKey(owner, "sk-or-wallet-2"));
     expect((await pick(member, id, otherOfOwner)).status).toBe(400);
   });
 

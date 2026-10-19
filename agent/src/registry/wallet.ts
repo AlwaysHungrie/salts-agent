@@ -51,7 +51,8 @@ export function walletKey(
 
 /**
  * Add a key to `email`'s wallet under a nickname of its own, unique in that wallet.
- * Refused as `{ error }` (not thrown, so the route can answer 400) when the wallet is full.
+ * Refused as `{ error }` (not thrown, so the route can answer 400) when the wallet is full
+ * or already holds this key.
  */
 export function addWalletKey(
   storage: DurableObjectStorage,
@@ -61,6 +62,7 @@ export function addWalletKey(
 ): WalletKeyRow | { error: string } {
   const owner = email.trim().toLowerCase();
   const existing = walletKeys(storage, owner);
+  if (existing.some((k) => k.secret === key.secret)) return { error: "Key already imported" };
   if (existing.length >= max) return { error: `A wallet holds at most ${max} keys.` };
   const row: WalletKeyRow = {
     id: WALLET_ID(),

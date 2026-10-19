@@ -334,11 +334,15 @@ async function deliver(env: Env, p: WalletPurchase): Promise<Response> {
 
 /** Add a pasted key, checked with OpenRouter first so a typo is refused now. */
 async function addKey(request: Request, env: Env, email: string): Promise<Response> {
-  const body = await readJson<{ key?: string }>(request);
+  const body = await readJson<{ key?: string; connected?: boolean }>(request);
   const secret = (body.key ?? "").trim().slice(0, 1000);
   if (!secret) return jsonError("Paste an OpenRouter API key.", 400);
   const checked = await checkOpenrouterKey(secret);
   if (!checked.ok) return jsonError(checked.error ?? "Failed to validate this OpenRouter API key", 400);
+  // A key just created through "From OpenRouter" must carry a credit limit; a pasted one may not.
+  if (body.connected && (await keyCredit(secret)).limit === null) {
+    return jsonError("This key has no credit limit. Create it again with a credit limit set.", 400);
+  }
 
   const settings = await deploymentSettings(env);
   const added = await directory(env).addWalletKey(
