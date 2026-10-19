@@ -78,11 +78,12 @@ export function useWallet() {
     void readWallet().then(apply);
   }, [apply]);
 
-  const add = async (key: string) => {
+  /** `connected` marks a key just made through "From OpenRouter", which needs a credit limit. */
+  const add = async (key: string, connected?: boolean) => {
     const res = await fetch("/api/wallet", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ key }),
+      body: JSON.stringify({ key, connected }),
     });
     if (!res.ok) return await errorOf(res, "Couldn't add that key.");
     await load();
