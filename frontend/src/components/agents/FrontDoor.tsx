@@ -9,7 +9,7 @@ export function FrontDoor({ onConnect }: { onConnect: () => void }) {
         className="w-full min-h-17 bg-canvas-soft hover:bg-canvas-soft/60 group flex cursor-pointer items-center gap-3 rounded-2xl px-5 py-4 transition"
       >
         <Plus size={18} strokeWidth={2} />
-        Connect your Account
+        Connect your account
       </button>
       <p className="text-faint mt-2 ml-2 text-xs leading-[1.33]">
         By signing up and using this platform you agree to our{" "}

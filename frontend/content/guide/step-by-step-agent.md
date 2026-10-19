@@ -10,7 +10,7 @@ This guide walks you through every step from signing in to Salts to reading your
 
 ## 1. Sign in
 
-Open the Salts home page and click **Connect your Account**. Click **Continue with Google**, or enter your email address and click **Continue**. If you used your email, Salts sends you a six-digit code. Type it in and click **Verify**.
+Open the Salts home page and click **Connect your account**. Click **Continue with Google**, or enter your email address and click **Continue**. If you used your email, Salts sends you a six-digit code. Type it in and click **Verify**.
 
 If this is your first time on Salts, click **Create one** at the bottom of the window before you enter your email.
 
@@ -28,7 +28,7 @@ Each key in your wallet gets a nickname, such as "Amber Falcon", so you can tell
 
 ## 3. Create the agent
 
-Back on the home page, click **Create a new Agent**.
+Back on the home page, click **Create a new agent**.
 
 1. Under **Name**, enter a name for your agent. You can always change it later.
 2. Leave **Create a fleet of agents** unchecked. Fleets are for creating agents for other people, and are covered in [Step-by-step: a fleet](/guide/step-by-step-fleet).

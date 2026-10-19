@@ -122,7 +122,7 @@ function WalletSidebar({ onClose }: { onClose: () => void }) {
             </p>
             <p className="text-muted text-xs font-light leading-[1.33]">
               {buying
-                ? "Provision a new Openrouter API key"
+                ? "Get a new OpenRouter API key"
                 : "Manage your OpenRouter API keys."}
             </p>
           </div>
@@ -392,7 +392,7 @@ function RemoveBoughtKey({
             ` ${key.agents === 1 ? "1 agent" : `${key.agents} agents`} using it will stop replying until given another.`}
           <br />
           <br />
-          This action cannot be undone. Proceed with caution.
+          This can&rsquo;t be undone.
         </p>
         <label className="mt-4 block">
           <span className="text-muted block text-xs leading-[1.33]">
@@ -519,7 +519,7 @@ function ResumePayments({ recover }: { recover: Recover }) {
         if (!live) return;
         const line =
           verdict === "paid" || verdict === "already"
-            ? "A payment you sent is counted: its key is in your wallet."
+            ? "A payment you sent went through, and its key is in your wallet."
             : verdict === "pending"
               ? "A payment you sent isn't final yet. We'll check it again next time you open your wallet."
               : verdict.final
@@ -618,7 +618,7 @@ function RecoverDialog({
       setNote("That payment isn't final yet. Try again in a minute.");
     } else {
       setNote(
-        verdict.final ? "Failed to validate transaction." : verdict.error,
+        verdict.final ? "Couldn't find that payment. Check the network and the transaction ID." : verdict.error,
       );
     }
   };
@@ -637,7 +637,7 @@ function RecoverDialog({
       >
         <div className="flex items-start gap-2">
           <p className="flex-1 text-base font-semibold leading-[1.38]">
-            Recover Lost Transactions
+            Recover a lost payment
           </p>
           <button
             onClick={onClose}
@@ -648,9 +648,8 @@ function RecoverDialog({
           </button>
         </div>
         <p className="text-muted mt-2 mb-4 text-sm font-light leading-[1.43]">
-          In case you made a transaction but did not receive an API key in your
-          wallet, you might be able to recover the API key if your transaction
-          was successful. Please provide us with the transaction details.
+          Paid, but no key showed up in your wallet? Enter the payment details
+          below and we&rsquo;ll look for it.
         </p>
         <div className="flex flex-col gap-2">
           <select

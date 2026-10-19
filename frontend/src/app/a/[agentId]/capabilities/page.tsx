@@ -236,9 +236,9 @@ export default function Capabilities({
                 summaryExtra={
                   capability.id === "mcp" && (
                     <>
-                      Salts also provides local MCP servers that can let your
-                      agent assist you with web search, data analysis,
-                      recruitment assistance, and more. Setup by running{" "}
+                      Salts also has tools that run on your own computer, for
+                      web search, spreadsheet analysis, screening candidates
+                      and more. Set them up by running{" "}
                       <code className="text-ink">npx salts-tools</code>.
                       <SaltsToolsInfo />
                     </>

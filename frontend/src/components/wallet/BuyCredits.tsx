@@ -96,7 +96,7 @@ export function BuyCredits({
     <div>
       {!locked && (
         <>
-          <Step title="LLM Credits" />
+          <Step title="Credit" />
           <label className="border-hairline focus-within:border-ink flex h-14 items-center gap-1 rounded-2xl border px-4 transition">
             <span className="text-muted text-2xl font-semibold">$</span>
             <input
@@ -152,9 +152,8 @@ export function BuyCredits({
           <span>{valid ? usd(total) : "—"}</span>
         </div>
         <p className="text-muted mt-2 text-xs leading-[1.33]">
-          The service fee helps us cover the network and routing costs and
-          crypto payment processing fees. We can only issue a key if we have
-          received confirmation of payment from your wallet.
+          The service fee covers network, routing and crypto payment costs.
+          Your key is issued as soon as your payment is confirmed.
         </p>
       </div>
 

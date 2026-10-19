@@ -9,12 +9,12 @@ This guide will help you create a fleet of agents for your users. Before you sta
 
 ## 1. Choose who gets an agent
 
-On the home page, click **Create a new Agent**.
+On the home page, click **Create a new agent**.
 
 1. Under **Name**, enter the name every agent in the fleet starts with, for example "Team assistant". Each user can rename their own agent later.
 2. Check **Create a fleet of agents**.
 3. Under **Fleet name**, enter a name for the whole fleet, such as your team or company name. Your users will see this name on their agent.
-4. Under **User Emails**, enter the email address of every user, separated by spaces. One agent is created for each address.
+4. Under **User emails**, enter the email address of every user, separated by spaces. One agent is created for each address.
 5. Check the line under the box. It shows how many agents will be created, and whether any address is invalid.
 6. Click **Next**.
 

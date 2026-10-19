@@ -168,8 +168,8 @@ export function FleetSettingsDialog({
               settings that could have been set by individual agent users.
               <br />
               <br />
-              It can create confusion as well as prevent some agents from
-              working as expected. Proceed with caution.
+              This can confuse your users and stop some agents from working as
+              expected.
             </p>
             <div className="mt-6 flex justify-end gap-2">
               <button

@@ -79,7 +79,7 @@ export default function Agents() {
           <div>
             <h1 className="text-[32px] font-[650] leading-[1.2]">Salts.</h1>
             <p className="text-muted mt-1 text-sm font-light leading-[1.43]">
-              Personal, Always Accessible AI Agents
+              Personal AI agents that stay with you forever
             </p>
           </div>
           {signedIn && (

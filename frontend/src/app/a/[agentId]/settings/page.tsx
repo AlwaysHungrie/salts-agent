@@ -658,7 +658,7 @@ export default function Settings({
             {!locked.has("openrouter_api_key") && (
               <Row
                 title="OpenRouter"
-                hint="Your agent cannot function without this."
+                hint="Your agent needs a key to reply."
               >
                 <WalletKeyPicker
                   value={config.openrouter_key_id}
@@ -700,7 +700,7 @@ export default function Settings({
 
             <Row
               title="Manage access"
-              hint="Users who have complete access to manage, chat and read all messages of this agent."
+              hint="People here can manage this agent, chat with it and read every conversation in it. Only add people you trust."
             >
               <ChipList
                 value={others}
@@ -722,7 +722,7 @@ export default function Settings({
               title="API key"
               hint={
                 <>
-                  Use this to get programatic access to your agent. Try it in
+                  Use this to reach your agent from your own code. Try it in
                   the{" "}
                   <a
                     href="/guide/api-playground"

@@ -16,7 +16,7 @@ Open your **OpenRouter wallet** from the top right corner of the home page. Unde
 
 ## 2. Choose how much credit you want
 
-Under **LLM Credits**, type an amount in US dollars or click one of the suggested amounts. We recommend starting with $10, since you can always buy another key later once you have a feel for how much your agent uses.
+Under **Credit**, type an amount in US dollars or click one of the suggested amounts. We recommend starting with $10, since you can always buy another key later once you have a feel for how much your agent uses.
 
 Below the amount you can see the credit that will be added to your key, the service fee, and the total under **You pay**. The service fee covers network and routing costs and the cost of processing crypto payments.
 

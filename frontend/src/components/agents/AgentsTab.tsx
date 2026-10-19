@@ -64,7 +64,7 @@ export function AgentsTab({
           className="disabled:opacity-30 disabled:cursor-not-allowed min-h-17 w-full bg-canvas-soft hover:bg-canvas-soft/60 group flex cursor-pointer items-center gap-3 rounded-2xl px-5 py-4 transition"
         >
           <Plus size={18} strokeWidth={2} />
-          Create a new Agent
+          Create a new agent
         </button>
       )}
 
@@ -79,9 +79,8 @@ export function AgentsTab({
             Need more agents?
           </span>
           <span className="text-muted block text-xs leading-[1.33]">
-            You can create and manage hundreds of agents for your friends and
-            customers. <br />
-            Click here to learn more.
+            Request a higher limit and create agents for your whole
+            community.
           </span>
         </span>
       </div>
