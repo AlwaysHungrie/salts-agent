@@ -155,11 +155,10 @@ export const FEATURES = {
 } as const;
 
 export const MISSION = {
-  eyebrow: "We're on track for",
-  titleSuffix: "agents.",
-  subtitle: "One for each person.",
-  body: "We believe every person on the planet should have open and equal access to AI.",
-  coverageSuffix: "covered so far.",
+  title: `${BRAND.name} is making AI accessible for all.`,
+  body: "When everyone has open and equal access to AI, people coordinate better, and resources are distributed more fairly.",
+  coveragePrefix: "We've covered",
+  coverageSuffix: "of the planet so far",
 } as const;
 
 export const CAPABILITIES = {
@@ -195,22 +194,30 @@ export const CAPABILITIES = {
 /** A short section for Fleet Accounts. Kept modest on purpose: the page is about personal agents. */
 export const FLEET = {
   eyebrow: "Fleet Accounts",
-  title: "Give an agent to everyone you work with.",
-  body: "Create agents for your team, your customers, or friends and family, one for each person. Your agents can share your OpenRouter API key, each with its own spending limit, so they work out of the box.",
+  title: "Give your whole community an agent.",
+  body: "Create agents for everyone in your community at once. You set them up and cover the cost. They sign in with their email and find an agent of their own waiting.",
   points: [
     {
-      title: "Every agent stays private",
-      body: "Each person gets their own agent, with their own chats, memories and bot. You cannot read their conversations.",
+      title: "One key, a limit each",
+      body: "Every agent runs on your OpenRouter key, and each has its own monthly spending limit.",
     },
     {
-      title: "Users can still make it their own",
-      body: "Your users can customise their agents, within the settings you allow them to change.",
+      title: "Nothing for them to set up",
+      body: "No OpenRouter account and no settings to work out. They just start chatting.",
     },
     {
-      title: "You run the setup, they just chat",
-      body: "Plug in tools like the analyst or the recruiter once, on your own machine, and everyone's agent can use them. Your users never need a computer.",
+      title: "Their chats stay theirs",
+      body: "You choose how the agents are set up, but you can't read anyone's conversations.",
     },
   ],
+  /** The owner in the middle of the diagram. */
+  owner: {
+    name: "Skipper",
+    role: "Fleet Owner",
+    key: "Skipper's OpenRouter API key",
+  },
+  /** The community around the owner; sample names only. */
+  members: ["Alex", "Marty", "Gloria", "Melman", "Julien", "Kowalski", "Rico", "Private"],
   cta: "Learn about fleets",
   note: "Upgrades to Fleet Accounts are free for a limited time. Request from the app.",
 } as const;

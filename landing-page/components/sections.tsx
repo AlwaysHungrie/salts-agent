@@ -1,5 +1,6 @@
 import { AppPreview } from "./AppPreview";
 import { CapabilityPanel } from "./CapabilityPanel";
+import { FleetDiagram } from "./FleetDiagram";
 import {
   COVERAGE_PERCENT,
   CTA as CTA_COPY,
@@ -11,7 +12,6 @@ import {
   MISSION,
   STATS as STATS_COPY,
   STEPS,
-  WORLD_POPULATION_B,
 } from "./content";
 import { Globe } from "./Globe";
 import { CountUp, HeroSquircles, Reveal } from "./motion";
@@ -161,28 +161,22 @@ export function Mission() {
     <section id="mission" className="mt-20 scroll-mt-28 sm:mt-28 lg:mt-32">
       <Wrap>
         <Reveal>
-          <div className="relative overflow-hidden rounded-[32px] bg-ink px-5 py-12 text-center text-white sm:px-12 sm:py-16 lg:py-20">
+          <div className="relative overflow-hidden rounded-[32px] bg-ink px-5 py-12 text-white sm:px-12 sm:py-16 lg:px-16 lg:py-20">
             {/* Cropped by the card edge, so it reads as a world still turning. */}
             <Globe className="pointer-events-none absolute right-0 top-1/2 hidden h-[520px] w-[520px] -translate-y-1/2 translate-x-[45%] lg:block" />
-            <div className="relative">
-              <p className="text-xs tracking-[0.08em] text-faint">
-                {MISSION.eyebrow}
-              </p>
-              <h2 className="mx-auto mt-3 max-w-[18ch] text-[clamp(26px,3.5vw,38px)] font-[650] leading-[1.1] tracking-[-0.025em] text-balance">
-                <CountUp to={WORLD_POPULATION_B} decimals={2} suffix="B" />{" "}
-                {MISSION.titleSuffix}
-              </h2>
-              <h2 className="mx-auto max-w-[18ch] text-[clamp(26px,3.5vw,38px)] font-[650] leading-[1.1] tracking-[-0.025em] text-balance">
-                {MISSION.subtitle}
-              </h2>
-              <p className="mx-auto mt-4 max-w-[540px] text-lg font-light leading-[1.45] text-faint text-balance">
-                {MISSION.body}
-              </p>
-              <p className="mt-8 text-sm text-faint">
+            <div className="relative max-w-[600px]">
+              <p className="text-sm text-faint">
+                {MISSION.coveragePrefix}{" "}
                 <span className="font-semibold text-white">
                   <CountUp to={COVERAGE_PERCENT} decimals={6} suffix="%" />
                 </span>{" "}
                 {MISSION.coverageSuffix}
+              </p>
+              <h2 className="mt-3 text-[clamp(26px,3.5vw,38px)] font-[650] leading-[1.1] tracking-[-0.025em] text-balance">
+                {MISSION.title}
+              </h2>
+              <p className="mt-4 text-lg font-light leading-[1.45] text-faint text-balance">
+                {MISSION.body}
               </p>
             </div>
           </div>
@@ -213,39 +207,35 @@ export function Fleet() {
   return (
     <section id="fleet" className="mt-20 scroll-mt-28 sm:mt-28 lg:mt-32">
       <Wrap>
-        <Reveal>
-          <div className="max-w-[640px]">
+        <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
+          <Reveal>
             <Eyebrow>{FLEET.eyebrow}</Eyebrow>
-            <h2 className="mt-3 text-[clamp(26px,3.5vw,34px)] font-[650] leading-[1.1] tracking-[-0.025em]">
+            <h2 className="mt-3 text-[clamp(30px,4.5vw,44px)] font-[650] leading-[1.08] tracking-[-0.025em] text-balance">
               {FLEET.title}
             </h2>
-            <p className="mt-4 leading-relaxed text-muted">{FLEET.body}</p>
-          </div>
-        </Reveal>
+            <p className="mt-4 text-base font-light leading-[1.45] text-muted sm:text-lg">
+              {FLEET.body}
+            </p>
 
-        <div className="mt-8 grid gap-6 sm:mt-10 md:grid-cols-3">
-          {FLEET.points.map((p, i) => (
-            <Reveal key={p.title} delay={i * 0.05}>
-              <div className="border-t border-hairline pt-5">
-                <h3 className="text-base font-semibold tracking-[-0.01em]">
-                  {p.title}
-                </h3>
-                <p className="mt-2 text-sm leading-relaxed text-muted">
-                  {p.body}
-                </p>
-              </div>
-            </Reveal>
-          ))}
+            <ul className="mt-8 space-y-5">
+              {FLEET.points.map((p) => (
+                <li key={p.title} className="border-l-2 border-hairline pl-4">
+                  <h3 className="text-base font-semibold tracking-[-0.01em]">{p.title}</h3>
+                  <p className="mt-1 text-sm leading-relaxed text-muted">{p.body}</p>
+                </li>
+              ))}
+            </ul>
+
+            <div className="mt-8 flex flex-col items-start gap-3">
+              <Button href={LINKS.fleetGuide} variant="outline">
+                {FLEET.cta}
+              </Button>
+              <p className="text-sm text-faint">{FLEET.note}</p>
+            </div>
+          </Reveal>
+
+          <FleetDiagram />
         </div>
-
-        <Reveal>
-          <div className="mt-8 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-5">
-            <Button href={LINKS.fleetGuide} variant="outline">
-              {FLEET.cta}
-            </Button>
-            <p className="text-sm text-faint">{FLEET.note}</p>
-          </div>
-        </Reveal>
       </Wrap>
     </section>
   );
