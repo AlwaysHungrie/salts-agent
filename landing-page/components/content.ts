@@ -72,14 +72,16 @@ const APP_URL = "https://salts-agent-app.vercel.app";
 export const LINKS = {
   signIn: APP_URL as string | null,
   signUp: APP_URL as string | null,
-  contact: null as string | null,
+  /** Our accounts. Not created yet: null renders the icon as disabled. */
+  x: null as string | null,
+  telegram: null as string | null,
   privacy: "/privacy",
   terms: "/terms",
   guide: `${APP_URL}/guide`,
   stepByStepGuide: `${APP_URL}/guide/step-by-step-agent`,
+  github: "https://github.com/AlwaysHungrie/salts-agent",
   githubIssues: "https://github.com/AlwaysHungrie/salts-agent/issues/new",
   fleetGuide: `${APP_URL}/guide/fleets`,
-  openRouterGuide: `${APP_URL}/guide/openrouter`,
 } as const;
 
 /* ----------------------------------------------------------------- Copy -- */
@@ -303,15 +305,16 @@ export const FAQ = {
 } as const;
 
 export const CTA = {
-  title: "Your agent is a few minutes away.",
-  body: "All you need is an OpenRouter API key. Everything else can be set up later.",
+  title: "Your agent is waiting for you.",
+  /** Two lines on wide screens, broken where the sentences break. */
+  body: ["Start with a $5 OpenRouter API key.", "It might be more than enough to last a lifetime."],
   primary: "Get my agent",
   secondary: "Read the user guide",
 } as const;
 
 export const FOOTER = {
-  tagline: `${BRAND.name} is an open source AI assistant with no monthly fee and nothing to install. Use it as much as you like and pay only for what it uses. Talk to it in your browser, on Telegram or on WhatsApp.`,
-  note: "No monthly fee. Self-host for no limits.",
+  tagline: "Personal AI agents that stay with you forever. Free to run, open source, and in the chat apps you already use.",
+  note: "Open and equal AI, for everyone.",
   columns: [
     {
       title: "Product",
@@ -325,14 +328,19 @@ export const FOOTER = {
       title: "Resources",
       links: [
         { href: LINKS.guide, label: "User guide" },
-        { href: LINKS.openRouterGuide, label: "Get an OpenRouter key" },
+        { href: LINKS.stepByStepGuide, label: "Get a key" },
+        { href: LINKS.github, label: "GitHub" },
         { href: "#faq", label: "FAQ" },
       ],
     },
     {
       title: "Company",
+      /** Icon links, shown in a row above the text links. */
+      social: [
+        { href: LINKS.x, label: "Salts on X", icon: "x" },
+        { href: LINKS.telegram, label: "Salts on Telegram", icon: "telegram" },
+      ],
       links: [
-        { href: LINKS.contact, label: "Contact" },
         { href: LINKS.privacy, label: "Privacy" },
         { href: LINKS.terms, label: "Terms" },
       ],

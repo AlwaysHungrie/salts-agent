@@ -311,8 +311,9 @@ export function Cta() {
               <h2 className="text-[clamp(30px,4.5vw,44px)] font-[650] leading-[1.08] tracking-[-0.025em]">
                 {CTA_COPY.title}
               </h2>
-              <p className="mx-auto mt-4 max-w-[520px] text-xl font-light leading-[1.4] text-muted text-balance">
-                {CTA_COPY.body}
+              <p className="mx-auto mt-4 text-xl font-light leading-[1.4] text-muted text-balance">
+                {CTA_COPY.body[0]} <br className="hidden sm:block" />
+                {CTA_COPY.body[1]}
               </p>
             </div>
 
