@@ -191,7 +191,7 @@ export function ApiKeys({
               Your new {LABEL[shown.role].title.toLowerCase()}
             </p>
             <p className="text-muted mt-1 text-xs font-light leading-[1.33]">
-              This token will not be shown again. Do not share this with anyone.
+              You won&rsquo;t see this key again. Copy it now and keep it private.
               It can be used to access this agent as{" "}
               {shown.role === "admin" ? "an admin" : "a member"}.
               <br />

@@ -12,7 +12,7 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: "Salts",
-  description: "Personal, Always Accessible AI Agents",
+  description: "Personal AI agents that stay with you forever",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

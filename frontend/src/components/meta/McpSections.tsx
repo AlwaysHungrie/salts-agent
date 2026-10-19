@@ -20,7 +20,7 @@ export function McpTemplatesSection({
   return (
     <Section
       title="MCP templates"
-      hint="MCP templates provide easier way to the user to add an MCP server. If none are selected, all of them are presented to the user."
+      hint="Templates let your users add a server in one click. Select none to offer all of them."
     >
       <div className="flex flex-wrap gap-2">
         {catalog.map(toPreset).map((preset) => {

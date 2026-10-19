@@ -442,7 +442,7 @@ export default function AgentPage({
             />
             {loaded?.sessionId !== selected ? (
               <div className="text-muted flex flex-1 items-center justify-center text-xl font-light mb-16">
-                Connecting Session…
+                Connecting…
               </div>
             ) : (
               <Chat

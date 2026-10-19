@@ -28,12 +28,12 @@ const AUTH_MODES: { id: McpAuth; label: string; hint?: string }[] = [
   {
     id: "headers",
     label: "API key",
-    hint: "Configure authentication headers that will be sent with every request.",
+    hint: "Headers sent with every request, such as an API key.",
   },
   {
     id: "oauth",
     label: "OAuth",
-    hint: "You will be redirected to the external provider and asked to authenticate via your account.",
+    hint: "You'll be sent to the app to sign in with your account.",
   },
 ];
 
@@ -896,8 +896,8 @@ export function McpServers({
 
       {redirectUri && (
         <p className="text-faint text-xs leading-[1.33]">
-          Expect external providers to redirect to the following URL to complete
-          OAuth flow: <span className="break-all font-bold">{redirectUri}</span>
+          The app you connect will send you back to this URL to finish signing
+          in: <span className="break-all font-bold">{redirectUri}</span>
         </p>
       )}
     </div>

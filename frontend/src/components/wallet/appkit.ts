@@ -41,7 +41,7 @@ export function appKitFor(projectId: string): WagmiAdapter {
     projectId,
     metadata: {
       name: "Salts",
-      description: "Personal, always accessible AI agents",
+      description: "Personal AI agents that stay with you forever",
       url: window.location.origin,
       icons: [`${window.location.origin}/icon.svg`],
     },
