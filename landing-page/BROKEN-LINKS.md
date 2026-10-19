@@ -9,7 +9,8 @@ plain text. **To fix one, set its value in `LINKS` — nothing else changes.**
 
 | Key | Where it appears | Was | Status |
 | --- | --- | --- | --- |
-| `contact` | Footer → Company | `href="#"` | Unbuilt |
+| `x` | Footer → Company (X icon) | none | Account not created yet |
+| `telegram` | Footer → Company (Telegram icon) | none | Account not created yet |
 
 ## Links that do work
 
