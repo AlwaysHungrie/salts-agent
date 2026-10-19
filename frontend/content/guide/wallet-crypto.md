@@ -32,7 +32,7 @@ We recommend paying within 30 minutes of starting the checkout. The price is hel
 
 ## You are done
 
-When you see **Payment received. Your key is in your wallet.**, the new key is ready. Go back to your wallet to see it, then pick it by its nickname when you [create your agent](/guide/getting-started) or from your agent's **Settings**.
+When you see **Payment received. Your key is in your wallet.**, the new key is ready. Go back to your wallet to see it, then pick it by its nickname when you [create your agent](/guide/step-by-step-agent) or from your agent's **Settings**.
 
 If you closed the page or lost your connection before the key arrived, your payment is not lost. See [Recover a lost payment](/guide/wallet-recovery).
 
