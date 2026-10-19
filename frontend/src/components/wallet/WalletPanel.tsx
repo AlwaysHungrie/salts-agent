@@ -10,9 +10,10 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeft, Check, Copy, CreditCard, Wallet, X } from "lucide-react";
+import { ArrowLeft, Check, Copy, Link2, Wallet, X } from "lucide-react";
 import type { WalletKey } from "@/lib/agent";
 import { formatUsdShort } from "@/lib/format";
+import { startConnect } from "@/lib/openrouter-connect";
 import { BuyCredits } from "./BuyCredits";
 import { PayOption } from "./PayOption";
 import { forgetPayment, sentPayments } from "./sentPayments";
@@ -186,10 +187,10 @@ function WalletSidebar({ onClose }: { onClose: () => void }) {
                   onClick={() => setBuying(true)}
                 />
                 <PayOption
-                  icon={<CreditCard className="h-4 w-4" />}
-                  title="Pay with card"
-                  note="Visa, Mastercard, Apple Pay"
-                  soon
+                  icon={<Link2 className="h-4 w-4" />}
+                  title="Connect OpenRouter"
+                  note="Sign in to OpenRouter and approve a key"
+                  onClick={() => void startConnect()}
                 />
               </div>
 
