@@ -169,7 +169,7 @@ list explains the selected row. Quitting leaves the services running.
 ## Staging
 
 Add `:staging` to any command to use the staging Worker
-(`salt-agent-staging.dhairyashah98.workers.dev`) and the staging site instead of
+(`api-staging.salts.dev`) and the staging site instead of
 production:
 
 ```bash

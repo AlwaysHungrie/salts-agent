@@ -68,3 +68,28 @@ resource "vercel_project_domain" "landing_page" {
   project_id = vercel_project.landing_page.id
   domain     = "${var.landing_page_project_name}.vercel.app"
 }
+
+# Our own domain. DNS is on Cloudflare, as DNS-only (grey cloud) records: Vercel issues
+# the certificates, which a proxied record would get in the way of.
+resource "vercel_project_domain" "landing_page_apex" {
+  project_id = vercel_project.landing_page.id
+  domain     = var.domain
+}
+
+resource "vercel_project_domain" "landing_page_www" {
+  project_id           = vercel_project.landing_page.id
+  domain               = "www.${var.domain}"
+  redirect             = vercel_project_domain.landing_page_apex.domain
+  redirect_status_code = 308
+}
+
+resource "vercel_project_domain" "frontend_app" {
+  project_id = vercel_project.frontend.id
+  domain     = "app.${var.domain}"
+}
+
+resource "vercel_project_domain" "frontend_staging" {
+  project_id = vercel_project.frontend.id
+  domain     = "staging.${var.domain}"
+  git_branch = var.staging_branch
+}

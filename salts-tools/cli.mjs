@@ -85,13 +85,13 @@ const [cmd, TARGET = "production"] = command.split(":");
 /** Per target: the Worker it pushes to, and the suffix that keeps its resources apart. */
 const TARGETS = {
   production: {
-    worker: "https://salt-agent.dhairyashah98.workers.dev",
-    app: "https://salts-agent-app.vercel.app",
+    worker: "https://api.salts.dev",
+    app: "https://app.salts.dev",
     suffix: "",
   },
   staging: {
-    worker: "https://salt-agent-staging.dhairyashah98.workers.dev",
-    app: "https://salts-agent-app-git-staging-dhairyashah98-gmailcoms-projects.vercel.app",
+    worker: "https://api-staging.salts.dev",
+    app: "https://staging.salts.dev",
     suffix: "-staging",
   },
 };

@@ -19,7 +19,7 @@ export type Env = {
    */
   CLERK_ISSUER?: string;
   /**
-   * The web app's origin (e.g. `https://salts-agent-app.vercel.app`), for the links
+   * The web app's origin (e.g. `https://app.salts.dev`), for the links
    * `!docs`, `!settings` and `!mcp` send. Unset, they say there is none.
    */
   APP_URL?: string;
