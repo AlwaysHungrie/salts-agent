@@ -1,4 +1,4 @@
-// Installing Coinbase's Payments MCP when its own installer cannot.
+// Installing Coinbase Wallet (Coinbase's Payments MCP package) when its own installer cannot.
 //
 // The installer (`npx @coinbase/payments-mcp install`) downloads the version Coinbase's
 // API names as the latest, and gives up when that zip is missing, which happens when a
@@ -10,7 +10,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-export const PAYMENTS_BASE = "https://payments-mcp.coinbase.com";
+export const WALLET_BASE = "https://payments-mcp.coinbase.com";
 
 /** `2.12.2` → `["2.12.2", "2.12.1", "2.12.0"]`, at most `max` of them. */
 export function patchVersions(latest, max = 5) {
@@ -26,17 +26,17 @@ export function patchVersions(latest, max = 5) {
  * dir)` and run `npmInstall(dir)`. Both return `{ status, stderr, stdout }` like spawnSync.
  * Returns the version installed; throws with what went wrong.
  */
-export async function installPayments({ dir, extract, npmInstall, log = () => {}, fetchImpl = fetch }) {
-  const res = await fetchImpl(`${PAYMENTS_BASE}/api/version`);
+export async function installCoinbaseWallet({ dir, extract, npmInstall, log = () => {}, fetchImpl = fetch }) {
+  const res = await fetchImpl(`${WALLET_BASE}/api/version`);
   if (!res.ok) throw new Error(`Coinbase's version check answered ${res.status}`);
   const { version } = await res.json();
   const versions = patchVersions(version);
   if (versions.length === 0) throw new Error(`Coinbase named no usable version (${version})`);
 
   for (const v of versions) {
-    const zip = await fetchImpl(`${PAYMENTS_BASE}/install/payments-mcp-v${v}.zip`);
+    const zip = await fetchImpl(`${WALLET_BASE}/install/payments-mcp-v${v}.zip`);
     if (zip.status === 404) {
-      log(`payments: v${v} is not downloadable, trying the one before`);
+      log(`coinbase-wallet: v${v} is not downloadable, trying the one before`);
       continue;
     }
     if (!zip.ok) throw new Error(`downloading v${v} failed: ${zip.status}`);
@@ -50,7 +50,7 @@ export async function installPayments({ dir, extract, npmInstall, log = () => {}
     } finally {
       rmSync(tmp, { recursive: true, force: true });
     }
-    log(`payments: installing the wallet app for v${v} (npm install)`);
+    log(`coinbase-wallet: installing the wallet app for v${v} (npm install)`);
     const installed = npmInstall(dir);
     if (installed.status !== 0) throw new Error(`npm install failed: ${(installed.stderr || installed.stdout || "").trim().slice(-500)}`);
     return v;
