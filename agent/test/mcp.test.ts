@@ -10,7 +10,7 @@ import {
   slug,
   type McpServerRow,
 } from "../src/mcp";
-import { mcpServerReady, mcpToolSpecs } from "../src/capabilities";
+import { mcpServerReady, mcpServersForChat, mcpToolSpecs } from "../src/capabilities";
 import { EMPTY_MCP_SERVER } from "../src/registry";
 
 /**
@@ -124,6 +124,24 @@ describe("slug and qualifiedName", () => {
     const a = qualifiedName(server({ name: "Alpha" }), "search");
     const b = qualifiedName(server({ name: "Beta" }), "search");
     expect(a).not.toBe(b);
+  });
+});
+
+describe("mcpServersForChat", () => {
+  const servers = [server({ name: "Open" }), server({ name: "Wallet", in_groups: 0 })];
+  const names = (chat: Parameters<typeof mcpServersForChat>[1]) =>
+    mcpServersForChat(servers, chat).map((s) => s.name);
+
+  it("leaves a server switched off for groups out of a Telegram group or supergroup", () => {
+    expect(names({ source: "telegram", chat_type: "group" })).toEqual(["Open"]);
+    expect(names({ source: "telegram", chat_type: "supergroup" })).toEqual(["Open"]);
+  });
+
+  it("keeps every server for a private chat, WhatsApp and the browser", () => {
+    expect(names({ source: "telegram", chat_type: "private" })).toEqual(["Open", "Wallet"]);
+    expect(names({ source: "whatsapp", chat_type: "private" })).toEqual(["Open", "Wallet"]);
+    expect(names({ source: "web", chat_type: "" })).toEqual(["Open", "Wallet"]);
+    expect(names(undefined)).toEqual(["Open", "Wallet"]);
   });
 });
 

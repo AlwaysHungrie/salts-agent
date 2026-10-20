@@ -241,4 +241,10 @@ export const SESSION_REGISTRY_MIGRATIONS: readonly Migration[] = [
       addColumnIfMissing(sql, "config", `openrouter_key_id TEXT NOT NULL DEFAULT ''`);
     },
   },
+  {
+    name: "mcp servers in telegram groups",
+    up: (sql) => {
+      addColumnIfMissing(sql, "mcp_servers", `in_groups INTEGER NOT NULL DEFAULT 1`);
+    },
+  },
 ];

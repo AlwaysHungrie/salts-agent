@@ -235,6 +235,7 @@ export const McpServerSchema = z
     url: z.string(),
     auth: z.enum(["none", "headers", "oauth"]),
     enabled: z.number(),
+    in_groups: z.number(),
     oauth_client_id: z.string(),
     oauth_expires_at: z.number(),
     oauth_scope: z.string(),

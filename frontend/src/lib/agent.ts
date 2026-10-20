@@ -339,6 +339,8 @@ export type McpServer = {
   url: string;
   auth: McpAuth;
   enabled: number;
+  /** Whether its tools are offered in Telegram groups, where anyone there can ask for them. */
+  in_groups: number;
   headers: Record<string, string>;
   tools: McpTool[];
   /**

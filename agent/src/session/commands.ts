@@ -112,7 +112,7 @@ export const HELP = [
   "`!unstick` — fix a session that stopped responding",
   "`!delete` — delete this session",
   "`!model` — list models; `!model <nickname>` switches",
-  "`!mcp` — list connected apps; `!enable-mcp <name>` / `!disable-mcp <name>` switch one",
+  "`!mcp` — list connected apps; `!mcp <name>` switches one on or off",
   "`!settings` — link to this agent's settings",
   "`!docs` — list the user guide's pages; `!docs <page>` shows one",
   "`!help` — this list",
@@ -168,9 +168,10 @@ export async function mcpList(host: SessionHost): Promise<CommandResult> {
     };
   }
   const lines = servers.map((s) => {
-    if (!s.enabled) return `- ${s.name} — off. Send \`!enable-mcp ${s.name}\` to turn it on.`;
+    if (!s.enabled) return `- ${s.name} — off. Send \`!mcp ${s.name}\` to turn it on.`;
     if (!mcpServerReady(s)) return `- ${s.name} — not connected; ${connectHint}.`;
-    return `- ${s.name} — on. Send \`!disable-mcp ${s.name}\` to turn it off.`;
+    const groups = s.in_groups ? "" : " Not offered in Telegram groups.";
+    return `- ${s.name} — on. Send \`!mcp ${s.name}\` to turn it off.${groups}`;
   });
   await host.loadConfig();
   const off = enabled(host.config(), "mcp")
@@ -278,30 +279,30 @@ export async function modelCommand(
 }
 
 /**
- * `!enable-mcp` / `!disable-mcp`. Enabling turns every tool on and re-reads the tool list
- * so an unreachable server says so now; disabling leaves the selection alone.
+ * `!mcp <name>`: switch the server off if it is on, on if it is off, and say where it ended
+ * up. Switching on turns every tool on and re-reads the tool list, so an unreachable server
+ * says so now; switching off leaves the selection alone.
  */
 export async function mcpCommand(
   host: SessionHost,
-  { mcp, server }: McpCommand
+  { server }: McpCommand
 ): Promise<CommandResult> {
   const reg = host.registry();
   const wanted = server.toLowerCase();
   const row = (await reg.mcpServers()).find((s) => s.name.toLowerCase() === wanted);
-  if (mcp === "disable") {
-    const done = row && (await reg.updateMcpServer(row.id, { enabled: 0 }));
+  if (!row)
+    return { text: `No MCP server named "${server}". Send \`!mcp\` to list them.`, destroy: false };
+  if (row.enabled) {
+    await reg.updateMcpServer(row.id, { enabled: 0 });
     return {
-      text: done
-        ? "Disabled. You can also partially enable a few tools that are required from the web UI."
-        : "Error disabling MCP server, please visit the web UI.",
+      text: `${row.name} is now off. Send \`!mcp ${row.name}\` to turn it back on.`,
       destroy: false,
     };
   }
-  if (!row) return { text: `No MCP server named "${server}".`, destroy: false };
   const updated = await reg.updateMcpServer(row.id, { enabled: 1, disabled_tools: "[]" });
   if (!updated || !mcpServerReady(updated)) {
     return {
-      text: `${row.name} is not connected. Connect it from the web UI.`,
+      text: `${row.name} is now on, but it is not connected. Connect it from the web UI.`,
       destroy: false,
     };
   }
@@ -316,20 +317,23 @@ export async function mcpCommand(
     await host.loadConfig();
     if (!enabled(host.config(), "mcp")) {
       return {
-        text: `${row.name} is enabled, but MCP is switched off for this agent. Turn it on from the web UI.`,
+        text: `${row.name} is now on, but MCP is switched off for this agent. Turn it on from the web UI.`,
         destroy: false,
       };
     }
     return {
       text:
-        `${row.name} enabled with all ${tools.length} tools. This can sharply raise token use — ` +
-        `disable it when not needed, or switch off unused tools from the web UI.`,
+        `${row.name} is now on, with all ${tools.length} tools. This can sharply raise token use — ` +
+        `switch it off when not needed, or switch off unused tools from the web UI.`,
       destroy: false,
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await reg.noteMcpError(row.id, message);
-    return { text: `Error connecting to ${row.name}: ${message}`, destroy: false };
+    return {
+      text: `${row.name} is now on, but it could not be reached: ${message}`,
+      destroy: false,
+    };
   }
 }
 

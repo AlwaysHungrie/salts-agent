@@ -319,6 +319,28 @@ export default function AgentPage({
   };
 
   /**
+   * `!new` / `!clear` typed in the chat: open a fresh session, as the sidebar's button does.
+   * `!clear` deletes the open one first, so it works at the session limit too.
+   */
+  const startOver = async (discard: boolean) => {
+    const old = selected;
+    if (discard && old) {
+      forget(keys.transcript(old));
+      forget(keys.summary(old));
+      const gone = await fetch(`/api/sessions/${encodeURIComponent(old)}`, {
+        method: "DELETE",
+      });
+      if (!gone.ok) {
+        await settle(gone, "Couldn't delete this session. Try again.");
+        return;
+      }
+      setSessions((current) => current.filter((s) => s.id !== old));
+      setSelected(null);
+    }
+    await createSession();
+  };
+
+  /**
    * Branch a conversation: the first `count` messages are copied into a fresh
    * session, which then opens. The original is left exactly as it was.
    */
@@ -457,6 +479,7 @@ export default function AgentPage({
                 onFork={(count, text) =>
                   void forkSession(selected, count, text)
                 }
+                onStartOver={(discard) => void startOver(discard)}
                 // A chat that lives on another platform is read here and answered
                 // there: the composer would send into a conversation this page is not
                 // the right end of.

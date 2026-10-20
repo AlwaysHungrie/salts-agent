@@ -9,7 +9,7 @@ import {
 } from "@cloudflare/think";
 import type { Schedule } from "agents";
 import type { UIMessage } from "ai";
-import { enabled, type ScheduledTask } from "./capabilities";
+import { enabled, mcpServersForChat, type ScheduledTask } from "./capabilities";
 import { telegramInbound, whatsappInbound } from "./channel";
 import type { Env } from "./env";
 import type { McpServerRow } from "./mcp";
@@ -198,7 +198,12 @@ export class SessionAgent extends Think<Env> {
     this.memories = enabled(this.currentConfig, "memory")
       ? await this.registry().recall("", 50)
       : [];
-    this.mcpServers = enabled(this.currentConfig, "mcp") ? await this.registry().mcpServers() : [];
+    this.mcpServers = enabled(this.currentConfig, "mcp")
+      ? mcpServersForChat(
+          await this.registry().mcpServers(),
+          await this.registry().get(this.sessionId())
+        )
+      : [];
   }
 
   /**

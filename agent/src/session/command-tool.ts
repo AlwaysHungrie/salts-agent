@@ -13,8 +13,6 @@ export const TOOL_COMMANDS = [
   "help",
   "settings",
   "mcp",
-  "enable-mcp",
-  "disable-mcp",
   "model",
   "new",
   "clear",
@@ -37,7 +35,7 @@ export const COMMAND_TOOL_DESCRIPTION = [
   "- docs: the user guide's pages, one line each. docs <page>: that page in full; pick the page from the list.",
   "- help: the commands the user can send themselves.",
   "- settings: this agent's model, MCP servers, and the settings page link.",
-  "- mcp: MCP servers and whether each is on. enable-mcp <name> / disable-mcp <name> switch one.",
+  "- mcp: MCP servers and whether each is on. mcp <name> switches that server on if it is off and off if it is on, so only pass a name when the user asks to switch one.",
   "- model: models on offer by nickname. model <nickname> switches the agent from the next reply.",
   "- new / clear / compact: start a fresh session (clear deletes this one) or summarise this one. They run after your reply is sent, so say what is about to happen. Only when the user asks for it.",
 ].join("\n");
@@ -73,11 +71,7 @@ export async function commandForTool(
   argument?: string
 ): Promise<CommandResult> {
   const arg = argument?.trim() ?? "";
-  if (command === "enable-mcp" || command === "disable-mcp") {
-    if (!arg) return { text: `${command} needs the MCP server's name.`, destroy: false };
-    const mcp = command === "enable-mcp" ? "enable" : "disable";
-    return await runCommand(host, { mcp, server: arg });
-  }
+  if (command === "mcp") return await runCommand(host, arg ? { server: arg } : "mcp");
   if (command === "docs") return await runCommand(host, arg ? { page: arg } : "docs");
   if (command === "model") return await runCommand(host, arg ? { nickname: arg } : "model");
   if (command === "settings") {

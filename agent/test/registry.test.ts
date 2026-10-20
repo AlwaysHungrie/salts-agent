@@ -409,6 +409,7 @@ describe("mcp servers", () => {
     auth: "none" as const,
     headers: "",
     enabled: 1,
+    in_groups: 1,
     oauth_client_id: "",
     oauth_client_secret: "",
     oauth_access_token: "",
