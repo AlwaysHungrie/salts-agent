@@ -247,4 +247,11 @@ export const SESSION_REGISTRY_MIGRATIONS: readonly Migration[] = [
       addColumnIfMissing(sql, "mcp_servers", `in_groups INTEGER NOT NULL DEFAULT 1`);
     },
   },
+  {
+    name: "mcp oauth redirect uri",
+    up: (sql) => {
+      // Blank on older rows, so their next Connect registers a fresh client.
+      addColumnIfMissing(sql, "mcp_servers", `oauth_redirect_uri TEXT NOT NULL DEFAULT ''`);
+    },
+  },
 ];

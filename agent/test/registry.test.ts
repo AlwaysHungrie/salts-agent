@@ -419,6 +419,7 @@ describe("mcp servers", () => {
     oauth_token_url: "",
     oauth_authorize_url: "",
     oauth_registration_url: "",
+    oauth_redirect_uri: "",
     oauth_resource: "",
     oauth_verifier: "",
     oauth_state: "",

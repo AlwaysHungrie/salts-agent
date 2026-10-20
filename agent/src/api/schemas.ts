@@ -242,6 +242,7 @@ export const McpServerSchema = z
     oauth_token_url: z.string(),
     oauth_authorize_url: z.string(),
     oauth_registration_url: z.string(),
+    oauth_redirect_uri: z.string(),
     oauth_resource: z.string(),
     oauth_return_to: z.string(),
     tools_synced_at: z.number(),

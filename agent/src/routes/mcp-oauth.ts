@@ -15,6 +15,23 @@ import { registry, type Registry } from "../worker/stores";
 export const redirectUri = (origin: string) => `${origin}/api/mcp/oauth/callback`;
 
 /**
+ * Whether the saved client can be reused. A client registered against a different
+ * authorization server, or for a different redirect URI (the Worker moved domains), is
+ * no client at all: the provider rejects the authorize request.
+ */
+export function needsNewClient(
+  row: Pick<McpServerRow, "oauth_client_id" | "oauth_authorize_url" | "oauth_redirect_uri">,
+  authorizeUrl: string,
+  redirect: string
+): boolean {
+  return (
+    !row.oauth_client_id ||
+    row.oauth_authorize_url !== authorizeUrl ||
+    row.oauth_redirect_uri !== redirect
+  );
+}
+
+/**
  * Start an OAuth connection: discover endpoints, register a client if needed, park the
  * PKCE verifier and state on the row, and return the authorize URL.
  */
@@ -33,8 +50,7 @@ export async function startMcpOauth(
 
   let clientId = row.oauth_client_id;
   let clientSecret = row.oauth_client_secret;
-  // A client registered against a different authorization server is no client at all.
-  if (!clientId || row.oauth_authorize_url !== metadata.authorization_endpoint) {
+  if (needsNewClient(row, metadata.authorization_endpoint, redirect)) {
     if (!metadata.registration_endpoint) {
       throw new Error("that server supports neither a saved client nor dynamic registration");
     }
@@ -53,6 +69,7 @@ export async function startMcpOauth(
     oauth_authorize_url: metadata.authorization_endpoint,
     oauth_token_url: metadata.token_endpoint,
     oauth_registration_url: metadata.registration_endpoint ?? "",
+    oauth_redirect_uri: redirect,
     oauth_resource: resource,
     oauth_scope: (metadata.scopes_supported ?? []).join(" "),
     oauth_verifier: verifier,
