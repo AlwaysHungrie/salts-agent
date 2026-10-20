@@ -398,6 +398,58 @@ describe("the spending limit", () => {
     // The gate is in front of the call, so the total is untouched by the refused turn.
     expect(await registry.spendThisMonth()).toBeCloseTo(0.002);
   });
+
+  /** A one-agent fleet on the admin's wallet key, already over a limit. */
+  async function fleetOverLimit() {
+    const admin = someone("fleet-admin");
+    const email = someone("member");
+    const dir = env.AgentDirectory.get(env.AgentDirectory.idFromName("root"));
+    const key = await dir.addWalletKey(admin, { kind: "own", secret: "sk-fleet-key" }, 20);
+    if ("error" in key) throw new Error(key.error);
+    const [agent] = (
+      (await (
+        await SELF.fetch(
+          `${BASE}/api/agents`,
+          as(admin, {
+            method: "POST",
+            body: JSON.stringify({
+              name: "Fleet Agent",
+              fleet_name: "Team",
+              allowed_emails: email,
+              meta: { monthly_spend_limit: 0.01, defaults: { openrouter_key_id: key.id } },
+            }),
+          })
+        )
+      ).json()) as { agents: { id: string }[] }
+    ).agents;
+    const session = (await (
+      await SELF.fetch(
+        `${BASE}/api/agents/${agent.id}/sessions`,
+        as(email, { method: "POST", body: JSON.stringify({ title: "Chat" }) })
+      )
+    ).json()) as { id: string };
+    await registryFor(agent.id).addSpend(0.02);
+    return { email, agentId: agent.id, sessionId: session.id };
+  }
+
+  it("refuses a fleet agent on the fleet's default key", async () => {
+    const { sessionId, email } = await fleetOverLimit();
+    const reply = ((await (await say(sessionId, email, "hello")).json()) as { reply: string })
+      .reply;
+    expect(reply).toContain("spending limit");
+  });
+
+  it("lets a fleet agent on its user's own key past the limit", async () => {
+    const { sessionId, email, agentId } = await fleetOverLimit();
+    await SELF.fetch(
+      `${BASE}/api/agents/${agentId}/config`,
+      as(email, { method: "PATCH", body: JSON.stringify({ openrouter_api_key: "sk-own-key" }) })
+    );
+    const reply = ((await (await say(sessionId, email, "hello")).json()) as { reply: string })
+      .reply;
+    // The user pays for their own key, so the admin's ceiling is not theirs to hit.
+    expect(reply).toBe(replyTo("hello"));
+  });
 });
 
 describe("bang commands over chat", () => {

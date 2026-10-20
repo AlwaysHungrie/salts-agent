@@ -16,7 +16,7 @@ To talk to their agent from their phone, they can connect their own Telegram bot
 ## How they know it is a fleet agent
 
 - At the top of their agent's sidebar, they see a line such as **This agent is part of "Acme" fleet.**, with your fleet's name in place of Acme. They do not see your email address.
-- In **Settings**, they see how much of their monthly spending limit is left, marked **Set by agent admin**.
+- In **Settings**, they see how much of their monthly spending limit is left, marked **Set by agent admin**, while their agent uses your default key.
 - Under **Manage access**, they see how many more people they can add, if you set a member limit.
 
 ## What they can and cannot change
@@ -36,4 +36,4 @@ It is also worth telling them that anyone they add under **Manage access** will 
 
 ## When they reach their limit
 
-When an agent reaches its monthly spend limit, it tells the user and stops replying. It starts working again at the beginning of the next calendar month, or as soon as you raise the limit for that agent.
+When an agent on your default key reaches its monthly spend limit, it tells the user and stops replying. It starts working again at the beginning of the next calendar month, or as soon as you raise the limit for that agent.
