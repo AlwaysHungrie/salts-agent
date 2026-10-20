@@ -10,9 +10,19 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeft, Check, Copy, CreditCard, Wallet, X } from "lucide-react";
+import {
+  ArrowLeft,
+  Check,
+  ChevronRight,
+  Copy,
+  KeyRoundIcon,
+  Link2,
+  Wallet,
+  X,
+} from "lucide-react";
 import type { WalletKey } from "@/lib/agent";
 import { formatUsdShort } from "@/lib/format";
+import { startConnect } from "@/lib/openrouter-connect";
 import { BuyCredits } from "./BuyCredits";
 import { PayOption } from "./PayOption";
 import { forgetPayment, sentPayments } from "./sentPayments";
@@ -179,39 +189,30 @@ function WalletSidebar({ onClose }: { onClose: () => void }) {
                 Get new key
               </p>
               <div className="space-y-3">
+                <div className="flex flex-col items-center">
+                  <PayOption
+                    icon={<Wallet className="h-4 w-4" />}
+                    title="Pay with crypto"
+                    note="USDC or ETH on Ethereum, Base, Solana and more"
+                    onClick={() => setBuying(true)}
+                  />
+                  {wallet.networks.length > 0 && (
+                    <div>
+                      <RecoverPayment
+                        networks={wallet.networks}
+                        recover={wallet.recover}
+                      />
+                    </div>
+                  )}
+                </div>
                 <PayOption
-                  icon={<Wallet className="h-4 w-4" />}
-                  title="Pay with crypto"
-                  note="USDC or ETH on Ethereum, Base, Solana and more"
-                  onClick={() => setBuying(true)}
+                  icon={<Link2 className="h-4 w-4" />}
+                  title="New key from OpenRouter"
+                  note="Sign in to OpenRouter and create a new key"
+                  onClick={() => void startConnect()}
                 />
-                <PayOption
-                  icon={<CreditCard className="h-4 w-4" />}
-                  title="Pay with card"
-                  note="Visa, Mastercard, Apple Pay"
-                  soon
-                />
+                <AddKey onAdd={wallet.add} />
               </div>
-
-              {wallet.networks.length > 0 && (
-                <RecoverPayment
-                  networks={wallet.networks}
-                  recover={wallet.recover}
-                />
-              )}
-
-              <div className="text-muted mt-8 mb-3 text-xs font-medium flex">
-                <span>Already have a key?</span>
-                <a
-                  href="/guide/openrouter"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hover:text-ink ml-auto"
-                >
-                  (OpenRouter guide)
-                </a>
-              </div>
-              <AddKey onAdd={wallet.add} />
             </>
           )}
         </div>
@@ -464,25 +465,33 @@ function AddKey({ onAdd }: { onAdd: (key: string) => Promise<string | null> }) {
 
   return (
     <div>
-      <div className="flex gap-2">
-        <input
-          value={secret}
-          onChange={(e) => setSecret(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") void submit();
-          }}
-          type="password"
-          autoComplete="off"
-          placeholder="Paste an OpenRouter key, sk-or-v1-…"
-          aria-label="OpenRouter API key"
-          className="bg-field placeholder:text-faint focus:ring-ink h-11 w-full rounded-2xl px-4 text-sm outline-none focus:ring-2"
-        />
+      <div className="ring-hairline-soft flex w-full items-center gap-4 rounded-[24px] p-5 text-left ring-1 transition">
+        <span className="bg-ink text-on-primary flex h-10 w-10 shrink-0 items-center justify-center rounded-full">
+          <KeyRoundIcon className="h-4 w-4" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-base font-semibold leading-[1.38]">
+            Already have an OpenRouter key?
+          </span>
+          <input
+            value={secret}
+            onChange={(e) => setSecret(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void submit();
+            }}
+            type="password"
+            autoComplete="off"
+            placeholder="Paste an OpenRouter key, sk-or-v1-…"
+            aria-label="OpenRouter API key"
+            className="mt-1 bg-field placeholder:text-faint focus:ring-ink text-muted block w-full rounded-md px-3 py-1 text-xs leading-[1.33] outline-none focus:ring-2"
+          />
+        </span>
         <button
-          onClick={() => void submit()}
+          onClick={submit}
           disabled={!ready || busy}
-          className="border-hairline text-ink hover:bg-canvas-soft h-11 shrink-0 rounded-full border px-5 text-sm font-semibold transition disabled:opacity-40"
+          className="text-faint h-4 w-4 shrink-0 transition hover:text-ink"
         >
-          {busy ? "Checking…" : "Add key"}
+          <ChevronRight className="h-4 w-4" />
         </button>
       </div>
       {error && <p className="mt-2 text-xs leading-[1.33]">{error}</p>}
@@ -561,7 +570,7 @@ function RecoverPayment({
     <>
       <button
         onClick={() => setOpen(true)}
-        className="text-muted hover:text-ink mt-3 text-xs underline underline-offset-2"
+        className="text-muted hover:text-ink text-xs underline underline-offset-2"
       >
         Paid but didn&apos;t get a key?
       </button>
@@ -618,7 +627,9 @@ function RecoverDialog({
       setNote("That payment isn't final yet. Try again in a minute.");
     } else {
       setNote(
-        verdict.final ? "Couldn't find that payment. Check the network and the transaction ID." : verdict.error,
+        verdict.final
+          ? "Couldn't find that payment. Check the network and the transaction ID."
+          : verdict.error,
       );
     }
   };
@@ -648,8 +659,8 @@ function RecoverDialog({
           </button>
         </div>
         <p className="text-muted mt-2 mb-4 text-sm font-light leading-[1.43]">
-          Paid, but no key showed up in your wallet? Enter the payment details
-          below and we&rsquo;ll look for it.
+          Share your transaction id in case your transaction went through but no
+          key was issued to you.
         </p>
         <div className="flex flex-col gap-2">
           <select

@@ -17,7 +17,7 @@ Each time you open your **OpenRouter wallet** in the same browser you paid from,
 If you paid from another device, or the key still has not appeared, you can recover it with the transaction id.
 
 1. Find the transaction id in your crypto wallet's activity or history. It may be called a transaction hash or a signature.
-2. Open your **OpenRouter wallet** and click **Paid but didn't get a key?** under **Get new key**.
+2. Open your **OpenRouter wallet** and click **Paid but didn't get a key?** under **Pay with crypto**.
 3. In the **Recover a lost payment** window, choose the network you paid on, paste the transaction id and click **Get my key**.
 
 If the payment is confirmed, you will see **Transaction confirmed. The key has been added to your wallet.** If the key had already been added earlier, the message says so instead. Recovering a payment never charges you again or adds a second key.
