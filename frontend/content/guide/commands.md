@@ -24,8 +24,7 @@ To use a command, send it as the whole message, for example `!new`. In a Telegra
 | `!docs <page>` | Sends one page of this guide. |
 | `!settings` | Sends a link to your agent's settings. |
 | `!mcp` | Lists your connected apps and whether each is on. |
-| `!enable-mcp <name>` | Switches on a connected app. |
-| `!disable-mcp <name>` | Switches off a connected app. |
+| `!mcp <name>` | Switches a connected app on if it is off, or off if it is on. |
 | `!model` | Shows the current model and lists the models you can switch to. |
 | `!model <nickname>` | Switches your agent to another model. |
 
@@ -33,13 +32,13 @@ To use a command, send it as the whole message, for example `!new`. In a Telegra
 
 We recommend sending `!new` whenever you change the subject. Your agent starts fresh, which makes replies cheaper, faster and less likely to get confused by the earlier conversation. The old conversation is still available in your browser, and anything you scheduled in it, such as a daily reminder, carries over to the new one.
 
-In the browser, you can start a new session from the sidebar instead.
+In the browser, `!new` opens a new session, the same as the **+** button in the sidebar. Anything you scheduled stays with the old session there.
 
 ## !clear
 
 `!clear` does the same as `!new`, but also deletes the old conversation along with its messages and files. This cannot be undone.
 
-If your agent has reached its limit of sessions and refuses `!new`, `!clear` will still work, since it frees up a slot.
+If your agent has reached its limit of sessions and refuses `!new`, `!clear` will still work, since it frees up a slot. In the browser, `!clear` deletes the session you are in and opens a new one, along with anything scheduled in it.
 
 ## !stop
 
@@ -67,15 +66,15 @@ Very rarely, a reply never finishes and your agent stops responding to anything 
 !docs openrouter
 ```
 
-## !mcp, !enable-mcp and !disable-mcp
+## !mcp
 
-Apps you connect to your agent, such as Notion or GitHub, make every reply a little more expensive, even when they are not used. These commands let you switch an app on only when you need it. Use the name the app has on your **Capabilities** page, for example:
+Apps you connect to your agent, such as Notion or GitHub, make every reply a little more expensive, even when they are not used. `!mcp` lets you switch an app on only when you need it. Send `!mcp` on its own to see every app and whether it is on. Add the name the app has on your **Capabilities** page to switch it: an app that is off is switched on, and an app that is on is switched off. Your agent replies with where the app ended up. For example:
 
 ```
-!enable-mcp Notion
+!mcp Notion
 ```
 
-The app must already be connected on the **Capabilities** page before you can switch it on this way. Send `!mcp` to see every app, whether it is on, and the command that switches it. An app switched off for Telegram groups on the **Capabilities** page is marked **Not offered in Telegram groups**.
+The app must already be connected on the **Capabilities** page before you can switch it on this way. An app switched off for Telegram groups on the **Capabilities** page is marked **Not offered in Telegram groups**.
 
 ## !model
 

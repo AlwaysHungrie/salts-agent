@@ -519,7 +519,7 @@ describe("bang commands over chat", () => {
   });
 });
 
-describe("!enable-mcp and !disable-mcp", () => {
+describe("!mcp", () => {
   async function withServer(patch: Record<string, unknown> = {}) {
     const fixture = await chatFixture();
     await registryFor(fixture.agentId).addMcpServer({
@@ -537,18 +537,18 @@ describe("!enable-mcp and !disable-mcp", () => {
   const reply = async (res: Response) => ((await res.json()) as { reply: string }).reply;
   const row = async (agentId: string) => (await registryFor(agentId).mcpServers())[0];
 
-  it("enables a server with every tool and says how many", async () => {
+  it("switches an off server on with every tool and says how many", async () => {
     const { sessionId, email, agentId } = await withServer();
-    const text = await reply(await say(sessionId, email, "!enable-mcp docs"));
-    expect(text).toContain(`Docs enabled with all ${MCP_TOOLS.length} tools`);
+    const text = await reply(await say(sessionId, email, "!mcp docs"));
+    expect(text).toContain(`Docs is now on, with all ${MCP_TOOLS.length} tools`);
     const server = await row(agentId);
     expect(server.enabled).toBe(1);
     expect(JSON.parse(server.disabled_tools)).toEqual([]);
   });
 
   it("refuses a tool call repeated with the same arguments, without running it", async () => {
-    const { sessionId, email } = await withServer({ enabled: 1, disabled_tools: "[]" });
-    await say(sessionId, email, "!enable-mcp docs");
+    const { sessionId, email } = await withServer({ disabled_tools: "[]" });
+    await say(sessionId, email, "!mcp docs");
     const callsBefore = ((await (await fetch("https://mcp.test/__calls")).json()) as unknown[])
       .length;
     const token = crypto.randomUUID().slice(0, 8);
@@ -571,7 +571,7 @@ describe("!enable-mcp and !disable-mcp", () => {
 
   it("keeps the server's instructions, and puts them in the model's prompt", async () => {
     const { sessionId, email, agentId } = await withServer();
-    await say(sessionId, email, "!enable-mcp docs");
+    await say(sessionId, email, "!mcp docs");
     expect((await row(agentId)).instructions).toBe(MCP_INSTRUCTIONS);
 
     const token = crypto.randomUUID().slice(0, 8);
@@ -585,10 +585,10 @@ describe("!enable-mcp and !disable-mcp", () => {
     );
   });
 
-  it("disables a server and keeps its tool selection", async () => {
+  it("switches an on server off, keeps its tool selection, and says how to undo it", async () => {
     const { sessionId, email, agentId } = await withServer({ enabled: 1 });
-    const text = await reply(await say(sessionId, email, "!disable-mcp Docs"));
-    expect(text).toMatch(/^Disabled\./);
+    const text = await reply(await say(sessionId, email, "!mcp Docs"));
+    expect(text).toBe("Docs is now off. Send `!mcp Docs` to turn it back on.");
     const server = await row(agentId);
     expect(server.enabled).toBe(0);
     expect(server.disabled_tools).toBe('["read_page"]');
@@ -596,31 +596,30 @@ describe("!enable-mcp and !disable-mcp", () => {
 
   it("reports a server it cannot find", async () => {
     const { sessionId, email } = await withServer();
-    expect(await reply(await say(sessionId, email, "!enable-mcp nope"))).toContain(
-      'No MCP server named "nope"'
-    );
-    expect(await reply(await say(sessionId, email, "!disable-mcp nope"))).toBe(
-      "Error disabling MCP server, please visit the web UI."
+    expect(await reply(await say(sessionId, email, "!mcp nope"))).toBe(
+      'No MCP server named "nope". Send `!mcp` to list them.'
     );
   });
 
   it("reports a server that is not connected", async () => {
     const { sessionId, email } = await withServer({ auth: "oauth" });
-    expect(await reply(await say(sessionId, email, "!enable-mcp docs"))).toContain("not connected");
+    expect(await reply(await say(sessionId, email, "!mcp docs"))).toBe(
+      "Docs is now on, but it is not connected. Connect it from the web UI."
+    );
   });
 
   it("lists servers with the command that flips each", async () => {
     const off = await withServer();
     expect(await reply(await say(off.sessionId, off.email, "!mcp"))).toContain(
-      "- Docs — off. Send `!enable-mcp Docs` to turn it on."
+      "- Docs — off. Send `!mcp Docs` to turn it on."
     );
     const on = await withServer({ enabled: 1 });
     expect(await reply(await say(on.sessionId, on.email, "!mcp"))).toContain(
-      "- Docs — on. Send `!disable-mcp Docs` to turn it off."
+      "- Docs — on. Send `!mcp Docs` to turn it off."
     );
     const noGroups = await withServer({ enabled: 1, in_groups: 0 });
     expect(await reply(await say(noGroups.sessionId, noGroups.email, "!mcp"))).toContain(
-      "- Docs — on. Send `!disable-mcp Docs` to turn it off. Not offered in Telegram groups."
+      "- Docs — on. Send `!mcp Docs` to turn it off. Not offered in Telegram groups."
     );
     const unconnected = await withServer({ enabled: 1, auth: "oauth" });
     expect(await reply(await say(unconnected.sessionId, unconnected.email, "!mcp"))).toContain(
@@ -635,8 +634,8 @@ describe("!enable-mcp and !disable-mcp", () => {
 
   it("reports a server it cannot reach", async () => {
     const { sessionId, email, agentId } = await withServer({ url: "https://unreachable.test/" });
-    expect(await reply(await say(sessionId, email, "!enable-mcp docs"))).toMatch(
-      /^Error connecting to Docs/
+    expect(await reply(await say(sessionId, email, "!mcp docs"))).toMatch(
+      /^Docs is now on, but it could not be reached:/
     );
     expect((await row(agentId)).last_error).not.toBe("");
   });
@@ -1184,6 +1183,23 @@ describe("the run_command tool", () => {
     expect(said).toContain("This agent's settings:");
     expect(said).toContain("Current model:");
     expect(said).toContain("MCP server");
+  });
+
+  it("switches an MCP server on and off for the model with mcp <name>", async () => {
+    const { sessionId, email, agentId } = await chatFixture();
+    await registryFor(agentId).addMcpServer({
+      ...EMPTY_MCP_SERVER,
+      id: crypto.randomUUID(),
+      name: "Docs",
+      url: "https://mcp.test/",
+      created_at: Date.now(),
+    });
+    expect(await reply(sessionId, email, "!!command mcp Docs")).toContain(
+      "Command said: Docs is now off."
+    );
+    expect(await reply(sessionId, email, "!!command mcp Docs")).toContain(
+      "Command said: Docs is now on, with all"
+    );
   });
 
   it("refuses !new for a browser session, which has no chat to hand over", async () => {

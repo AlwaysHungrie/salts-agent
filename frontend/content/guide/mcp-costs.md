@@ -28,11 +28,10 @@ If you only use an app now and then, switch its card off in **Capabilities** and
 On Telegram or WhatsApp, you can do the same with a command. Use the name the server has on your **Capabilities** page:
 
 ```
-!enable-mcp Notion
-!disable-mcp Notion
+!mcp Notion
 ```
 
-`!enable-mcp` switches on every tool the server has, so we recommend clicking **Select recommended** again the next time you are on the **Capabilities** page.
+It switches the server on if it is off, and off if it is on, and tells you which. Switching a server on this way switches on every tool it has, so we recommend clicking **Select recommended** again the next time you are on the **Capabilities** page.
 
 ## Watch the cost of each reply
 

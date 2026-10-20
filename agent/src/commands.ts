@@ -22,8 +22,8 @@ export type Command =
   | ModelCommand
   | DocsCommand;
 
-/** `!enable-mcp <name>` / `!disable-mcp <name>`. */
-export type McpCommand = { mcp: "enable" | "disable"; server: string };
+/** `!mcp <name>`: switch that MCP server on if it is off, off if it is on. */
+export type McpCommand = { server: string };
 
 /** `!model <nickname>`: switch to the offered model whose label carries it in brackets. */
 export type ModelCommand = { nickname: string };
@@ -59,8 +59,8 @@ export type CommandResult = { text: string; destroy: boolean };
  */
 export function parseCommand(text: string): Command | null {
   const bare = text.replace(/@[A-Za-z0-9_]{3,}/g, " ").trim();
-  const mcp = bare.match(/^!(enable|disable)-mcp\s+(.+)$/i);
-  if (mcp) return { mcp: mcp[1].toLowerCase() as McpCommand["mcp"], server: mcp[2].trim() };
+  const mcp = bare.match(/^!mcp\s+(.+)$/i);
+  if (mcp) return { server: mcp[1].trim() };
   const model = bare.match(/^!model\s+(.+)$/i);
   if (model) return { nickname: model[1].trim() };
   const docs = bare.match(/^!docs\s+(.+)$/i);

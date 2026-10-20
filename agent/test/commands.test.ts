@@ -66,13 +66,11 @@ describe("parseCommand", () => {
     expect(parseCommand("@mybot should I use !delete here?")).toBe(null);
   });
 
-  it("parses !enable-mcp and !disable-mcp with a server name", () => {
-    expect(parseCommand("!enable-mcp Notion")).toEqual({ mcp: "enable", server: "Notion" });
-    expect(parseCommand("  !DISABLE-MCP  my server ")).toEqual({
-      mcp: "disable",
-      server: "my server",
-    });
-    expect(parseCommand("@mybot !enable-mcp notion")).toEqual({ mcp: "enable", server: "notion" });
+  it("parses !mcp with a server name as a toggle, and bare !mcp as the list", () => {
+    expect(parseCommand("!mcp Notion")).toEqual({ server: "Notion" });
+    expect(parseCommand("  !MCP  my server ")).toEqual({ server: "my server" });
+    expect(parseCommand("@mybot !mcp notion")).toEqual({ server: "notion" });
+    expect(parseCommand("!mcp   ")).toBe("mcp");
   });
 
   it("parses !docs with a page", () => {
@@ -80,13 +78,13 @@ describe("parseCommand", () => {
     expect(parseCommand("@mybot !DOCS  salts-tools ")).toEqual({ page: "salts-tools" });
   });
 
-  it("does not match an mcp command without a server name", () => {
-    expect(parseCommand("!enable-mcp")).toBe(null);
-    expect(parseCommand("!disable-mcp   ")).toBe(null);
+  it("no longer knows !enable-mcp and !disable-mcp", () => {
+    expect(parseCommand("!enable-mcp notion")).toBe(null);
+    expect(parseCommand("!disable-mcp notion")).toBe(null);
   });
 
   it("does not match an mcp command inside a sentence", () => {
-    expect(parseCommand("how do I use !enable-mcp notion?")).toBe(null);
+    expect(parseCommand("how do I use !mcp notion?")).toBe(null);
   });
 
   it("parses !model with a nickname", () => {
