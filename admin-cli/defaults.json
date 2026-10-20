@@ -108,6 +108,16 @@
       "headers": {"Authorization": "Bearer SALTS-TOOLS-TOKEN"}
     },
     {
+      "id": "coinbase-wallet",
+      "name": "coinbase-wallet",
+      "url": "https://your-tunnel.trycloudflare.com/coinbase-wallet/mcp",
+      "auth": "headers",
+      "description": "Coinbase's non-custodial wallet on your laptop, via salts-tools: pay in USDC on Base, Polygon and Solana.",
+      "guide": "salts-tools-coinbase-wallet",
+      "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNi42NjciPjxwYXRoIGQ9Ik03LjkzMTU0IDEyLjVDNS43NDA0NSAxMi41IDMuOTY1NzcgMTAuNjM1NCAzLjk2NTc3IDguMzMzMzNDMy45NjU3NyA2LjAzMTI1IDUuNzQwNDUgNC4xNjY2NyA3LjkzMTU0IDQuMTY2NjdDOS44OTQ2IDQuMTY2NjcgMTEuNTIzOSA1LjY3MDE0IDExLjgzNzggNy42Mzg4OUgxNS44MzMzQzE1LjQ5NjIgMy4zNjExMSAxMi4wODkgMCA3LjkzMTU0IDBDMy41NTI2NyAwIDAgMy43MzI2NCAwIDguMzMzMzNDMCAxMi45MzQgMy41NTI2NyAxNi42NjY3IDcuOTMxNTQgMTYuNjY2N0MxMi4wODkgMTYuNjY2NyAxNS40OTYyIDEzLjMwNTYgMTUuODMzMyA5LjAyNzc4SDExLjgzNzhDMTEuNTIzOSAxMC45OTY1IDkuODk0NiAxMi41IDcuOTMxNTQgMTIuNVoiIGZpbGw9IiMwMDUyRkYiLz48L3N2Zz4=",
+      "headers": {"Authorization": "Bearer SALTS-TOOLS-TOKEN"}
+    },
+    {
       "id": "swiggy",
       "name": "Swiggy",
       "url": "https://mcp.swiggy.com/food",
