@@ -39,4 +39,4 @@ You can attach up to **4 files** to a single message. Each file can be up to:
 
 Salts does not limit how much your agent spends. Every reply is paid for with your own OpenRouter API key, so the spending limit is the one you set on your key. See [Get an OpenRouter API key](/guide/openrouter), and [What your agent costs](/guide/costs) for what a typical month comes to.
 
-If your agent is part of a fleet, the person who runs the fleet may have set a monthly spending limit for it. You can see how much of it is left in your agent's **Settings**.
+If your agent is part of a fleet, the person who runs the fleet may have set a monthly spending limit for it. It applies while your agent uses the **Default fleet key**, and you can see how much of it is left in your agent's **Settings**.

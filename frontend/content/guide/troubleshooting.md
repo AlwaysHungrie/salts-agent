@@ -18,7 +18,7 @@ If your agent is replying in the browser, you can also just ask it what is wrong
 | "The provider rejected the call for credits or quota" | Your OpenRouter account is out of credit, or your key has reached its credit limit. Buy more credit on OpenRouter, or raise the limit on your key. |
 | "The provider is rate limiting this key" | Too many requests were sent in a short time. Wait a minute and try again, or pick a different model in **Settings**. |
 | "That turn was too large for the model's context" | The conversation has grown longer than the model can read. Send `!compact`, or start a new conversation with `!new`. |
-| "This agent has reached its spending limit for this month" | Your agent is part of a fleet, and you have used this month's allowance. It starts working again next month, or as soon as the person who runs the fleet raises your limit. |
+| "This agent has reached its spending limit for this month" | Your agent is part of a fleet, and you have used this month's allowance on the default fleet key. It starts working again next month, as soon as the person who runs the fleet raises your limit, or when you switch to a key of your own in **Settings**. |
 | "That turn did not finish" | Try again. If it keeps happening, send `!unstick`. |
 | "I ran out of steps before finishing this" | The task needed more steps than one reply allows. Reply with "continue" and your agent carries on from where it stopped. |
 
