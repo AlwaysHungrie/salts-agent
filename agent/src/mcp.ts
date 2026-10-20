@@ -86,6 +86,18 @@ export type McpServerView = Omit<
 
 export const MCP_PROTOCOL_VERSION = "2025-06-18";
 
+/**
+ * Sent on every outbound request. A Worker's `fetch` sends none by default, and some
+ * providers' firewalls refuse a request without one (Porkbun 403s client registration).
+ */
+export const USER_AGENT = "Salts-Agent/1.0";
+
+/** A server's saved headers, plus ours unless they set one (in any case). */
+const withUserAgent = (headers: Record<string, string>): Record<string, string> =>
+  Object.keys(headers).some((k) => k.toLowerCase() === "user-agent")
+    ? headers
+    : { "user-agent": USER_AGENT, ...headers };
+
 /* ------------------------------------------------------------- transport -- */
 
 type JsonRpcResponse = {
@@ -174,7 +186,7 @@ export class McpClient {
       "content-type": "application/json",
       accept: "application/json, text/event-stream",
       "mcp-protocol-version": MCP_PROTOCOL_VERSION,
-      ...this.extraHeaders,
+      ...withUserAgent(this.extraHeaders),
     };
     if (this.bearer) headers.authorization = `Bearer ${this.bearer}`;
     if (this.sessionId) headers["mcp-session-id"] = this.sessionId;
@@ -298,7 +310,10 @@ export class McpClient {
    * passes the returned id instead.
    */
   async upload(bytes: ArrayBuffer, mime: string): Promise<string> {
-    const headers: Record<string, string> = { ...this.extraHeaders, "content-type": mime };
+    const headers: Record<string, string> = {
+      ...withUserAgent(this.extraHeaders),
+      "content-type": mime,
+    };
     if (this.bearer) headers.authorization = `Bearer ${this.bearer}`;
     const res = await fetch(uploadsUrl(this.url), {
       method: "POST",
@@ -383,7 +398,9 @@ export async function pkceChallenge(verifier: string): Promise<string> {
 
 async function getJson<T>(url: string): Promise<T | undefined> {
   try {
-    const res = await fetch(url, { headers: { accept: "application/json" } });
+    const res = await fetch(url, {
+      headers: { accept: "application/json", "user-agent": USER_AGENT },
+    });
     if (!res.ok) return undefined;
     return (await res.json()) as T;
   } catch {
@@ -444,7 +461,11 @@ export async function registerClient(
 ): Promise<{ client_id: string; client_secret?: string }> {
   const res = await fetch(registrationUrl, {
     method: "POST",
-    headers: { "content-type": "application/json", accept: "application/json" },
+    headers: {
+      "content-type": "application/json",
+      accept: "application/json",
+      "user-agent": USER_AGENT,
+    },
     body: JSON.stringify({
       client_name: "Serverless Agent",
       redirect_uris: [redirectUri],
@@ -470,7 +491,11 @@ export type TokenSet = {
 async function tokenRequest(tokenUrl: string, form: Record<string, string>): Promise<TokenSet> {
   const res = await fetch(tokenUrl, {
     method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json" },
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      accept: "application/json",
+      "user-agent": USER_AGENT,
+    },
     body: new URLSearchParams(form).toString(),
   });
   if (!res.ok) {
