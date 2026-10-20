@@ -36,6 +36,8 @@ export type McpServerRow = {
   oauth_token_url: string;
   oauth_authorize_url: string;
   oauth_registration_url: string;
+  /** The redirect URI the client was registered with. A different one needs a new client. */
+  oauth_redirect_uri: string;
   /** The canonical resource id the tokens are bound to (RFC 8707). */
   oauth_resource: string;
   /** PKCE verifier and CSRF state, live only between Connect and the callback. */
