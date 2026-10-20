@@ -4,9 +4,21 @@ The system runs on two hosts, each with a production and a staging deployment.
 
 | Part | Host | Production | Staging |
 | --- | --- | --- | --- |
-| Agent Worker (`agent/`) | Cloudflare | `https://salt-agent.dhairyashah98.workers.dev` | `https://salt-agent-staging.dhairyashah98.workers.dev` |
-| Web app (`frontend/`) | Vercel project `salts-agent-app` | `https://salts-agent-app.vercel.app` | `staging` branch preview |
-| Landing page (`landing-page/`) | Vercel project `salts-agent-landingpage` | `https://salts-agent-landingpage.vercel.app` | none |
+| Agent Worker (`agent/`) | Cloudflare | `https://api.salts.dev` | `https://api-staging.salts.dev` |
+| Web app (`frontend/`) | Vercel project `salts-agent-app` | `https://app.salts.dev` | `https://staging.salts.dev` |
+| Landing page (`landing-page/`) | Vercel project `salts-agent-landingpage` | `https://salts.dev` | none |
+
+The old `*.workers.dev` and `*.vercel.app` URLs still answer.
+
+## Domain
+
+`salts.dev` is registered at Porkbun. Its nameservers point at Cloudflare, so all DNS
+records live in the Cloudflare zone:
+
+- `api` and `api-staging`: created by `wrangler deploy` from the `routes` in
+  `agent/wrangler.jsonc` (Worker custom domains).
+- The apex, `www`, `app` and `staging`: point at Vercel. Each is **DNS only** (grey
+  cloud). Vercel issues their certificates, and a proxied record breaks that.
 
 The web app calls the Worker at `AGENT_URL`. Production and staging each point at their
 own Worker, so staging never touches production data.
@@ -25,6 +37,9 @@ The two hosts are managed separately:
 - Both projects: name, Next.js framework, root directory (`frontend` or
   `landing-page`), `pnpm install`, and the GitHub repo with `main` as the production
   branch.
+- The domains: `salts.dev` and `www.salts.dev` (redirects to the apex) on the landing
+  page, `app.salts.dev` on the web app, and `staging.salts.dev` on the web app's
+  `staging` branch.
 - The `*.vercel.app` domains named after each project. The old
   `serverless-agent-one.vercel.app` domain is still attached to the app but is not
   managed by Terraform.
@@ -118,8 +133,7 @@ gh pr merge
 ```
 
 The staging web app's URL follows Vercel's branch pattern,
-`salts-agent-app-git-staging-<account>.vercel.app`. The exact URL is on the deployment
-page.
+`salts-agent-app-git-staging-<account>.vercel.app`, and `staging.salts.dev` points at it.
 
 ### Clerk
 
@@ -129,9 +143,8 @@ Development instances accept any domain, so the Vercel URLs need no Clerk settin
 A Clerk production instance (`pk_live_` keys) needs a domain you own and does not
 work on `*.vercel.app`. Before switching:
 
-1. Buy a domain.
-2. Add it to the web app as a `vercel_project_domain` in `main.tf`.
-3. Add the DNS records Clerk asks for.
+1. Create the production instance on `salts.dev`.
+2. Add the DNS records Clerk asks for to the Cloudflare zone.
 
 ### Recovering state
 

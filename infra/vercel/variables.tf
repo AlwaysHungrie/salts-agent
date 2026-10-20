@@ -36,5 +36,11 @@ variable "staging_branch" {
 
 variable "staging_agent_url" {
   type    = string
-  default = "https://salt-agent-staging.dhairyashah98.workers.dev"
+  default = "https://api-staging.salts.dev"
+}
+
+variable "domain" {
+  description = "Our domain. Landing page on the apex, web app on app., staging on staging."
+  type        = string
+  default     = "salts.dev"
 }

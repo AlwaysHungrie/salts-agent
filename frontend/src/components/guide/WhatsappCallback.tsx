@@ -27,7 +27,7 @@ export function WhatsappCallback({ base }: { base: string }) {
 export function Field({ base, agent }: { base: string; agent: string | null }) {
   const url = `${base}/whatsapp/webhook/${agent ? encodeURIComponent(agent) : "agent-id-goes-here"}`;
   const web = (
-    <Mono>https://salts-agent-app.vercel.app/a/&lt;find-agent-id-here&gt;</Mono>
+    <Mono>https://app.salts.dev/a/&lt;find-agent-id-here&gt;</Mono>
   );
   return (
     <>

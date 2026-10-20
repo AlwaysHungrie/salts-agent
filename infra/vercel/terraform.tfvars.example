@@ -3,12 +3,12 @@
 
 frontend_env = {
   production = {
-    AGENT_URL                         = "https://salt-agent.dhairyashah98.workers.dev"
+    AGENT_URL                         = "https://api.salts.dev"
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY = "pk_live_..."
     CLERK_SECRET_KEY                  = "sk_live_..."
   }
   preview = {
-    AGENT_URL                         = "https://salt-agent.dhairyashah98.workers.dev"
+    AGENT_URL                         = "https://api.salts.dev"
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY = "pk_test_..."
     CLERK_SECRET_KEY                  = "sk_test_..."
   }
