@@ -2,6 +2,10 @@
 // no tunnel outlives the supervisor that started it; every stray supervisor or orphaned
 // cloudflared keeps a tunnel open that nothing points at.
 
+import { createHash } from "node:crypto";
+import { readFileSync, readdirSync } from "node:fs";
+import path from "node:path";
+
 /** `pid ppid command` lines (ps -axo pid=,ppid=,command=, or the Windows equivalent). */
 export function parseProcessList(text) {
   const out = [];
@@ -35,4 +39,21 @@ export function orphanTunnels(procs) {
  */
 export function caffeinateArgs(pid) {
   return ["-is", "-w", String(pid)];
+}
+
+/**
+ * What code a supervisor runs: a hash of this folder's `.mjs` files and package.json. A
+ * supervisor keeps running the code it started with, so after an upgrade (a new npx copy,
+ * or edits in a clone) the CLI compares this with the running one's and replaces it.
+ */
+export function codeFingerprint(dir) {
+  const hash = createHash("sha256");
+  const files = readdirSync(dir)
+    .filter((name) => name.endsWith(".mjs") || name === "package.json")
+    .sort();
+  for (const name of files) {
+    hash.update(`${name}\0`);
+    hash.update(readFileSync(path.join(dir, name)));
+  }
+  return hash.digest("hex").slice(0, 16);
 }

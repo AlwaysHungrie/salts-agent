@@ -62,7 +62,8 @@ import { fileURLToPath } from "node:url";
 import { agentIdFrom, call, openCommand, startPairing, toolsReport, waitForApproval, wantedServices } from "./computer.mjs";
 import { startGateway } from "./gateway.mjs";
 import { installMcp, launchArgs, mcpSource, viaNpx } from "./mcps.mjs";
-import { caffeinateArgs, orphanTunnels, parseProcessList, supervisorsOf } from "./procs.mjs";
+import { installPayments } from "./payments.mjs";
+import { caffeinateArgs, codeFingerprint, orphanTunnels, parseProcessList, supervisorsOf } from "./procs.mjs";
 import { connectionStatus, serviceStatus } from "./status.mjs";
 import { startStdioBridge } from "./stdio-bridge.mjs";
 import { BOLD, DIM, INV, OFF, follow, keys, paint, rowText, wrap } from "./tui.mjs";
@@ -70,6 +71,8 @@ import { BOLD, DIM, INV, OFF, follow, keys, paint, rowText, wrap } from "./tui.m
 const here = path.dirname(fileURLToPath(import.meta.url));
 const CLI = fileURLToPath(import.meta.url);
 const VERSION = JSON.parse(readFileSync(path.join(here, "package.json"), "utf8")).version;
+/** The code this process runs; a supervisor saves it, so an outdated one can be replaced. */
+const CODE = codeFingerprint(here);
 /** How the user runs this CLI, for the commands it tells them to run. */
 const SELF = viaNpx(CLI) ? "npx salts-tools" : "salts-tools";
 /** The login item's program and arguments, before the command. */
@@ -536,16 +539,32 @@ const MATCHMAKER_HEADERS = [
 const PAYMENTS_DIR = path.join(os.homedir(), ".payments-mcp");
 const PAYMENTS_BUNDLE = path.join(PAYMENTS_DIR, "bundle.js");
 
-/** Install Payments MCP when it is not there yet. Updates are left to the user. */
-function readyPayments() {
+/**
+ * Install Payments MCP when it is not there yet, with Coinbase's installer, or directly
+ * when that fails (see payments.mjs). Updates are left to the user.
+ */
+async function readyPayments() {
   if (existsSync(PAYMENTS_BUNDLE)) return;
   log("payments: installing @coinbase/payments-mcp");
   const npx = IS_WIN ? "npx.cmd" : "npx";
   const res = run(npx, ["--yes", "@coinbase/payments-mcp", "install", "--client", "other", "--no-auto-config"], {
     timeout: 600_000,
   });
-  if (res.status !== 0 || !existsSync(PAYMENTS_BUNDLE)) {
-    throw new Error(`Couldn't install Payments MCP: ${(res.stderr || res.stdout || "").trim().slice(-500)}`);
+  if (res.status === 0 && existsSync(PAYMENTS_BUNDLE)) return;
+  const why = (res.stderr || res.stdout || "").trim().split("\n").filter((l) => /fail|error/i.test(l)).pop() ?? "";
+  log(`payments: Coinbase's installer failed (${why.trim()}); installing it directly`);
+  try {
+    const version = await installPayments({
+      dir: PAYMENTS_DIR,
+      log,
+      // Windows' tar reads zip files; elsewhere unzip does.
+      extract: (zip, dir) => (IS_WIN ? run("tar", ["-xf", zip, "-C", dir]) : run("unzip", ["-q", "-o", zip, "-d", dir])),
+      npmInstall: (dir) => run(IS_WIN ? "npm.cmd" : "npm", ["install", "--no-audit", "--no-fund"], { cwd: dir, timeout: 600_000 }),
+    });
+    if (!existsSync(PAYMENTS_BUNDLE)) throw new Error(`v${version} has no bundle.js`);
+    log(`payments: installed v${version}`);
+  } catch (err) {
+    throw new Error(`Couldn't install Payments MCP: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
@@ -699,7 +718,7 @@ const SERVICES = {
     bridge: null,
     healthy: (port) => ok(`http://127.0.0.1:${port}/healthz`),
     async up(token) {
-      readyPayments();
+      await readyPayments();
       this.stop();
       const port = await portFrom(readState().svc?.payments?.port, PAYMENTS_PORT);
       const out = openSync(PAYMENTS_LOG, "a");
@@ -847,7 +866,7 @@ async function supervise() {
   }
   const token = readToken() || newToken();
   const worker = workerUrl();
-  writeState({ url: "", lastError: "", reportError: "", supervisorStartedAt: new Date().toISOString() });
+  writeState({ url: "", lastError: "", reportError: "", supervisorStartedAt: new Date().toISOString(), supervisorCode: CODE });
 
   /** Loopback port of each service that is on and answering; what the gateway routes to. */
   const ports = {};
@@ -1156,6 +1175,12 @@ async function stopSupervisor() {
 async function ensureSupervisor() {
   const since = new Date().toISOString();
   let pid = supervisorPid();
+  // One started before an upgrade runs the old code, and would never run a new service.
+  if (pid && readState().supervisorCode !== CODE) {
+    console.log("  salts-tools was updated: restarting it to run the new version …");
+    await stopSupervisor();
+    pid = 0;
+  }
   if (pid) {
     await endStrays(pid);
     writeFileSync(RELOAD_FILE, since);
