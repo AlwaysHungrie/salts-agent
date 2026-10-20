@@ -339,11 +339,15 @@ Two routes are deliberately outside all of this:
 
 A message that is nothing but a bang command is handled before a turn starts, the same
 in the browser, Telegram and WhatsApp: `!new`, `!clear`, `!delete`, `!stop`, `!unstick`,
-`!compact`, `!enable-mcp <name>` / `!disable-mcp <name>`, and `!model <nickname>`, which
+`!compact`, `!mcp <name>` (switches that server off if it is on, on if it is off, and
+says which; switching on turns every tool on and re-reads the list), and `!model <nickname>`, which
 sets the agent's model to the offered one whose label holds the nickname in brackets
 (refused when meta locks `model`). Bare `!model` names the current model and lists the nicknames and `!mcp` lists the
 agent's MCP servers with the command that flips each. `!help` explains sessions and lists
-every command; `!new` and `!clear` point at it. `!settings` links the agent's settings page
+every command; `!new` and `!clear` point at it. In the web app the composer handles `!new`
+and `!clear` itself (`onStartOver` in `Chat.tsx`): the same create and delete calls as the
+sidebar, then the new session opens. A browser session that reaches the Worker with either
+(the API) is told it has no chat to move. `!settings` links the agent's settings page
 under `APP_URL` (a `var` in `wrangler.jsonc`; unset, it says there is none). `!docs` lists
 the user guide's pages (and links it under `APP_URL`); `!docs <page>` sends one page's
 markdown. See [`src/commands.ts`](src/commands.ts).
@@ -354,7 +358,7 @@ not committed.
 
 The model can run the same commands through the always-on `run_command` tool
 ([`src/session/command-tool.ts`](src/session/command-tool.ts)): `docs`, `help`, `settings`
-(link plus model and MCP lists), `mcp`, `enable-mcp`/`disable-mcp`, `model`, and `new`,
+(link plus model and MCP lists), `mcp` (with a name, the same toggle), `model`, and `new`,
 `clear`, `compact`. Its description is the only thing the model is told about Salts itself:
 it reads the guide on demand, so nothing is added to the system prompt. `new`, `clear` and
 `compact` change the session the turn runs in, so they are queued on the turn and run once
