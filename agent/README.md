@@ -408,6 +408,12 @@ changing what it is. The Worker refuses the difference on `/api/agents/:agentId/
 the meta dialog passes `?meta=1` to say the call is coming from the page that owns the
 setting, the same bypass a locked config column gets on the meta route.
 
+`in_groups` on a server (on by default; the card's **Use in Telegram groups** switch)
+decides whether a Telegram group or supergroup session sees it: `loadConfig` drops the
+servers switched off for groups when the session's own row says it is one, so their
+tools, instructions and uploads never reach that turn. Private chats, WhatsApp and the
+browser are unaffected. `!mcp` marks a server that is off for groups.
+
 A server's `instructions` (from its `initialize` answer) are cached with its tools on
 every sync and put in the system prompt, one section per connected server. Tool
 descriptions say what one call does; the instructions say the order a task takes, which

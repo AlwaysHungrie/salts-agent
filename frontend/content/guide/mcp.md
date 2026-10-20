@@ -36,4 +36,6 @@ We strongly recommend only keeping the tools you need, since every tool that is 
 
 Anyone who can talk to your agent can ask it to use the apps you connected, with your account. Only connect apps to an agent that you alone use, or that you share with people you trust. If your agent is in a Telegram group, read [Telegram safety tips](/guide/telegram-safety) first.
 
+Everyone in a Telegram group can ask your agent to use its apps, so each server has its own **Use in Telegram groups** switch, which you find by clicking the name of its card. Switch it off and your agent keeps using that app in your private chats and in the browser, but not in any group. We recommend switching it off for any app that can spend money or change things in your accounts.
+
 When you create an API key for an app, we recommend giving it only the access your agent actually needs, for example read-only access if you only want to ask questions.

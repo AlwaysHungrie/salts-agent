@@ -395,6 +395,16 @@ function ServerCard({
             )}
           </div>
 
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-muted text-xs leading-[1.33]">
+              Use in Telegram groups. Anyone in the group can ask for these tools.
+            </span>
+            <Toggle
+              on={!!server.in_groups}
+              onChange={(v) => onPatch({ in_groups: v })}
+            />
+          </div>
+
           {!server.connected && (
             <AuthPicker
               value={server.auth}

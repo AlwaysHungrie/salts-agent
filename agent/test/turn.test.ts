@@ -618,6 +618,10 @@ describe("!enable-mcp and !disable-mcp", () => {
     expect(await reply(await say(on.sessionId, on.email, "!mcp"))).toContain(
       "- Docs — on. Send `!disable-mcp Docs` to turn it off."
     );
+    const noGroups = await withServer({ enabled: 1, in_groups: 0 });
+    expect(await reply(await say(noGroups.sessionId, noGroups.email, "!mcp"))).toContain(
+      "- Docs — on. Send `!disable-mcp Docs` to turn it off. Not offered in Telegram groups."
+    );
     const unconnected = await withServer({ enabled: 1, auth: "oauth" });
     expect(await reply(await say(unconnected.sessionId, unconnected.email, "!mcp"))).toContain(
       `- Docs — not connected; connect it at https://salts-agent-app.vercel.app/a/${unconnected.agentId}/capabilities.`

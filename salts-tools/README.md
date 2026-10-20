@@ -8,6 +8,7 @@ the internet through a single cloudflared quick tunnel (free, no account):
 | `web` | [SearXNG](https://github.com/searxng/searxng), a self-hosted metasearch engine (Google, Bing, DuckDuckGo, Brave, Wikipedia and about 70 others, merged, over a JSON API). No account, no API key, no per-query bill. | **SearXNG URL** and **SearXNG token**: `<tunnel>/web` |
 | `matchmaker` | [local-mcps/matchmaker-mcp](../local-mcps/matchmaker-mcp/docs/matchmaker-spec.md): resumes and cover letters in, the best people for a job out, as an MCP server. Files on disk, no Docker. | MCP server `matchmaker`: `<tunnel>/matchmaker/mcp` |
 | `analyst` | [local-mcps/analyst-mcp](../local-mcps/analyst-mcp/README.md): Excel and CSV analysis as an MCP server. It reads workbooks sent in the chat, answers questions about them, previews tables and charts, and returns built workbooks. No Docker. | MCP server `analyst`: `<tunnel>/analyst/mcp` |
+| `payments` | Coinbase's [Payments MCP](https://github.com/coinbase/payments-mcp): a USDC wallet app plus an MCP server that pays x402 endpoints, such as a Coinbase Business checkout's `x402_url`. It speaks stdio only; salts-tools puts it on loopback HTTP through `stdio-bridge.mjs`. | MCP server `payments`: `<tunnel>/payments/mcp` |
 
 The computer is paired with the user's Salts account once, from the browser; that is
 the only thing done there. After that, the user adds agents to the dashboard by ID (or
@@ -42,6 +43,10 @@ It runs on macOS, Linux and Windows.
     Colima itself. Docker Engine runs as a system service, so start it with
     `sudo systemctl enable --now docker`, and add your user to the `docker` group so
     `docker info` works without `sudo`.
+- For `payments`: nothing beyond Node. salts-tools runs Coinbase's installer
+  (`npx @coinbase/payments-mcp install --client other --no-auto-config`) the first time,
+  which puts the wallet app (Electron) in `~/.payments-mcp`. Updating it is left to the
+  user: `npx @coinbase/payments-mcp install`.
 - For `matchmaker` and `analyst` only: [uv](https://docs.astral.sh/uv/). salts-tools runs
   `uv sync` the first time.
 - Linux only, optional: `secret-tool` (package `libsecret-tools` on Debian/Ubuntu,
@@ -115,6 +120,20 @@ says the name is taken.
 Each server's own `.env` still applies (`MM_DATA_DIR`, models, `DATA_DIR`, `INBOX_DIR`,
 `ALLOW_PYTHON`, …). salts-tools overrides the transport, host, port and token. Logs:
 `~/.salts-tools/matchmaker.log`, `~/.salts-tools/analyst.log`.
+
+## Payments
+
+One Payments MCP process serves every agent, over the bridge in `stdio-bridge.mjs`: one
+JSON-RPC message per `POST /mcp`, answered as JSON. Request ids are swapped so two
+callers cannot collide, `initialize` reaches the server once and is answered from
+memory after that, and anything the server asks of the client (sampling, elicitation)
+is refused. The bridge checks the gateway token like every other service.
+
+The wallet is signed in to on this computer: the agent's `show_wallet_app` tool opens it.
+Spend limits per call and per session are set there, and the agent cannot change them.
+The server also offers `send` and `trade`, which move funds to any address; the user
+guide recommends switching them off on the agent's server card, and switching the
+server off for Telegram groups. Log: `~/.salts-tools/payments.log`.
 
 ## Dashboard
 

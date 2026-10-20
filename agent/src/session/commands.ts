@@ -170,7 +170,8 @@ export async function mcpList(host: SessionHost): Promise<CommandResult> {
   const lines = servers.map((s) => {
     if (!s.enabled) return `- ${s.name} — off. Send \`!enable-mcp ${s.name}\` to turn it on.`;
     if (!mcpServerReady(s)) return `- ${s.name} — not connected; ${connectHint}.`;
-    return `- ${s.name} — on. Send \`!disable-mcp ${s.name}\` to turn it off.`;
+    const groups = s.in_groups ? "" : " Not offered in Telegram groups.";
+    return `- ${s.name} — on. Send \`!disable-mcp ${s.name}\` to turn it off.${groups}`;
   });
   await host.loadConfig();
   const off = enabled(host.config(), "mcp")

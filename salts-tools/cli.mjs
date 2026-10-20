@@ -5,7 +5,7 @@
 // tunnel (no account needed), and reports to the Worker. Every service shares the
 // tunnel's address and is told apart by path (see gateway.mjs): `<tunnel>/web` is
 // SearXNG, `<tunnel>/matchmaker` the matchmaker MCP server, `<tunnel>/analyst` the
-// spreadsheet analyst MCP server.
+// spreadsheet analyst MCP server, `<tunnel>/payments` Coinbase's Payments MCP.
 //
 // The computer is paired once from the browser: `start` shows a code and opens the Salts
 // site, where the signed-in user picks the agents it serves. From then on a supervisor
@@ -64,6 +64,7 @@ import { startGateway } from "./gateway.mjs";
 import { installMcp, launchArgs, mcpSource, viaNpx } from "./mcps.mjs";
 import { caffeinateArgs, orphanTunnels, parseProcessList, supervisorsOf } from "./procs.mjs";
 import { connectionStatus, serviceStatus } from "./status.mjs";
+import { startStdioBridge } from "./stdio-bridge.mjs";
 import { BOLD, DIM, INV, OFF, follow, keys, paint, rowText, wrap } from "./tui.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -109,6 +110,7 @@ const PID_FILE = path.join(HOME, "supervisor.pid");
 const LOG_FILE = path.join(HOME, "supervisor.log");
 const MATCHMAKER_LOG = path.join(HOME, "matchmaker.log");
 const ANALYST_LOG = path.join(HOME, "analyst.log");
+const PAYMENTS_LOG = path.join(HOME, "payments.log");
 /** `salts-tools restart` drops this file; the supervisor picks it up (no SIGUSR1 on Windows). */
 const RESTART_FILE = path.join(HOME, "restart.request");
 /** `start`/`stop` of one service drop this file: the supervisor re-reads which are on. */
@@ -167,6 +169,7 @@ const GATEWAY_PORT = 8080;
 const WEB_PORT = 8180;
 const MATCHMAKER_PORT = 8280;
 const ANALYST_PORT = 8380;
+const PAYMENTS_PORT = 8480;
 
 const GREEN = "\x1b[32m";
 const RED = "\x1b[31m";
@@ -527,6 +530,26 @@ const MATCHMAKER_HEADERS = [
 ];
 
 /**
+ * Coinbase's Payments MCP: a wallet app and a stdio server, installed by its own npm
+ * installer into ~/.payments-mcp (shared by every target, as its wallet is).
+ */
+const PAYMENTS_DIR = path.join(os.homedir(), ".payments-mcp");
+const PAYMENTS_BUNDLE = path.join(PAYMENTS_DIR, "bundle.js");
+
+/** Install Payments MCP when it is not there yet. Updates are left to the user. */
+function readyPayments() {
+  if (existsSync(PAYMENTS_BUNDLE)) return;
+  log("payments: installing @coinbase/payments-mcp");
+  const npx = IS_WIN ? "npx.cmd" : "npx";
+  const res = run(npx, ["--yes", "@coinbase/payments-mcp", "install", "--client", "other", "--no-auto-config"], {
+    timeout: 600_000,
+  });
+  if (res.status !== 0 || !existsSync(PAYMENTS_BUNDLE)) {
+    throw new Error(`Couldn't install Payments MCP: ${(res.stderr || res.stdout || "").trim().slice(-500)}`);
+  }
+}
+
+/**
  * Each service: how to bring it up on loopback (returning its port), whether it answers
  * there, how to take it down, and what to tell the Worker once the tunnel reaches it.
  * `up` and `down` run in the supervisor.
@@ -664,6 +687,56 @@ const SERVICES = {
       return { status: 0, stdout: "", stderr: "" };
     },
     reached: (tunnel) => `${tunnel}/analyst/mcp`,
+  },
+
+  payments: {
+    label: "Payments",
+    kind: "mcp",
+    needs: ["cap_mcp"],
+    about: "pay x402 services and Coinbase Business checkouts in USDC (Coinbase Payments MCP)",
+    log: PAYMENTS_LOG,
+    docker: false,
+    bridge: null,
+    healthy: (port) => ok(`http://127.0.0.1:${port}/healthz`),
+    async up(token) {
+      readyPayments();
+      this.stop();
+      const port = await portFrom(readState().svc?.payments?.port, PAYMENTS_PORT);
+      const out = openSync(PAYMENTS_LOG, "a");
+      // It speaks stdio only; the bridge puts it on loopback HTTP like the others.
+      const bridge = await startStdioBridge({
+        command: process.execPath,
+        args: [PAYMENTS_BUNDLE],
+        cwd: PAYMENTS_DIR,
+        // Started from inside an editor (itself Electron), this would make the wallet app
+        // run as plain Node, which cannot open it.
+        env: Object.fromEntries(Object.entries(process.env).filter(([k]) => k !== "ELECTRON_RUN_AS_NODE")),
+        port,
+        token,
+        output: out,
+      });
+      this.bridge = bridge;
+      bridge.child.on("exit", (code, signal) => {
+        if (this.bridge === bridge) log(`payments exited (${signal ?? code})`);
+      });
+      writeSvc("payments", { pid: bridge.child.pid });
+      log(`payments started (pid ${bridge.child.pid}) on port ${port}; log at ${PAYMENTS_LOG}`);
+      if (!(await waitUntil(() => this.healthy(port), 30))) {
+        throw new Error(`Payments didn't respond on port ${port}. Details are in ${PAYMENTS_LOG}`);
+      }
+      return port;
+    },
+    stop() {
+      this.bridge?.close();
+      this.bridge = null;
+      const stale = readState().svc?.payments?.pid;
+      if (isProcess(stale, /payments-mcp/i)) process.kill(stale, "SIGTERM");
+    },
+    down() {
+      this.stop();
+      return { status: 0, stdout: "", stderr: "" };
+    },
+    reached: (tunnel) => `${tunnel}/payments/mcp`,
   },
 };
 
@@ -1075,6 +1148,7 @@ async function stopSupervisor() {
   if (isTunnel(tunnelPid)) process.kill(tunnelPid, "SIGTERM");
   if (isProcess(svc?.matchmaker?.pid, /recruiter-mcp/i)) process.kill(svc.matchmaker.pid, "SIGTERM");
   if (isProcess(svc?.analyst?.pid, /analyst-mcp/i)) process.kill(svc.analyst.pid, "SIGTERM");
+  if (isProcess(svc?.payments?.pid, /payments-mcp/i)) process.kill(svc.payments.pid, "SIGTERM");
   return Boolean(pid || strays);
 }
 
@@ -1647,6 +1721,11 @@ function serviceFiles(name) {
     return [
       ["inbox folder", ANALYST_INBOX, `Files you put here can be read too. To move it, set DATA_DIR or INBOX_DIR in ${path.join(ANALYST_DIR, ".env")}`, ANALYST_INBOX],
       ["run_python", "off unless ALLOW_PYTHON=true", `Set it in ${path.join(ANALYST_DIR, ".env")}`],
+    ];
+  }
+  if (name === "payments") {
+    return [
+      ["wallet app", PAYMENTS_DIR, "Ask the agent to show the wallet to sign in, add funds and set spend limits.", PAYMENTS_DIR],
     ];
   }
   return [];

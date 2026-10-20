@@ -75,7 +75,7 @@ Apps you connect to your agent, such as Notion or GitHub, make every reply a lit
 !enable-mcp Notion
 ```
 
-The app must already be connected on the **Capabilities** page before you can switch it on this way. Send `!mcp` to see every app, whether it is on, and the command that switches it.
+The app must already be connected on the **Capabilities** page before you can switch it on this way. Send `!mcp` to see every app, whether it is on, and the command that switches it. An app switched off for Telegram groups on the **Capabilities** page is marked **Not offered in Telegram groups**.
 
 ## !model
 
