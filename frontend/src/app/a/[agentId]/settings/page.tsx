@@ -458,10 +458,13 @@ export default function Settings({
 
         {config && (
           <div className="mt-8">
-            {/* Only a fleet agent, and only one that was given a ceiling. An agent
-                somebody made for themselves is spending their own money against no
-                limit, and a row that always reads "100% remaining" is furniture. */}
-            {spend && agent?.fleet_id && (
+            {/* Only a fleet agent on the fleet's default key: the limit guards the
+                admin's money, so it lifts (and the Worker stops enforcing it) once
+                the user switches to a key of their own. */}
+            {spend &&
+              agent?.fleet_id &&
+              !!defaultKeyId &&
+              config.openrouter_key_id === defaultKeyId && (
               <Row
                 title={
                   spend.limit > 0 ? "Monthly spend limit" : "This month's usage"

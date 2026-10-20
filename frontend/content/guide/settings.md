@@ -11,7 +11,7 @@ To open it, open your agent and click **Settings** in the sidebar. Most changes 
 
 ## Monthly spend limit
 
-Only shown if your agent is part of a fleet. It shows how much of this month's allowance is left. It is set by the person who runs the fleet, and resets at the start of every calendar month.
+Only shown if your agent is part of a fleet and uses the **Default fleet key**. It shows how much of this month's allowance is left. It is set by the person who runs the fleet, and resets at the start of every calendar month. If you switch to a key of your own, you pay for your replies yourself, so the limit no longer applies.
 
 ## Telegram
 

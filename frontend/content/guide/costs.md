@@ -36,7 +36,7 @@ For most people, the $10 we recommend starting with lasts several months on the 
 
 - **Under every reply.** Each reply in your browser shows what it cost.
 - **On OpenRouter.** The **Activity** page in your OpenRouter account lists every call your agent made, what it cost and which model it used.
-- **In Settings, for fleet agents.** If your agent is part of a fleet, its **Settings** shows how much of this month's spending limit is left.
+- **In Settings, for fleet agents.** If your agent is part of a fleet and uses the **Default fleet key**, its **Settings** shows how much of this month's spending limit is left.
 
 ## Keeping costs down
 

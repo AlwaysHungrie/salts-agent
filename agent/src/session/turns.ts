@@ -1,6 +1,7 @@
 import { type UIMessage } from "ai";
 import { type Command, parseCommand } from "../commands";
 import { turnCost } from "../openrouter";
+import { directory } from "../worker/stores";
 import { attachmentsOf, claimed } from "./attachments";
 import { runQueuedCommand } from "./command-tool";
 import { runCommand } from "./commands";
@@ -104,11 +105,26 @@ export async function rewind(host: SessionHost): Promise<Attachment[]> {
 export async function spendBlocked(host: SessionHost): Promise<string> {
   const { usd, limit } = await host.registry().spendState();
   if (limit <= 0 || usd < limit) return "";
+  if (!(await limitApplies(host))) return "";
   return (
     `This agent has reached its spending limit for this month ` +
     `($${usd.toFixed(2)} of $${limit.toFixed(2)}). ` +
     `It will answer again next month, or when its administrator raises the limit.`
   );
+}
+
+/**
+ * A fleet agent's limit guards the admin's money only: it holds while the agent runs on
+ * the fleet's default key, and lifts once its user picks a key of their own. Read only
+ * on the way to a refusal, so a turn under the limit pays for none of it.
+ */
+async function limitApplies(host: SessionHost): Promise<boolean> {
+  const row = await directory(host.env).get(host.agentId());
+  if (!row?.fleet_id) return true;
+  const defaultKey = (await host.registry().meta()).defaults.openrouter_key_id ?? "";
+  if (!defaultKey) return false;
+  await host.loadConfig();
+  return host.config().openrouter_key_id === defaultKey;
 }
 
 /** A whole turn, without streaming. */

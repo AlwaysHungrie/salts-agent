@@ -888,7 +888,7 @@ export async function openrouterMock(request: Request): Promise<Response> {
   if (url.pathname === "/api/v1/key") {
     const auth = request.headers.get("authorization") ?? "";
     if (auth.includes("sk-invalid")) return json({ error: "invalid" }, 401);
-    return json({ data: { label: "mock key" } });
+    return json({ data: { label: "mock key", limit: auth.includes("unlimited") ? null : 10 } });
   }
 
   if (url.pathname.startsWith("/api/v1/keys") || url.pathname === "/__keys") {
