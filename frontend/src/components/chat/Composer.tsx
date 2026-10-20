@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { FileText, Mic, Paperclip, Send, Square, X } from "lucide-react";
 import { recordingSeconds, type ClientLimits } from "@/lib/agent";
 import { AttachmentStrip } from "./attachments";
@@ -110,10 +110,19 @@ export function Composer({
   onStop: () => void;
 }) {
   const picker = useRef<HTMLInputElement>(null);
+  const box = useRef<HTMLTextAreaElement>(null);
   const { attachments, ghosts, uploading, uploadError } = uploads;
   const { recording, recordedFor } = recorder;
   const canAttach =
     ready.has("file_ingest") || ready.has("vision") || ready.has("audio_input");
+
+  // Grow with the text up to max-h-24 (three lines), then scroll.
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [input, recording]);
 
   return (
     <div className="border-hairline-soft border-t px-4 py-4 md:px-8 md:py-6">
@@ -131,7 +140,7 @@ export function Composer({
         </div>
       )}
 
-      <form onSubmit={onSubmit} className="flex gap-2 md:gap-3">
+      <form onSubmit={onSubmit} className="flex items-end gap-2 md:gap-3">
         {canAttach && (
           <>
             <input
@@ -178,11 +187,20 @@ export function Composer({
             onDiscard={() => void recorder.finishRecording(false)}
           />
         ) : (
-          <input
+          <textarea
+            ref={box}
+            rows={1}
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              // Enter sends; Shift+Enter (or Enter mid-IME composition) is a newline.
+              if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing)
+                return;
+              e.preventDefault();
+              e.currentTarget.form?.requestSubmit();
+            }}
             placeholder={uploading ? "Uploading…" : "Message the agent…"}
-            className="bg-field placeholder:text-faint text-ink focus:ring-ink h-12 min-w-0 flex-1 rounded-2xl px-4 text-base outline-none focus:ring-2"
+            className="bg-field placeholder:text-faint text-ink focus:ring-ink block max-h-24 min-h-12 min-w-0 flex-1 resize-none overflow-y-auto rounded-2xl px-4 py-3 text-base leading-6 outline-none focus:ring-2"
           />
         )}
         {recording ? (
