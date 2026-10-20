@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { test } from "node:test";
 
-import { caffeinateArgs, orphanTunnels, parseProcessList, supervisorsOf } from "../procs.mjs";
+import { caffeinateArgs, codeFingerprint, orphanTunnels, parseProcessList, supervisorsOf } from "../procs.mjs";
 
 // What this laptop looked like when staging could not open a tunnel: one production
 // supervisor, three staging ones (each with its own tunnel), and strays left behind.
@@ -42,4 +45,22 @@ test("only salts-tools tunnels whose supervisor is gone are orphans", () => {
 
 test("caffeinate holds off idle and system sleep until the given process exits", () => {
   assert.deepEqual(caffeinateArgs(4242), ["-is", "-w", "4242"]);
+});
+
+test("the code fingerprint changes with any .mjs file or package.json, and only then", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "fingerprint-"));
+  writeFileSync(path.join(dir, "cli.mjs"), "one");
+  writeFileSync(path.join(dir, "package.json"), '{"version":"1.0.0"}');
+  const first = codeFingerprint(dir);
+  assert.equal(codeFingerprint(dir), first);
+
+  writeFileSync(path.join(dir, "README.md"), "docs");
+  assert.equal(codeFingerprint(dir), first);
+
+  writeFileSync(path.join(dir, "cli.mjs"), "two");
+  const second = codeFingerprint(dir);
+  assert.notEqual(second, first);
+
+  writeFileSync(path.join(dir, "package.json"), '{"version":"1.1.0"}');
+  assert.notEqual(codeFingerprint(dir), second);
 });
