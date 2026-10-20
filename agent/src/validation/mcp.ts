@@ -38,6 +38,7 @@ export function validateMcpBody(body: Record<string, unknown>): Partial<McpServe
     patch.headers = JSON.stringify(body.headers).slice(0, 8000);
   }
   if (body.enabled !== undefined) patch.enabled = body.enabled ? 1 : 0;
+  if (body.in_groups !== undefined) patch.in_groups = body.in_groups ? 1 : 0;
   if (body.disabled_tools !== undefined) {
     if (!Array.isArray(body.disabled_tools)) throw new Error("disabled_tools must be an array");
     patch.disabled_tools = JSON.stringify(

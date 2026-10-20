@@ -822,6 +822,19 @@ export function mcpServerReady(server: McpServerRow): boolean {
   return true;
 }
 
+/**
+ * The servers a chat may use. In a Telegram group anyone there can ask for a tool, so a
+ * server switched off for groups is left out.
+ */
+export function mcpServersForChat(
+  servers: McpServerRow[],
+  chat: { source: string; chat_type: string } | undefined
+): McpServerRow[] {
+  const group =
+    chat?.source === "telegram" && (chat.chat_type === "group" || chat.chat_type === "supergroup");
+  return group ? servers.filter((s) => s.in_groups) : servers;
+}
+
 /** How the model names an attachment in `upload_id`; swapped for the server's id on call. */
 export const ATTACHMENT_REF = "attachment:";
 

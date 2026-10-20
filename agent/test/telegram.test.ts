@@ -359,6 +359,38 @@ describe("what the channel seam buys", () => {
     expect(sent.find((s) => s.document !== undefined)?.document).toBe("Client report.xlsx");
   });
 
+  it("leaves a server switched off for groups out of a group's tools, not a private chat's", async () => {
+    const { hook, chat, agentId } = await agentFixture();
+    await env.SessionRegistry.get(env.SessionRegistry.idFromName(agentId)).addMcpServer({
+      ...EMPTY_MCP_SERVER,
+      id: crypto.randomUUID(),
+      name: "Wallet",
+      url: "https://mcp.test/media/mcp",
+      in_groups: 0,
+      tools_json: JSON.stringify([MCP_MEDIA_TOOL]),
+      created_at: Date.now(),
+    });
+    const toolsSent = async (token: string) => {
+      const [request] = (await (
+        await fetch(`https://openrouter.ai/__requests?contains=${token}`)
+      ).json()) as { tools?: { function: { name: string } }[] }[];
+      return (request.tools ?? []).map((t) => t.function.name);
+    };
+
+    const inGroup = crypto.randomUUID().slice(0, 8);
+    const group = update(chat, `@mock_bot hello ${inGroup}`);
+    group.message.chat = { ...group.message.chat, type: "supergroup" };
+    await post(hook, group);
+    await waitForReply(chat);
+    expect(await toolsSent(inGroup)).not.toContain("mcp_wallet_build_report");
+
+    const direct = crypto.randomUUID().slice(0, 8);
+    const dm = chatId();
+    await post(hook, update(dm, `hello ${direct}`));
+    await waitForReply(dm);
+    expect(await toolsSent(direct)).toContain("mcp_wallet_build_report");
+  });
+
   it("ingests a file the message carried", async () => {
     const { hook, chat, email } = await agentFixture({ cap_file_ingest: 1 });
     const res = await post(hook, withDocument(chat, "what does this say"));

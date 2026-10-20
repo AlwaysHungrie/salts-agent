@@ -11,13 +11,14 @@ For example, once salts-tools is running you can ask your agent "What is the wea
 
 ## What it can run
 
-salts-tools can run three tools, and you can switch on as many of them as you like:
+salts-tools can run four tools, and you can switch on as many of them as you like:
 
 | Tool | What it gives your agent |
 |---|---|
 | **web** | Free web search, using a private search engine called SearXNG. There is no account to make and no bill for searches. See [Set up web search](/guide/web-search). |
 | **matchmaker** | Reads resumes and cover letters and finds the best people for a job, for recruiters. See [Add the matchmaker](/guide/salts-tools-matchmaker). |
 | **analyst** | Reads Excel and CSV files sent in the chat, answers questions about them, and builds new sheets with tables and charts. See [Add the spreadsheet analyst](/guide/salts-tools-analyst). |
+| **payments** | A crypto wallet your agent can pay with in USDC, for example a Coinbase Business checkout or a paid API. See [Add payments](/guide/salts-tools-payments). |
 
 One salts-tools can serve several agents at once, and you choose which tools each agent gets in the salts-tools screen in your terminal.
 

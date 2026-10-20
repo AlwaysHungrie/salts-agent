@@ -21,6 +21,8 @@ export type McpServerRow = {
   /** Custom headers as a JSON object, `{"Authorization": "Bearer …"}`. */
   headers: string;
   enabled: number;
+  /** Whether its tools are offered in a Telegram group, where anyone there can ask for them. */
+  in_groups: number;
 
   /* OAuth state, all empty until the user connects. */
   oauth_client_id: string;

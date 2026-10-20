@@ -16,7 +16,8 @@ This matters because anyone your agent replies to can spend your OpenRouter cred
 3. **Be careful with patterns.** An entry wrapped in slashes, like `/^team_/`, allows every username that matches it, and anyone can create a username that starts with `team_`.
 4. **Only allow groups you control.** Everyone in an allowed group can talk to your agent, including people who join later.
 5. **Keep your bot token private.** If it leaks, send `/revoke` to [@BotFather](https://t.me/BotFather) and save the new token in your agent's settings.
-6. **Set a spending limit on your OpenRouter key.** Even if something goes wrong, the limit stops it from turning into a large bill. See [Get an OpenRouter API key](/guide/openrouter).
+6. **Keep risky apps out of groups.** Each MCP server on the **Capabilities** page has a **Use in Telegram groups** switch. Switch it off for any app that can spend money or change your accounts, and your agent will only use it in your private chats.
+7. **Set a spending limit on your OpenRouter key.** Even if something goes wrong, the limit stops it from turning into a large bill. See [Get an OpenRouter API key](/guide/openrouter).
 
 ## Making a public agent
 
