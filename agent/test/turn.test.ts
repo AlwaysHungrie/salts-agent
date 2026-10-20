@@ -484,10 +484,10 @@ describe("bang commands over chat", () => {
     const reply = async (message: string) =>
       ((await (await say(sessionId, email, message)).json()) as { reply: string }).reply;
     expect(await reply("!docs")).toContain(
-      "The user guide: https://salts-agent-app.vercel.app/guide"
+      "The user guide: https://app.salts.dev/guide"
     );
     expect(await reply("!settings")).toBe(
-      `This agent's settings: https://salts-agent-app.vercel.app/a/${agentId}/settings`
+      `This agent's settings: https://app.salts.dev/a/${agentId}/settings`
     );
   });
 
@@ -620,7 +620,7 @@ describe("!enable-mcp and !disable-mcp", () => {
     );
     const unconnected = await withServer({ enabled: 1, auth: "oauth" });
     expect(await reply(await say(unconnected.sessionId, unconnected.email, "!mcp"))).toContain(
-      `- Docs — not connected; connect it at https://salts-agent-app.vercel.app/a/${unconnected.agentId}/capabilities.`
+      `- Docs — not connected; connect it at https://app.salts.dev/a/${unconnected.agentId}/capabilities.`
     );
   });
 

@@ -63,7 +63,7 @@ export const NAV_OWNER: Record<string, string> = Object.fromEntries(
 /* --------------------------------------------------------------- Links -- */
 
 /** The web app, where agents are created and managed. */
-const APP_URL = "https://salts-agent-app.vercel.app";
+const APP_URL = "https://app.salts.dev";
 
 /**
  * Every destination on the page. Entries set to `null` are not built yet and
