@@ -23,6 +23,7 @@ export function Chat({
   onLoadOlder,
   onTurnEnd,
   onFork,
+  onStartOver,
   initialInput = "",
   continueAt = null,
 }: {
@@ -41,6 +42,11 @@ export function Chat({
    * whole transcript) become a new session, and `draft` is the dropped question.
    */
   onFork: (count: number, draft: string) => void;
+  /**
+   * `!new` and `!clear` typed here: open a fresh session, and with `discard` delete this
+   * one. The page does it with its own create and delete, as the sidebar would.
+   */
+  onStartOver?: (discard: boolean) => void;
   /** Text the composer opens with — a forked question waiting to be re-asked. */
   initialInput?: string;
   /** A conversation that lives on a chat channel: readable here, answered there. */
@@ -110,6 +116,13 @@ export function Chat({
 
     // Fixed at the moment of sending, not whatever the composer holds later.
     const text = input;
+    const startOver = text.trim().match(/^!(new|clear)$/i);
+    if (startOver && onStartOver && uploads.attachments.length === 0) {
+      sending.current = false;
+      setInput("");
+      onStartOver(startOver[1].toLowerCase() === "clear");
+      return;
+    }
     const files = uploads.attachments;
     setInput("");
     uploads.setAttachments([]);
