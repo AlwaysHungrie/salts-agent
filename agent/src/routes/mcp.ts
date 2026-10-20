@@ -106,6 +106,10 @@ const McpBodyShape = z.object({
     .optional()
     .openapi({ description: "Header values sent to a `headers` server." }),
   enabled: z.union([z.number(), z.boolean()]).optional(),
+  in_groups: z
+    .union([z.number(), z.boolean()])
+    .optional()
+    .openapi({ description: "Whether its tools are offered in Telegram groups." }),
   disabled_tools: z.array(z.string()).optional(),
 });
 const McpBodySchema = checkedByHandler(McpBodyShape, "McpServerBody");
@@ -305,6 +309,7 @@ async function addServer({ reg, manages }: McpCall, body: Record<string, unknown
     auth: patch.auth ?? "none",
     headers: patch.headers ?? "",
     enabled: patch.enabled ?? 1,
+    in_groups: patch.in_groups ?? 1,
   };
   await reg.addMcpServer(row);
   // Added back by hand: salts-tools may repoint it again.

@@ -5,7 +5,8 @@
 // tunnel (no account needed), and reports to the Worker. Every service shares the
 // tunnel's address and is told apart by path (see gateway.mjs): `<tunnel>/web` is
 // SearXNG, `<tunnel>/matchmaker` the matchmaker MCP server, `<tunnel>/analyst` the
-// spreadsheet analyst MCP server.
+// spreadsheet analyst MCP server, `<tunnel>/coinbase-wallet` Coinbase's wallet MCP
+// server (Payments MCP).
 //
 // The computer is paired once from the browser: `start` shows a code and opens the Salts
 // site, where the signed-in user picks the agents it serves. From then on a supervisor
@@ -62,13 +63,17 @@ import { fileURLToPath } from "node:url";
 import { agentIdFrom, call, openCommand, startPairing, toolsReport, waitForApproval, wantedServices } from "./computer.mjs";
 import { startGateway } from "./gateway.mjs";
 import { installMcp, launchArgs, mcpSource, viaNpx } from "./mcps.mjs";
-import { caffeinateArgs, orphanTunnels, parseProcessList, supervisorsOf } from "./procs.mjs";
+import { installCoinbaseWallet } from "./coinbase-wallet.mjs";
+import { caffeinateArgs, codeFingerprint, orphanTunnels, parseProcessList, supervisorsOf } from "./procs.mjs";
 import { connectionStatus, serviceStatus } from "./status.mjs";
+import { startStdioBridge } from "./stdio-bridge.mjs";
 import { BOLD, DIM, INV, OFF, follow, keys, paint, rowText, wrap } from "./tui.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const CLI = fileURLToPath(import.meta.url);
 const VERSION = JSON.parse(readFileSync(path.join(here, "package.json"), "utf8")).version;
+/** The code this process runs; a supervisor saves it, so an outdated one can be replaced. */
+const CODE = codeFingerprint(here);
 /** How the user runs this CLI, for the commands it tells them to run. */
 const SELF = viaNpx(CLI) ? "npx salts-tools" : "salts-tools";
 /** The login item's program and arguments, before the command. */
@@ -109,6 +114,7 @@ const PID_FILE = path.join(HOME, "supervisor.pid");
 const LOG_FILE = path.join(HOME, "supervisor.log");
 const MATCHMAKER_LOG = path.join(HOME, "matchmaker.log");
 const ANALYST_LOG = path.join(HOME, "analyst.log");
+const WALLET_LOG = path.join(HOME, "coinbase-wallet.log");
 /** `salts-tools restart` drops this file; the supervisor picks it up (no SIGUSR1 on Windows). */
 const RESTART_FILE = path.join(HOME, "restart.request");
 /** `start`/`stop` of one service drop this file: the supervisor re-reads which are on. */
@@ -167,6 +173,7 @@ const GATEWAY_PORT = 8080;
 const WEB_PORT = 8180;
 const MATCHMAKER_PORT = 8280;
 const ANALYST_PORT = 8380;
+const WALLET_PORT = 8480;
 
 const GREEN = "\x1b[32m";
 const RED = "\x1b[31m";
@@ -527,6 +534,42 @@ const MATCHMAKER_HEADERS = [
 ];
 
 /**
+ * Coinbase Wallet (Coinbase's Payments MCP package): a wallet app and a stdio server, installed by its own npm
+ * installer into ~/.payments-mcp (shared by every target, as its wallet is).
+ */
+const WALLET_DIR = path.join(os.homedir(), ".payments-mcp");
+const WALLET_BUNDLE = path.join(WALLET_DIR, "bundle.js");
+
+/**
+ * Install the wallet when it is not there yet, with Coinbase's installer, or directly
+ * when that fails (see coinbase-wallet.mjs). Updates are left to the user.
+ */
+async function readyWallet() {
+  if (existsSync(WALLET_BUNDLE)) return;
+  log("coinbase-wallet: installing @coinbase/payments-mcp");
+  const npx = IS_WIN ? "npx.cmd" : "npx";
+  const res = run(npx, ["--yes", "@coinbase/payments-mcp", "install", "--client", "other", "--no-auto-config"], {
+    timeout: 600_000,
+  });
+  if (res.status === 0 && existsSync(WALLET_BUNDLE)) return;
+  const why = (res.stderr || res.stdout || "").trim().split("\n").filter((l) => /fail|error/i.test(l)).pop() ?? "";
+  log(`coinbase-wallet: Coinbase's installer failed (${why.trim()}); installing it directly`);
+  try {
+    const version = await installCoinbaseWallet({
+      dir: WALLET_DIR,
+      log,
+      // Windows' tar reads zip files; elsewhere unzip does.
+      extract: (zip, dir) => (IS_WIN ? run("tar", ["-xf", zip, "-C", dir]) : run("unzip", ["-q", "-o", zip, "-d", dir])),
+      npmInstall: (dir) => run(IS_WIN ? "npm.cmd" : "npm", ["install", "--no-audit", "--no-fund"], { cwd: dir, timeout: 600_000 }),
+    });
+    if (!existsSync(WALLET_BUNDLE)) throw new Error(`v${version} has no bundle.js`);
+    log(`coinbase-wallet: installed v${version}`);
+  } catch (err) {
+    throw new Error(`Couldn't install Coinbase Wallet: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+/**
  * Each service: how to bring it up on loopback (returning its port), whether it answers
  * there, how to take it down, and what to tell the Worker once the tunnel reaches it.
  * `up` and `down` run in the supervisor.
@@ -665,6 +708,56 @@ const SERVICES = {
     },
     reached: (tunnel) => `${tunnel}/analyst/mcp`,
   },
+
+  "coinbase-wallet": {
+    label: "Coinbase Wallet",
+    kind: "mcp",
+    needs: ["cap_mcp"],
+    about: "non-custodial USDC wallet on Base, Polygon and Solana; pays x402 links such as Coinbase Business checkouts",
+    log: WALLET_LOG,
+    docker: false,
+    bridge: null,
+    healthy: (port) => ok(`http://127.0.0.1:${port}/healthz`),
+    async up(token) {
+      await readyWallet();
+      this.stop();
+      const port = await portFrom(readState().svc?.["coinbase-wallet"]?.port, WALLET_PORT);
+      const out = openSync(WALLET_LOG, "a");
+      // It speaks stdio only; the bridge puts it on loopback HTTP like the others.
+      const bridge = await startStdioBridge({
+        command: process.execPath,
+        args: [WALLET_BUNDLE],
+        cwd: WALLET_DIR,
+        // Started from inside an editor (itself Electron), this would make the wallet app
+        // run as plain Node, which cannot open it.
+        env: Object.fromEntries(Object.entries(process.env).filter(([k]) => k !== "ELECTRON_RUN_AS_NODE")),
+        port,
+        token,
+        output: out,
+      });
+      this.bridge = bridge;
+      bridge.child.on("exit", (code, signal) => {
+        if (this.bridge === bridge) log(`coinbase-wallet exited (${signal ?? code})`);
+      });
+      writeSvc("coinbase-wallet", { pid: bridge.child.pid });
+      log(`coinbase-wallet started (pid ${bridge.child.pid}) on port ${port}; log at ${WALLET_LOG}`);
+      if (!(await waitUntil(() => this.healthy(port), 30))) {
+        throw new Error(`Coinbase Wallet didn't respond on port ${port}. Details are in ${WALLET_LOG}`);
+      }
+      return port;
+    },
+    stop() {
+      this.bridge?.close();
+      this.bridge = null;
+      const stale = readState().svc?.["coinbase-wallet"]?.pid;
+      if (isProcess(stale, /payments-mcp/i)) process.kill(stale, "SIGTERM");
+    },
+    down() {
+      this.stop();
+      return { status: 0, stdout: "", stderr: "" };
+    },
+    reached: (tunnel) => `${tunnel}/coinbase-wallet/mcp`,
+  },
 };
 
 /** Stop every service that runs as a child process of the supervisor (not containers). */
@@ -774,7 +867,7 @@ async function supervise() {
   }
   const token = readToken() || newToken();
   const worker = workerUrl();
-  writeState({ url: "", lastError: "", reportError: "", supervisorStartedAt: new Date().toISOString() });
+  writeState({ url: "", lastError: "", reportError: "", supervisorStartedAt: new Date().toISOString(), supervisorCode: CODE });
 
   /** Loopback port of each service that is on and answering; what the gateway routes to. */
   const ports = {};
@@ -1075,6 +1168,7 @@ async function stopSupervisor() {
   if (isTunnel(tunnelPid)) process.kill(tunnelPid, "SIGTERM");
   if (isProcess(svc?.matchmaker?.pid, /recruiter-mcp/i)) process.kill(svc.matchmaker.pid, "SIGTERM");
   if (isProcess(svc?.analyst?.pid, /analyst-mcp/i)) process.kill(svc.analyst.pid, "SIGTERM");
+  if (isProcess(svc?.["coinbase-wallet"]?.pid, /payments-mcp/i)) process.kill(svc["coinbase-wallet"].pid, "SIGTERM");
   return Boolean(pid || strays);
 }
 
@@ -1082,6 +1176,12 @@ async function stopSupervisor() {
 async function ensureSupervisor() {
   const since = new Date().toISOString();
   let pid = supervisorPid();
+  // One started before an upgrade runs the old code, and would never run a new service.
+  if (pid && readState().supervisorCode !== CODE) {
+    console.log("  salts-tools was updated: restarting it to run the new version …");
+    await stopSupervisor();
+    pid = 0;
+  }
   if (pid) {
     await endStrays(pid);
     writeFileSync(RELOAD_FILE, since);
@@ -1647,6 +1747,11 @@ function serviceFiles(name) {
     return [
       ["inbox folder", ANALYST_INBOX, `Files you put here can be read too. To move it, set DATA_DIR or INBOX_DIR in ${path.join(ANALYST_DIR, ".env")}`, ANALYST_INBOX],
       ["run_python", "off unless ALLOW_PYTHON=true", `Set it in ${path.join(ANALYST_DIR, ".env")}`],
+    ];
+  }
+  if (name === "coinbase-wallet") {
+    return [
+      ["wallet app", WALLET_DIR, "Ask the agent to show the wallet to sign in, add funds and set spend limits.", WALLET_DIR],
     ];
   }
   return [];

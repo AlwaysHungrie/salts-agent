@@ -18,7 +18,7 @@ Look in the app's documentation for its MCP server. You need two things:
 
 Open your agent, go to **Capabilities**, scroll down to **MCP servers** and click **Add an MCP server**.
 
-1. Enter a name for the server. This is the name you will use with `!enable-mcp` and `!disable-mcp`, so we recommend keeping it short, for example `Linear`.
+1. Enter a name for the server. This is the name you will use with `!mcp`, so we recommend keeping it short, for example `Linear`.
 2. Enter the server URL.
 3. Choose how to sign in:
    - **OAuth** if the app lets you sign in with your account. After you click **Add**, click **Connect** on the new card and sign in.
