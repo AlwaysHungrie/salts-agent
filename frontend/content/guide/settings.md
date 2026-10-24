@@ -13,6 +13,10 @@ To open it, open your agent and click **Settings** in the sidebar. Most changes 
 
 Only shown if your agent is part of a fleet and uses the **Default fleet key**. It shows how much of this month's allowance is left. It is set by the person who runs the fleet, and resets at the start of every calendar month. If you switch to a key of your own, you pay for your replies yourself, so the limit no longer applies.
 
+## Daily spend limit
+
+Shown in the same place as the monthly limit, but only if the person who runs the fleet has set one. It works the same way, except that it resets every day at midnight UTC.
+
 ## Telegram
 
 Lets you talk to your agent from Telegram. Paste your bot's token into **Bot token**, and list who your agent may reply to in **DM whitelist** and **Groups whitelist**. See [Connect your agent to Telegram](/guide/telegram), and read [Telegram safety tips](/guide/telegram-safety) before you change the whitelists.

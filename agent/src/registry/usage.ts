@@ -5,6 +5,11 @@ export function thisMonth(at = Date.now()): string {
   return new Date(at).toISOString().slice(0, 7);
 }
 
+/** Spend-row day as `YYYY-MM-DD` in UTC, like `thisMonth`. */
+export function today(at = Date.now()): string {
+  return new Date(at).toISOString().slice(0, 10);
+}
+
 export function addStorageBytes(storage: DurableObjectStorage, delta: number): void {
   if (!Number.isFinite(delta) || delta === 0) return;
   // The delta is bound twice, not read via `excluded` (which holds the zero-clamped
@@ -40,6 +45,12 @@ export function addSpend(storage: DurableObjectStorage, usd: number): void {
     thisMonth(),
     usd
   );
+  storage.sql.exec(
+    `INSERT INTO daily_spend (day, usd) VALUES (?, ?)
+     ON CONFLICT(day) DO UPDATE SET usd = usd + excluded.usd`,
+    today(),
+    usd
+  );
 }
 
 export function spendThisMonth(storage: DurableObjectStorage): number {
@@ -49,14 +60,28 @@ export function spendThisMonth(storage: DurableObjectStorage): number {
   return row?.usd ?? 0;
 }
 
+export function spendToday(storage: DurableObjectStorage): number {
+  const row = storage.sql
+    .exec(`SELECT usd FROM daily_spend WHERE day = ? LIMIT 1`, today())
+    .toArray()[0] as { usd: number } | undefined;
+  return row?.usd ?? 0;
+}
+
 export function spendState(storage: DurableObjectStorage): {
   usd: number;
   limit: number;
   month: string;
+  day_usd: number;
+  day_limit: number;
+  day: string;
 } {
+  const meta = readMeta(storage);
   return {
     usd: spendThisMonth(storage),
-    limit: readMeta(storage).monthly_spend_limit,
+    limit: meta.monthly_spend_limit,
     month: thisMonth(),
+    day_usd: spendToday(storage),
+    day_limit: meta.daily_spend_limit,
+    day: today(),
   };
 }

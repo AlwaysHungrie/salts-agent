@@ -399,6 +399,22 @@ describe("the spending limit", () => {
     expect(await registry.spendThisMonth()).toBeCloseTo(0.002);
   });
 
+  it("refuses a turn once the day's limit is reached, under the month's", async () => {
+    const { sessionId, email, agentId } = await chatFixture();
+    const registry = registryFor(agentId);
+    await registry.setMeta({
+      ...(await registry.meta()),
+      monthly_spend_limit: 10,
+      daily_spend_limit: 0.001,
+    });
+    await registry.addSpend(0.002);
+
+    const reply = ((await (await say(sessionId, email, "hello")).json()) as { reply: string })
+      .reply;
+    expect(reply).toContain("spending limit for today");
+    expect(await registry.spendToday()).toBeCloseTo(0.002);
+  });
+
   /** A one-agent fleet on the admin's wallet key, already over a limit. */
   async function fleetOverLimit() {
     const admin = someone("fleet-admin");

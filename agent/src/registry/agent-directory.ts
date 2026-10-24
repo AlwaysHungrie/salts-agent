@@ -30,13 +30,18 @@ import {
   touchAgent,
 } from "./directory-agents";
 import {
+  fleetAdmin,
+  fleetAgentsFor,
+  fleetKey,
   fleetMeta,
   listAgents,
   listFleetPage,
   listFleets,
   listGuestPage,
   listPage,
+  removeFleetKey,
   removeFleetMeta,
+  setFleetKey,
   setFleetMeta,
 } from "./directory-listing";
 import {
@@ -171,6 +176,35 @@ export class AgentDirectory extends DurableObject {
   setFleetMeta(fleetId: string, json: string): void {
     this.ensureSchema();
     return setFleetMeta(this.ctx.storage, fleetId, json);
+  }
+
+  /** The fleet's agents that hold `email` on their access list. */
+  fleetAgentsFor(fleetId: string, email: string): AgentRow[] {
+    this.ensureSchema();
+    return fleetAgentsFor(this.ctx.storage, fleetId, email);
+  }
+
+  /** Who administers a fleet; empty when it has no agents. */
+  fleetAdmin(fleetId: string): string {
+    this.ensureSchema();
+    return fleetAdmin(this.ctx.storage, fleetId);
+  }
+
+  /** The fleet API key's hash and hint, or undefined when it has none. */
+  fleetKey(fleetId: string) {
+    this.ensureSchema();
+    return fleetKey(this.ctx.storage, fleetId);
+  }
+
+  /** Replace the fleet's API key (only its hash is kept). */
+  setFleetKey(fleetId: string, hash: string, hint: string) {
+    this.ensureSchema();
+    return setFleetKey(this.ctx.storage, fleetId, hash, hint);
+  }
+
+  removeFleetKey(fleetId: string): void {
+    this.ensureSchema();
+    removeFleetKey(this.ctx.storage, fleetId);
   }
 
   /** Forget a fleet's settings, once the last of its agents is gone. */

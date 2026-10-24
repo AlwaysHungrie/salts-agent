@@ -99,17 +99,26 @@ export async function rewind(host: SessionHost): Promise<Attachment[]> {
 }
 
 /**
- * The refusal to send instead of a turn once the month's spend is used (empty = go
- * ahead). Checked before the turn, so a reply is never cut off midway.
+ * The refusal to send instead of a turn once the month's or the day's spend is used
+ * (empty = go ahead). Checked before the turn, so a reply is never cut off midway.
  */
 export async function spendBlocked(host: SessionHost): Promise<string> {
-  const { usd, limit } = await host.registry().spendState();
-  if (limit <= 0 || usd < limit) return "";
+  const { usd, limit, day_usd, day_limit } = await host.registry().spendState();
+  const month = limit > 0 && usd >= limit;
+  const day = day_limit > 0 && day_usd >= day_limit;
+  if (!month && !day) return "";
   if (!(await limitApplies(host))) return "";
+  if (month) {
+    return (
+      `This agent has reached its spending limit for this month ` +
+      `($${usd.toFixed(2)} of $${limit.toFixed(2)}). ` +
+      `It will answer again next month, or when its administrator raises the limit.`
+    );
+  }
   return (
-    `This agent has reached its spending limit for this month ` +
-    `($${usd.toFixed(2)} of $${limit.toFixed(2)}). ` +
-    `It will answer again next month, or when its administrator raises the limit.`
+    `This agent has reached its spending limit for today ` +
+    `($${day_usd.toFixed(2)} of $${day_limit.toFixed(2)}). ` +
+    `It will answer again tomorrow (midnight UTC), or when its administrator raises the limit.`
   );
 }
 
