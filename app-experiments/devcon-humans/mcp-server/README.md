@@ -40,15 +40,31 @@ so a lost secret means a lost profile.
 | Tool | Cost | What it does |
 |---|---|---|
 | `search_people {query, offset}` | ~$0.00002 | Saved profiles ranked by BM25 + embedding similarity (reciprocal rank fusion), 10 per page; `next_offset` for more |
-| `get_person {person_id}` | free | Saved profile, everything the person wrote, links |
+| `get_person {person_id}` | free | Saved profile (headline, location, skills, summary, beliefs), everything the person wrote, links |
 | `add_info {text?, links?}` | free | Adds to your entries: the text is one entry, each link another |
 | `my_info` | free | Your entries with `entry_id`s, the saved profile, `unsaved_changes` |
 | `delete_info {entry_ids}` | free | Deletes some of your entries |
-| `save_profile` | ~$0.001 | One model call writes the profile from your entries, then it is embedded and searchable. With no entries left, you leave search. Unchanged entries: no model call |
+| `save_profile` | ~$0.001 | One model call writes the profile (headline, location, skills, summary, beliefs) from your entries, then it is embedded and searchable. With no entries left, you leave search. Unchanged entries: no model call |
 | `delete_my_profile` | free | Deletes all your entries and your saved profile |
 | `ping` | free | People with a saved profile |
 
 Search and `get_person` read only saved profiles. Added or deleted entries reach them on the next `save_profile`.
+Beliefs are what the person says they believe in or care about, so a search like "privacy is a right" finds people
+who think alike. Profiles saved before beliefs existed have none until their next save with changed entries.
+
+## HTTP API
+
+For the app that sets up agents, so its pages can show and save a profile without an agent. Same headers as the MCP
+endpoint; each route runs the tool of the same name, so the secret, key, cost cap and spend limits apply alike.
+
+| Route | Answer |
+|---|---|
+| `GET /api/me` | `{info, profile}`: `info` as `my_info`, `profile` the saved profile as `get_person` gives it, or null |
+| `POST /api/me/save` | Runs `save_profile`, then the same as `GET /api/me` |
+| `GET /api/people/{person_id}` | As `get_person` |
+
+Failures are `{"error": {"code", "message"}}` with a status: 400 `invalid_input`/`missing_header`, 401 no or bad
+secret, 402 `cost_limit_exceeded`, 404 `not_found`, 429 `spend_limit_reached`/`rate_limited`, 502 provider errors.
 
 ## Spend limits
 

@@ -53,7 +53,7 @@ describe("the agent client", () => {
   });
 
   it("adds find-humans with a fresh minted secret as its only header", async () => {
-    await ensureFindHumans("salt_admin_ab12cd34_x");
+    const kept = await ensureFindHumans("salt_admin_ab12cd34_x");
     const added = calls.find((c) => c.method === "POST")!;
     expect(added.url).toBe("https://worker.test/api/agents/ab12cd34/mcp?meta=1");
     expect(added.headers.authorization).toBe("Bearer salt_admin_ab12cd34_x");
@@ -63,6 +63,7 @@ describe("the agent client", () => {
     const [, id] = body.headers["X-Find-Humans-Secret"].split(".");
     expect(id).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(body.headers["X-Find-Humans-Secret"]).toBe(mintSecret(id));
+    expect(kept).toBe(id);
   });
 
   it("matches find-humans' signature", () => {
@@ -88,7 +89,7 @@ describe("the agent client", () => {
 
     calls = [];
     servers = [{ id: "s1", name: "find-humans", headers: { "X-Find-Humans-Secret": mintSecret("their-id-0123456789") } }];
-    await ensureFindHumans("salt_admin_ab12cd34_x");
+    expect(await ensureFindHumans("salt_admin_ab12cd34_x")).toBe("their-id-0123456789");
     expect(calls.map((c) => c.method)).toEqual(["GET"]);
   });
 

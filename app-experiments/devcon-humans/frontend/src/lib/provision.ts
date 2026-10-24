@@ -46,16 +46,19 @@ function keptId(secret: string | undefined): string | null {
  * Give the agent find-humans with its user's own minted secret as the only header. Any
  * other header (a shared token or model key left from before) is dropped: a member can
  * read or redirect whatever the agent holds, so it must hold nothing beyond their own pass.
+ * Returns the secret's id, which this app keeps to reach the same profile from its own pages.
  */
-export async function ensureFindHumans(adminKey: string): Promise<void> {
+export async function ensureFindHumans(adminKey: string): Promise<string> {
   const url = process.env.FIND_HUMANS_MCP_URL;
   if (!url) throw new AgentError("FIND_HUMANS_MCP_URL must be set.", 500);
   const server = (await mcpServers(adminKey)).find((s) => s.name.toLowerCase() === SERVER);
   const held = Object.entries(server?.headers ?? {}).find(([k]) => k.toLowerCase() === SECRET_HEADER.toLowerCase())?.[1];
-  const headers = { [SECRET_HEADER]: mintSecret(keptId(held) ?? randomBytes(32).toString("base64url")) };
-  if (!server) return addMcpServer(adminKey, { name: SERVER, url, headers });
-  const kept = Object.keys(server.headers).length === 1 && held === headers[SECRET_HEADER];
-  if (!kept) await setMcpHeaders(adminKey, server.id, headers);
+  const id = keptId(held) ?? randomBytes(32).toString("base64url");
+  const headers = { [SECRET_HEADER]: mintSecret(id) };
+  if (!server) await addMcpServer(adminKey, { name: SERVER, url, headers });
+  else if (!(Object.keys(server.headers).length === 1 && held === headers[SECRET_HEADER]))
+    await setMcpHeaders(adminKey, server.id, headers);
+  return id;
 }
 
 /**
@@ -81,12 +84,31 @@ export async function userKeyFor(userId: string, email: string): Promise<string>
   }
   try {
     const agentId = (await findFleetAgent(email)) ?? (await addFleetAgent(email));
-    await ensureFindHumans(await issueAgentKey(agentId, "admin"));
+    const findHumansId = await ensureFindHumans(await issueAgentKey(agentId, "admin"));
     const userKey = await issueAgentKey(agentId, "user");
-    await col.updateOne({ userId }, { $set: { agentId, userKey }, $unset: { provisioningUntil: "" } });
+    await col.updateOne({ userId }, { $set: { agentId, userKey, findHumansId }, $unset: { provisioningUntil: "" } });
     return userKey;
   } catch (err) {
     await col.updateOne({ userId }, { $unset: { provisioningUntil: "" } }).catch(() => {});
     throw err;
   }
+}
+
+/**
+ * The user's own find-humans secret, the one their agent holds, so the app's pages reach the
+ * same profile. Users set up before the id was kept have it read from their agent once.
+ */
+export async function findHumansSecret(userId: string): Promise<string> {
+  const col = await users();
+  let doc = await col.findOne({ userId });
+  if (!doc?.email) throw new Refusal("Pick up your badge again.", 401);
+  if (!doc.userKey) {
+    await userKeyFor(userId, doc.email);
+    doc = await col.findOne({ userId });
+  }
+  if (doc?.findHumansId) return mintSecret(doc.findHumansId);
+  if (!doc?.agentId) throw new Refusal("Your agent isn’t set up. Pick up your badge again.", 409);
+  const findHumansId = await ensureFindHumans(await issueAgentKey(doc.agentId, "admin"));
+  await col.updateOne({ userId }, { $set: { findHumansId } });
+  return mintSecret(findHumansId);
 }

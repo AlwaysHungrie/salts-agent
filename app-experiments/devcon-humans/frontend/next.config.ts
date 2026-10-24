@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // No "N" badge over the page in dev: it sits on the landing scene's corner.
+  devIndicators: false,
   async headers() {
     return [
       {

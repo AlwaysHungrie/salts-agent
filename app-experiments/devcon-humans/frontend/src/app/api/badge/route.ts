@@ -41,7 +41,7 @@ export async function POST(request: Request) {
       maxAge: SESSION_TTL,
       path: "/",
     });
-    return Response.json({ token, userId, name });
+    return Response.json({ token, userId, name, email });
   } catch (err) {
     if (err instanceof PassError) return fail(err.message, 400);
     return failure(err);

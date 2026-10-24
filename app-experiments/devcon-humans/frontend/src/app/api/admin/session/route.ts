@@ -40,7 +40,7 @@ export async function POST(request: Request) {
       maxAge: SESSION_TTL,
       path: "/",
     });
-    return Response.json({ userId, name });
+    return Response.json({ userId, name, email });
   } catch (err) {
     return failure(err);
   }

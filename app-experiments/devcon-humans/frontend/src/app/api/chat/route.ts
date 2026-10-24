@@ -2,12 +2,13 @@ import { stream } from "@/lib/agent";
 import { authorize } from "@/lib/auth";
 import { currentChat, newChat } from "@/lib/chat";
 import { fail, failure } from "@/lib/http";
+import { searchMessage } from "@/lib/prompts";
 import { messageProblem } from "@/lib/rules";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-/** Start the chat over: a new agent session, the previous one deleted. The first call also sets up the user's agent. */
+/** Start the search over: a new agent session, the previous one deleted. The first call also sets up the user's agent. */
 export async function PUT(request: Request) {
   const session = await authorize(request);
   if (session instanceof Response) return session;
@@ -19,7 +20,7 @@ export async function PUT(request: Request) {
   }
 }
 
-/** Send a message; the reply streams back as the agent's server-sent events. */
+/** Send a search or a follow-up; the reply streams back as the agent's server-sent events. */
 export async function POST(request: Request) {
   const session = await authorize(request);
   if (session instanceof Response) return session;
@@ -29,7 +30,7 @@ export async function POST(request: Request) {
   if (problem) return fail(problem, 400);
   try {
     const { key, sessionId } = await currentChat(session.userId);
-    const reply = await stream(key, sessionId, message, request.signal);
+    const reply = await stream(key, sessionId, searchMessage(message), request.signal);
     return new Response(reply, {
       headers: { "content-type": "text/event-stream", "cache-control": "no-store" },
     });

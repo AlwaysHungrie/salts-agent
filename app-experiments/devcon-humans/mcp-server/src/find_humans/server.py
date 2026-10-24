@@ -7,6 +7,7 @@ import json
 import logging
 import sys
 import traceback
+from types import SimpleNamespace
 from typing import Annotated
 
 import uvicorn
@@ -225,6 +226,49 @@ async def delete_my_profile(ctx: Context | None = None) -> dict:
 @mcp.custom_route("/healthz", methods=["GET"])
 async def healthz(_: Request) -> JSONResponse:
     return JSONResponse({"ok": True})
+
+
+# ---------------------------------------------------------------- HTTP API
+# For the app that sets up agents, so its pages can show and save a profile without going through an agent. Each
+# route runs the tool of the same name with the request's headers, so the secret, key and spend rules are the same.
+
+_STATUS = {"invalid_input": 400, "missing_header": 400, "missing_secret": 401, "not_found": 404,
+           "cost_limit_exceeded": 402, "spend_limit_reached": 429, "rate_limited": 429, "internal_error": 500}
+
+
+def _ctx(request: Request) -> SimpleNamespace:
+    return SimpleNamespace(headers=request.headers)
+
+
+def _failed(result: CallToolResult) -> JSONResponse:
+    body = json.loads(result.content[0].text)
+    return JSONResponse(body, status_code=_STATUS.get(body["error"]["code"], 502))
+
+
+def _mine(info: MyInfo | CallToolResult) -> JSONResponse:
+    """The caller's entries and their saved profile as structured fields (null until first saved)."""
+    if isinstance(info, CallToolResult):
+        return _failed(info)
+    published = people.saved(people.person_dir(services(), info.person_id))
+    profile = people.person_from(info.person_id, published) if published else None
+    return JSONResponse({"info": info.model_dump(mode="json"),
+                         "profile": profile.model_dump(mode="json") if profile else None})
+
+
+@mcp.custom_route("/api/me", methods=["GET"])
+async def api_me(request: Request) -> JSONResponse:
+    return _mine(await my_info(ctx=_ctx(request)))
+
+
+@mcp.custom_route("/api/me/save", methods=["POST"])
+async def api_save(request: Request) -> JSONResponse:
+    return _mine(await save_profile(ctx=_ctx(request)))
+
+
+@mcp.custom_route("/api/people/{person_id}", methods=["GET"])
+async def api_person(request: Request) -> JSONResponse:
+    result = await get_person(person_id=request.path_params["person_id"])
+    return _failed(result) if isinstance(result, CallToolResult) else JSONResponse(result.model_dump(mode="json"))
 
 
 def build_http_app():
