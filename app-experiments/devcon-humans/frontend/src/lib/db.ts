@@ -15,7 +15,9 @@ export type UserDoc = {
   agentId?: string;
   /** The agent's user API key. */
   userKey?: string;
-  /** The session the chat on screen talks to; replaced each time the page opens. */
+  /** The id inside the find-humans secret the agent holds; the app mints the same secret from it. */
+  findHumansId?: string;
+  /** The session the search page talks to; replaced each time the page opens. */
   sessionId?: string;
   /** Set while the user's agent is being created, so two pickups cannot each make one. */
   provisioningUntil?: Date;

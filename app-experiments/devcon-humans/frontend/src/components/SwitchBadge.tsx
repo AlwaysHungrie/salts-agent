@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { saveProfile } from "@/lib/profile";
 
 /** Signs the user out, so a different ticket can be used. */
 export function SwitchBadge() {
@@ -12,6 +13,7 @@ export function SwitchBadge() {
     setBusy(true);
     const res = await fetch("/api/badge", { method: "DELETE" }).catch(() => null);
     if (res?.ok) {
+      saveProfile(null);
       router.replace("/");
       router.refresh();
     } else setBusy(false);
@@ -22,9 +24,9 @@ export function SwitchBadge() {
       type="button"
       onClick={signOut}
       disabled={busy}
-      className="min-h-10 shrink-0 rounded-full px-3 py-1.5 text-sm whitespace-nowrap font-medium text-ink-2 hover:bg-card hover:text-ink disabled:opacity-60"
+      className="min-h-10 shrink-0 rounded-full py-1.5 text-sm whitespace-nowrap text-white/45 transition-colors hover:text-white disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/60"
     >
-      Switch badge
+      Sign out
     </button>
   );
 }

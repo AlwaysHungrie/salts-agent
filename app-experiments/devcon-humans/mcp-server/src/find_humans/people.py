@@ -41,7 +41,7 @@ def render_profile(p: Profile, links: list[str]) -> str:
         return f"- {label}: {value}" if value not in (None, "", []) else None
 
     facts = [line("Name", p.name), line("Location", p.location), line("Skills", ", ".join(p.skills)),
-             line("Links", " ".join(links))]
+             line("Believes", "; ".join(p.beliefs)), line("Links", " ".join(links))]
     return "\n".join([f"# {p.headline}", "", *[f for f in facts if f], "", p.summary.strip()]) + "\n"
 
 
@@ -166,10 +166,11 @@ def delete_person(svc: Services, person_id: str) -> None:
 
 
 def person_from(person_id: str, published: dict) -> Person:
+    # Profiles saved before beliefs were asked for have none.
     p = published["profile"]
     return Person(person_id=person_id, name=p["name"], headline=p["headline"], location=p["location"],
-                  skills=p["skills"], summary=p["summary"], links=published["links"], about=published["about"],
-                  saved_at=published["saved_at"])
+                  skills=p["skills"], summary=p["summary"], beliefs=p.get("beliefs", []),
+                  links=published["links"], about=published["about"], saved_at=published["saved_at"])
 
 
 def get_person(svc: Services, person_id: str) -> Person:

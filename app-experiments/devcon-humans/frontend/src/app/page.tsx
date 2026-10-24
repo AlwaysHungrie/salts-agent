@@ -1,48 +1,52 @@
 import { cookies } from "next/headers";
-import { AdminSignIn } from "@/components/AdminSignIn";
-import { Chat } from "@/components/Chat";
-import { SwitchBadge } from "@/components/SwitchBadge";
-import { UserIdForm } from "@/components/UserIdForm";
-import { Wordmark } from "@/components/Wordmark";
+import CyberScene from "@/components/CyberScene";
+import { PoweredBySalts } from "@/components/PoweredBySalts";
+import { VendingScreens } from "@/components/VendingScreens";
+import WhatIsThis from "@/components/WhatIsThis";
+import scene from "@/data/scene-panels.json";
+import type { Panel } from "@/lib/sign-canvas";
 import { readSession, SESSION_COOKIE } from "@/lib/session";
 
-/** The one page: the badge pickup until the user has a session, then their chat. */
+/** The front page (from mooned). The vending machine's screens sign the user in, then lead to search. */
 export default async function Home() {
-  const session = await readSession((await cookies()).get(SESSION_COOKIE)?.value);
-  if (session)
-    return (
-      <div className="mx-auto flex min-h-dvh max-w-5xl flex-col px-4 sm:px-6 lg:px-8">
-        <header className="flex items-center justify-between gap-4 py-4">
-          <Wordmark className="min-w-0 text-violet" />
-          <div className="flex shrink-0 items-center gap-2">
-            <span className="hidden font-display text-sm font-semibold text-ink sm:inline">Hello, {session.name}</span>
-            <SwitchBadge />
-          </div>
-        </header>
-        <main className="flex-1 pb-6">
-          <Chat />
-        </main>
-      </div>
-    );
-
+  const session = await readSession(
+    (await cookies()).get(SESSION_COOKIE)?.value,
+  );
   return (
-    <div className="mx-auto flex min-h-dvh max-w-6xl flex-col px-5 lg:px-10">
-      <main className="grid flex-1 grid-cols-[minmax(0,1fr)] content-start items-start gap-10 lg:grid-cols-[minmax(0,1fr)_400px] lg:gap-20">
-        <section className="pt-10 lg:pt-24">
-          <Wordmark className="text-violet" />
-          <h1 className="mt-12 max-w-[14ch] font-display text-5xl leading-[0.98] font-bold tracking-[-0.03em] text-balance sm:text-6xl lg:text-7xl">
-            Find the people worth meeting at Devcon 8.
+    <main className="mooned fixed inset-0 bg-black">
+      <CyberScene
+        className="h-full w-full"
+        plate="/scene/plate.webp"
+        depth="/scene/depth.webp"
+        wet="/scene/wet.webp"
+        machine="/scene/vending-machine.png"
+        panels={scene.panels as Panel[]}
+        plateW={scene.w}
+        plateH={scene.h}
+      />
+      <div className="pointer-events-none absolute inset-x-0 top-5 z-10 flex select-none flex-col items-center sm:inset-x-auto sm:left-10 sm:top-8 sm:items-start">
+        {/* Sized together, so the tagline spans the logo's width: two columns as wide as M, each letter
+            centred in its own, and the tagline sized, tracked and shifted to meet its ink edges (measured in Orbitron). */}
+        <div className="header-shade relative flex flex-col text-7xl md:text-8xl">
+          <h1
+            aria-label="humans"
+            className="inline-grid w-fit animate-logo-glow grid-cols-[0.93em_0.93em] justify-items-center gap-x-[0.06em] font-orbitron font-black uppercase leading-[0.9] text-white"
+          >
+            <span aria-hidden>h</span>
+            <span aria-hidden>u</span>
+            <span aria-hidden>m</span>
+            <span aria-hidden>a</span>
+            <span aria-hidden>n</span>
+            <span aria-hidden>s</span>
           </h1>
-          <p className="mt-6 max-w-[46ch] text-lg text-ink-2">
-            This is an unofficial app and not associated with Devcon. Ask your agent who builds AI agents or who runs
-            brand deals, or tell it what you do so others can find you.
+          <p className="mt-3 ml-[0.35em] font-orbitron text-[0.14em] font-medium uppercase tracking-[0.29em] whitespace-nowrap text-white/85 [text-shadow:0_1px_2px_rgba(0,0,0,0.9),0_0_18px_rgba(0,0,0,0.65)]">
+            at Devcon VIII
           </p>
-        </section>
-        <div className="pb-16">
-          <UserIdForm />
-          <AdminSignIn />
         </div>
-      </main>
-    </div>
+        <WhatIsThis />
+      </div>
+      <VendingScreens signedIn={session !== null} />
+      <PoweredBySalts />
+    </main>
   );
 }
