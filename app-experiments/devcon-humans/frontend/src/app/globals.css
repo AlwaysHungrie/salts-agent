@@ -314,6 +314,23 @@ button.terminal-screen:focus-visible {
 .md-dark th, .md-dark td { border-color: rgb(255 255 255 / 0.12); }
 .md-dark th { color: rgb(255 255 255 / 0.55); }
 .md-dark blockquote { border-color: #5dff8f; color: rgb(255 255 255 / 0.6); }
+/* The profile page's write-up: a bold label alone on its line reads as a section label. */
+.profile-page > * + * { margin-top: 1.4em; }
+.profile-page p > strong:only-child,
+.profile-page p > strong:first-child:has(+ br) {
+  display: block;
+  margin-bottom: 0.5em;
+  font-family: var(--font-orbitron-face), sans-serif;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: rgb(255 255 255 / 0.4);
+}
+.profile-page p > strong:first-child + br { display: none; }
+.profile-page p:has(> strong:only-child) + * { margin-top: 0; }
+.profile-page p > strong:only-child { margin-bottom: 0; }
+.profile-page a { color: #5dff8f; text-decoration-color: rgb(93 255 143 / 0.35); }
 /* A person the agent names: jumps to their result. */
 .md-dark a.person-ref {
   color: #5dff8f;
@@ -336,4 +353,24 @@ button.terminal-screen:focus-visible {
 .rise-in { animation: rise-in 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 @media (prefers-reduced-motion: reduce) {
   .result:target, .rise-in { animation: none; }
+}
+
+/* The search answer while it streams: a terminal cursor right after its last word. */
+.md.streaming > :last-child:not(ul, ol)::after,
+.md.streaming > :is(ul, ol):last-child > li:last-child::after {
+  content: "";
+  display: inline-block;
+  width: 0.5em;
+  height: 1em;
+  margin-left: 0.15em;
+  vertical-align: -0.15em;
+  background: #5dff8f;
+  box-shadow: 0 0 8px rgb(93 255 143 / 0.6);
+  animation: terminal-blink 1.06s steps(1) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .md.streaming > :last-child::after,
+  .md.streaming li::after {
+    animation: none;
+  }
 }

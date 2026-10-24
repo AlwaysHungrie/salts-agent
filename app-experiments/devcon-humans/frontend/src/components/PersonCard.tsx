@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, use } from "react";
-import { linkLabel, quoteBeliefs, type Person } from "@/lib/people";
+import { linkLabel, type Person } from "@/lib/people";
 
 // One fetch per person per page load, whichever answer names them first.
 const loaded = new Map<string, Promise<Person | null>>();
@@ -39,10 +39,10 @@ function Card({ id }: { id: string }) {
       <h3 className="text-xl font-semibold tracking-tight text-white">{name}</h3>
       <p className="mt-1 text-white/80">
         {p.headline}
-        {p.location && <span className="text-white/40"> · {p.location}</span>}
+        {/* Not when the headline already says where. */}
+              {p.location && !p.headline.includes(p.location) && <span className="text-white/40"> · {p.location}</span>}
       </p>
       <p className="mt-2 leading-relaxed text-white/55">{p.summary}</p>
-      {p.beliefs.length > 0 && <p className="mt-2 text-white/70 italic">{quoteBeliefs(p.beliefs)}</p>}
       {p.links.length > 0 && (
         <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
           {p.links.map((l) => (

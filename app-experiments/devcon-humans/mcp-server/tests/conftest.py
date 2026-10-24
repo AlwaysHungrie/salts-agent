@@ -1,7 +1,7 @@
 """Test setup: a temp DATA_DIR and fake model clients, so tests run offline.
 
 What people write in tests uses a tiny line format the fake LLM reads:
-  Name: / Headline: / Location: / Skill: AI agents / Belief: Privacy is a right
+  Name: / Headline: / Location: / Skill: AI agents (the page lists every line)
 """
 
 import hashlib
@@ -45,7 +45,7 @@ class FakeLLM:
         headline = _last(user, "Headline") or "Unknown"
         return {"name": _last(user, "Name"), "headline": headline, "location": _last(user, "Location"),
                 "skills": list(dict.fromkeys(_fields(user, "Skill"))), "summary": f"Works as {headline}.",
-                "beliefs": _fields(user, "Belief")}
+                "page": "\n".join(f"- {line}" for line in user.strip().splitlines())}
 
 
 class FakeEmbedder:

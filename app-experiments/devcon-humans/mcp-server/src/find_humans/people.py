@@ -41,8 +41,9 @@ def render_profile(p: Profile, links: list[str]) -> str:
         return f"- {label}: {value}" if value not in (None, "", []) else None
 
     facts = [line("Name", p.name), line("Location", p.location), line("Skills", ", ".join(p.skills)),
-             line("Believes", "; ".join(p.beliefs)), line("Links", " ".join(links))]
-    return "\n".join([f"# {p.headline}", "", *[f for f in facts if f], "", p.summary.strip()]) + "\n"
+             line("Links", " ".join(links))]
+    body = [f"# {p.headline}", "", *[f for f in facts if f], "", p.summary.strip(), "", p.page.strip()]
+    return "\n".join(body) + "\n"
 
 
 def _write(path: Path, data: str) -> None:
@@ -62,8 +63,13 @@ def saved(folder: Path) -> dict | None:
     return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else None
 
 
+# Bump when the profile's fields or prompt change, so every profile counts as changed and its next save rewrites it.
+PROFILE_FORMAT = 6
+
+
 def _digest(entries: list[dict]) -> str:
-    return hashlib.sha256(json.dumps(entries, sort_keys=True).encode()).hexdigest()
+    body = json.dumps({"format": PROFILE_FORMAT, "entries": entries}, sort_keys=True)
+    return hashlib.sha256(body.encode()).hexdigest()
 
 
 def _link(raw: str, limit: int) -> str:
@@ -166,11 +172,12 @@ def delete_person(svc: Services, person_id: str) -> None:
 
 
 def person_from(person_id: str, published: dict) -> Person:
-    # Profiles saved before beliefs were asked for have none.
+    # Profiles saved before the page was written have none.
     p = published["profile"]
     return Person(person_id=person_id, name=p["name"], headline=p["headline"], location=p["location"],
-                  skills=p["skills"], summary=p["summary"], beliefs=p.get("beliefs", []),
-                  links=published["links"], about=published["about"], saved_at=published["saved_at"])
+                  skills=p["skills"], summary=p["summary"], page=p.get("page"),
+                  links=published["links"], about=published["about"],
+                  saved_at=published["saved_at"])
 
 
 def get_person(svc: Services, person_id: str) -> Person:

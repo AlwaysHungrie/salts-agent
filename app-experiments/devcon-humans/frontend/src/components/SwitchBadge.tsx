@@ -5,7 +5,7 @@ import { useState } from "react";
 import { saveProfile } from "@/lib/profile";
 
 /** Signs the user out, so a different ticket can be used. */
-export function SwitchBadge() {
+export function SwitchBadge({ className }: { className: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
 
@@ -24,9 +24,9 @@ export function SwitchBadge() {
       type="button"
       onClick={signOut}
       disabled={busy}
-      className="min-h-10 shrink-0 rounded-full py-1.5 text-sm whitespace-nowrap text-white/45 transition-colors hover:text-white disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/60"
+      className={className}
     >
-      Sign out
+      SIGN OUT
     </button>
   );
 }

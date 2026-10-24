@@ -61,7 +61,8 @@ async def test_my_profile_is_structured_and_saved_by_the_api(api):
     empty = (await api.get("/api/me", headers=ASHA)).json()
     assert empty["profile"] is None and empty["info"]["entries"] == []
 
-    await server.add_info(text=about("Asha Rao", "Builds AI agents", "AI agents") + "Belief: Privacy is a right\n",
+    text = about("Asha Rao", "Builds AI agents", "AI agents") + "Telegram: @asha\n"
+    await server.add_info(text=text,
                           links=["https://asha.dev"], ctx=server.SimpleNamespace(headers=ASHA))
     unsaved = (await api.get("/api/me", headers=ASHA)).json()
     assert unsaved["info"]["unsaved_changes"] and unsaved["profile"] is None
@@ -73,12 +74,12 @@ async def test_my_profile_is_structured_and_saved_by_the_api(api):
     assert body["profile"] | {"saved_at": None} == {
         "person_id": body["info"]["person_id"], "name": "Asha Rao", "headline": "Builds AI agents",
         "location": None, "skills": ["AI agents"], "summary": "Works as Builds AI agents.",
-        "beliefs": ["Privacy is a right"], "links": ["https://asha.dev"],
-        "about": [about("Asha Rao", "Builds AI agents", "AI agents").strip() + "\nBelief: Privacy is a right"],
+        "page": body["profile"]["page"], "links": ["https://asha.dev"],
+        "about": [about("Asha Rao", "Builds AI agents", "AI agents").strip() + "\nTelegram: @asha"],
         "saved_at": None}
 
     person = await api.get(f"/api/people/{body['info']['person_id']}", headers=ASHA)
-    assert person.json()["beliefs"] == ["Privacy is a right"]
+    assert "- Telegram: @asha" in person.json()["page"]  # anything they wrote, in the readable page
 
 
 async def test_the_api_needs_a_secret_and_answers_failures_with_codes(api):

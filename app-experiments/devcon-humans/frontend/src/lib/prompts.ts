@@ -12,7 +12,7 @@ ${text}`;
 
 /** The profile page: one message at a time, no back and forth, and saving is the page's button. */
 export function profileMessage(text: string): string {
-  return `[Humans profile page. What follows is the user telling you about themselves, or asking to change their profile. Add it with add_info in their own words (links as links), or delete with delete_info what they want gone (my_info lists the entries). Do not call save_profile: the page has a Save button. They cannot reply to this, so ask no questions. In one or two sentences say what you added or removed, then what else would help people find them (what they work on, links, what they believe in).]
+  return `[Humans profile page. What follows is the user telling you about themselves, or asking to change their profile. Every message changes the profile: call add_info with it before you reply, whatever it says, unless they ask to remove something, then call delete_info. Never say you added or removed anything without that call succeeding. Add it with add_info: the text word for word as they wrote it, leaving nothing out (what they believe in matters as much as what they do), and links as links, or delete with delete_info what they want gone (my_info lists the entries). Do not call save_profile: the page has a Save button. They cannot reply to this, so ask no questions. In one or two sentences say what you noted or removed, and that it reaches their profile when they press Save, then what else would help people find them (what they work on, links, what they believe in).]
 
 ${text}`;
 }

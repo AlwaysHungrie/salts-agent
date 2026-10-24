@@ -107,33 +107,43 @@ export async function spendBlocked(host: SessionHost): Promise<string> {
   const month = limit > 0 && usd >= limit;
   const day = day_limit > 0 && day_usd >= day_limit;
   if (!month && !day) return "";
-  if (!(await limitApplies(host))) return "";
-  if (month) {
-    return (
-      `This agent has reached its spending limit for this month ` +
+  const scope = await limitScope(host);
+  if (scope === "none") return "";
+  const refusal = month
+    ? `This agent has reached its spending limit for this month ` +
       `($${usd.toFixed(2)} of $${limit.toFixed(2)}). ` +
       `It will answer again next month, or when its administrator raises the limit.`
-    );
-  }
-  return (
-    `This agent has reached its spending limit for today ` +
-    `($${day_usd.toFixed(2)} of $${day_limit.toFixed(2)}). ` +
-    `It will answer again tomorrow (midnight UTC), or when its administrator raises the limit.`
-  );
+    : `This agent has reached its spending limit for today ` +
+      `($${day_usd.toFixed(2)} of $${day_limit.toFixed(2)}). ` +
+      `It will answer again tomorrow (midnight UTC), or when its administrator raises the limit.`;
+  return scope === "fleet" ? `${refusal} ${ownKeyHint(host)}` : refusal;
 }
 
 /**
- * A fleet agent's limit guards the admin's money only: it holds while the agent runs on
- * the fleet's default key, and lifts once its user picks a key of their own. Read only
- * on the way to a refusal, so a turn under the limit pays for none of it.
+ * How a fleet agent's user gets past the fleet's limit: their own OpenRouter key, picked
+ * in the agent's settings on the web app, lifts it (see `limitScope`).
  */
-async function limitApplies(host: SessionHost): Promise<boolean> {
+function ownKeyHint(host: SessionHost): string {
+  const base = host.env.APP_URL?.trim().replace(/\/+$/, "");
+  const where = base
+    ? `in this agent's settings at ${base}/a/${host.agentId()}/settings`
+    : "in this agent's settings";
+  return `To keep going now, on your own terms, add your own OpenRouter API key ${where}: the limit no longer applies once the agent runs on your key.`;
+}
+
+/**
+ * Whose limit a refused turn hits. A fleet agent's limit guards the admin's money only:
+ * it holds while the agent runs on the fleet's default key ("fleet") and lifts once its
+ * user picks a key of their own ("none"). Any other agent's limit always holds ("agent").
+ * Read only on the way to a refusal, so a turn under the limit pays for none of it.
+ */
+async function limitScope(host: SessionHost): Promise<"none" | "agent" | "fleet"> {
   const row = await directory(host.env).get(host.agentId());
-  if (!row?.fleet_id) return true;
+  if (!row?.fleet_id) return "agent";
   const defaultKey = (await host.registry().meta()).defaults.openrouter_key_id ?? "";
-  if (!defaultKey) return false;
+  if (!defaultKey) return "none";
   await host.loadConfig();
-  return host.config().openrouter_key_id === defaultKey;
+  return host.config().openrouter_key_id === defaultKey ? "fleet" : "none";
 }
 
 /** A whole turn, without streaming. */

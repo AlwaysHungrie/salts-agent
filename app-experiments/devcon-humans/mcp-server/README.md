@@ -40,17 +40,20 @@ so a lost secret means a lost profile.
 | Tool | Cost | What it does |
 |---|---|---|
 | `search_people {query, offset}` | ~$0.00002 | Saved profiles ranked by BM25 + embedding similarity (reciprocal rank fusion), 10 per page; `next_offset` for more |
-| `get_person {person_id}` | free | Saved profile (headline, location, skills, summary, beliefs), everything the person wrote, links |
+| `get_person {person_id}` | free | Saved profile (headline, location, skills, summary, readable page), everything the person wrote, links |
 | `add_info {text?, links?}` | free | Adds to your entries: the text is one entry, each link another |
 | `my_info` | free | Your entries with `entry_id`s, the saved profile, `unsaved_changes` |
 | `delete_info {entry_ids}` | free | Deletes some of your entries |
-| `save_profile` | ~$0.001 | One model call writes the profile (headline, location, skills, summary, beliefs) from your entries, then it is embedded and searchable. With no entries left, you leave search. Unchanged entries: no model call |
+| `save_profile` | ~$0.001 | One model call writes the profile (headline, location, skills, summary, and a readable Markdown page) from your entries, then it is embedded and searchable. With no entries left, you leave search. Unchanged entries: no model call |
 | `delete_my_profile` | free | Deletes all your entries and your saved profile |
 | `ping` | free | People with a saved profile |
 
 Search and `get_person` read only saved profiles. Added or deleted entries reach them on the next `save_profile`.
-Beliefs are what the person says they believe in or care about, so a search like "privacy is a right" finds people
-who think alike. Profiles saved before beliefs existed have none until their next save with changed entries.
+The page is the profile as people read it: short Markdown sections with bold labels, holding everything the person
+wrote (beliefs, what they want, handles such as Telegram), not only what fits the fixed fields. It is indexed and
+embedded with the rest, so a search like "privacy is a right" finds people who think alike. `PROFILE_FORMAT` in `people.py` is
+part of the entries hash: bumping it when the profile's fields or prompt change makes every profile show
+`unsaved_changes`, and its next save rewrites it.
 
 ## HTTP API
 
