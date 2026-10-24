@@ -25,8 +25,8 @@ address without the `/mcp`.
 ## Behaviour
 
 - **Front page** (`/`): the mooned landing page (from `~/one-day-builds/mooned`), copied with its assets: the
-  WebGL rain scene (`CyberScene`, `public/scene/`), rain audio (`RainAudio`, `public/audio/`), the alien-script
-  signs (`public/fonts/`, `src/data/`) and the "What is this?" ink dialog (`InkDialog`). Its dark body styles
+  WebGL rain scene (`CyberScene`, `public/scene/`), rain audio (`RainAudio`, `public/audio/`), street signs
+  in Marathi and Gujarati with plain marks of Ethereum and other layer 1 chains (`src/data/sign-words.ts`, subset fonts in `public/fonts/`) and the "What is this?" ink dialog (`InkDialog`). Its dark body styles
   also dress search and profile (`body:has(.mooned, .terminal-page)`). The rain audio is mounted in the root
   layout, so it keeps playing from page to page. Green terminal text sits on the vending machine's two
   screens (`VendingScreens`, an HTML overlay matched to where the shader draws the machine): the big one reads
