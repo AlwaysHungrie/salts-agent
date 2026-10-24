@@ -37,6 +37,12 @@ own `OPENROUTER_API_KEY`.
   calls it every time it opens and on "New chat", so nothing carries over between visits. `POST { message }`
   streams the reply as server-sent events. Messages over 4000 characters, or with any line starting `!word` or
   `/word`, are refused.
+- **Admin mode** (`POST /api/admin/session { email }`): off unless `HUMANS_ADMIN_KEY` (32+ characters) is set.
+  A browser whose local storage has `HUMANS_ADMIN_KEY` set to the same value (`localStorage.setItem("HUMANS_ADMIN_KEY", "…")`
+  in the console) shows a "sign in as" field under the badge. The key goes in the `x-humans-admin-key` header; a
+  wrong key answers 404. The session is that email's user (the latest one, if several tickets share it), so the
+  chat reaches their own agent with their user key and find-humans secret. An email with no user yet becomes one,
+  id `dc-email-` + SHA-256 of the email, its agent found or added in the fleet by email as on first pickup.
 - Every chat write needs the session cookie and must come from this origin. Agent errors are logged, never relayed.
 
 ## Collection

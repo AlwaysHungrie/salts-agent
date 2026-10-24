@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { AdminSignIn } from "@/components/AdminSignIn";
 import { Chat } from "@/components/Chat";
 import { SwitchBadge } from "@/components/SwitchBadge";
 import { UserIdForm } from "@/components/UserIdForm";
@@ -39,6 +40,7 @@ export default async function Home() {
         </section>
         <div className="pb-16">
           <UserIdForm />
+          <AdminSignIn />
         </div>
       </main>
     </div>
