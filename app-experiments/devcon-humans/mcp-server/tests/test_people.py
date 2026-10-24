@@ -2,6 +2,7 @@ import json
 
 import pytest
 
+from find_humans import people
 from find_humans.errors import ToolFailure
 from find_humans.identity import caller, person_id
 from find_humans.people import add_info, delete_info, delete_person, get_person, my_info, save_profile
@@ -24,7 +25,7 @@ def test_the_secret_header_decides_who_you_are():
         assert e.value.code == code
 
 
-async def test_entries_are_free_and_reach_search_only_when_saved(svc):
+async def test_entries_are_free_and_reach_search_only_when_saved(svc, monkeypatch):
     info = add_info(svc, ASHA, about("Asha Rao", "Builds AI agents", "AI agents, Python"),
                     links=["github.com/asha", "https://asha.dev"])
     assert [e.kind for e in info.entries] == ["text", "link", "link"]
@@ -39,6 +40,10 @@ async def test_entries_are_free_and_reach_search_only_when_saved(svc):
     assert svc.llm.calls == ["person_profile"] and svc.embedder.calls == 1
     await save_profile(svc, ASHA)  # nothing changed: no model call
     assert svc.llm.calls == ["person_profile"]
+    monkeypatch.setattr(people, "PROFILE_FORMAT", people.PROFILE_FORMAT + 1)
+    assert my_info(svc, ASHA).unsaved_changes  # a new profile format: the next save rewrites it
+    await save_profile(svc, ASHA)
+    assert svc.llm.calls == ["person_profile", "person_profile"]
 
     page = await search(svc, "AI agents")
     assert page.total == 1 and page.people[0].person_id == ASHA and page.people[0].name == "Asha Rao"

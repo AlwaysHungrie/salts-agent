@@ -10,7 +10,8 @@ export type Person = {
   location: string | null;
   skills: string[];
   summary: string;
-  beliefs: string[];
+  /** Their profile as Markdown, everything they wrote; null for profiles saved before there was one. */
+  page: string | null;
   links: string[];
   about: string[];
   saved_at: string;
@@ -41,9 +42,4 @@ export function linkLabel(url: string): string {
 export function profileState(p: MyProfile | null): "ACTIVE" | "INCOMPLETE" | "NOT ADDED" {
   if (p?.profile) return "ACTIVE";
   return p?.info.entries.length ? "INCOMPLETE" : "NOT ADDED";
-}
-
-/** Beliefs as one quoted line: each starting with a capital, no closing full stop. */
-export function quoteBeliefs(beliefs: string[]): string {
-  return beliefs.map((b) => `“${b.charAt(0).toUpperCase()}${b.slice(1).replace(/\.$/, "")}”`).join(" · ");
 }

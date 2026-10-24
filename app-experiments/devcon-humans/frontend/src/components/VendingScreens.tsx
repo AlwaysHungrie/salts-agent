@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSyncExternalStore } from "react";
 import { parseProfile, saveProfile, storedProfile, subscribeProfile } from "@/lib/profile";
@@ -15,7 +16,8 @@ import { SignInPanel } from "./SignInPanel";
  *
  * The big screen reads "Enter" and opens the sign-in dialog, which leads to search once the
  * user's agent is set up; signed in already, it goes straight to search.
- * The small one shows "Profile found" and the email while this browser is signed in.
+ * The small one shows "Profile found" and the email while this browser is signed in, and
+ * opens the profile page.
  */
 export function VendingScreens({ signedIn }: { signedIn: boolean }) {
   const router = useRouter();
@@ -64,10 +66,14 @@ export function VendingScreens({ signedIn }: { signedIn: boolean }) {
       <div className="absolute left-[23.2%] top-[38.7%] h-[12%] w-[29.3%]">
         <div className="terminal-screen" aria-live="polite">
           {found && (
-            <span className="flex w-full flex-col items-start gap-[4cqw] px-[7cqw]">
+            <Link
+              href="/profile"
+              aria-label="Your profile"
+              className="pointer-events-auto flex h-full w-full flex-col items-start justify-center gap-[4cqw] px-[7cqw] transition-[filter] duration-300 hover:brightness-125"
+            >
               <span className="terminal-text text-[12cqw] leading-none">PROFILE FOUND</span>
               <span className="terminal-text w-full truncate text-[8cqw] leading-none opacity-80">{found.email}</span>
-            </span>
+            </Link>
           )}
         </div>
       </div>

@@ -19,8 +19,8 @@ class Profile(LLMModel):
     skills: list[str] = Field(description="5-25 skills, roles, tools and domains under their common names, strongest "
                                           "first, including ones their work clearly implies")
     summary: str = Field(description="2-4 sentences, factual: what they do, for whom, notable work")
-    beliefs: list[str] = Field(description="What they say they believe in or care about, each in a short line in "
-                                           "their words; empty when they say none")
+    page: str = Field(description="Their profile for people to read, in Markdown: short sections, each a bold label "
+                                  "then a line or a few bullets, covering everything they wrote")
 
 
 # ---- results ----
@@ -49,7 +49,8 @@ class Person(BaseModel):
     location: str | None
     skills: list[str]
     summary: str
-    beliefs: list[str]
+    page: str | None = Field(description="Their profile as Markdown, everything they wrote; null for profiles "
+                                         "saved before there was one")
     links: list[str]
     about: list[str] = Field(description="What they wrote about themselves, as saved")
     saved_at: str
@@ -63,7 +64,7 @@ class Hit(BaseModel):
     location: str | None
     skills: list[str]
     summary: str
-    beliefs: list[str]
+    page: str | None
     links: list[str]
     keyword_rank: int | None = Field(description="Place on words alone (BM25); null when no query word appears")
     meaning_rank: int = Field(description="Place on meaning alone (embeddings)")

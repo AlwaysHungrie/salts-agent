@@ -387,6 +387,8 @@ describe("the spending limit", () => {
       .reply;
     // Said in words the person can act on, rather than a silent failure or a 402.
     expect(reply).toContain("spending limit");
+    // Not a fleet agent: no fleet limit for an own key to lift.
+    expect(reply).not.toContain("OpenRouter API key");
   });
 
   it("does not call the provider once the limit is reached", async () => {
@@ -448,11 +450,13 @@ describe("the spending limit", () => {
     return { email, agentId: agent.id, sessionId: session.id };
   }
 
-  it("refuses a fleet agent on the fleet's default key", async () => {
+  it("refuses a fleet agent on the fleet's default key, and points to a key of its own", async () => {
     const { sessionId, email } = await fleetOverLimit();
     const reply = ((await (await say(sessionId, email, "hello")).json()) as { reply: string })
       .reply;
     expect(reply).toContain("spending limit");
+    // The fleet's limit lifts on the user's own key, so the refusal says where to add one.
+    expect(reply).toContain("add your own OpenRouter API key");
   });
 
   it("lets a fleet agent on its user's own key past the limit", async () => {
@@ -499,9 +503,7 @@ describe("bang commands over chat", () => {
     const { sessionId, email, agentId } = await chatFixture();
     const reply = async (message: string) =>
       ((await (await say(sessionId, email, message)).json()) as { reply: string }).reply;
-    expect(await reply("!docs")).toContain(
-      "The user guide: https://app.salts.dev/guide"
-    );
+    expect(await reply("!docs")).toContain("The user guide: https://app.salts.dev/guide");
     expect(await reply("!settings")).toBe(
       `This agent's settings: https://app.salts.dev/a/${agentId}/settings`
     );

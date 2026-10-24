@@ -115,7 +115,7 @@ async def search(svc: Services, query: str, offset: int = 0, limit: int | None =
         p = published["profile"]
         people.append(Hit(position=offset + n + 1, person_id=idx.ids[i], name=p["name"], headline=p["headline"],
                           location=p["location"], skills=p["skills"], summary=p["summary"],
-                          beliefs=p.get("beliefs", []), links=published["links"],
+                          page=p.get("page"), links=published["links"],
                           keyword_rank=keyword_rank.get(i), meaning_rank=meaning_rank[i]))
     end = offset + len(window)
     return Page(query=query, total=len(order), offset=offset, people=people,

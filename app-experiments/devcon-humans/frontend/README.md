@@ -36,16 +36,17 @@ address without the `/mcp`.
   The name and email are kept in local storage (`HUMANS_PROFILE`) for that; the session stays in its cookie,
   and a stored profile without a valid cookie is cleared.
 - **Search** (`/search`, the first view after signing in): one line to type who you are looking for, or something
-  you believe in. The header shows the email, then `VIEW PROFILE (ACTIVE)` once a profile is saved,
-  `(INCOMPLETE)` when the user has told the agent things but never saved, `(NOT ADDED)` before that. Each answer
+  you believe in. The header shows `VIEW PROFILE (ACTIVE)` once a profile is saved,
+  `(INCOMPLETE)` when the user has told the agent things but never saved, `(NOT ADDED)` before that, then
+  the email and, at the end of the row, "Sign out" (on the profile page too), which clears the stored profile. Each answer
   shows the query, the agent's reply, and every person it links as a result card (`GET /api/people/:id`);
   follow-ups keep the thread. A new session each time the page opens, nothing kept.
-- **Profile** (`/profile`): the saved profile (headline, location, summary, beliefs, skills, links), **Save**
+- **Profile** (`/profile`): the saved profile (headline and location, then the page the profile writer made from everything the user said: short sections under bold labels), **Save**
   (`POST /api/profile`, publishes it to search) and **Share on X** (an X post with the site's address). Telling
   the agent about yourself is one message at a time (`POST /api/profile/message`): each runs in a session of its
   own, deleted once the reply ends, so there is no back and forth; the page reloads the profile after each
-  (`GET /api/profile`). The agent adds or deletes entries but never saves; the button does. "Sign out" clears
-  the stored profile.
+  (`GET /api/profile`). The agent adds or deletes entries but never saves; the button does. On the front page the
+  machine's small screen ("PROFILE FOUND") opens this page.
 - **Link previews**: Open Graph and Twitter card from `layout.tsx`, the image `src/app/opengraph-image.jpg` (and
   `twitter-image.jpg`), a 1200 × 630 capture of the front page. Set `SITE_URL` so its address is absolute (on
   Vercel, Next.js uses the deployment's own).

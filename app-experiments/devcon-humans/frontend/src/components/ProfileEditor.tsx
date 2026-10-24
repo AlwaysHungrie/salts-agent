@@ -1,10 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { linkLabel, quoteBeliefs, type MyProfile } from "@/lib/people";
-import { sendMessage } from "@/lib/reply";
+import type { MyProfile } from "@/lib/people";
+import { sendMessage, visibleReply } from "@/lib/reply";
 import { Markdown } from "./Markdown";
-import { SwitchBadge } from "./SwitchBadge";
 import { TerminalInput } from "./TerminalInput";
 
 /** One message's exchange: what was sent, and the reply as it arrives. */
@@ -43,10 +42,17 @@ export function ProfileEditor({ name, initial }: { name: string; initial: MyProf
     setSending(true);
     setShot({ sent: text, reply: "", error: "" });
     try {
-      await sendMessage("/api/profile/message", text, {
+      const tools = await sendMessage("/api/profile/message", text, {
         onText: (d) => setShot((s) => s && { ...s, reply: s.reply + d }),
         onTool: setTool,
+        // Show the change as soon as it is stored, not when the reply ends.
+        onToolDone: (name, ok) => {
+          if (ok && /(add_info|delete_info)$/.test(name)) void refresh();
+        },
       });
+      // The reply alone is no proof: only a finished add or delete changed the profile.
+      if (!tools.some((t) => /(add_info|delete_info)$/.test(t)))
+        setShot((s) => s && { ...s, error: "Nothing was saved to your profile. Send it again." });
     } catch (err) {
       setShot((s) => s && { ...s, error: err instanceof Error ? err.message : "Something went wrong. Try again." });
     } finally {
@@ -72,8 +78,8 @@ export function ProfileEditor({ name, initial }: { name: string; initial: MyProf
 
   function share() {
     const text = profile
-      ? `I’m on Humans at Devcon VIII: ${profile.headline}. Find me, or anyone you’re looking for:`
-      : "Finding the best people at Devcon VIII on Humans:";
+      ? `At Devcon VIII? Come find me.\n\n${profile.headline}.\n\nHumans finds you the people at Devcon worth meeting:`
+      : "At Devcon VIII? Humans finds you the people worth meeting:";
     const url = `https://x.com/intent/post?text=${encodeURIComponent(text)}&url=${encodeURIComponent(window.location.origin)}`;
     window.open(url, "_blank", "noopener,noreferrer");
   }
@@ -83,98 +89,87 @@ export function ProfileEditor({ name, initial }: { name: string; initial: MyProf
 
   return (
     <div className="py-8">
-      <h1 className="font-orbitron text-3xl font-black break-words uppercase leading-[0.95] text-white sm:text-5xl">
-        {profile?.name ?? name}
-      </h1>
-
-      {/* The saved profile, as search shows it. */}
-      {profile ? (
-        <div className="mt-6 space-y-4">
-          <p className="text-xl text-white sm:text-2xl">
-            {profile.headline}
-            {profile.location && <span className="text-white/40"> · {profile.location}</span>}
-          </p>
-          <p className="leading-relaxed text-white/65">{profile.summary}</p>
-          {profile.beliefs.length > 0 && (
-            <p className="text-white/80 italic">{quoteBeliefs(profile.beliefs)}</p>
-          )}
-          {profile.skills.length > 0 && <p className="text-sm text-white/45">{profile.skills.join(" · ")}</p>}
-          {profile.links.length > 0 && (
-            <ul className="flex flex-wrap gap-x-4 gap-y-1">
-              {profile.links.map((l) => (
-                <li key={l}>
-                  <a
-                    href={l}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    className="text-[#5dff8f]/90 underline decoration-[#5dff8f]/30 underline-offset-4 hover:decoration-[#5dff8f]"
-                  >
-                    {linkLabel(l)}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          )}
+      {/* Everything to do sits on top: tell the agent, save, share. */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+        <div className="min-w-0 flex-1">
+          <TerminalInput
+            id="tell"
+            label="Tell us about yourself"
+            value={draft}
+            onChange={setDraft}
+            onSubmit={() => void send()}
+            disabled={sending}
+            placeholder="Tell us about yourself…"
+            className="text-xl leading-snug sm:text-2xl"
+          />
         </div>
-      ) : (
-        <p className="mt-6 text-white/55">
-          {unsaved ? "Save to create your profile." : "Tell us who you are, what you work on and what you believe in."}
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void save()}
+            disabled={saving || sending || !unsaved}
+            className={`${button} bg-white text-black hover:opacity-90 ${unsaved ? "shadow-[0_0_24px_rgb(93_255_143/0.45)] ring-2 ring-[#5dff8f]" : ""}`}
+          >
+            {saving ? "Saving…" : unsaved ? "Save" : "Saved"}
+          </button>
+          <button type="button" onClick={share} className={`${button} border border-white/25 text-white hover:border-white/60`}>
+            Share on X
+          </button>
+        </div>
+      </div>
+      {unsaved && (
+        <p className="terminal-text mt-4 text-lg leading-none text-[#ffcf5d] [text-shadow:0_0_8px_rgb(255_207_93/0.45)]">
+          &gt; NOT IN YOUR PROFILE YET. SAVE TO ADD IT.
         </p>
       )}
-      {unsaved && profile && <p className="mt-4 text-sm text-[#ffcf5d]/90">You have unsaved changes.</p>}
-
-      <div className="mt-6 flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={() => void save()}
-          disabled={saving || sending || !unsaved}
-          className={`${button} bg-white text-black hover:opacity-90`}
-        >
-          {saving ? "Saving…" : unsaved ? "Save" : "Saved"}
-        </button>
-        <button type="button" onClick={share} className={`${button} border border-white/25 text-white hover:border-white/60`}>
-          Share on X
-        </button>
-      </div>
       {(saveError || loadError) && (
         <p role="alert" className="mt-4 text-[#ff7a9a]">
           {saveError || loadError}
         </p>
       )}
+      {shot && (
+        <div className="rise-in mt-5">
+          {visibleReply(shot.reply) && <Markdown className={`md-dark ${sending ? "streaming" : ""}`}>{visibleReply(shot.reply)}</Markdown>}
+          {sending && !visibleReply(shot.reply) && (
+            <p className="terminal-text text-xl leading-none">
+              {tool ? "SAVING YOUR NOTE" : "THINKING"}
+              <span className="terminal-cursor" aria-hidden />
+            </p>
+          )}
+          {shot.error && (
+            <p role="alert" className="text-[#ff7a9a]">
+              {shot.error}
+            </p>
+          )}
+        </div>
+      )}
 
-      {/* Telling the agent: one message at a time. */}
-      <div className="mt-14">
-        <TerminalInput
-          id="tell"
-          label="Tell us about yourself"
-          value={draft}
-          onChange={setDraft}
-          onSubmit={() => void send()}
-          disabled={sending}
-          placeholder="Tell us about yourself…"
-          className="text-xl leading-snug sm:text-2xl"
-        />
-        {shot && (
-          <div className="rise-in mt-6">
-            {shot.reply && <Markdown className="md-dark">{shot.reply}</Markdown>}
-            {sending && (
-              <p className="terminal-text text-xl leading-none">
-                {tool ? "SAVING YOUR NOTE" : "THINKING"}
-                <span className="terminal-cursor" aria-hidden />
-              </p>
-            )}
-            {shot.error && (
-              <p role="alert" className="text-[#ff7a9a]">
-                {shot.error}
-              </p>
-            )}
-          </div>
+      <h1 className="mt-12 font-orbitron text-4xl font-black break-words uppercase leading-[0.95] text-white sm:text-6xl">
+        {profile?.name ?? name}
+      </h1>
+
+      {/* The saved profile, as search shows it. */}
+      <section aria-label="Your saved profile" className="mt-8 rounded-2xl border border-white/10 bg-white/[0.035] p-6 backdrop-blur-md sm:p-8">
+        {profile ? (
+          <>
+            <p className="text-xl text-white sm:text-2xl">
+              {profile.headline}
+              {/* Not when the headline already says where. */}
+              {profile.location && !profile.headline.includes(profile.location) && <span className="text-white/40"> · {profile.location}</span>}
+            </p>
+            {/* Written from everything they said: bold labels, a line or bullets under each. */}
+            <Markdown breaks className="md-dark profile-page mt-6">
+              {profile.page ?? profile.summary}
+            </Markdown>
+          </>
+        ) : (
+          <p className="py-6 text-center text-white/55">
+            {unsaved
+              ? "Save to create your profile and let people find you."
+              : "Tell us who you are, what you work on and what you believe in. Then save, and people can find you."}
+          </p>
         )}
-      </div>
-
-      <div className="mt-auto pt-16">
-        <SwitchBadge />
-      </div>
+      </section>
     </div>
   );
 }
