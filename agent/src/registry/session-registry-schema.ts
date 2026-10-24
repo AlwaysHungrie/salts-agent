@@ -254,4 +254,16 @@ export const SESSION_REGISTRY_MIGRATIONS: readonly Migration[] = [
       addColumnIfMissing(sql, "mcp_servers", `oauth_redirect_uri TEXT NOT NULL DEFAULT ''`);
     },
   },
+  {
+    name: "daily spend",
+    up: (sql) => {
+      // The day's running total beside the month's, for `daily_spend_limit`.
+      sql.exec(
+        `CREATE TABLE IF NOT EXISTS daily_spend (
+           day TEXT PRIMARY KEY,
+           usd REAL NOT NULL DEFAULT 0
+         )`
+      );
+    },
+  },
 ];

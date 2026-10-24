@@ -1,6 +1,8 @@
 import { MetaSettingsForm } from "@/components/MetaSettings";
 import { type Capability, EMPTY_META, type FleetRow, type McpCatalogEntry, type MetaSettings, type ModelOption } from "@/lib/agent";
 import { useEffect, useState } from "react";
+import { ApiKeys } from "@/components/ApiKeys";
+import { Section } from "@/components/meta/pieces";
 
 /**
  * A fleet's own settings. Saving overwrites every agent in the fleet (their meta and
@@ -125,6 +127,13 @@ export function FleetSettingsDialog({
               mcpCatalog={mcpCatalog}
               capabilities={capabilities}
             />
+
+            <Section
+              title="Fleet API key"
+              hint="Lets your own app find this fleet's agents by email address, add new ones and talk to them. Takes effect at once, without Save and apply."
+            >
+              <ApiKeys fleetId={fleet.fleet_id} roles={["fleet"]} />
+            </Section>
 
             {busy && (
               <p className="text-muted pb-4 text-xs leading-[1.33]">

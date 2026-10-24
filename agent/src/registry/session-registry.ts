@@ -47,6 +47,7 @@ import {
   addStorageBytes,
   spendState,
   spendThisMonth,
+  spendToday,
   storageRoom,
   storageState,
 } from "./usage";
@@ -222,7 +223,7 @@ export class SessionRegistry extends DurableObject {
     return storageRoom(this.ctx.storage, limit);
   }
 
-  /** Add a finished turn's cost (failed turns still spent tokens) to this month. */
+  /** Add a finished turn's cost (failed turns still spent tokens) to this month and today. */
   addSpend(usd: number): void {
     this.ensureSchema();
     return addSpend(this.ctx.storage, usd);
@@ -234,8 +235,14 @@ export class SessionRegistry extends DurableObject {
     return spendThisMonth(this.ctx.storage);
   }
 
-  /** This month's spend and its ceiling (0 = none), for the turn gate and the dialog. */
-  spendState(): { usd: number; limit: number; month: string } {
+  /** What this agent has spent today (UTC), in US dollars. */
+  spendToday(): number {
+    this.ensureSchema();
+    return spendToday(this.ctx.storage);
+  }
+
+  /** This month's and today's spend and their ceilings (0 = none), for the turn gate and the dialog. */
+  spendState(): ReturnType<typeof spendState> {
     this.ensureSchema();
     return spendState(this.ctx.storage);
   }

@@ -31,16 +31,62 @@ const REASONING: { id: ReasoningEffort; label: string; hint: string }[] = [
 ];
 
 /**
- * How much of the month's ceiling is left, as a whole number from 0 to 100.
+ * How much of a ceiling is left, as a whole number from 0 to 100.
  *
  * Whole numbers because a percentage with decimals in it invites reading it as an
  * exact figure; the dollars underneath are the exact figure. Rounded down, so a
  * nearly-spent agent never reads as having 1% left when it has 0.4%.
  */
-function remainingPercent(spend: SpendState): number {
-  if (spend.limit <= 0) return 100;
-  const left = Math.max(0, spend.limit - spend.usd);
-  return Math.max(0, Math.min(100, Math.floor((left / spend.limit) * 100)));
+function remainingPercent(usd: number, limit: number): number {
+  if (limit <= 0) return 100;
+  const left = Math.max(0, limit - usd);
+  return Math.max(0, Math.min(100, Math.floor((left / limit) * 100)));
+}
+
+/** One period's spend against its ceiling: what is left, and a bar of what is used. */
+function SpendMeter({
+  usd,
+  limit,
+  period,
+}: {
+  usd: number;
+  limit: number;
+  /** "this month" or "today", for when no limit is set. */
+  period: string;
+}) {
+  return (
+    <div className="bg-canvas-soft rounded-2xl px-5 py-4">
+      <div className="tnum text-xl font-[650] leading-[1.3]">
+        {limit > 0 ? (
+          <>
+            {remainingPercent(usd, limit)}% remaining{" "}
+            <span className="text-muted text-xs font-light">
+              {formatUsdShort(usd)} of {formatUsdShort(limit)} spent
+            </span>
+          </>
+        ) : (
+          <>
+            {formatUsdShort(usd)}{" "}
+            <span className="text-muted text-sm font-light">
+              spent {period} (limit not set)
+            </span>
+          </>
+        )}
+      </div>
+      {limit > 0 && (
+        <>
+          {/* The bar is the same number again, for the glance that does
+              not stop to read it. */}
+          <div className="bg-canvas mt-3 h-1.5 overflow-hidden rounded-full">
+            <div
+              className="bg-ink h-full rounded-full"
+              style={{ width: `${100 - remainingPercent(usd, limit)}%` }}
+            />
+          </div>
+        </>
+      )}
+    </div>
+  );
 }
 
 function Row({
@@ -465,45 +511,25 @@ export default function Settings({
               agent?.fleet_id &&
               !!defaultKeyId &&
               config.openrouter_key_id === defaultKeyId && (
-              <Row
-                title={
-                  spend.limit > 0 ? "Monthly spend limit" : "This month's usage"
-                }
-                hint="Set by agent admin. Resets every calendar month."
-              >
-                <div className="bg-canvas-soft rounded-2xl px-5 py-4">
-                  <div className="tnum text-xl font-[650] leading-[1.3]">
-                    {spend.limit > 0 ? (
-                      <>
-                        {remainingPercent(spend)}% remaining{" "}
-                        <span className="text-muted text-xs font-light">
-                          {formatUsdShort(spend.usd)} of{" "}
-                          {formatUsdShort(spend.limit)} spent
-                        </span>
-                      </>
-                    ) : (
-                      <>
-                        {formatUsdShort(spend.usd)}{" "}
-                        <span className="text-muted text-sm font-light">
-                          spent this month (limit not set)
-                        </span>
-                      </>
-                    )}
-                  </div>
-                  {spend.limit > 0 && (
-                    <>
-                      {/* The bar is the same number again, for the glance that does
-                          not stop to read it. */}
-                      <div className="bg-canvas mt-3 h-1.5 overflow-hidden rounded-full">
-                        <div
-                          className="bg-ink h-full rounded-full"
-                          style={{ width: `${100 - remainingPercent(spend)}%` }}
-                        />
-                      </div>
-                    </>
-                  )}
-                </div>
-              </Row>
+              <>
+                <Row
+                  title={
+                    spend.limit > 0 ? "Monthly spend limit" : "This month's usage"
+                  }
+                  hint="Set by agent admin. Resets every calendar month."
+                >
+                  <SpendMeter usd={spend.usd} limit={spend.limit} period="this month" />
+                </Row>
+                {/* Only once the admin sets one: a second "usage" box would say little. */}
+                {spend.day_limit > 0 && (
+                  <Row
+                    title="Daily spend limit"
+                    hint="Set by agent admin. Resets every day at midnight UTC."
+                  >
+                    <SpendMeter usd={spend.day_usd} limit={spend.day_limit} period="today" />
+                  </Row>
+                )}
+              </>
             )}
 
             {telegram && !locked.has("telegram") && (

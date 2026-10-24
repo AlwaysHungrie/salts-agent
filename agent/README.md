@@ -184,7 +184,11 @@ curl -X POST http://localhost:8787/agents/session-agent/my-session/chat \
 | `POST /api/sessions/:sessionId/fork` | New session seeded with the first `count` messages of this one |
 | `POST /api/sessions/:sessionId/unstick` | Same as the session route above, behind the agent's access list |
 | `GET\|PATCH /api/fleets/:fleetId` | A fleet's settings, with the catalogues its dialog picks from. Fleet admin only |
-| `POST /api/fleets/:fleetId/agents` | Add agents to a fleet, one per address |
+| `POST /api/fleets/:fleetId/agents` | Add agents to a fleet, one per address. Fleet admin or fleet key |
+| `GET /api/fleets/:fleetId/agents?email=` | The fleet's agents whose access list holds that address. Fleet admin or fleet key |
+| `POST /api/fleets/:fleetId/agents/:agentId/api-keys/:role` | Issue a fleet agent's `admin` or `user` key, replacing its old one; the answer carries it once. Fleet admin or fleet key |
+| `GET /api/fleets/:fleetId/api-keys` | The fleet key, like an agent's key list: `{ keys: [{ role: "fleet", hint, created_at }] }`, never the key. Fleet admin, signed in |
+| `POST\|DELETE /api/fleets/:fleetId/api-keys/fleet` | A new fleet key (shown once, replaces the old), or revoke it. Fleet admin, signed in |
 | `DELETE /api/agents?fleet=:fleetId` | Delete a fleet's agents, a page at a time. Fleet admin only |
 | `POST /api/business-requests` | A signed-in account asks for a higher agent limit |
 | `GET\|POST /api/wallet` | The caller's OpenRouter wallet / add a pasted key `{ key, connected? }`, checked with OpenRouter first and given a random nickname. A key already in the wallet is refused ("Key already imported"); `connected` (a key just made through OpenRouter's PKCE flow) also requires the key to carry a credit limit. At most `max_wallet_keys` |
@@ -268,6 +272,12 @@ under `/api` and `/agents` refuses a caller it cannot identify.
 owner-only operations). It names nobody: an `x-user-email` header is ignored, with or
 without the secret, so the secret cannot be used to act as a user. Leave it unset and
 the admin routes are closed.
+
+**A fleet key** (`salt_fleet_<fleetId>_<secret>`, made by the fleet admin in the fleet's
+settings) acts for the fleet admin on `/api/fleets/<fleetId>/agents…` only: finding the
+fleet's agents by address, adding agents, and issuing those agents' own keys. It opens no
+agent route, no other fleet, and neither the fleet's settings nor its own key. Only its
+hash is stored; replacing or revoking it ends the old one at once.
 
 An address not on an agent's access list is told the agent does not exist rather than
 that it may not have it, however it was arrived at. Session routes are covered by the

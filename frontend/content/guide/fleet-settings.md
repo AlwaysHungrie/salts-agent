@@ -22,6 +22,7 @@ We recommend locking settings that cost you money, and leaving the rest unlocked
 |---|---|
 | **OpenRouter** | The key from your OpenRouter wallet that every agent uses. Lock it if you are paying and do not want users to replace it with their own key. If you leave it unlocked, users see it as **Default fleet key** and can switch back to it after trying their own. |
 | **Monthly spend limit** | How much each agent can spend in a calendar month, in US dollars. 0 means no limit. It only applies while an agent uses your default key, since a user on their own key is paying for themselves. Users can see it but cannot change it. |
+| **Daily spend limit** | The same as **Monthly spend limit**, but for each day, resetting at midnight UTC. It stops one busy day from using up a month's allowance. 0 means no limit. |
 | **Member limit** | How many other people each user can add to their agent. 0 means no limit. Users cannot change it. |
 | **Model options** | The list of models your users can choose from. Enter each model's OpenRouter ID, for example `anthropic/claude-haiku-5.5`, and optionally a name. Anything in brackets in the name, such as `Haiku (haiku)`, is a nickname users can switch to with `!model haiku`. Leave the list empty to use the default list. |
 | **Model** | The model every agent starts on. Lock it if you want everyone on the same model. |

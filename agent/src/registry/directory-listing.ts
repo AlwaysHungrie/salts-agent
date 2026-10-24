@@ -257,4 +257,68 @@ export function setFleetMeta(storage: DurableObjectStorage, fleetId: string, jso
 
 export function removeFleetMeta(storage: DurableObjectStorage, fleetId: string): void {
   storage.sql.exec(`DELETE FROM fleet_meta WHERE fleet_id = ?`, fleetId);
+  storage.sql.exec(`DELETE FROM fleet_keys WHERE fleet_id = ?`, fleetId);
+}
+
+/** The fleet's agents whose access list holds `email`, oldest first. */
+export function fleetAgentsFor(
+  storage: DurableObjectStorage,
+  fleetId: string,
+  email: string
+): AgentRow[] {
+  const wanted = email.trim().toLowerCase();
+  if (!fleetId || !wanted) return [];
+  return storage.sql
+    .exec(
+      `SELECT id, name, created_at, updated_at, allowed_emails, admin_email,
+              fleet_id, fleet_name
+         FROM agents
+        WHERE fleet_id = ?1 AND instr(char(10) || allowed_emails || char(10), char(10) || ?2 || char(10)) > 0
+        ORDER BY created_at, id`,
+      fleetId,
+      wanted
+    )
+    .toArray() as unknown as AgentRow[];
+}
+
+/** The address that administers a fleet: its agents' admin. Empty when the fleet has none. */
+export function fleetAdmin(storage: DurableObjectStorage, fleetId: string): string {
+  const row = storage.sql
+    .exec(`SELECT admin_email FROM agents WHERE fleet_id = ? LIMIT 1`, fleetId)
+    .toArray()[0] as { admin_email: string } | undefined;
+  return row?.admin_email ?? "";
+}
+
+export type FleetKeyInfo = { hint: string; created_at: number };
+
+export function fleetKey(
+  storage: DurableObjectStorage,
+  fleetId: string
+): (FleetKeyInfo & { hash: string }) | undefined {
+  return storage.sql
+    .exec(`SELECT hash, hint, created_at FROM fleet_keys WHERE fleet_id = ? LIMIT 1`, fleetId)
+    .toArray()[0] as (FleetKeyInfo & { hash: string }) | undefined;
+}
+
+export function setFleetKey(
+  storage: DurableObjectStorage,
+  fleetId: string,
+  hash: string,
+  hint: string
+): FleetKeyInfo {
+  const created_at = Date.now();
+  storage.sql.exec(
+    `INSERT INTO fleet_keys (fleet_id, hash, hint, created_at) VALUES (?, ?, ?, ?)
+     ON CONFLICT(fleet_id) DO UPDATE SET hash = excluded.hash, hint = excluded.hint,
+       created_at = excluded.created_at`,
+    fleetId,
+    hash,
+    hint,
+    created_at
+  );
+  return { hint, created_at };
+}
+
+export function removeFleetKey(storage: DurableObjectStorage, fleetId: string): void {
+  storage.sql.exec(`DELETE FROM fleet_keys WHERE fleet_id = ?`, fleetId);
 }

@@ -1,0 +1,61 @@
+"""Embedding provider interface."""
+
+from typing import Protocol
+
+from openai import AsyncOpenAI
+
+from .billing import ensure_budget
+from .config import Settings
+from .errors import ToolFailure
+from .llm import MAX_RETRIES, deadline, within
+from .usage import UsageRecord, record
+
+
+class Embedder(Protocol):
+    dim: int
+
+    async def embed(self, texts: list[str]) -> list[list[float]]: ...
+
+
+class OpenRouterEmbedder:
+    def __init__(self, settings: Settings, api_key: str) -> None:
+        self.model = settings.embed_model
+        self.dim = settings.embed_dim
+        self.deadline = deadline(settings.embed_timeout_seconds)
+        self.client = AsyncOpenAI(
+            base_url=settings.embed_base_url,
+            api_key=api_key,
+            timeout=settings.embed_timeout_seconds,
+            max_retries=MAX_RETRIES,
+        )
+
+    async def embed(self, texts: list[str]) -> list[list[float]]:
+        kwargs: dict = {}
+        # OpenAI v3 models can be shortened to the configured dimension.
+        if "text-embedding-3" in self.model:
+            kwargs["dimensions"] = self.dim
+        ensure_budget()
+        resp = await within(self.client.embeddings.create(model=self.model, input=texts, **kwargs),
+                            self.deadline, "the embedding model")
+        vectors = [d.embedding for d in sorted(resp.data, key=lambda d: d.index)]
+        if any(len(v) != self.dim for v in vectors):
+            raise ToolFailure(
+                "config_error",
+                f"embedding model returned {len(vectors[0])} dims, EMBED_DIM is {self.dim}",
+            )
+        if resp.usage is not None:
+            record(
+                UsageRecord(
+                    kind="embedding",
+                    model=self.model,
+                    input_tokens=resp.usage.prompt_tokens or 0,
+                    cost_usd=getattr(resp.usage, "cost", None),
+                )
+            )
+        return vectors
+
+
+def create_embedder(settings: Settings, api_key: str) -> Embedder:
+    if settings.embed_provider == "openrouter":
+        return OpenRouterEmbedder(settings, api_key)
+    raise ToolFailure("config_error", f"unknown EMBED_PROVIDER {settings.embed_provider}")
