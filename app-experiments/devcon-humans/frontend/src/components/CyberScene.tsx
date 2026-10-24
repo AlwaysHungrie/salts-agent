@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { buildSignTextures, type Panel } from "@/lib/sign-canvas";
-import { loadAlienFaces } from "@/lib/alien-script";
+import { loadSignFaces } from "@/lib/sign-script";
 
 /**
  * The night-street hero.
@@ -446,7 +446,7 @@ export default function CyberScene({
       loadImage(depth),
       loadImage(wet),
       machine ? loadImage(machine) : Promise.resolve(null),
-      loadAlienFaces(),
+      loadSignFaces(),
     ]).then(([plateImg, depthImg, wetImg, machineImg]) => {
       const { signs, phase } = buildSignTextures(panels, plateW, plateH);
       upload(gl, plateImg, 0);
