@@ -1,0 +1,42 @@
+[project]
+name = "find-humans"
+version = "0.1.0"
+description = "MCP server: a public directory of people who describe themselves, searchable by anyone connected"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "mcp[cli]>=2.2",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    "openai>=1.40",
+    "uvicorn>=0.30",
+    "starlette>=0.37",
+    "bm25s>=0.3.13",
+    "pystemmer>=3.1.0",
+    "numpy>=2.5.3",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.23",
+]
+
+[project.scripts]
+find-humans-mcp = "find_humans.server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/find_humans"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]

@@ -1,6 +1,6 @@
 import { env, runInDurableObject } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
-import { DEFAULT_CONFIG, sessionIdForChat, sessionLimitMessage, thisMonth } from "../src/registry";
+import { DEFAULT_CONFIG, sessionIdForChat, sessionLimitMessage, thisMonth, today } from "../src/registry";
 import { SHIPPED } from "./shipped";
 
 const SEED = SHIPPED.config_defaults;
@@ -202,6 +202,23 @@ describe("spend accounting", () => {
     expect(state.month).toBe(thisMonth());
     expect(state.usd).toBeCloseTo(2);
     expect(typeof state.limit).toBe("number");
+  });
+
+  it("keeps today's total beside the month's", async () => {
+    await reg.addSpend(0.5);
+    await reg.addSpend(-1);
+    const state = await reg.spendState();
+    expect(state.day).toBe(today());
+    expect(state.day_usd).toBeCloseTo(0.5);
+    expect(state.day_limit).toBe(0);
+    expect(await reg.spendToday()).toBeCloseTo(0.5);
+  });
+});
+
+describe("today", () => {
+  it("is the UTC date, turning at midnight UTC", () => {
+    expect(today(Date.UTC(2026, 9, 24, 23, 59, 59))).toBe("2026-10-24");
+    expect(today(Date.UTC(2026, 9, 25, 0, 0, 0))).toBe("2026-10-25");
   });
 });
 
@@ -419,6 +436,7 @@ describe("mcp servers", () => {
     oauth_token_url: "",
     oauth_authorize_url: "",
     oauth_registration_url: "",
+    oauth_redirect_uri: "",
     oauth_resource: "",
     oauth_verifier: "",
     oauth_state: "",

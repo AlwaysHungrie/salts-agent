@@ -3,7 +3,7 @@ import { modelCatalog } from "../models";
 import { type AgentRow, DEFAULT_META, type FleetRow, type MetaSettings } from "../registry";
 import { deploymentSettings } from "../settings";
 import { redactMeta, validateMeta } from "../validation/meta";
-import { callerEmail } from "../worker/auth";
+import { callerEmail, fleetKeyCaller, newApiKey, newFleetKey } from "../worker/auth";
 import { capabilitiesFor } from "../worker/capability-views";
 import { errorMessage, json, jsonError, readJson } from "../worker/http";
 import { syncWebhook } from "../worker/integrations";
@@ -11,7 +11,7 @@ import { applyMeta, provisionAgent } from "../worker/provisioning";
 import { AGENT_ID, directory, registry } from "../worker/stores";
 import { agentLimitError, fleetMembers } from "./agents";
 
-/** A fleet as its administrator reaches it. */
+/** A fleet as its administrator reaches it, signed in or through the fleet's API key. */
 type FleetCall = {
   request: Request;
   env: Env;
@@ -19,10 +19,16 @@ type FleetCall = {
   fleetId: string;
   fleet: FleetRow;
   email: string;
+  /** Through the fleet key rather than a signed-in session. */
+  viaKey: boolean;
   dir: ReturnType<typeof directory>;
 };
 
-/** Everything under `/api/fleets/:id`, for the fleet's administrator only. */
+/**
+ * Everything under `/api/fleets/:id`, for the fleet's administrator. The fleet's API key
+ * acts for them on its agents (finding and adding them by address, issuing their keys),
+ * never on the fleet's settings or its own key.
+ */
 export async function handleFleets(
   request: Request,
   env: Env,
@@ -32,19 +38,36 @@ export async function handleFleets(
   const fleetId = segments[2];
   if (!fleetId) return undefined;
   const dir = directory(env);
-  const email = await callerEmail(request, env);
+  const signedIn = await callerEmail(request, env);
+  const viaKey = !signedIn && (await fleetKeyCaller(request, env)) === fleetId;
+  const email = signedIn || (viaKey ? await dir.fleetAdmin(fleetId) : "");
   const fleet = email
     ? (await dir.listFleets(email)).find((f) => f.fleet_id === fleetId)
     : undefined;
   if (!fleet) return jsonError("not allowed", 403);
-  const call: FleetCall = { request, env, url, fleetId, fleet, email, dir };
+  const call: FleetCall = { request, env, url, fleetId, fleet, email, viaKey, dir };
 
+  if (segments[3] === "agents") {
+    if (!segments[4]) {
+      if (request.method === "GET") return await findFleetAgents(call);
+      if (request.method === "POST") return await addFleetAgents(call);
+      return undefined;
+    }
+    if (segments[5] === "api-keys" && segments[6] && !segments[7] && request.method === "POST") {
+      return await issueAgentKey(call, decodeURIComponent(segments[4]), segments[6]);
+    }
+    return undefined;
+  }
+  if (viaKey) return jsonError("not allowed", 403);
   if (!segments[3]) {
     if (request.method === "GET") return await getFleet(call);
     if (request.method === "PATCH") return await patchFleet(call);
     return undefined;
   }
-  if (segments[3] === "agents" && request.method === "POST") return await addFleetAgents(call);
+  if (segments[3] === "api-keys") {
+    if (!segments[4] && request.method === "GET") return await listFleetKeys(call);
+    if (segments[4] === "fleet" && !segments[5]) return await handleFleetKey(call);
+  }
   return undefined;
 }
 
@@ -148,4 +171,51 @@ async function addFleetAgents(call: FleetCall): Promise<Response> {
     );
   }
   return json({ agents: created, fleet_id: fleetId });
+}
+
+/** The fleet's agents that `?email=` is on, oldest first; none is an empty list. */
+async function findFleetAgents({ url, fleetId, dir }: FleetCall): Promise<Response> {
+  const email = (url.searchParams.get("email") ?? "").trim().toLowerCase();
+  if (!email) return jsonError("email is required", 400);
+  return json({ agents: await dir.fleetAgentsFor(fleetId, email), fleet_id: fleetId });
+}
+
+/**
+ * Issue one of a fleet agent's own keys (`admin` or `user`), replacing the one it had.
+ * The answer carries the key, shown this once.
+ */
+async function issueAgentKey(
+  { env, fleetId, dir }: FleetCall,
+  agentId: string,
+  role: string
+): Promise<Response> {
+  if (role !== "admin" && role !== "user") return jsonError("role must be admin or user", 400);
+  const row = await dir.get(agentId);
+  if (!row || row.fleet_id !== fleetId) return jsonError("no such agent in this fleet", 404);
+  const { key, hash, hint } = await newApiKey(agentId, role);
+  const saved = await registry(env, agentId).setApiKey(role, hash, hint);
+  return json({ ...saved, key });
+}
+
+/** The fleet's key, shaped like an agent's key list: never the key, only its hint. */
+async function listFleetKeys({ fleetId, dir }: FleetCall): Promise<Response> {
+  const stored = await dir.fleetKey(fleetId);
+  return json({ keys: stored ? [{ role: "fleet", hint: stored.hint, created_at: stored.created_at }] : [] });
+}
+
+/**
+ * The fleet's API key. POST replaces it and answers the new key this once; DELETE
+ * revokes it. Signed in only.
+ */
+async function handleFleetKey({ request, fleetId, dir }: FleetCall): Promise<Response> {
+  if (request.method === "POST") {
+    const { key, hash, hint } = await newFleetKey(fleetId);
+    const saved = await dir.setFleetKey(fleetId, hash, hint);
+    return json({ role: "fleet", ...saved, key });
+  }
+  if (request.method === "DELETE") {
+    await dir.removeFleetKey(fleetId);
+    return json({ ok: true });
+  }
+  return jsonError("method not allowed", 405);
 }

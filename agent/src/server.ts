@@ -16,6 +16,7 @@ import { deploymentSettings, SettingsIncompleteError } from "./settings";
 import {
   apiKeyCaller,
   callerEmail,
+  fleetKeyCaller,
   keyReaches,
   mayUseAgent,
   mayUseSessionAsGuest,
@@ -65,9 +66,16 @@ async function preflight(request: Request, env: Env, segments: string[]) {
  */
 async function gate(request: Request, env: Env, segments: string[]) {
   if ((segments[0] === "api" || segments[0] === "agents") && !(await callerEmail(request, env))) {
-    // No Clerk session: an agent API key, on its own agent's routes only.
+    // No Clerk session: an agent API key on its own agent's routes, or a fleet key on its
+    // own fleet's routes; nothing else.
     const key = await apiKeyCaller(request, env);
-    if (!key || !keyReaches(key.agentId, segments)) return jsonError("unauthorized", 401);
+    const reaches = key
+      ? keyReaches(key.agentId, segments)
+      : segments[0] === "api" &&
+        segments[1] === "fleets" &&
+        !!segments[2] &&
+        (await fleetKeyCaller(request, env)) === decodeURIComponent(segments[2]);
+    if (!reaches) return jsonError("unauthorized", 401);
   }
   const sessionRoute =
     (segments[0] === "agents" && segments[1] === "session-agent" && segments[2]) ||

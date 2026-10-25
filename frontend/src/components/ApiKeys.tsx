@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { CopyField } from "@/components/GuideFields";
 
-type Role = "admin" | "user";
+type Role = "admin" | "user" | "fleet";
 type KeyInfo = { role: Role; hint: string; created_at: number };
 
 const LABEL: Record<Role, { title: string; hint: string }> = {
@@ -15,23 +15,30 @@ const LABEL: Record<Role, { title: string; hint: string }> = {
     title: "User key",
     hint: "Does what a member can: settings, sessions, messages and files.",
   },
+  fleet: {
+    title: "Fleet key",
+    hint: "Finds and adds this fleet's agents by email address, and issues their keys.",
+  },
 };
 
 const button =
   "border-hairline text-ink hover:bg-canvas-soft h-9 rounded-full border px-4 text-xs font-semibold transition disabled:opacity-40";
 
 /**
- * The agent's API keys for `roles`, for calling the Worker without signing in. A key
- * is shown once, when it is generated; after that only its last four characters.
+ * An agent's API keys for `roles` (or, with `fleetId`, the fleet's key), for calling the
+ * Worker without signing in. A key is shown once, when it is generated; after that only
+ * its last four characters.
  */
 export function ApiKeys({
   agentId,
+  fleetId,
   roles,
 }: {
-  agentId: string;
   roles: Role[];
-}) {
-  const base = `/api/agents/${encodeURIComponent(agentId)}/api-keys`;
+} & ({ agentId: string; fleetId?: undefined } | { fleetId: string; agentId?: undefined })) {
+  const base = fleetId
+    ? `/api/fleets/${encodeURIComponent(fleetId)}/api-keys`
+    : `/api/agents/${encodeURIComponent(agentId!)}/api-keys`;
   const [keys, setKeys] = useState<KeyInfo[] | null>(null);
   /** The key just generated, shown in a dialog until it is dismissed, then never again. */
   const [shown, setShown] = useState<{ role: Role; key: string } | null>(null);
@@ -100,7 +107,7 @@ export function ApiKeys({
               <div className="min-w-0">
                 <p className="text-faint tnum mt-1 text-xs">
                   {info
-                    ? `Generated on ${new Date(info.created_at).toLocaleDateString()} (salt_u...${info.hint})`
+                    ? `Generated on ${new Date(info.created_at).toLocaleDateString()} (${role === "fleet" ? "salt_f" : "salt_u"}...${info.hint})`
                     : "No key yet"}
                 </p>
               </div>
@@ -192,8 +199,14 @@ export function ApiKeys({
             </p>
             <p className="text-muted mt-1 text-xs font-light leading-[1.33]">
               You won&rsquo;t see this key again. Copy it now and keep it private.
-              It can be used to access this agent as{" "}
-              {shown.role === "admin" ? "an admin" : "a member"}.
+              {shown.role === "fleet" ? (
+                "It can be used to find and add this fleet’s agents by email address, and to issue their keys."
+              ) : (
+                <>
+                  It can be used to access this agent as{" "}
+                  {shown.role === "admin" ? "an admin" : "a member"}.
+                </>
+              )}
               <br />
               <br /> To be used as Authorization: Bearer &lt;key&gt;
             </p>

@@ -12,6 +12,7 @@ import {
 } from "../src/mcp";
 import { mcpServerReady, mcpServersForChat, mcpToolSpecs } from "../src/capabilities";
 import { EMPTY_MCP_SERVER } from "../src/registry";
+import { needsNewClient } from "../src/routes/mcp-oauth";
 
 /**
  * External MCP servers: the one place this Worker runs code it did not write the
@@ -265,5 +266,38 @@ describe("OAuth helpers", () => {
 
   it("pins the protocol version it negotiates", () => {
     expect(MCP_PROTOCOL_VERSION).toBe("2025-06-18");
+  });
+});
+
+describe("needsNewClient", () => {
+  const authorize = "https://auth.example.com/authorize";
+  const redirect = "https://api.salts.dev/api/mcp/oauth/callback";
+  const registered = server({
+    oauth_client_id: "c1",
+    oauth_authorize_url: authorize,
+    oauth_redirect_uri: redirect,
+  });
+
+  it("reuses a client registered for this server and redirect URI", () => {
+    expect(needsNewClient(registered, authorize, redirect)).toBe(false);
+  });
+
+  it("registers when there is no client yet", () => {
+    expect(needsNewClient(server(), authorize, redirect)).toBe(true);
+  });
+
+  it("registers when the authorization server changed", () => {
+    expect(needsNewClient(registered, "https://other.example.com/authorize", redirect)).toBe(true);
+  });
+
+  it("registers when the Worker's redirect URI changed", () => {
+    const moved = "https://old.workers.dev/api/mcp/oauth/callback";
+    expect(needsNewClient(registered, authorize, moved)).toBe(true);
+  });
+
+  it("registers for a client saved before the redirect URI was recorded", () => {
+    expect(needsNewClient({ ...registered, oauth_redirect_uri: "" }, authorize, redirect)).toBe(
+      true
+    );
   });
 });

@@ -228,6 +228,20 @@ export const AGENT_DIRECTORY_MIGRATIONS: readonly Migration[] = [
       );
     },
   },
+  {
+    name: "fleet keys",
+    up: (sql) => {
+      // A fleet's API key, as a hash: what an app outside salts adds agents to the fleet with.
+      sql.exec(
+        `CREATE TABLE IF NOT EXISTS fleet_keys (
+           fleet_id TEXT PRIMARY KEY,
+           hash TEXT NOT NULL,
+           hint TEXT NOT NULL DEFAULT '',
+           created_at INTEGER NOT NULL DEFAULT 0
+         )`
+      );
+    },
+  },
 ];
 
 export function migrateMembership(storage: DurableObjectStorage) {

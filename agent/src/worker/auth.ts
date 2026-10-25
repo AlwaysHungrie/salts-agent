@@ -151,6 +151,36 @@ export async function apiKeyCaller(request: Request, env: Env): Promise<KeyCalle
 }
 
 /**
+ * A fleet API key: `salt_fleet_<fleetId>_<secret>`. It acts for the fleet's admin on
+ * `/api/fleets/<fleetId>/…` and nowhere else: finding and adding the fleet's agents by
+ * address, and issuing those agents' own keys.
+ */
+const FLEET_KEY = /^salt_fleet_([A-Za-z0-9-]+)_([A-Za-z0-9]{32,})$/;
+
+/** A fresh fleet key, its hash (what is stored) and a hint to recognise it by. */
+export async function newFleetKey(fleetId: string) {
+  const bytes = crypto.getRandomValues(new Uint8Array(24));
+  const secret = [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+  const key = `salt_fleet_${fleetId}_${secret}`;
+  return { key, hash: await sha256(key), hint: secret.slice(-4) };
+}
+
+/** The fleet a bearer fleet key was issued for, when it is that fleet's current key; else undefined. */
+export async function fleetKeyCaller(request: Request, env: Env): Promise<string | undefined> {
+  const offered = (request.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
+  const match = FLEET_KEY.exec(offered);
+  if (!match) return undefined;
+  const fleetId = match[1];
+  const stored = (await directory(env).fleetKey(fleetId))?.hash;
+  if (!stored) return undefined;
+  const enc = new TextEncoder();
+  const offeredHash = enc.encode(await sha256(offered));
+  const storedHash = enc.encode(stored);
+  if (offeredHash.byteLength !== storedHash.byteLength) return undefined;
+  return crypto.subtle.timingSafeEqual(offeredHash, storedHash) ? fleetId : undefined;
+}
+
+/**
  * Who a key acts as on its agent. The admin key is the agent's admin — a member too when
  * the admin is on the access list. The user key is a member with no address of its own.
  */
