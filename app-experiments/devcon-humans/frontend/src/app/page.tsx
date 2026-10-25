@@ -4,6 +4,7 @@ import { PoweredBySalts } from "@/components/PoweredBySalts";
 import { VendingScreens } from "@/components/VendingScreens";
 import WhatIsThis from "@/components/WhatIsThis";
 import scene from "@/data/scene-panels.json";
+import { isAdminSession } from "@/lib/admin";
 import type { Panel } from "@/lib/sign-canvas";
 import { readSession, SESSION_COOKIE } from "@/lib/session";
 
@@ -12,6 +13,10 @@ export default async function Home() {
   const session = await readSession(
     (await cookies()).get(SESSION_COOKIE)?.value,
   );
+  const admin = await isAdminSession(session).catch((err) => {
+    console.error(err);
+    return false;
+  });
   return (
     <main className="mooned fixed inset-0 bg-black">
       <CyberScene
@@ -45,7 +50,7 @@ export default async function Home() {
         </div>
         <WhatIsThis />
       </div>
-      <VendingScreens signedIn={session !== null} />
+      <VendingScreens signedIn={session !== null} admin={admin} />
       <PoweredBySalts />
     </main>
   );

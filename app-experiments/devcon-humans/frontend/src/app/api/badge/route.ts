@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { isAdminEmail } from "@/lib/admin";
 import { sameOrigin } from "@/lib/auth";
 import { users } from "@/lib/db";
 import { fail, failure } from "@/lib/http";
@@ -33,7 +34,8 @@ export async function POST(request: Request) {
       { $set: { name, email, lastSeenAt: now }, $setOnInsert: { userId, createdAt: now } },
       { upsert: true },
     );
-    const token = await signSession({ userId, name });
+    const admin = isAdminEmail(email);
+    const token = await signSession({ userId, name, admin });
     (await cookies()).set(SESSION_COOKIE, token, {
       httpOnly: true,
       sameSite: "lax",
@@ -41,7 +43,7 @@ export async function POST(request: Request) {
       maxAge: SESSION_TTL,
       path: "/",
     });
-    return Response.json({ token, userId, name, email });
+    return Response.json({ token, userId, name, email, admin });
   } catch (err) {
     if (err instanceof PassError) return fail(err.message, 400);
     return failure(err);

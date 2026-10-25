@@ -15,11 +15,12 @@ import { SignInPanel } from "./SignInPanel";
  * image's own aspect (581 × 1163). The screens are placed by their glass in that image.
  *
  * The big screen reads "Enter" and opens the sign-in dialog, which leads to search once the
- * user's agent is set up; signed in already, it goes straight to search.
+ * user's agent is set up; signed in already, it goes straight to search, except in admin mode,
+ * where it opens the dialog again to switch users.
  * The small one shows "Profile found" and the email while this browser is signed in, and
  * opens the profile page.
  */
-export function VendingScreens({ signedIn }: { signedIn: boolean }) {
+export function VendingScreens({ signedIn, admin }: { signedIn: boolean; admin: boolean }) {
   const router = useRouter();
   // The cookie is what signs a browser in: a profile left after it has gone is not shown, and the
   // next sign-in replaces it. (Clearing it here would also wipe the one just saved, before the
@@ -43,7 +44,7 @@ export function VendingScreens({ signedIn }: { signedIn: boolean }) {
           trigger={(open) => (
             <button
               type="button"
-              onClick={found ? () => router.push("/search") : open}
+              onClick={found && !admin ? () => router.push("/search") : open}
               aria-label="Enter"
               className="terminal-screen pointer-events-auto"
             >
@@ -53,6 +54,7 @@ export function VendingScreens({ signedIn }: { signedIn: boolean }) {
         >
           {() => (
             <SignInPanel
+              admin={admin}
               onSignedIn={(p) => {
                 saveProfile(p);
                 router.push("/search");
