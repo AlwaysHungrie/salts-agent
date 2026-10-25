@@ -19,6 +19,15 @@ Click **Manage fleet** on the fleet's row to see every agent in the fleet, along
 
 The new agents start with the fleet's current settings. Remember to tell your new users to sign in with the email address you entered for them.
 
+## Add users from your own app
+
+If you run your own website or app for your users, it can add them to the fleet by itself, using the fleet's API key. We recommend this when people sign up with you rather than with Salts, so nobody has to type their address in by hand.
+
+1. Click **Fleet Settings** on the fleet's row.
+2. Under **Fleet API key**, at the bottom, click **Generate**. Copy the key and keep it on your app's server. It is shown only once, and you don't need to click **Save and apply** for it.
+
+With the key, your app can look up the agent for an email address, add an agent for a new address, and get that agent's own keys so it can chat with it. The new agents start with the fleet's current settings, like any others. If the key is ever lost or leaked, open **Fleet Settings** again and click **Regenerate** or **Revoke**: the old key stops working straight away.
+
 ## Change settings for everyone
 
 1. Click **Fleet Settings** on the fleet's row.

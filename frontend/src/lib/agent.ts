@@ -412,6 +412,8 @@ export type MetaSettings = {
    * answering, until the month turns or the limit is raised.
    */
   monthly_spend_limit: number;
+  /** The same ceiling per UTC day, so one day cannot use up the month. 0 is none. */
+  daily_spend_limit: number;
   /**
    * How many addresses the agent's own access list may grow to. 0 is no ceiling.
    * The agent's user adds members from its settings page; this is the
@@ -459,6 +461,7 @@ export const EMPTY_META: MetaSettings = {
   field_options: {},
   mcp: { templates: [], catalog: [], servers: [], user_servers: true },
   monthly_spend_limit: 0,
+  daily_spend_limit: 0,
   member_limit: 0,
 };
 
@@ -495,7 +498,14 @@ export function recordingSeconds(limits: ClientLimits): number {
   return Math.max(5, Math.min(600, Math.floor(limits.max_upload_bytes.audio / 32_000)));
 }
 
-export type SpendState = { usd: number; limit: number; month: string };
+export type SpendState = {
+  usd: number;
+  limit: number;
+  month: string;
+  day_usd: number;
+  day_limit: number;
+  day: string;
+};
 
 /** A file the user attached, or an image the agent drew, minus the bytes. */
 export type Attachment = {

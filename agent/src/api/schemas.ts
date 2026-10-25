@@ -109,8 +109,17 @@ const ConfigPatchShape = ConfigSchema.omit({ telegram_bot_username: true })
   );
 
 export const SpendSchema = z
-  .object({ usd: z.number(), limit: z.number(), month: z.string() })
-  .openapi("Spend", { description: "This month's model spend and its ceiling (0 = none)." });
+  .object({
+    usd: z.number(),
+    limit: z.number(),
+    month: z.string(),
+    day_usd: z.number(),
+    day_limit: z.number(),
+    day: z.string(),
+  })
+  .openapi("Spend", {
+    description: "This month's and today's (UTC) model spend and their ceilings (0 = none).",
+  });
 
 export const ModelOptionSchema = z
   .object({ id: z.string(), label: z.string(), vision: z.boolean() })
@@ -188,6 +197,7 @@ export const MetaSettingsSchema = z
       user_servers: z.boolean(),
     }),
     monthly_spend_limit: z.number(),
+    daily_spend_limit: z.number(),
     member_limit: z.number(),
   })
   .openapi("MetaSettings", {
@@ -242,6 +252,7 @@ export const McpServerSchema = z
     oauth_token_url: z.string(),
     oauth_authorize_url: z.string(),
     oauth_registration_url: z.string(),
+    oauth_redirect_uri: z.string(),
     oauth_resource: z.string(),
     oauth_return_to: z.string(),
     tools_synced_at: z.number(),

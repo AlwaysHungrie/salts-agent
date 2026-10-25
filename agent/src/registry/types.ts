@@ -163,6 +163,8 @@ export type MetaSettings = {
    * rather than cut off mid-answer.
    */
   monthly_spend_limit: number;
+  /** The same ceiling per UTC day (0 = none), so one day cannot use up the month. */
+  daily_spend_limit: number;
   /**
    * Ceiling on the agent's access list (0 = only the deployment's `max_members`): the
    * administrator's say over how far a fleet agent's user may share it.
@@ -233,6 +235,7 @@ export const DEFAULT_META: MetaSettings = {
   field_options: {},
   mcp: { templates: [], catalog: [], servers: [], user_servers: true },
   monthly_spend_limit: 0,
+  daily_spend_limit: 0,
   member_limit: 0,
 };
 

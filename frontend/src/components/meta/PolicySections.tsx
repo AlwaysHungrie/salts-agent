@@ -6,7 +6,7 @@ import { IdList, inputClass, Section } from "./pieces";
 const SLUG_HINT =
   "Enter any OpenRouter model ID. Leave the list empty to offer the default models.";
 
-/** The administrator's ceilings: monthly spend, and how far the access list may grow. */
+/** The administrator's ceilings: monthly and daily spend, and how far the access list may grow. */
 export function LimitsSection({
   editor,
   spend,
@@ -35,6 +35,27 @@ export function LimitsSection({
           value={meta.monthly_spend_limit || ""}
           onChange={(e) =>
             patch({ monthly_spend_limit: Number(e.target.value) || 0 })
+          }
+          placeholder="0"
+          className={`${inputClass} mt-2`}
+        />
+      </label>
+
+      <label className="mt-4 block">
+        <span className="block text-sm font-semibold leading-[1.43]">
+          Daily spend limit
+        </span>
+        <span className="text-muted block text-xs font-light leading-[1.33]">
+          In US dollars, per day (resets at midnight UTC). Leave as 0 for no limit.
+          {spend ? ` Spent so far today: $${spend.day_usd.toFixed(2)}.` : ""}
+        </span>
+        <input
+          type="number"
+          min={0}
+          step="0.01"
+          value={meta.daily_spend_limit || ""}
+          onChange={(e) =>
+            patch({ daily_spend_limit: Number(e.target.value) || 0 })
           }
           placeholder="0"
           className={`${inputClass} mt-2`}

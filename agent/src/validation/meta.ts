@@ -60,10 +60,10 @@ export function lockedColumns(locked: string[]): Set<string> {
 export const CAPABILITY_FIELD_KEYS = new Set<string>(CAPABILITY_FIELDS.map((f) => String(f.key)));
 
 /** A spend ceiling in dollars, 0 for none. Refused rather than rounded to 0 by accident. */
-function spendLimit(value: unknown): number {
+function spendLimit(value: unknown, field = "monthly_spend_limit"): number {
   const usd = Number(value);
   if (!Number.isFinite(usd) || usd < 0) {
-    throw new Error("monthly_spend_limit must be a positive number of dollars, or 0 for none");
+    throw new Error(`${field} must be a positive number of dollars, or 0 for none`);
   }
   return Math.round(usd * 100) / 100;
 }
@@ -235,6 +235,10 @@ export function validateMeta(
     body.monthly_spend_limit !== undefined
       ? spendLimit(body.monthly_spend_limit)
       : DEFAULT_META.monthly_spend_limit;
+  const daySpend =
+    body.daily_spend_limit !== undefined
+      ? spendLimit(body.daily_spend_limit, "daily_spend_limit")
+      : DEFAULT_META.daily_spend_limit;
   const members =
     body.member_limit !== undefined
       ? memberLimit(body.member_limit, settings)
@@ -257,6 +261,7 @@ export function validateMeta(
     field_options: options,
     mcp: servers,
     monthly_spend_limit: spend,
+    daily_spend_limit: daySpend,
     member_limit: members,
   };
   if (!creation) {
