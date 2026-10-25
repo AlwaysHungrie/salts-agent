@@ -1,0 +1,6 @@
+# Copy to terraform.tfvars (gitignored) and fill in.
+# vercel_team = "..."
+
+atlas_org_id            = "..."
+fleet_api_key           = "..."
+find_humans_signing_key = "..."
