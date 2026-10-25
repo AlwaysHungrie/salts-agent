@@ -289,7 +289,7 @@ export function SignInPanel({
                 <span className="text-sm text-white/50">
                   {file
                     ? "Ready. Click to change."
-                    : "It will be in your inbox"}
+                    : "In your ticket email. On a phone, open it in a browser, not the mail app."}
                 </span>
               </>
             )}
