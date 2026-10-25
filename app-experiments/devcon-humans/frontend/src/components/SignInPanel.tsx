@@ -62,14 +62,16 @@ async function answer(res: Response): Promise<Profile> {
 }
 
 /**
- * Signing in, inside the Enter dialog: the Devcon ticket's .pkpass, and, when this
- * browser's local storage has HUMANS_ADMIN_KEY, any email with no ticket (admin mode;
- * the server checks the key against its own). Once signed in, the user's agent is set up
+ * Signing in, inside the Enter dialog: the Devcon ticket's .pkpass, and, in admin mode
+ * (`admin`: this browser's session is an admin's, or its local storage has HUMANS_ADMIN_KEY,
+ * which the server checks against its own), any email with no ticket. Once signed in, the user's agent is set up
  * here, before `onSignedIn`, so the dialog shows each step rather than closing at once.
  */
 export function SignInPanel({
+  admin,
   onSignedIn,
 }: {
+  admin: boolean;
   onSignedIn: (profile: Profile) => void;
 }) {
   const adminKey = useSyncExternalStore(
@@ -165,7 +167,7 @@ export function SignInPanel({
         },
         body: JSON.stringify({ email }),
       });
-      if (res.status === 404) throw new Error("Admin key not accepted.");
+      if (res.status === 404) throw new Error("Admin mode is not on for this browser.");
       await finish(await answer(res));
     } catch (err) {
       setAdminError(
@@ -231,10 +233,10 @@ export function SignInPanel({
         className="mt-12 grid gap-10 sm:grid-cols-2"
       >
         <div>
+          {/* No `accept`: the iOS picker knows no type for .pkpass and greys the file out. `pick` checks the name. */}
           <input
             ref={input}
             type="file"
-            accept=".pkpass,application/vnd.apple.pkpass"
             className="sr-only"
             tabIndex={-1}
             onChange={(e) => pick(e.target.files?.[0] ?? null)}
@@ -324,7 +326,7 @@ export function SignInPanel({
         </div>
       </form>
 
-      {adminKey && (
+      {(admin || adminKey) && (
         <form onSubmit={bypass} noValidate className="mt-14">
           <div className="mb-6 flex items-center gap-4">
             <span className="font-orbitron text-[0.6rem] font-bold uppercase tracking-[0.35em] text-white/40">

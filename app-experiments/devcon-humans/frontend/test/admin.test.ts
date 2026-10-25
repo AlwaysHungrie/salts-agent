@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { adminEmail, emailUserId, isAdminKey } from "@/lib/admin";
+import { adminEmail, emailUserId, isAdminEmail, isAdminKey, isAdminSession } from "@/lib/admin";
+import { readSession, signSession } from "@/lib/session";
 
 const KEY = "k".repeat(40);
 
@@ -38,5 +39,25 @@ describe("emailUserId", () => {
     expect(emailUserId("a@x.com")).toBe(emailUserId("a@x.com"));
     expect(emailUserId("a@x.com")).not.toBe(emailUserId("b@x.com"));
     expect(emailUserId("a@x.com")).toMatch(/^dc-email-[0-9a-f]{32}$/);
+  });
+});
+
+describe("isAdminEmail", () => {
+  it("knows the admin's ticket, whatever its case", () => {
+    expect(isAdminEmail("dhairyashah98@gmail.com")).toBe(true);
+    expect(isAdminEmail(" DhairyaShah98@Gmail.com ")).toBe(true);
+    expect(isAdminEmail("someone@example.com")).toBe(false);
+  });
+});
+
+describe("admin sessions", () => {
+  it("carry the claim through the JWT, and only when set", async () => {
+    process.env.SESSION_SECRET = "s".repeat(40);
+    const admin = await readSession(await signSession({ userId: "dc-1", name: "d", admin: true }));
+    const plain = await readSession(await signSession({ userId: "dc-2", name: "a" }));
+    expect(admin).toEqual({ userId: "dc-1", name: "d", admin: true });
+    expect(plain).toEqual({ userId: "dc-2", name: "a", admin: false });
+    expect(await isAdminSession(admin)).toBe(true);
+    expect(await isAdminSession(null)).toBe(false);
   });
 });
