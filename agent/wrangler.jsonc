@@ -39,8 +39,8 @@
   // other secret production holds) is also a one-time setup step.
   //
   // `vars` are not inherited by an environment, so CLERK_ISSUER is repeated here rather
-  // than referenced. Point it at a separate Clerk instance if you have one; the same
-  // development instance is fine to start with.
+  // than referenced. Staging signs in against the Clerk development instance, which
+  // the preview deploys of the web app use (`pk_test`); production has its own.
   "env": {
     "staging": {
       "name": "salt-agent-staging",
@@ -81,10 +81,10 @@
   "vars": {
     // The Clerk instance whose session tokens this Worker verifies, as the exact `iss`
     // those tokens carry. Not a secret — it is a public URL, and the key set under it
-    // is public too — so it lives here rather than in `wrangler secret`, and the same
-    // value is right for `wrangler dev` and for a deploy because both sign in against
-    // the same Clerk instance.
-    "CLERK_ISSUER": "https://rich-horse-1284.clerk.accounts.dev",
+    // is public too — so it lives here rather than in `wrangler secret`. This is the
+    // production instance; `wrangler dev` signs in against the development one, so
+    // `.dev.vars` overrides it locally (see `.dev.vars.example`).
+    "CLERK_ISSUER": "https://clerk.salts.dev",
     // The web app the `!docs`, `!settings` and `!mcp` links point at.
     "APP_URL": "https://app.salts.dev",
     // The JSON-RPC endpoint each payment network's transactions are read back from. Where
