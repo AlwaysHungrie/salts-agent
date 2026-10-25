@@ -284,12 +284,12 @@ export function SignInPanel({
             ) : (
               <>
                 <span className="font-medium text-white">
-                  {file ? file.name : "Add your .pkpass ticket"}
+                  {file ? file.name : "Upload your .pkpass ticket"}
                 </span>
                 <span className="text-sm text-white/50">
                   {file
                     ? "Ready. Click to change."
-                    : "In your ticket email. On a phone, open it in a browser, not the mail app."}
+                    : "From your Devcon ticket email"}
                 </span>
               </>
             )}
@@ -312,6 +312,10 @@ export function SignInPanel({
             <strong className="font-semibold text-white">
               Please present your ticket
             </strong>
+          </p>
+          <p>
+            On iOS, use the browser to download the attached .pkpass file
+            instead of the Gmail app.
           </p>
           <p>
             Your <strong className="font-semibold text-white">.pkpass</strong>{" "}
