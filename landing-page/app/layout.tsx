@@ -8,10 +8,27 @@ const inter = Inter({
   weight: ["300", "400", "500", "600", "700"],
 });
 
+const TITLE = "Salts — your own AI agent, always on";
+const DESCRIPTION =
+  "A personal AI agent that is always on and free to run. Talk to it in your browser, on Telegram or on WhatsApp. It remembers what you tell it, reminds you when things are due, and gets things done in the apps you already use.";
+
+// Link previews need absolute URLs; the card image comes from opengraph-image.tsx.
 export const metadata: Metadata = {
-  title: "Salts — your own AI agent, always on",
-  description:
-    "A personal AI agent that is always on and free to run. Talk to it in your browser, on Telegram or on WhatsApp. It remembers what you tell it, reminds you when things are due, and gets things done in the apps you already use.",
+  metadataBase: new URL("https://salts.dev"),
+  title: TITLE,
+  description: DESCRIPTION,
+  openGraph: {
+    title: TITLE,
+    description: DESCRIPTION,
+    siteName: "Salts",
+    type: "website",
+    url: "/",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: TITLE,
+    description: DESCRIPTION,
+  },
 };
 
 export default function RootLayout({
