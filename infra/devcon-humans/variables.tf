@@ -15,7 +15,7 @@ variable "atlas_org_id" {
 
 variable "domain" {
   type    = string
-  default = "humans.salts.dev"
+  default = "devcon.salts.dev"
 }
 
 variable "agent_url" {
