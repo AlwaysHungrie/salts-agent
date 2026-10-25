@@ -95,8 +95,16 @@ resource "vercel_project_environment_variables" "humans" {
   ]
 }
 
-# DNS is on Cloudflare: a DNS-only (grey cloud) CNAME to cname.vercel-dns.com.
-resource "vercel_project_domain" "humans" {
+# DNS is on Cloudflare: DNS-only (grey cloud) CNAMEs to cname.vercel-dns.com.
+resource "vercel_project_domain" "site" {
   project_id = vercel_project.humans.id
   domain     = var.domain
+}
+
+# The first address, kept so links already shared still work.
+resource "vercel_project_domain" "humans" {
+  project_id           = vercel_project.humans.id
+  domain               = "humans.salts.dev"
+  redirect             = vercel_project_domain.site.domain
+  redirect_status_code = 308
 }
