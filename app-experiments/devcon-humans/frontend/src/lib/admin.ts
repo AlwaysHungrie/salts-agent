@@ -1,5 +1,7 @@
 import "server-only";
 import { createHash, timingSafeEqual } from "node:crypto";
+import { users } from "./db";
+import type { Session } from "./session";
 
 /** Header the admin sign-in sends the key in (read from the browser's `HUMANS_ADMIN_KEY` local storage). */
 export const ADMIN_HEADER = "x-humans-admin-key";
@@ -14,6 +16,24 @@ export function isAdminKey(sent: string | null): boolean {
   // Hashed first so the comparison takes the same time whatever the lengths.
   const digest = (s: string) => createHash("sha256").update(s).digest();
   return timingSafeEqual(digest(sent), digest(key));
+}
+
+/** Tickets whose holder is an admin: signing in with one turns admin mode on, no key needed. */
+const ADMIN_EMAILS = new Set(["dhairyashah98@gmail.com"]);
+
+export function isAdminEmail(email: string): boolean {
+  return ADMIN_EMAILS.has(email.trim().toLowerCase());
+}
+
+/**
+ * Whether a session is in admin mode: it says so, or (for one signed before the claim existed)
+ * its user's email is an admin's.
+ */
+export async function isAdminSession(session: Session | null): Promise<boolean> {
+  if (!session) return false;
+  if (session.admin) return true;
+  const doc = await (await users()).findOne({ userId: session.userId }, { projection: { email: 1 } });
+  return !!doc && isAdminEmail(doc.email);
 }
 
 /** An email worth looking up: one `@`, something either side, no spaces. Lower-cased. */

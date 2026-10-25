@@ -25,7 +25,8 @@ address without the `/mcp`.
 ## Behaviour
 
 - **Front page** (`/`): the mooned landing page (from `~/one-day-builds/mooned`), copied with its assets: the
-  WebGL rain scene (`CyberScene`, `public/scene/`), rain audio (`RainAudio`, `public/audio/`), street signs
+  WebGL rain scene (`CyberScene`, `public/scene/`; its parallax follows the mouse, or on a phone the tilt
+  (`src/lib/tilt.ts`), which iOS asks permission for on the first tap), rain audio (`RainAudio`, `public/audio/`), street signs
   in Marathi and Gujarati with plain marks of Ethereum and other layer 1 chains (`src/data/sign-words.ts`, subset fonts in `public/fonts/`) and the "What is this?" ink dialog (`InkDialog`). Its dark body styles
   also dress search and profile (`body:has(.mooned, .terminal-page)`). The rain audio is mounted in the root
   layout, so it keeps playing from page to page. Green terminal text sits on the vending machine's two
@@ -65,10 +66,13 @@ address without the `/mcp`.
   over 4000 characters, or with any line starting `!word` or `/word`, are refused. The server puts the page's
   instructions before each message (`src/lib/prompts.ts`): search asks the agent to link each person as
   `[Name](humans:<person_id>)`, which the page turns into result cards; profile tells it not to save.
-- **Admin mode** (`POST /api/admin/session { email }`): off unless `HUMANS_ADMIN_KEY` (32+ characters) is set.
-  A browser whose local storage has `HUMANS_ADMIN_KEY` set to the same value (`localStorage.setItem("HUMANS_ADMIN_KEY", "…")`
-  in the console) shows a "sign in as any email" form in the Enter dialog, under the ticket form. The key goes in the `x-humans-admin-key` header; a
-  wrong key answers 404. The session is that email's user (the latest one, if several tickets share it), so the
+- **Admin mode** (`POST /api/admin/session { email }`): a "sign in as any email" form in the Enter dialog,
+  under the ticket form, for two kinds of browser. One signed in with an admin's ticket (`ADMIN_EMAILS` in
+  `src/lib/admin.ts`): its session carries `admin`, and `ENTER` opens the dialog again rather than search, so
+  admin mode works on a phone with no console. Or, when `HUMANS_ADMIN_KEY` (32+ characters) is set, one whose
+  local storage has `HUMANS_ADMIN_KEY` set to the same value (`localStorage.setItem("HUMANS_ADMIN_KEY", "…")`
+  in the console); the key goes in the `x-humans-admin-key` header. Anyone else gets 404. A session signed
+  in this way carries `admin` too, so the browser can keep switching. The session is that email's user (the latest one, if several tickets share it), so the
   pages reach their own agent with their user key and find-humans secret. An email with no user yet becomes one,
   id `dc-email-` + SHA-256 of the email, its agent found or added in the fleet by email as on first pickup.
 - Every write needs the session cookie and must come from this origin. Agent errors are logged, never relayed.
