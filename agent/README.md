@@ -286,9 +286,9 @@ same list — a session id names its agent.
 `CLERK_ISSUER` is the exact `iss` your tokens carry —
 `https://<subdomain>.clerk.accounts.dev` on a development instance,
 `https://clerk.<your-domain>` on a production one. It is a public URL and the key set
-under it is public too, so it is a plain `var` in `wrangler.jsonc` rather than a secret,
-and the same value serves `wrangler dev` and a deploy because both sign in against the
-same Clerk instance. The key set is fetched from `/.well-known/jwks.json` under it and
+under it is public too, so it is a plain `var` in `wrangler.jsonc` rather than a secret.
+Production uses the production instance; staging and `wrangler dev` (via `.dev.vars`)
+use the development one. The key set is fetched from `/.well-known/jwks.json` under it and
 cached for the life of the isolate, with a 30s floor between refetches, and every
 verified token is cached by hash until its own `exp`, so a stream that reconnects a
 hundred times costs one signature check.

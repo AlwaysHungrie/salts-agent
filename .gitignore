@@ -18,3 +18,6 @@ terraform.tfvars
 notes/
 # Generated from frontend/content/guide by agent/scripts/guide.mjs
 agent/src/guide.json
+
+# Promo video, 16 MB: kept locally, not in git
+media/devcon-humans/humans-vending-machine.mp4

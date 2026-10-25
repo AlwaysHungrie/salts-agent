@@ -7,6 +7,7 @@
 # holds it — it is pasted into one browser by hand.
 API_SECRET=local-dev-secret
 
-# CLERK_ISSUER is not here: it is a public URL, not a secret, so it lives in `vars` in
-# wrangler.jsonc and is the same for `wrangler dev` and for a deploy. Set it here only
-# to point local development at a different Clerk instance.
+# CLERK_ISSUER in wrangler.jsonc `vars` is the production Clerk instance. Local
+# development signs in with the development instance's `pk_test` key, so point the
+# Worker at that instance here.
+CLERK_ISSUER=https://rich-horse-1284.clerk.accounts.dev
