@@ -9,8 +9,11 @@ const ISSUER = "devcon-humans";
 /** How long a session lasts, in seconds. */
 export const SESSION_TTL = 30 * 24 * 60 * 60;
 
-/** Who a session JWT says the user is. */
-export type Session = { userId: string; name: string };
+/**
+ * Who a session JWT says the user is. `admin` marks a browser in admin mode: signed in with an
+ * admin's ticket, or through admin mode itself, so it can keep switching users.
+ */
+export type Session = { userId: string; name: string; admin?: boolean };
 
 function secret(): Uint8Array {
   const s = process.env.SESSION_SECRET;
@@ -18,9 +21,9 @@ function secret(): Uint8Array {
   return new TextEncoder().encode(s);
 }
 
-/** A signed JWT: `sub` is the user id, `name` the name on their ticket. */
-export async function signSession({ userId, name }: Session): Promise<string> {
-  return new SignJWT({ name })
+/** A signed JWT: `sub` is the user id, `name` the name on their ticket, `admin` only when true. */
+export async function signSession({ userId, name, admin }: Session): Promise<string> {
+  return new SignJWT(admin ? { name, admin: true } : { name })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuer(ISSUER)
     .setAudience(ISSUER)
@@ -36,7 +39,7 @@ export async function readSession(token: string | undefined): Promise<Session | 
   try {
     const { payload } = await jwtVerify(token, secret(), { algorithms: ["HS256"], issuer: ISSUER, audience: ISSUER });
     if (typeof payload.sub !== "string" || typeof payload.name !== "string") return null;
-    return { userId: payload.sub, name: payload.name };
+    return { userId: payload.sub, name: payload.name, admin: payload.admin === true };
   } catch {
     return null;
   }

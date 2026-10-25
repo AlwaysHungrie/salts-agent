@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { buildSignTextures, type Panel } from "@/lib/sign-canvas";
 import { loadSignFaces } from "@/lib/sign-script";
+import { type Pose, settle, tiltOffset } from "@/lib/tilt";
 
 /**
  * The night-street hero.
@@ -413,7 +414,34 @@ export default function CyberScene({
       }
     };
 
+    // On a phone there is no pointer to follow, so tilting the phone moves the scene instead,
+    // measured from how it is held. iOS asks permission first, and only from a tap: the first
+    // tap anywhere asks.
+    let rest: Pose | null = null;
+    const onTilt = (e: DeviceOrientationEvent) => {
+      if (e.beta === null || e.gamma === null) return;
+      const pose = { beta: e.beta, gamma: e.gamma };
+      rest = rest ? settle(rest, pose) : pose;
+      const t = tiltOffset(pose, rest, screen.orientation?.angle ?? 0);
+      target.x = t.x;
+      target.y = t.y;
+    };
+    const tilt = typeof DeviceOrientationEvent === "undefined" ? null : DeviceOrientationEvent;
+    const askTilt = () => {
+      (tilt as unknown as { requestPermission: () => Promise<PermissionState> })
+        .requestPermission()
+        .then((state) => {
+          if (state === "granted") window.addEventListener("deviceorientation", onTilt);
+        })
+        .catch(() => {});
+    };
+    const asks = !!tilt && "requestPermission" in tilt;
+    if (asks) window.addEventListener("click", askTilt, { once: true });
+    else if (tilt) window.addEventListener("deviceorientation", onTilt);
+
     const onPointer = (e: PointerEvent) => {
+      // A finger dragging across the page would fight the tilt.
+      if (e.pointerType !== "mouse" && rest) return;
       target.x = (e.clientX / window.innerWidth) * 2 - 1;
       target.y = (e.clientY / window.innerHeight) * 2 - 1;
     };
@@ -478,6 +506,8 @@ export default function CyberScene({
       cancelAnimationFrame(raf);
       window.removeEventListener("pointermove", onPointer);
       window.removeEventListener("resize", resize);
+      window.removeEventListener("click", askTilt);
+      window.removeEventListener("deviceorientation", onTilt);
     };
   }, [
     plate,
