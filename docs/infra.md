@@ -169,15 +169,16 @@ The agent is one Worker, defined in `agent/wrangler.jsonc`:
 - **Durable Objects:** `SessionAgent`, `SessionRegistry`, `AgentDirectory`. Each has
   its own SQLite storage.
 - **R2 bucket:** `salt-agent-files` (binding `FILES`).
-- **Vars:** `CLERK_ISSUER`, the Clerk instance whose session tokens the Worker accepts.
-  It is a public URL, so it lives in `wrangler.jsonc`.
+- **Vars:** `CLERK_ISSUER`, the Clerk instance whose session tokens the Worker accepts:
+  the production instance, `https://clerk.salts.dev`. It is a public URL, so it lives
+  in `wrangler.jsonc`.
 - **Secret:** `API_SECRET`, set with `wrangler secret put`. The deploy preflight refuses
   to deploy without it.
 
 Staging (`env.staging` in `wrangler.jsonc`) is a separate Worker, `salt-agent-staging`,
 with its own Durable Objects, its own R2 bucket `salt-agent-files-staging`, and its own
 secrets. Staging does not inherit `vars` from the top level, so `CLERK_ISSUER` is set
-again under `env.staging`.
+again under `env.staging`, to the Clerk development instance.
 
 Runtime limits and defaults (models, system prompt, upload ceilings and so on) are not
 in `wrangler.jsonc`. They are a settings document stored in the Worker and edited
