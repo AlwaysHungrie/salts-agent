@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 
 const inter = Inter({
@@ -36,7 +37,16 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={inter.variable}>
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">
+        {children}
+        {/* Cloudflare Web Analytics: cookieless visitor counts. salts.dev is DNS-only on
+            Cloudflare, so the beacon can't be auto-injected and lives here instead. */}
+        <Script
+          src="https://static.cloudflareinsights.com/beacon.min.js"
+          data-cf-beacon='{"token": "baad0908ac1347658a154edfa8fd019b"}'
+          strategy="afterInteractive"
+        />
+      </body>
     </html>
   );
 }
