@@ -72,9 +72,8 @@ const APP_URL = "https://app.salts.dev";
 export const LINKS = {
   signIn: APP_URL as string | null,
   signUp: APP_URL as string | null,
-  /** Our accounts. Not created yet: null renders the icon as disabled. */
-  x: null as string | null,
-  telegram: null as string | null,
+  x: "https://x.com/saltsdotdev" as string | null,
+  telegram: "https://t.me/+ErLH1BA0hHUzZGM1" as string | null,
   privacy: "/privacy",
   terms: "/terms",
   guide: `${APP_URL}/guide`,
