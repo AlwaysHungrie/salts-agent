@@ -82,7 +82,7 @@ export function GuideLayout({
           <span>
             Still have a question?{" "}
             <a
-              href="https://t.me/saltsagents"
+              href="https://t.me/+ErLH1BA0hHUzZGM1"
               target="_blank"
               rel="noreferrer"
               className="text-ink underline underline-offset-2"
