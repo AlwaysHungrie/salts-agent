@@ -6,7 +6,7 @@ import { TERMS } from "@/components/legal";
 
 export const metadata: Metadata = {
   title: `${TERMS.title} — ${BRAND.name}`,
-  description: `The agreement between you and ${BRAND.legalName} for using ${BRAND.name}.`,
+  description: `The terms you agree to when you use ${BRAND.name}.`,
 };
 
 export default function Page() {
