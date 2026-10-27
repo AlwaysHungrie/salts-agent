@@ -1,5 +1,6 @@
 import type { Env } from "../env";
 import {
+  type AuthServerMetadata,
   discoverAuthServer,
   exchangeCode,
   type McpServerRow,
@@ -15,25 +16,72 @@ import { registry, type Registry } from "../worker/stores";
 export const redirectUri = (origin: string) => `${origin}/api/mcp/oauth/callback`;
 
 /**
- * Whether the saved client can be reused. A client registered against a different
- * authorization server, or for a different redirect URI (the Worker moved domains), is
- * no client at all: the provider rejects the authorize request.
+ * The Worker's OAuth client id under CIMD (Client ID Metadata Documents): a URL that
+ * serves the client's own metadata, which the authorization server fetches instead of
+ * having us register. Per origin, so staging and production are separate clients.
  */
-export function needsNewClient(
-  row: Pick<McpServerRow, "oauth_client_id" | "oauth_authorize_url" | "oauth_redirect_uri">,
-  authorizeUrl: string,
-  redirect: string
-): boolean {
+export const clientMetadataUrl = (origin: string) => `${origin}/oauth/client.json`;
+
+/** The document served at `clientMetadataUrl(origin)`. Its `client_id` is that URL. */
+export function clientMetadata(origin: string) {
+  return {
+    client_id: clientMetadataUrl(origin),
+    client_name: "Salts",
+    client_uri: "https://salts.dev",
+    redirect_uris: [redirectUri(origin)],
+    grant_types: ["authorization_code", "refresh_token"],
+    response_types: ["code"],
+    token_endpoint_auth_method: "none",
+  };
+}
+
+/** `GET /oauth/client.json`: public, since authorization servers fetch it with no session. */
+export function handleClientMetadata(url: URL): Response {
+  return new Response(JSON.stringify(clientMetadata(url.origin)), {
+    headers: {
+      "content-type": "application/json",
+      "cache-control": "public, max-age=300",
+    },
+  });
+}
+
+/**
+ * Whether the authorization server takes a CIMD client id from a public client: it says
+ * it fetches client metadata, and allows token requests with no secret (or does not say).
+ */
+export function supportsCimd(metadata: AuthServerMetadata): boolean {
+  const methods = metadata.token_endpoint_auth_methods_supported;
   return (
-    !row.oauth_client_id ||
-    row.oauth_authorize_url !== authorizeUrl ||
-    row.oauth_redirect_uri !== redirect
+    metadata.client_id_metadata_document_supported === true &&
+    (!methods || methods.includes("none"))
   );
 }
 
 /**
- * Start an OAuth connection: discover endpoints, register a client if needed, park the
- * PKCE verifier and state on the row, and return the authorize URL.
+ * Whether the saved client can be reused. A client registered against a different
+ * authorization server, or for a different redirect URI (the Worker moved domains), is
+ * no client at all: the provider rejects the authorize request. Where the server takes
+ * CIMD, anything but the current CIMD client id is replaced, so registered clients move
+ * over on their next connect; where it no longer does, a saved CIMD client id is dead.
+ */
+export function needsNewClient(
+  row: Pick<McpServerRow, "oauth_client_id" | "oauth_authorize_url" | "oauth_redirect_uri">,
+  authorizeUrl: string,
+  redirect: string,
+  cimd: { url: string; supported: boolean }
+): boolean {
+  return (
+    !row.oauth_client_id ||
+    row.oauth_authorize_url !== authorizeUrl ||
+    row.oauth_redirect_uri !== redirect ||
+    (cimd.supported ? row.oauth_client_id !== cimd.url : row.oauth_client_id === cimd.url)
+  );
+}
+
+/**
+ * Start an OAuth connection: discover endpoints, pick a client (CIMD where the server
+ * takes it, else dynamic registration), park the PKCE verifier and state on the row, and
+ * return the authorize URL.
  */
 export async function startMcpOauth(
   reg: Registry,
@@ -43,20 +91,28 @@ export async function startMcpOauth(
   returnTo: string
 ): Promise<string> {
   const redirect = redirectUri(origin);
-  const { metadata, resource } = await discoverAuthServer(row.url);
+  const { metadata, resource, scope } = await discoverAuthServer(row.url);
   if (!metadata.authorization_endpoint || !metadata.token_endpoint) {
     throw new Error("that server does not advertise an OAuth authorization endpoint");
   }
 
+  const cimd = { url: clientMetadataUrl(origin), supported: supportsCimd(metadata) };
   let clientId = row.oauth_client_id;
   let clientSecret = row.oauth_client_secret;
-  if (needsNewClient(row, metadata.authorization_endpoint, redirect)) {
-    if (!metadata.registration_endpoint) {
-      throw new Error("that server supports neither a saved client nor dynamic registration");
+  if (needsNewClient(row, metadata.authorization_endpoint, redirect, cimd)) {
+    if (cimd.supported) {
+      // A public client: the id is our metadata URL, and there is no secret.
+      clientId = cimd.url;
+      clientSecret = "";
+    } else if (metadata.registration_endpoint) {
+      const registered = await registerClient(metadata.registration_endpoint, redirect);
+      clientId = registered.client_id;
+      clientSecret = registered.client_secret ?? "";
+    } else {
+      throw new Error(
+        "that server supports neither client ID metadata documents (CIMD) nor dynamic registration"
+      );
     }
-    const registered = await registerClient(metadata.registration_endpoint, redirect);
-    clientId = registered.client_id;
-    clientSecret = registered.client_secret ?? "";
   }
 
   const verifier = randomToken();
@@ -68,10 +124,11 @@ export async function startMcpOauth(
     oauth_client_secret: clientSecret,
     oauth_authorize_url: metadata.authorization_endpoint,
     oauth_token_url: metadata.token_endpoint,
-    oauth_registration_url: metadata.registration_endpoint ?? "",
+    // Empty for a CIMD client: nothing was registered.
+    oauth_registration_url: clientId === cimd.url ? "" : (metadata.registration_endpoint ?? ""),
     oauth_redirect_uri: redirect,
     oauth_resource: resource,
-    oauth_scope: (metadata.scopes_supported ?? []).join(" "),
+    oauth_scope: scope,
     oauth_verifier: verifier,
     oauth_state: state,
     oauth_return_to: returnTo,
@@ -87,8 +144,7 @@ export async function startMcpOauth(
   authorize.searchParams.set("state", state);
   // RFC 8707: bind the token to this server, so it is useless anywhere else.
   if (resource) authorize.searchParams.set("resource", resource);
-  const scopes = (metadata.scopes_supported ?? []).join(" ");
-  if (scopes) authorize.searchParams.set("scope", scopes);
+  if (scope) authorize.searchParams.set("scope", scope);
   return authorize.toString();
 }
 

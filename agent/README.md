@@ -211,6 +211,7 @@ curl -X POST http://localhost:8787/agents/session-agent/my-session/chat \
 | `POST /searxng/:agentId/url` | salts-tools reports its tunnel address. Bearer token must match the agent's SearXNG token |
 | `POST /searxng/:agentId/mcp` | salts-tools points the agent's MCP server `{ name }` at its tunnel `{ url }`: creates it with `Authorization: Bearer <token>`, or repoints one whose Authorization is already that token (409 otherwise). Same token proof |
 | `GET /api/mcp/oauth/callback` | Where an MCP provider's OAuth sends the browser back |
+| `GET /oauth/client.json` | Public. The Worker's OAuth client metadata document (CIMD); its URL is the Worker's client id at providers that support it |
 | `GET /api/admin/settings` | The stored settings and what they still lack: `{ settings, missing, fields }`. Owner only, via `API_SECRET` |
 | `PATCH /api/admin/settings` | Merge a patch: `{ <field>: value }`. No field can be unset. Owner only |
 | `GET /api/admin/stats` | Deployment counts. Owner only |
@@ -264,7 +265,9 @@ There is one way to be somebody here.
 
 **A Clerk session token**, sent as `authorization: Bearer <token>`. The Worker verifies
 its signature against Clerk's published keys and takes the address out of the verified
-claims, so it is an address Clerk vouched for rather than one the caller typed. This is
+claims, so it is an address Clerk vouched for rather than one the caller typed. Only a
+session token counts, meaning one that carries `sid`. Clerk signs OAuth access tokens for
+third-party apps with the same keys, but those have no `sid` and sign nobody in. This is
 the only identity a normal user of the app ever has, and it is the gate: everything
 under `/api` and `/agents` refuses a caller it cannot identify.
 
@@ -338,12 +341,22 @@ the full sequence.
 Set the admin key with `wrangler secret put API_SECRET`, or in `agent/.dev.vars` for
 `wrangler dev`. The frontend does not hold it; `admin-cli` does.
 
-Two routes are deliberately outside all of this:
+Three routes are deliberately outside all of this:
 
 - `POST /telegram/webhook/:agentId` — Telegram proves itself with the per-bot secret
   token it echoes back, and per-chat access is the bot's own whitelists.
 - `GET /api/mcp/oauth/callback` — arrives from the provider's browser, carrying a state
   token instead of a header.
+- `GET /oauth/client.json` — the client metadata document authorization servers fetch
+  when the Worker connects to an MCP server with CIMD. Public, and the same for everyone.
+
+MCP OAuth prefers CIMD (Client ID Metadata Documents): when a provider's authorization
+server advertises `client_id_metadata_document_supported` and accepts public clients,
+the Worker's client id is `<origin>/oauth/client.json`, and nothing is registered. Dynamic
+client registration is the fallback. A client registered before the provider supported
+CIMD moves over on its next connect. The scopes requested are the MCP server's own:
+the `scope` in its 401 challenge, then its resource metadata's `scopes_supported`, and
+the authorization server's list only when the MCP server names none.
 
 ## Commands
 
