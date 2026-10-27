@@ -98,11 +98,6 @@ export async function clerkEmail(request: Request, env: Env): Promise<string> {
       // moment ago must not read as not-yet-valid.
       clockTolerance: 30,
     });
-    // Only a Clerk session token is a Salts login, and only session tokens carry `sid`.
-    // The same issuer and keys also sign OAuth access tokens for third-party clients
-    // (CIMD clients of MCP servers that use Clerk); those name the user too, but were
-    // granted to someone else's app, so they must not sign anyone in here.
-    if (typeof payload.sid !== "string") throw new Error("not a session token");
     email = emailFrom(payload);
     // Never past the token's own expiry, and never longer than the failure window,
     // so a revoked session cannot outlive the short life Clerk gave its token.

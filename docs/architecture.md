@@ -250,7 +250,7 @@ message protocol, so it calls `fetch` itself and adds the same headers by hand.
     │  1. callerEmail() must name somebody, or 401 — no anonymous callers
     │  2. session-route gate: agentIdOf(id) → mayUseAgent()
     │        └── callerEmail() → clerkEmail(): verify the bearer token against
-    │              Clerk's JWKS (cached); only a session token (has `sid`) counts
+    │              Clerk's JWKS (cached)
     │        └── agentAccess() → SessionRegistry(agentId).access()
     │              the AGENT'S OWN object answers. The directory is not read.
     │              (unwritten access row only: one directory read, then seedAccess())
