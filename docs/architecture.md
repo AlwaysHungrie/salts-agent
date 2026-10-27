@@ -87,11 +87,13 @@ The deploy is guarded ahead of that: `npm run deploy` runs
 "unknown" is worse than none — and says whether `API_SECRET` (the admin routes) is set
 on the deployment it is about to ship to.
 
-Two Worker routes sit outside all of this on purpose. `POST /telegram/webhook/:agentId`
+Three Worker routes sit outside all of this on purpose. `POST /telegram/webhook/:agentId`
 authenticates with a per-bot secret token that Telegram echoes back, derived by SHA-256
 from the bot token itself so there is nothing extra to store. `GET /api/mcp/oauth/callback`
 arrives from a provider's browser redirect and carries a state token instead of a header;
-it is matched before the secret gate for exactly that reason.
+it is matched before the secret gate for exactly that reason. So is `GET /oauth/client.json`,
+the Worker's public OAuth client metadata document: under CIMD, its URL is the Worker's
+client id, and authorization servers fetch it with no session.
 
 ---
 
@@ -248,7 +250,7 @@ message protocol, so it calls `fetch` itself and adds the same headers by hand.
     │  1. callerEmail() must name somebody, or 401 — no anonymous callers
     │  2. session-route gate: agentIdOf(id) → mayUseAgent()
     │        └── callerEmail() → clerkEmail(): verify the bearer token against
-    │              Clerk's JWKS (cached)
+    │              Clerk's JWKS (cached); only a session token (has `sid`) counts
     │        └── agentAccess() → SessionRegistry(agentId).access()
     │              the AGENT'S OWN object answers. The directory is not read.
     │              (unwritten access row only: one directory read, then seedAccess())

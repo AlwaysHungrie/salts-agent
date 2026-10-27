@@ -4,7 +4,8 @@ import { TEST_CLERK_ISSUER, TEST_CLERK_KID, TEST_CLERK_PRIVATE_JWK } from "./cle
 /**
  * A Clerk session token for `email`, signed by the suite's test issuer — the same proof
  * the Worker verifies in production. Synchronous (node:crypto under nodejs_compat) so
- * request helpers can stay plain objects.
+ * request helpers can stay plain objects. `claims` overrides the payload; `sid: undefined`
+ * makes it the shape of an OAuth access token instead.
  */
 function b64url(bytes: Uint8Array): string {
   let bin = "";
@@ -13,10 +14,18 @@ function b64url(bytes: Uint8Array): string {
 }
 const encode = (value: unknown) => b64url(new TextEncoder().encode(JSON.stringify(value)));
 
-export function clerkToken(email: string): string {
+export function clerkToken(email: string, claims: Record<string, unknown> = {}): string {
   const now = Math.floor(Date.now() / 1000);
   const header = encode({ alg: "ES256", typ: "JWT", kid: TEST_CLERK_KID });
-  const payload = encode({ iss: TEST_CLERK_ISSUER, sub: email, email, iat: now, exp: now + 3600 });
+  const payload = encode({
+    iss: TEST_CLERK_ISSUER,
+    sub: email,
+    sid: "sess_test",
+    email,
+    iat: now,
+    exp: now + 3600,
+    ...claims,
+  });
   const signed = new TextEncoder().encode(`${header}.${payload}`);
   const signature = sign("sha256", signed, {
     key: TEST_CLERK_PRIVATE_JWK,
