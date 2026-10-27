@@ -39,8 +39,8 @@
   // other secret production holds) is also a one-time setup step.
   //
   // `vars` are not inherited by an environment, so CLERK_ISSUER is repeated here rather
-  // than referenced. Staging signs in against the Clerk development instance, which
-  // the preview deploys of the web app use (`pk_test`); production has its own.
+  // than referenced. Staging signs in against the Clerk production instance, as the
+  // staging web app does (`pk_live`); only `wrangler dev` uses the development one.
   "env": {
     "staging": {
       "name": "salt-agent-staging",
@@ -63,7 +63,7 @@
         { "binding": "FILES", "bucket_name": "salt-agent-files-staging" }
       ],
       "vars": {
-        "CLERK_ISSUER": "https://rich-horse-1284.clerk.accounts.dev",
+        "CLERK_ISSUER": "https://clerk.salts.dev",
         "APP_URL": "https://staging.salts.dev",
         "PAYMENT_RPC": {
           "ethereum": "https://ethereum-rpc.publicnode.com",
