@@ -178,8 +178,7 @@ The agent is one Worker, defined in `agent/wrangler.jsonc`:
 Staging (`env.staging` in `wrangler.jsonc`) is a separate Worker, `salt-agent-staging`,
 with its own Durable Objects, its own R2 bucket `salt-agent-files-staging`, and its own
 secrets. Staging does not inherit `vars` from the top level, so `CLERK_ISSUER` is set
-again under `env.staging`, to the Clerk production instance (`https://clerk.salts.dev`),
-because the staging web app signs in with production Clerk keys.
+again under `env.staging`, to the Clerk development instance.
 
 Runtime limits and defaults (models, system prompt, upload ceilings and so on) are not
 in `wrangler.jsonc`. They are a settings document stored in the Worker and edited
