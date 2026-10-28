@@ -4,12 +4,14 @@ import { chooseScope, exchangeCode, refreshToken, type McpServerRow } from "../s
 import { EMPTY_MCP_SERVER } from "../src/registry";
 import { clientMetadataUrl, redirectUri, startMcpOauth } from "../src/routes/mcp-oauth";
 import type { Registry } from "../src/worker/stores";
+import { clerkToken } from "./clerk";
 
 /**
  * MCP OAuth with CIMD (Client ID Metadata Documents): the Worker's client id is a URL
  * serving its own metadata, so an authorization server with no registration endpoint
  * (Clerk, as Salts runs it) still lets agents connect. Dynamic registration stays the
- * fallback.
+ * fallback. Also the other half of the change: an OAuth access token from that same
+ * Clerk is not a Salts login.
  */
 
 const BASE = "https://worker.test";
@@ -266,5 +268,35 @@ describe("token requests from a public client", () => {
     expect(form.get("client_id")).toBe(clientMetadataUrl(origin));
     expect(form.has("client_secret")).toBe(false);
     expect(form.get("resource")).toBe(MCP_URL);
+  });
+});
+
+describe("Clerk tokens as a Salts login", () => {
+  const someone = () => `cimd-${crypto.randomUUID().slice(0, 8)}@x.com`;
+  const listAgents = (token: string) =>
+    SELF.fetch(`${BASE}/api/agents`, { headers: { authorization: `Bearer ${token}` } });
+
+  it("accepts a session token, which carries sid", async () => {
+    const res = await listAgents(clerkToken(someone()));
+    expect(res.status).toBe(200);
+  });
+
+  it("refuses a correctly signed token with an email but no sid (an OAuth access token)", async () => {
+    // The shape Clerk issues a CIMD client (seen on a real token), plus an email for the
+    // worst case: no sid, an audience, the client and its scopes.
+    const res = await listAgents(
+      clerkToken(someone(), {
+        sid: undefined,
+        aud: "https://mcp.example.com/mcp",
+        client_id: "https://api.salts.dev/oauth/client.json",
+        scope: "openid email profile offline_access",
+      })
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it("refuses a sid that is not a string", async () => {
+    const res = await listAgents(clerkToken(someone(), { sid: 42 }));
+    expect(res.status).toBe(401);
   });
 });

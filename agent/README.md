@@ -265,7 +265,9 @@ There is one way to be somebody here.
 
 **A Clerk session token**, sent as `authorization: Bearer <token>`. The Worker verifies
 its signature against Clerk's published keys and takes the address out of the verified
-claims, so it is an address Clerk vouched for rather than one the caller typed. This is
+claims, so it is an address Clerk vouched for rather than one the caller typed. Only a
+session token counts, meaning one that carries `sid`. Clerk signs OAuth access tokens for
+third-party apps with the same keys, but those have no `sid` and sign nobody in. This is
 the only identity a normal user of the app ever has, and it is the gate: everything
 under `/api` and `/agents` refuses a caller it cannot identify.
 
@@ -306,7 +308,8 @@ Without that claim the signature still verifies but there is no address in it, s
 caller is nobody and the call is refused. The claim is instance-wide configuration and
 lives in the Clerk dashboard, not in this repo, so a new Clerk instance needs it added
 by hand. The alternative is a JWT template that emits the same claim, named on the
-frontend in `CLERK_JWT_TEMPLATE`.
+frontend in `CLERK_JWT_TEMPLATE`; its tokens must keep the session's `sid` claim, or
+the Worker refuses them.
 
 ## The Worker refuses to run unconfigured
 
