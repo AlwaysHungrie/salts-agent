@@ -272,32 +272,59 @@ describe("OAuth helpers", () => {
 describe("needsNewClient", () => {
   const authorize = "https://auth.example.com/authorize";
   const redirect = "https://api.salts.dev/api/mcp/oauth/callback";
+  const cimdUrl = "https://api.salts.dev/oauth/client.json";
+  const dcrOnly = { url: cimdUrl, supported: false };
+  const cimd = { url: cimdUrl, supported: true };
   const registered = server({
     oauth_client_id: "c1",
     oauth_authorize_url: authorize,
     oauth_redirect_uri: redirect,
   });
+  const metadataClient = server({
+    oauth_client_id: cimdUrl,
+    oauth_authorize_url: authorize,
+    oauth_redirect_uri: redirect,
+  });
 
   it("reuses a client registered for this server and redirect URI", () => {
-    expect(needsNewClient(registered, authorize, redirect)).toBe(false);
+    expect(needsNewClient(registered, authorize, redirect, dcrOnly)).toBe(false);
   });
 
   it("registers when there is no client yet", () => {
-    expect(needsNewClient(server(), authorize, redirect)).toBe(true);
+    expect(needsNewClient(server(), authorize, redirect, dcrOnly)).toBe(true);
   });
 
   it("registers when the authorization server changed", () => {
-    expect(needsNewClient(registered, "https://other.example.com/authorize", redirect)).toBe(true);
+    expect(
+      needsNewClient(registered, "https://other.example.com/authorize", redirect, dcrOnly)
+    ).toBe(true);
   });
 
   it("registers when the Worker's redirect URI changed", () => {
     const moved = "https://old.workers.dev/api/mcp/oauth/callback";
-    expect(needsNewClient(registered, authorize, moved)).toBe(true);
+    expect(needsNewClient(registered, authorize, moved, dcrOnly)).toBe(true);
   });
 
   it("registers for a client saved before the redirect URI was recorded", () => {
-    expect(needsNewClient({ ...registered, oauth_redirect_uri: "" }, authorize, redirect)).toBe(
-      true
-    );
+    expect(
+      needsNewClient({ ...registered, oauth_redirect_uri: "" }, authorize, redirect, dcrOnly)
+    ).toBe(true);
+  });
+
+  it("replaces a registered client once the server takes CIMD", () => {
+    expect(needsNewClient(registered, authorize, redirect, cimd)).toBe(true);
+  });
+
+  it("reuses the current CIMD client id", () => {
+    expect(needsNewClient(metadataClient, authorize, redirect, cimd)).toBe(false);
+  });
+
+  it("replaces a CIMD client id the server no longer takes", () => {
+    expect(needsNewClient(metadataClient, authorize, redirect, dcrOnly)).toBe(true);
+  });
+
+  it("replaces a CIMD client id from another origin", () => {
+    const staging = { url: "https://api-staging.salts.dev/oauth/client.json", supported: true };
+    expect(needsNewClient(metadataClient, authorize, redirect, staging)).toBe(true);
   });
 });
