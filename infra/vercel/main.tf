@@ -27,8 +27,10 @@ resource "vercel_project" "landing_page" {
 locals {
   frontend_env = nonsensitive(var.frontend_env)
 
-  # Staging: production's vars with AGENT_URL pointed at the staging Worker.
-  staging_env = merge(local.frontend_env["production"], { AGENT_URL = var.staging_agent_url })
+  # Staging: preview's vars (the Clerk development instance, which the staging Worker
+  # trusts) with AGENT_URL pointed at the staging Worker. Never production's: staging
+  # must not sign anyone in against real accounts.
+  staging_env = merge(local.frontend_env["preview"], { AGENT_URL = var.staging_agent_url })
 }
 
 resource "vercel_project_environment_variables" "frontend" {

@@ -35,20 +35,25 @@ that salts-tools repoints once the token matches).
 
 ## Choosing `auth`
 
-Our OAuth flow needs **dynamic client registration** (`agent/src/mcp.ts`). Check
-whether the provider supports it before choosing `oauth`:
+Our OAuth flow needs the provider's authorization server to support either **CIMD**
+(client ID metadata documents, preferred) or **dynamic client registration**
+(`agent/src/routes/mcp-oauth.ts`). Check which before choosing `oauth`:
 
 ```sh
 # 1. The server names its authorization server in the 401 it sends back.
 curl -s -i -X POST <url> -H 'content-type: application/json' -d '{}' | grep -i www-authenticate
 curl -s <resource_metadata url from above>      # read "authorization_servers"
 
-# 2. That server's metadata must list a registration_endpoint.
-curl -s https://<auth host>/.well-known/oauth-authorization-server/<path> | grep registration_endpoint
+# 2. That server's metadata must support CIMD or list a registration_endpoint.
+curl -s https://<auth host>/.well-known/oauth-authorization-server/<path> \
+  | grep -oE '"(client_id_metadata_document_supported|registration_endpoint)":[^,]*'
 ```
 
+- `client_id_metadata_document_supported: true` (with `none` among its
+  `token_endpoint_auth_methods_supported`, or no such list): use `oauth`. The Worker's
+  client id is `<worker>/oauth/client.json`, and no registration happens.
 - There is a `registration_endpoint`: use `oauth`. The user clicks through a sign-in. Notion works this way.
-- There is no `registration_endpoint`: use `headers`. The user pastes a token into the form
+- Neither: use `headers`. The user pastes a token into the form
   as `Authorization: Bearer <token>`. GitHub works this way because it has no dynamic
   registration, so the user needs a personal access token.
 - The server needs no credentials: use `none`.

@@ -377,12 +377,15 @@ export function uploadsUrl(url: string): string {
 
 /* ----------------------------------------------------------------- oauth -- */
 
-type AuthServerMetadata = {
+export type AuthServerMetadata = {
   issuer?: string;
   authorization_endpoint?: string;
   token_endpoint?: string;
   registration_endpoint?: string;
   scopes_supported?: string[];
+  /** The server fetches a client's metadata from its `client_id` URL (CIMD). */
+  client_id_metadata_document_supported?: boolean;
+  token_endpoint_auth_methods_supported?: string[];
 };
 
 const base64url = (bytes: Uint8Array) =>
@@ -420,19 +423,88 @@ function wellKnown(base: URL, document: string): string[] {
   return urls;
 }
 
+/** One parameter of a `WWW-Authenticate` challenge, or undefined. */
+export function challengeParam(challenge: string, name: string): string | undefined {
+  return challenge.match(new RegExp(`(?:^|[\\s,])${name}="([^"]*)"`))?.[1];
+}
+
+/**
+ * The scope the MCP server's own 401 asks for, if it names one. An unauthenticated
+ * `initialize` is what any client would send first; a server that does not answer 401
+ * (or cannot be reached) names nothing.
+ */
+async function challengeScope(serverUrl: string): Promise<string | undefined> {
+  try {
+    const res = await fetch(serverUrl, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+        "mcp-protocol-version": MCP_PROTOCOL_VERSION,
+        "user-agent": USER_AGENT,
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 0,
+        method: "initialize",
+        params: {
+          protocolVersion: MCP_PROTOCOL_VERSION,
+          capabilities: {},
+          clientInfo: { name: "salts-agent", version: "1.0" },
+        },
+      }),
+    });
+    await res.body?.cancel();
+    if (res.status !== 401) return undefined;
+    return challengeParam(res.headers.get("www-authenticate") ?? "", "scope")?.trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The scopes to request, most specific first: what the MCP server's challenge asked for,
+ * then what its resource metadata lists, then the authorization server's whole list.
+ * The authorization server may offer scopes (Clerk's `private_metadata`) that the MCP
+ * server never needs and a public client may not ask for.
+ */
+export function chooseScope(sources: {
+  challenge?: string;
+  resource?: string[];
+  authServer?: string[];
+}): string {
+  if (sources.challenge) return sources.challenge;
+  if (sources.resource?.length) return sources.resource.join(" ");
+  return (sources.authServer ?? []).join(" ");
+}
+
 /**
  * Find an MCP endpoint's authorization server and its metadata, falling back to the
- * conventional endpoints on its own origin as the spec allows.
+ * conventional endpoints on its own origin as the spec allows. `scope` is what to ask
+ * for (see `chooseScope`).
  */
 export async function discoverAuthServer(
   serverUrl: string
-): Promise<{ metadata: AuthServerMetadata; resource: string }> {
+): Promise<{ metadata: AuthServerMetadata; resource: string; scope: string }> {
   const base = new URL(serverUrl);
-  const resourceMeta = await Promise.all(
-    wellKnown(base, "oauth-protected-resource").map((u) =>
-      getJson<{ authorization_servers?: string[]; resource?: string }>(u)
-    )
-  ).then((all) => all.find((m) => m?.authorization_servers?.length));
+  const [resourceMeta, challenge] = await Promise.all([
+    Promise.all(
+      wellKnown(base, "oauth-protected-resource").map((u) =>
+        getJson<{
+          authorization_servers?: string[];
+          resource?: string;
+          scopes_supported?: string[];
+        }>(u)
+      )
+    ).then((all) => all.find((m) => m?.authorization_servers?.length)),
+    challengeScope(serverUrl),
+  ]);
+  const scopeOf = (metadata: AuthServerMetadata) =>
+    chooseScope({
+      challenge,
+      resource: resourceMeta?.scopes_supported,
+      authServer: metadata.scopes_supported,
+    });
 
   const resource = resourceMeta?.resource ?? `${base.origin}${base.pathname.replace(/\/$/, "")}`;
   const issuer = new URL(resourceMeta?.authorization_servers?.[0] ?? base.origin);
@@ -444,18 +516,16 @@ export async function discoverAuthServer(
   for (const candidate of candidates) {
     const metadata = await getJson<AuthServerMetadata>(candidate);
     if (metadata?.authorization_endpoint && metadata.token_endpoint) {
-      return { metadata, resource };
+      return { metadata, resource, scope: scopeOf(metadata) };
     }
   }
-  return {
-    metadata: {
-      issuer: issuer.origin,
-      authorization_endpoint: `${issuer.origin}/authorize`,
-      token_endpoint: `${issuer.origin}/token`,
-      registration_endpoint: `${issuer.origin}/register`,
-    },
-    resource,
+  const metadata: AuthServerMetadata = {
+    issuer: issuer.origin,
+    authorization_endpoint: `${issuer.origin}/authorize`,
+    token_endpoint: `${issuer.origin}/token`,
+    registration_endpoint: `${issuer.origin}/register`,
   };
+  return { metadata, resource, scope: scopeOf(metadata) };
 }
 
 /** Dynamic client registration: MCP providers issue no client ids in advance. */
