@@ -87,7 +87,10 @@ async function gate(request: Request, env: Env, segments: string[]) {
     !!owner &&
     ((await mayUseAgent(request, env, owner)) ||
       (await mayUseSessionAsGuest(request, env, owner, sessionId, segments)));
-  return allowed ? undefined : notFound();
+  if (!allowed) return notFound();
+  // Only a listed session: a session object is made by name, so a request for a deleted
+  // (or never-created) one would quietly bring it back outside the session list.
+  return (await registry(env, owner).get(sessionId)) ? undefined : notFound();
 }
 
 /** Keep the sidebar ordered by recency: a message touches its session and agent. */
