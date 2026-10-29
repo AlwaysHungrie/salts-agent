@@ -403,6 +403,8 @@ type ChatBody = {
  * put in the message it sent: `?contains=<token>`.
  */
 const chatRequests: ChatBody[] = [];
+/** The key each of those requests was sent with, beside its body: `GET /__chat-keys?contains=`. */
+const chatKeys: { key: string; body: string }[] = [];
 
 const json = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value), {
@@ -834,7 +836,8 @@ async function rpcMock(request: Request, url: URL): Promise<Response> {
         return undefined;
     }
   })();
-  if (result === undefined) return json({ jsonrpc: "2.0", id, error: { message: `unmocked ${method}` } });
+  if (result === undefined)
+    return json({ jsonrpc: "2.0", id, error: { message: `unmocked ${method}` } });
   return json({ jsonrpc: "2.0", id, result });
 }
 
@@ -855,7 +858,8 @@ async function provisionedKeysMock(request: Request, url: URL): Promise<Response
   if (!auth.startsWith("Bearer sk-or-prov")) return json({ error: "not a provisioning key" }, 401);
   if (auth.includes("down")) return json({ error: "down" }, 503);
   const hash = decodeURIComponent(url.pathname.slice("/api/v1/keys/".length));
-  if (request.method === "GET") return json({ data: [...madeKeys.keys()].map((h) => ({ hash: h })) });
+  if (request.method === "GET")
+    return json({ data: [...madeKeys.keys()].map((h) => ({ hash: h })) });
   if (request.method === "POST") {
     const body = (await request.json()) as { name: string; limit: number };
     const made = { hash: crypto.randomUUID(), key: `sk-or-v1-${crypto.randomUUID()}` };
@@ -913,12 +917,21 @@ export async function openrouterMock(request: Request): Promise<Response> {
     );
   }
 
+  if (url.pathname === "/__chat-keys") {
+    const contains = url.searchParams.get("contains") ?? "";
+    return json(chatKeys.filter((k) => k.body.includes(contains)).map((k) => k.key));
+  }
+
   if (url.pathname !== "/api/v1/chat/completions") {
     return json({ error: `unmocked OpenRouter path ${url.pathname}` }, 404);
   }
 
   const body = (await request.json().catch(() => ({}))) as ChatBody;
   chatRequests.push(body);
+  chatKeys.push({
+    key: (request.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, ""),
+    body: JSON.stringify(body),
+  });
   const message = lastUserMessage(body);
 
   if (message.startsWith("!!fail500")) {
