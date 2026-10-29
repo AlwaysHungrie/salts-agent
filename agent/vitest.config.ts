@@ -61,6 +61,9 @@ export default defineConfig({
           API_SECRET: "test-secret",
           TELEGRAM_API_BASE: "https://telegram.test",
           CLERK_ISSUER: TEST_CLERK_ISSUER,
+          // A trusted app's OAuth access tokens open session routes (test/oauth-sessions.test.ts).
+          OAUTH_RESOURCE: "https://worker.test",
+          OAUTH_CLIENTS: "https://trusted.test/client.json",
           // Every network's chain is the stand-in in the mock, which the payment tests
           // load transactions into. The tests set where payments go.
           PAYMENT_RPC: Object.fromEntries(
