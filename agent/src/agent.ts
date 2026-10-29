@@ -11,6 +11,7 @@ import type { Schedule } from "agents";
 import type { UIMessage } from "ai";
 import { enabled, mcpServersForChat, type ScheduledTask } from "./capabilities";
 import { telegramInbound, whatsappInbound } from "./channel";
+import { APP_KEY_HEADER } from "./clerk-oauth";
 import type { Env } from "./env";
 import type { McpServerRow } from "./mcp";
 import { modelCatalog } from "./models";
@@ -69,6 +70,9 @@ import type { WhatsappInbound } from "./whatsapp";
  * since the reply is written by a later invocation with no memory of who asked.
  */
 export const SCHEDULED_PREFIX = "[scheduled task] ";
+
+/** Set in a session's storage once a trusted app has talked in it; see `openrouterKey`. */
+const APP_KEYED = "app_keyed";
 
 export class SessionAgent extends Think<Env> {
   /**
@@ -249,9 +253,25 @@ export class SessionAgent extends Think<Env> {
   /**
    * The agent's own OpenRouter key. There is deliberately no deployment-wide fallback, so
    * no agent can spend the deployment's credit. Read per call so a new key applies at once.
+   *
+   * A session a trusted app has talked in is the app's for good: every call in it, from
+   * replies to titles, compaction and scheduled tasks, uses the key the app sent, and with
+   * none in hand (the object was evicted since) it uses none, never the agent's.
    */
   private openrouterKey(): string {
+    if (this.ctx.storage.kv.get(APP_KEYED)) return this.appKey;
     return this.config().openrouter_api_key;
+  }
+
+  /** The key the last message from a trusted app was paid with; memory only, never stored. */
+  private appKey = "";
+
+  /** Only the Worker sets the header, for a trusted app's message (see `withAppKey`). */
+  private takeAppKey(request: Request) {
+    const appKey = request.headers.get(APP_KEY_HEADER);
+    if (!appKey) return;
+    this.ctx.storage.kv.put(APP_KEYED, true);
+    this.appKey = appKey;
   }
 
   private model(): string {
@@ -266,6 +286,9 @@ export class SessionAgent extends Think<Env> {
     const session = this.name;
     const key = this.openrouterKey();
     // Said here: OpenRouter answers a blank key with a bare 401 that names nothing actionable.
+    if (!key && this.ctx.storage.kv.get(APP_KEYED)) {
+      throw new Error("This chat is paid for by the app it was started in. Continue it there.");
+    }
     if (!key) {
       throw new Error("OpenRouter API key is missing. Add it in Settings.");
     }
@@ -418,6 +441,7 @@ export class SessionAgent extends Think<Env> {
   async onRequest(request: Request): Promise<Response> {
     this.ensureSchema();
     await this.loadConfig();
+    this.takeAppKey(request);
 
     const url = new URL(request.url);
     const segments = url.pathname.split("/").filter(Boolean);
