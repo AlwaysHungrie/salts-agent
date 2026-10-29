@@ -454,9 +454,14 @@ lists `upload_id="attachment:<id>"` for each.
 
 Two guards for models that loop. A tool call repeated in one turn with the same
 arguments as an earlier successful one is not run; it fails with "already called, use
-the result above", so three in a row end the turn with an explanation. A reply bound for
-a chat loses any tool call the model wrote out as text (`<tool_call>…`), and a turn that
-ran out of tool rounds ends with a line saying to send "continue".
+the result above", so three in a row end the turn with an explanation. The step that must
+then answer (and the last tool round) is sent no tools at all, not only `tool_choice:
+"none"`: a model that still sees its tools writes the call out as text in its own markup.
+Anthropic models keep theirs, since Anthropic refuses tool history with no tools defined.
+Any tool call a model still writes out as text (GLM's `<tool_call>…`, DeepSeek's DSML) is
+cut from the stream, the stored reply and chat replies; a reply that was nothing else
+says it stopped. A turn that ran out of tool rounds ends with a line saying to send
+"continue".
 
 Scheduled tasks use the Agents SDK's own scheduling (`schedule`/`getSchedules`), so they
 survive eviction. A scheduled turn writes into the transcript like any other, and bills
