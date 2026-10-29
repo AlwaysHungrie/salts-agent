@@ -558,6 +558,32 @@ describe("sessions over HTTP", () => {
     );
     expect(res.status).toBe(404);
   });
+
+  it("404s a deleted or never-created session instead of bringing it back", async () => {
+    const member = someone("member");
+    const { body } = await createAgent(member);
+    const created = await SELF.fetch(
+      `${BASE}/api/agents/${body.id}/sessions`,
+      as(member, { method: "POST", body: JSON.stringify({ title: "Gone soon" }) })
+    );
+    const { id } = (await created.json()) as { id: string };
+    expect(
+      (await SELF.fetch(`${BASE}/api/sessions/${id}`, as(member, { method: "DELETE" }))).status
+    ).toBe(200);
+
+    for (const sessionId of [id, `${body.id}~deadbeef`]) {
+      const chat = await SELF.fetch(
+        `${BASE}/agents/session-agent/${sessionId}/chat`,
+        as(member, { method: "POST", body: JSON.stringify({ message: "still there?" }) })
+      );
+      expect(chat.status).toBe(404);
+      expect(
+        (await SELF.fetch(`${BASE}/agents/session-agent/${sessionId}/messages`, as(member))).status
+      ).toBe(404);
+    }
+    const listed = await SELF.fetch(`${BASE}/api/agents/${body.id}/sessions`, as(member));
+    expect(((await listed.json()) as { sessions: unknown[] }).sessions).toEqual([]);
+  });
 });
 
 describe("the model catalog", () => {

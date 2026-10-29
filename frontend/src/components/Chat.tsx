@@ -131,6 +131,10 @@ export function Chat({
     try {
       // The Worker sends every file it holds, so strays must go before the message.
       await uploads.reconcileIfNeeded(files.map((a) => a.id));
+      // The reconnect asked on mount may still be in flight, and `sendMessage` leaves it
+      // be. Landing after this turn starts, it would attach to it as a second stream and
+      // the two would draw the reply over and over. `stop` is what cancels it.
+      await stop();
       // The files ride along only so the sent bubble can draw them at once.
       sendMessage({
         role: "user",
