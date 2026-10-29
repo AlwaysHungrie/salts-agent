@@ -19,6 +19,16 @@ export type Env = {
    */
   CLERK_ISSUER?: string;
   /**
+   * This Worker's resource URL (e.g. `https://api.salts.dev`): a Clerk OAuth access token
+   * opens session routes only when its `aud` holds it. Unset, no access token does.
+   */
+  OAUTH_RESOURCE?: string;
+  /**
+   * The OAuth client ids (comma or space separated) whose access tokens may open their
+   * users' sessions: apps that sign people in with this Clerk instead of a Salts login.
+   */
+  OAUTH_CLIENTS?: string;
+  /**
    * The web app's origin (e.g. `https://app.salts.dev`), for the links
    * `!docs`, `!settings` and `!mcp` send. Unset, they say there is none.
    */

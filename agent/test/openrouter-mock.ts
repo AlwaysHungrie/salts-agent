@@ -880,6 +880,17 @@ export async function openrouterMock(request: Request): Promise<Response> {
   // The test issuer's public keys, so tokens from test/clerk.ts verify for real.
   if (url.hostname === "clerk.test" && url.pathname === "/.well-known/jwks.json")
     return json(TEST_CLERK_JWKS);
+  // Userinfo for a test access token: the address is its `sub` (test/clerk.ts), and a
+  // `test_unverified` claim makes it unverified. The signature was checked by the Worker.
+  if (url.hostname === "clerk.test" && url.pathname === "/oauth/userinfo") {
+    const token = (request.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
+    try {
+      const claims = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+      return json({ sub: claims.sub, email: claims.sub, email_verified: !claims.test_unverified });
+    } catch {
+      return json({ error: "invalid_token" }, 401);
+    }
+  }
   if (url.hostname !== "openrouter.ai") {
     return new Response(`blocked outbound request to ${url.hostname}`, { status: 503 });
   }
