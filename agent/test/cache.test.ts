@@ -36,7 +36,7 @@ type Body = {
   model?: string;
   stream?: boolean;
   usage?: { include?: boolean };
-  provider?: { data_collection?: string };
+  provider?: { data_collection?: string; quantizations?: string[] };
   messages?: { role?: string; content?: string | ContentPart[] }[];
 };
 
@@ -184,6 +184,17 @@ describe("prepareOpenRouterRequest", () => {
     const ready: Body = { model: "vendor/model", messages: [], usage: { include: true } };
     const init = prepareOpenRouterRequest(request(ready), true);
     expect((JSON.parse(init?.body as string) as Body).provider?.data_collection).toBe("deny");
+  });
+
+  it("sends GLM only to fp8 hosts, and leaves other models' hosts alone", () => {
+    const glm: Body = { model: "z-ai/glm-5.3", messages: [], usage: { include: true } };
+    expect(prepared(glm).provider?.quantizations).toEqual(["fp8"]);
+    const both = JSON.parse(prepareOpenRouterRequest(request(glm), true)?.body as string) as Body;
+    expect(both.provider).toEqual({ data_collection: "deny", quantizations: ["fp8"] });
+    expect(prepared(anthropic()).provider).toBeUndefined();
+    expect(
+      prepared({ model: "deepseek/deepseek-v4-flash", messages: [] }).provider
+    ).toBeUndefined();
   });
 
   it("hands back anything it cannot read", () => {

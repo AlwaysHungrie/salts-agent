@@ -35,7 +35,7 @@ export type ContentPart = { type?: string; text?: string; cache_control?: { type
 export type ChatRequestBody = {
   model?: string;
   usage?: { include?: boolean };
-  provider?: { data_collection?: "allow" | "deny" };
+  provider?: { data_collection?: "allow" | "deny"; quantizations?: string[] };
   messages?: { role?: string; content?: string | ContentPart[] }[];
 };
 
@@ -43,8 +43,14 @@ export type ChatRequestBody = {
 export const CACHE_CONTROL = { type: "ephemeral" } as const;
 
 /**
+ * GLM is served by dozens of OpenRouter hosts, the cheapest at fp4, which breaks tool
+ * calls now and then. fp8 is what Z.AI itself serves.
+ */
+const FP8_ONLY = "z-ai/";
+
+/**
  * Add what the AI SDK does not send: `usage.include` for the real cost, the Anthropic
- * cache breakpoint, and (for WhatsApp) the no-training provider rule.
+ * cache breakpoint, (for WhatsApp) the no-training provider rule, and fp8 hosts for GLM.
  */
 export function prepareOpenRouterRequest(
   init: RequestInit | undefined,
@@ -55,9 +61,11 @@ export function prepareOpenRouterRequest(
     const body = JSON.parse(init.body) as ChatRequestBody;
     const reported = body.usage?.include === true;
     const marked = markCacheablePrefix(body);
-    if (reported && !marked && !noTrain) return init;
+    const fp8 = (body.model ?? "").startsWith(FP8_ONLY);
+    if (reported && !marked && !noTrain && !fp8) return init;
     body.usage = { ...body.usage, include: true };
     if (noTrain) body.provider = { ...body.provider, data_collection: "deny" };
+    if (fp8) body.provider = { ...body.provider, quantizations: ["fp8"] };
     return { ...init, body: JSON.stringify(body) };
   } catch {
     return init;
