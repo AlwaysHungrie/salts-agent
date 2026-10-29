@@ -24,6 +24,8 @@
  * - `!!command <command> [argument]` — the model calls `run_command`, then answers
  *   `Command said: <its result>`.
  * - `!!toolloop` — the model calls `list` again and again until it may no longer call tools.
+ * - `!!leak` / `!!leakonly` — the model writes a tool call out as DeepSeek DSML text, after
+ *   `LEAK_PREFIX` or on its own, as a model sent no tools may.
  *   The second leg is recognised by the tool message the SDK sends back, so the whole
  *   two-step exchange stays deterministic.
  * - `!!schedule` — the model schedules a task a second out, then confirms it. The task
@@ -390,6 +392,7 @@ type ChatBody = {
   audio?: { voice?: string; format?: string };
   messages?: { role: string; content?: unknown }[];
   tool_choice?: unknown;
+  tools?: unknown[];
 };
 
 /**
@@ -577,6 +580,16 @@ function streamedText(text: string) {
 
 /** What a `!!failloop` model says once it may no longer call tools. */
 export const FAILLOOP_REPLY = "The tool kept failing, so I stopped.";
+
+/** What a `!!leak` model says before the tool call it writes out as text. */
+export const LEAK_PREFIX = "Let me look deeper.";
+
+/** A DeepSeek tool call written out as text, as a `!!leak` model sends it. */
+export const LEAKED_DSML =
+  '<｜DSML｜tool_calls> <｜DSML｜invoke name="mcp_docs_search"> <｜DSML｜parameter name="query" string="true">lane</｜DSML｜parameter> </｜DSML｜invoke> </｜DSML｜tool_calls>';
+
+/** Whether a request leaves the model no tool to call: banned, or none sent at all. */
+const mayNotCallTools = (body: ChatBody) => body.tool_choice === "none" || !body.tools?.length;
 
 /** What a `!!toolloop` model says once it may no longer call tools. */
 export const TOOLLOOP_REPLY = "Here is what I found so far.";
@@ -1014,13 +1027,17 @@ export async function openrouterMock(request: Request): Promise<Response> {
   // `!!failloop <tool>`: a model that repeats one failing call for as long as it is let.
   // An empty prompt makes `schedule_task` fail; a tool the turn lacks fails in the SDK.
   if (message.startsWith("!!failloop")) {
-    if (body.tool_choice === "none") return streamedText(FAILLOOP_REPLY);
+    if (mayNotCallTools(body)) return streamedText(FAILLOOP_REPLY);
     return streamedToolCall(message.split(/\s+/)[1], { prompt: "", when: "1" });
   }
 
+  // `!!leak` / `!!leakonly`: a model that writes its tool call out as text.
+  if (message.startsWith("!!leakonly")) return streamedText(LEAKED_DSML);
+  if (message.startsWith("!!leak")) return streamedText(`${LEAK_PREFIX}\n\n${LEAKED_DSML}`);
+
   // `!!toolloop`: a model that keeps calling a tool that works, for as long as it is let.
   if (message.startsWith("!!toolloop")) {
-    if (body.tool_choice === "none") return streamedText(TOOLLOOP_REPLY);
+    if (mayNotCallTools(body)) return streamedText(TOOLLOOP_REPLY);
     return streamedToolCall("list", { path: "/" });
   }
 

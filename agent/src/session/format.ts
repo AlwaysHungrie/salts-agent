@@ -63,14 +63,118 @@ export function turnFailure(status: string, error?: string): string {
 export const OUT_OF_ROUNDS =
   'I ran out of steps before finishing this. Say "continue" and I will carry on from here.';
 
+/** Said when all a reply held was a tool call written out as text. */
+export const NO_ANSWER =
+  "I stopped before I could answer this. Ask again, or tell me what to try differently.";
+
+/**
+ * Tool-call markup that models write out as text when they may not call tools: GLM's
+ * `<tool_call>`, DeepSeek's DSML and its older `tool▁calls` tokens. Opener, then closer.
+ */
+const TOOL_MARKUP: [string, string][] = [
+  ["<tool_call>", "</tool_call>"],
+  ["<｜DSML｜tool_calls>", "</｜DSML｜tool_calls>"],
+  ["<｜tool▁calls▁begin｜>", "<｜tool▁calls▁end｜>"],
+  ["<|tool▁calls▁begin|>", "<|tool▁calls▁end|>"],
+];
+
+/**
+ * Cuts tool-call markup out of text that arrives in pieces. A piece that could be the
+ * start of an opener is held back until the next one settles it; markup never closed
+ * is cut to the end. `dropped` says whether anything was cut.
+ */
+export function toolMarkupFilter() {
+  let held = "";
+  let closer = "";
+  const filter = {
+    dropped: false,
+    push(piece: string): string {
+      held += piece;
+      let out = "";
+      for (;;) {
+        if (closer) {
+          const end = held.indexOf(closer);
+          if (end < 0) {
+            held = held.slice(-(closer.length - 1));
+            return out;
+          }
+          held = held.slice(end + closer.length);
+          closer = "";
+          continue;
+        }
+        let first: { at: number; open: string; close: string } | undefined;
+        for (const [open, close] of TOOL_MARKUP) {
+          const at = held.indexOf(open);
+          if (at >= 0 && (!first || at < first.at)) first = { at, open, close };
+        }
+        if (first) {
+          out += held.slice(0, first.at);
+          held = held.slice(first.at + first.open.length);
+          closer = first.close;
+          filter.dropped = true;
+          continue;
+        }
+        let keep = 0;
+        for (const [open] of TOOL_MARKUP) {
+          for (let n = Math.min(open.length - 1, held.length); n > keep; n--) {
+            if (held.endsWith(open.slice(0, n))) keep = n;
+          }
+        }
+        out += held.slice(0, held.length - keep);
+        held = held.slice(held.length - keep);
+        return out;
+      }
+    },
+    flush(): string {
+      const rest = closer ? "" : held;
+      held = "";
+      closer = "";
+      return rest;
+    },
+  };
+  return filter;
+}
+
+/** Text with any tool-call markup cut out. */
+export function stripToolMarkup(text: string): string {
+  const filter = toolMarkupFilter();
+  return filter.push(text) + filter.flush();
+}
+
+/**
+ * The stored reply with leaked tool-call markup cut from its text, so a reload, the
+ * transcript and the next turn's history never carry it. A reply left with no text says
+ * why it stopped. Undefined when there was nothing to cut.
+ */
+export function withoutToolMarkup(message: UIMessage, outOfRounds: boolean): UIMessage | undefined {
+  let cut = false;
+  const parts = message.parts.map((part) => {
+    if (part.type !== "text") return part;
+    const text = stripToolMarkup(part.text);
+    if (text === part.text) return part;
+    cut = true;
+    return { ...part, text };
+  });
+  if (!cut) return undefined;
+  const cleaned = { ...message, parts };
+  if (textOf(cleaned).trim()) return cleaned;
+  return {
+    ...cleaned,
+    parts: [...parts, { type: "text", text: outOfRounds ? OUT_OF_ROUNDS : NO_ANSWER }],
+  };
+}
+
 /**
  * A reply as a chat should get it. Some models, told to stop calling tools, write the
- * call out as text in their own markup; that is never an answer, so it is cut. A turn
- * that ran out of rounds says so, unless the reply already offers "continue".
+ * call out as text in their own markup; that is never an answer, so it is cut, and a
+ * reply that was nothing else says so. A turn that ran out of rounds says so, unless the
+ * reply already offers "continue".
  */
 export function chatReply(text: string, outOfRounds: boolean): string {
-  const cleaned = text.replace(/<tool_call>[\s\S]*?(<\/tool_call>|$)/g, "").trim();
-  if (!outOfRounds || /\bcontinue\b/i.test(cleaned)) return cleaned;
+  const cleaned = stripToolMarkup(text).trim();
+  if (!outOfRounds || /\bcontinue\b/i.test(cleaned)) {
+    return cleaned || (text.trim() ? NO_ANSWER : "");
+  }
   return cleaned ? `${cleaned}\n\n${OUT_OF_ROUNDS}` : OUT_OF_ROUNDS;
 }
 

@@ -48,7 +48,7 @@ import {
 } from "./session/context";
 import { cacheFileAnnotations } from "./session/documents";
 import { PARSE_CACHE_DIR, publicAttachment } from "./session/files";
-import { describeSchedule, textOf } from "./session/format";
+import { describeSchedule, textOf, withoutToolMarkup } from "./session/format";
 import { LiveTurns } from "./session/live";
 import { SESSION_AGENT_MIGRATIONS } from "./session/migrations";
 import { exportTurns, importTurns, transcriptPage } from "./session/transcript";
@@ -411,6 +411,8 @@ export class SessionAgent extends Think<Env> {
     this.ensureSchema();
     this.turn.running = Math.max(0, this.turn.running - 1);
     this.live.lastReplyId = result.message.id;
+    const cleaned = withoutToolMarkup(result.message, this.turn.outOfRounds);
+    if (cleaned) result = { ...result, message: await this.updateMessageInHistory(cleaned) };
     this.exec(
       `INSERT OR REPLACE INTO usage (message_id, prompt_tokens, completion_tokens, cost_usd, ms, ts, context_tokens)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,

@@ -21,6 +21,7 @@ If your agent is replying in the browser, you can also just ask it what is wrong
 | "This agent has reached its spending limit for this month" | Your agent is part of a fleet, and you have used this month's allowance on the default fleet key. It starts working again next month, as soon as the person who runs the fleet raises your limit, or when you switch to a key of your own in **Settings**. |
 | "That turn did not finish" | Try again. If it keeps happening, send `!unstick`. |
 | "I ran out of steps before finishing this" | The task needed more steps than one reply allows. Reply with "continue" and your agent carries on from where it stopped. |
+| "I stopped before I could answer this" | Your agent's tools kept failing, so it stopped before it had an answer. Ask again, or tell it what to try differently. If it keeps happening, check the app it was using on your agent's **Capabilities** page. |
 
 ## When there is no reply at all
 
