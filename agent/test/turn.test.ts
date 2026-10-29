@@ -4,6 +4,8 @@ import {
   COST_PER_TURN,
   FAILLOOP_REPLY,
   INVENTED_TOOL,
+  LEAK_PREFIX,
+  LEAKED_DSML,
   MCP_MEDIA_TOOL,
   MCP_INSTRUCTIONS,
   MCP_TOOLS,
@@ -14,7 +16,13 @@ import {
 } from "./openrouter-mock";
 import { GUIDE, guidePage } from "../src/guide";
 import { EMPTY_MCP_SERVER, agentIdOf } from "../src/registry";
-import { chatReply, OUT_OF_ROUNDS } from "../src/session/format";
+import {
+  chatReply,
+  NO_ANSWER,
+  OUT_OF_ROUNDS,
+  stripToolMarkup,
+  toolMarkupFilter,
+} from "../src/session/format";
 import { signedIn } from "./clerk";
 import { SHIPPED } from "./shipped";
 
@@ -221,8 +229,28 @@ describe("a reply as a chat gets it", () => {
       "Here it is.<tool_call>mcp_analyst_breakdown<arg_key>cell</arg_key><arg_value>C93</arg_value></tool_call>";
     expect(chatReply(leaked, false)).toBe("Here it is.");
     expect(chatReply("<tool_call>mcp_analyst_breakdown<arg_key>cell</arg_key><arg_va", false)).toBe(
-      ""
+      NO_ANSWER
     );
+  });
+
+  it("cuts DeepSeek's DSML tool calls", () => {
+    expect(chatReply(`${LEAK_PREFIX}\n\n${LEAKED_DSML}`, false)).toBe(LEAK_PREFIX);
+    expect(chatReply(LEAKED_DSML, false)).toBe(NO_ANSWER);
+    expect(chatReply("", false)).toBe("");
+  });
+
+  it("cuts markup that arrives a character at a time", () => {
+    // Streamed deltas can split an opener anywhere; none of it may reach the browser.
+    const text = `Before. ${LEAKED_DSML} After.`;
+    const filter = toolMarkupFilter();
+    const out = [...text].map((ch) => filter.push(ch)).join("") + filter.flush();
+    expect(out).toBe("Before.  After.");
+    expect(filter.dropped).toBe(true);
+  });
+
+  it("leaves text that only looks like the start of markup", () => {
+    expect(stripToolMarkup("a < b and <tool")).toBe("a < b and <tool");
+    expect(stripToolMarkup("x <｜tool▁calls▁begin｜>y<｜tool▁calls▁end｜> z")).toBe("x  z");
   });
 
   it("says how to go on when the turn ran out of rounds", () => {
@@ -289,6 +317,7 @@ describe("tools that keep failing", () => {
     ).json()) as {
       stream?: boolean;
       tool_choice?: unknown;
+      tools?: unknown[];
       messages: { role: string; content?: unknown }[];
     }[];
     return requests.filter((r) => r.stream);
@@ -311,12 +340,31 @@ describe("tools that keep failing", () => {
     const sent = await legs(token);
     // Three failing calls, then one step that may not call tools.
     expect(sent).toHaveLength(4);
-    expect(sent.slice(0, 3).every((r) => r.tool_choice !== "none")).toBe(true);
-    expect(sent[3].tool_choice).toBe("none");
+    expect(sent.slice(0, 3).every((r) => r.tool_choice !== "none" && r.tools?.length)).toBe(true);
+    // Sent no tools at all: a model that still sees them writes the call out as text.
+    expect(sent[3].tools ?? []).toEqual([]);
     const results = sent[3].messages.filter((m) => m.role === "tool");
     expect(results).toHaveLength(3);
     expect(JSON.stringify(results)).toContain(error);
     expect(JSON.stringify(sent[3])).toContain("3 tool calls in a row have failed");
+  });
+  it("keeps an Anthropic model's tools on the step that must answer", async () => {
+    // Anthropic refuses a request whose history holds tool calls but defines no tools.
+    const { sessionId, email, agentId } = await chatFixture();
+    const patched = await SELF.fetch(
+      `${BASE}/api/agents/${agentId}/config`,
+      as(email, {
+        method: "PATCH",
+        body: JSON.stringify({ cap_scheduled_tasks: 1, model: "anthropic/claude-sonnet-4.5" }),
+      })
+    );
+    expect(patched.ok).toBe(true);
+    const token = `failloop-${crypto.randomUUID().slice(0, 8)}`;
+    await say(sessionId, email, `!!failloop schedule_task ${token}`);
+    const sent = await legs(token);
+    expect(sent).toHaveLength(4);
+    expect(sent[3].tool_choice).toBe("none");
+    expect(sent[3].tools?.length).toBeGreaterThan(0);
   });
 });
 
@@ -329,12 +377,12 @@ describe("running out of tool rounds", () => {
 
     const requests = (await (
       await fetch(`https://openrouter.ai/__requests?contains=${token}`)
-    ).json()) as { stream?: boolean; tool_choice?: unknown }[];
+    ).json()) as { stream?: boolean; tool_choice?: unknown; tools?: unknown[] }[];
     const sent = requests.filter((r) => r.stream);
-    // Every round but the last may call tools; the last must answer.
+    // Every round but the last may call tools; the last must answer, and is sent none.
     expect(sent).toHaveLength(SHIPPED.max_tool_rounds);
-    expect(sent.slice(0, -1).every((r) => r.tool_choice !== "none")).toBe(true);
-    expect(sent.at(-1)?.tool_choice).toBe("none");
+    expect(sent.slice(0, -1).every((r) => r.tool_choice !== "none" && r.tools?.length)).toBe(true);
+    expect(sent.at(-1)?.tools ?? []).toEqual([]);
     expect(JSON.stringify(sent.at(-1))).toContain("This is the last step of this turn");
   });
 });
@@ -808,6 +856,42 @@ describe("streaming a turn", () => {
     // The stream is what the browser reads, but the transcript is what survives a
     // reload — a turn that streamed and stored nothing would look fine until then.
     expect(body.messages.map((m) => m.content)).toContain("streamed");
+  });
+
+  it.each([
+    ["after some words", "!!leak", LEAK_PREFIX],
+    ["on its own", "!!leakonly", NO_ANSWER],
+  ])("never shows or stores a tool call written out as text: %s", async (_, message, expected) => {
+    const { sessionId, email } = await chatFixture();
+    const body = await SELF.fetch(
+      `${BASE}/agents/session-agent/${sessionId}/stream`,
+      as(email, { method: "POST", body: JSON.stringify({ message }) })
+    ).then((r) => r.text());
+    const streamed = [...body.matchAll(/^data: (.*)$/gm)]
+      .map(([, payload]) => {
+        try {
+          return JSON.parse(payload) as { type?: string; text?: string };
+        } catch {
+          return {};
+        }
+      })
+      .filter((event) => event.type === "delta")
+      .map((event) => event.text ?? "")
+      .join("");
+    expect(streamed.trim()).toBe(expected);
+    // The stored reply is what a reload and the next turn's history read.
+    const stored = (await (await transcript(sessionId, email)).json()) as {
+      messages: { role: string; content: string }[];
+    };
+    const reply = stored.messages.find((m) => m.role === "assistant")!;
+    expect(reply.content.trim()).toBe(expected);
+    expect(JSON.stringify(stored)).not.toContain("DSML");
+  });
+
+  it("answers the chat API without the markup", async () => {
+    const { sessionId, email } = await chatFixture();
+    const res = await say(sessionId, email, "!!leakonly");
+    expect(((await res.json()) as { reply: string }).reply).toBe(NO_ANSWER);
   });
 
   it("rejects a stream request with no message", async () => {

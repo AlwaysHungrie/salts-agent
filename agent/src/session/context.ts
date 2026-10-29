@@ -230,6 +230,19 @@ export function failedInARow(host: SessionHost, steps: readonly StepParts[]): nu
   return run;
 }
 
+/** A step that must answer in words. */
+type ForcedAnswer = { toolChoice: "none"; instructions: string; activeTools?: string[] };
+
+/**
+ * A forced answer is sent no tools at all, not only a ban on calling them: a model that
+ * still sees its tools writes the call out as text in its own markup (DeepSeek's DSML,
+ * GLM's `<tool_call>`). Anthropic is left as it was: it refuses a request whose history
+ * holds tool calls but which defines no tools, and it does not write calls out.
+ */
+function noTools(host: SessionHost): { activeTools?: string[] } {
+  return host.config().model.startsWith("anthropic/") ? {} : { activeTools: [] };
+}
+
 /**
  * Once tools have failed `MAX_FAILED_TOOL_CALLS` times running, the next step may not call
  * any: a model repeating one mistake otherwise spends every tool round and answers nothing.
@@ -237,10 +250,11 @@ export function failedInARow(host: SessionHost, steps: readonly StepParts[]): nu
 export function stopAfterFailures(
   host: SessionHost,
   steps: readonly StepParts[]
-): { toolChoice: "none"; instructions: string } | undefined {
+): ForcedAnswer | undefined {
   const failed = failedInARow(host, steps);
   if (failed < MAX_FAILED_TOOL_CALLS) return undefined;
   return {
+    ...noTools(host),
     toolChoice: "none",
     instructions: `${systemPrompt(host)}\n\n${failed} tool calls in a row have failed. Do not call any more tools this turn. Tell the user, briefly and in plain words, what you were trying to do and what went wrong (the errors the tools returned), and ask how they want to proceed.`,
   };
@@ -254,10 +268,11 @@ export function answerOnLastRound(
   host: SessionHost,
   stepNumber: number,
   maxSteps: number
-): { toolChoice: "none"; instructions: string } | undefined {
+): ForcedAnswer | undefined {
   if (stepNumber < maxSteps - 1) return undefined;
   host.turn.outOfRounds = true;
   return {
+    ...noTools(host),
     toolChoice: "none",
     instructions: `${systemPrompt(host)}\n\nThis is the last step of this turn: do not call any more tools. Answer now with what you have found so far, say plainly what is still left to do, and tell the user they can say "continue" to carry on.`,
   };

@@ -6,7 +6,14 @@ import { attachmentsOf, claimed } from "./attachments";
 import { runQueuedCommand } from "./command-tool";
 import { runCommand } from "./commands";
 import { isAudioAttachment, publicAttachment } from "./files";
-import { reportable, textOf } from "./format";
+import {
+  NO_ANSWER,
+  OUT_OF_ROUNDS,
+  reportable,
+  textOf,
+  toolMarkupFilter,
+  withoutToolMarkup,
+} from "./format";
 import { streamSentence } from "./live";
 import type { Attachment, SessionHost } from "./types";
 
@@ -158,7 +165,11 @@ export async function runChat(host: SessionHost, message: string, retry = false)
   if (blocked) return { body: { reply: blocked }, turn: { cost_usd: 0, llm_ms: 0 } };
   const userMessage = await openTurn(host, message, retry);
   const result = await host.runTurn({ input: [userMessage] });
-  const said = result.status === "completed" ? textOf(result.message as unknown as UIMessage) : "";
+  const answer = result.message as unknown as UIMessage;
+  const said =
+    result.status === "completed"
+      ? textOf(withoutToolMarkup(answer, host.turn.outOfRounds) ?? answer)
+      : "";
   // A command the model queued (`!new`, `!clear`, `!compact`) runs now and says so after it.
   const queued = await runQueuedCommand(host, result.status === "completed");
   if (queued?.destroy) host.ctx.waitUntil(host.finishDelete());
@@ -192,6 +203,14 @@ export async function streamChat(
   const userMessage = await openTurn(host, message, retry);
   // Tool events name the call by id; the name arrives once, when it starts.
   const toolNames = new Map<string, string>();
+  // A tool call the model wrote out as text never reaches the browser (see `withoutToolMarkup`).
+  const markup = toolMarkupFilter();
+  let shown = false;
+  const show = (text: string) => {
+    if (!text) return;
+    if (text.trim()) shown = true;
+    host.live.emit({ type: "delta", text });
+  };
 
   // The turn runs on the object and banks every event; this response is one listener, and
   // a reloaded browser can attach another.
@@ -214,7 +233,7 @@ export async function streamChat(
               toolName?: string;
             };
             if (chunk.type === "text-delta" && chunk.delta) {
-              host.live.emit({ type: "delta", text: chunk.delta });
+              show(markup.push(chunk.delta));
             } else if (chunk.type === "tool-input-start" && chunk.toolCallId) {
               toolNames.set(chunk.toolCallId, chunk.toolName ?? "tool");
               host.live.emit({ type: "tool", name: chunk.toolName ?? "tool" });
@@ -239,6 +258,9 @@ export async function streamChat(
           },
         },
       });
+      show(markup.flush());
+      // The same words the stored reply was given in place of the markup.
+      if (markup.dropped && !shown) show(host.turn.outOfRounds ? OUT_OF_ROUNDS : NO_ANSWER);
 
       // A command the model queued (`!new`, `!clear`, `!compact`) runs now and says so after it.
       const queued = await runQueuedCommand(host, !failed);
