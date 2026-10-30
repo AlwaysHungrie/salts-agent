@@ -161,8 +161,8 @@ curl -X POST http://localhost:8787/agents/session-agent/my-session/chat \
 
 | Route | What it does |
 |---|---|
-| `POST /agents/session-agent/:id/chat` | Send a message, get a reply |
-| `POST /agents/session-agent/:id/stream` | Send a message, get an SSE token stream |
+| `POST /agents/session-agent/:id/chat` | Send a message, get a reply. Optional `x-openrouter-key` pays for it instead of the agent's key; optional `x-mcp-servers` (comma-separated names) limits it to those MCP servers |
+| `POST /agents/session-agent/:id/stream` | Send a message, get an SSE token stream. Optional `x-openrouter-key` and `x-mcp-servers` as for `chat` |
 | `GET  /agents/session-agent/:id/messages` | One page of transcript, newest last, with per-message tokens and cost. `?limit` (default 30, max 200) and `?before=<message id>` walk backwards |
 | `GET  /agents/session-agent/:id/summary` | Message count and total LLM spend |
 | `POST /agents/session-agent/:id/reset` | Wipe the session |

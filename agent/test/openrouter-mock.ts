@@ -406,6 +406,8 @@ type ChatBody = {
  * put in the message it sent: `?contains=<token>`.
  */
 const chatRequests: ChatBody[] = [];
+/** The key each of those requests was sent with, beside its body: `GET /__chat-keys?contains=`. */
+const chatKeys: { key: string; body: string }[] = [];
 
 const json = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value), {
@@ -895,6 +897,17 @@ export async function openrouterMock(request: Request): Promise<Response> {
   // The test issuer's public keys, so tokens from test/clerk.ts verify for real.
   if (url.hostname === "clerk.test" && url.pathname === "/.well-known/jwks.json")
     return json(TEST_CLERK_JWKS);
+  // Userinfo for a test access token: the address is its `sub` (test/clerk.ts), and a
+  // `test_unverified` claim makes it unverified. The signature was checked by the Worker.
+  if (url.hostname === "clerk.test" && url.pathname === "/oauth/userinfo") {
+    const token = (request.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
+    try {
+      const claims = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+      return json({ sub: claims.sub, email: claims.sub, email_verified: !claims.test_unverified });
+    } catch {
+      return json({ error: "invalid_token" }, 401);
+    }
+  }
   if (url.hostname !== "openrouter.ai") {
     return new Response(`blocked outbound request to ${url.hostname}`, { status: 503 });
   }
@@ -917,12 +930,21 @@ export async function openrouterMock(request: Request): Promise<Response> {
     );
   }
 
+  if (url.pathname === "/__chat-keys") {
+    const contains = url.searchParams.get("contains") ?? "";
+    return json(chatKeys.filter((k) => k.body.includes(contains)).map((k) => k.key));
+  }
+
   if (url.pathname !== "/api/v1/chat/completions") {
     return json({ error: `unmocked OpenRouter path ${url.pathname}` }, 404);
   }
 
   const body = (await request.json().catch(() => ({}))) as ChatBody;
   chatRequests.push(body);
+  chatKeys.push({
+    key: (request.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, ""),
+    body: JSON.stringify(body),
+  });
   const message = lastUserMessage(body);
 
   if (message.startsWith("!!fail500")) {
