@@ -76,6 +76,18 @@ export const SCHEDULED_PREFIX = "[scheduled task] ";
  */
 export const CALLER_KEY_HEADER = "x-openrouter-key";
 
+/**
+ * A caller may narrow the MCP servers a message can use: a comma-separated list of server
+ * names in this header on `stream` or `chat` offers only those of the agent's enabled
+ * servers for that turn (none, if it names none of them). Without it nothing changes.
+ */
+export const MCP_SERVERS_HEADER = "x-mcp-servers";
+
+/** The servers a turn may use: all of them, or only those `names` lists (any case). */
+function onlyNamed(servers: McpServerRow[], names: string[] | null): McpServerRow[] {
+  return names ? servers.filter((s) => names.includes(s.name.trim().toLowerCase())) : servers;
+}
+
 export class SessionAgent extends Think<Env> {
   /**
    * Attachment bytes, and anything the model writes, live in one workspace, with R2
@@ -205,9 +217,12 @@ export class SessionAgent extends Think<Env> {
       ? await this.registry().recall("", 50)
       : [];
     this.mcpServers = enabled(this.currentConfig, "mcp")
-      ? mcpServersForChat(
-          await this.registry().mcpServers(),
-          await this.registry().get(this.sessionId())
+      ? onlyNamed(
+          mcpServersForChat(
+            await this.registry().mcpServers(),
+            await this.registry().get(this.sessionId())
+          ),
+          this.callerMcp
         )
       : [];
   }
@@ -263,19 +278,34 @@ export class SessionAgent extends Think<Env> {
 
   /** The key the caller of the running turn pays with, if it sent one; memory only. */
   private callerKey = "";
+  /** The MCP server names (lower case) the running turn's caller allowed; null for all. */
+  private callerMcp: string[] | null = null;
 
   /**
-   * Set by the requests that start a turn, so a key lasts exactly one turn: its reply,
-   * the compaction before it and the title after it. Other requests (a reconnect mid-reply)
-   * leave it alone.
+   * Set by the requests that start a turn, so the caller's choices last exactly one turn:
+   * its reply, the compaction before it and the title after it. Other requests (a
+   * reconnect mid-reply) leave them alone.
    */
-  private takeCallerKey(request: Request, path: string) {
+  private takeCallerOptions(request: Request, path: string) {
     if (request.method !== "POST") return;
     if (path === "stream" || path === "chat") {
       this.callerKey = (request.headers.get(CALLER_KEY_HEADER) ?? "").trim();
+      const servers = request.headers.get(MCP_SERVERS_HEADER);
+      this.callerMcp =
+        servers === null
+          ? null
+          : servers
+              .split(",")
+              .map((name) => name.trim().toLowerCase())
+              .filter(Boolean);
     } else if (path === "telegram" || path === "whatsapp") {
-      this.callerKey = "";
+      this.clearCallerOptions();
     }
+  }
+
+  private clearCallerOptions() {
+    this.callerKey = "";
+    this.callerMcp = null;
   }
 
   private model(): string {
@@ -443,14 +473,15 @@ export class SessionAgent extends Think<Env> {
 
   async onRequest(request: Request): Promise<Response> {
     this.ensureSchema();
-    await this.loadConfig();
 
     const url = new URL(request.url);
     const segments = url.pathname.split("/").filter(Boolean);
     // Everything after /agents/session-agent/<session-id>.
     const route = segments.slice(segments.indexOf("session-agent") + 2);
     const path = route[0] ?? "";
-    this.takeCallerKey(request, path);
+    // Before the config, which the caller's MCP choice narrows.
+    this.takeCallerOptions(request, path);
+    await this.loadConfig();
 
     // Streaming owns its own metering: the object stays billable until the last token.
     if (request.method === "POST" && path === "stream") {
@@ -668,9 +699,9 @@ export class SessionAgent extends Think<Env> {
    */
   async runScheduledTask(payload: { prompt: string }) {
     this.ensureSchema();
+    // A scheduled task is the agent's own turn: its own key, all its servers.
+    this.clearCallerOptions();
     await this.loadConfig();
-    // A scheduled task is the agent's own turn, paid with its own key.
-    this.callerKey = "";
     // Over the spend ceiling the task is dropped, not queued for next month; logged, since
     // nobody watches a scheduled task.
     console.log(`scheduled task running in session ${this.name}`);

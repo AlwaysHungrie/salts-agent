@@ -50,11 +50,15 @@ const EVENTS =
 const tag = ["Messages"];
 const middleware = [keepForward];
 
-/** A caller paying for its own message; see `CALLER_KEY_HEADER` in agent.ts. */
+/** A caller's choices for its own message; see `CALLER_KEY_HEADER` in agent.ts. */
 const CallerKeyHeaders = z.object({
   "x-openrouter-key": z.string().optional().openapi({
     description:
       "An OpenRouter key to pay for this message with, instead of the agent's own key. Used for this turn only and never stored; without it the agent's key is used.",
+  }),
+  "x-mcp-servers": z.string().optional().openapi({
+    description:
+      "Comma-separated MCP server names: this message may use only these of the agent's enabled servers (none, if it names none of them). For this turn only; without it every enabled server is offered.",
   }),
 });
 

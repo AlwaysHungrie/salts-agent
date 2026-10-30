@@ -1,4 +1,5 @@
-import { SELF } from "cloudflare:test";
+import { SELF, env } from "cloudflare:test";
+import { EMPTY_MCP_SERVER } from "../src/registry";
 import { describe, expect, it } from "vitest";
 import { clerkToken, signedIn } from "./clerk";
 
@@ -10,7 +11,8 @@ import { clerkToken, signedIn } from "./clerk";
  * in it and delete it; it is no Salts login anywhere else, and a token for another
  * resource or client, or for an unverified address, opens nothing.
  *
- * Also here: any caller may pay for its own message with `x-openrouter-key`.
+ * Also here: any caller may pay for its own message with `x-openrouter-key`, and narrow
+ * the MCP servers it may use with `x-mcp-servers`.
  */
 
 const BASE = "https://worker.test";
@@ -193,5 +195,74 @@ describe("a caller's own OpenRouter key", () => {
     await res.text();
     await expect.poll(() => keysFor(marker).then((k) => k.length)).toBeGreaterThanOrEqual(1);
     expect(new Set(await keysFor(marker))).toEqual(new Set(["sk-fake-but-valid"]));
+  });
+});
+
+describe("a caller's choice of MCP servers", () => {
+  /** An agent with two ready servers, as an app offering one per language would set up. */
+  async function twoServers() {
+    const member = someone();
+    const agentId = await createAgent(member);
+    const reg = env.SessionRegistry.get(env.SessionRegistry.idFromName(agentId));
+    for (const name of ["Dev3Pack", "Dev3Pack Spanish"]) {
+      await reg.addMcpServer({
+        ...EMPTY_MCP_SERVER,
+        id: crypto.randomUUID(),
+        name,
+        url: "https://mcp.test/",
+        enabled: 1,
+        tools_json: JSON.stringify([{ name: "search_documents", description: "Search." }]),
+        created_at: Date.now(),
+      });
+    }
+    const id = await (async () => {
+      const res = await SELF.fetch(`${BASE}/api/agents/${agentId}/sessions`, {
+        method: "POST",
+        headers: { "content-type": "application/json", ...signedIn(member) },
+        body: "{}",
+      });
+      return ((await res.json()) as { id: string }).id;
+    })();
+    return { member, id };
+  }
+
+  /** Which of the two servers' tools the model was offered for the turn carrying `marker`. */
+  async function offered(marker: string): Promise<string[]> {
+    const bodies = (await (
+      await fetch(`https://openrouter.ai/__requests?contains=${marker}`)
+    ).json()) as { stream?: boolean; tools?: unknown[] }[];
+    const tools = JSON.stringify(bodies.find((b) => b.stream)?.tools ?? []);
+    return ["[Dev3Pack]", "[Dev3Pack Spanish]"].filter((tag) => tools.includes(tag));
+  }
+
+  async function turn(headers: Record<string, string>) {
+    const { member, id } = await twoServers();
+    const marker = `m-${crypto.randomUUID()}`;
+    const res = await send(id, { ...signedIn(member), ...headers }, marker);
+    expect(res.status).toBe(200);
+    await res.text();
+    return await offered(marker);
+  }
+
+  it("offers every enabled server without the header", async () => {
+    expect(await turn({})).toEqual(["[Dev3Pack]", "[Dev3Pack Spanish]"]);
+  });
+
+  it("offers only the one named, in any case", async () => {
+    expect(await turn({ "x-mcp-servers": "dev3pack spanish" })).toEqual(["[Dev3Pack Spanish]"]);
+    expect(await turn({ "x-mcp-servers": "Dev3Pack" })).toEqual(["[Dev3Pack]"]);
+  });
+
+  it("offers none when it names none of them", async () => {
+    expect(await turn({ "x-mcp-servers": "Elsewhere" })).toEqual([]);
+  });
+
+  it("lasts one turn", async () => {
+    const { member, id } = await twoServers();
+    const first = await send(id, { ...signedIn(member), "x-mcp-servers": "Dev3Pack" }, "hi");
+    await first.text();
+    const marker = `m-${crypto.randomUUID()}`;
+    await (await send(id, signedIn(member), marker)).text();
+    expect(await offered(marker)).toEqual(["[Dev3Pack]", "[Dev3Pack Spanish]"]);
   });
 });
