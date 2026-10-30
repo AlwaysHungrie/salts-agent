@@ -11,7 +11,6 @@ import type { Schedule } from "agents";
 import type { UIMessage } from "ai";
 import { enabled, mcpServersForChat, type ScheduledTask } from "./capabilities";
 import { telegramInbound, whatsappInbound } from "./channel";
-import { APP_KEY_HEADER } from "./clerk-oauth";
 import type { Env } from "./env";
 import type { McpServerRow } from "./mcp";
 import { modelCatalog } from "./models";
@@ -71,8 +70,11 @@ import type { WhatsappInbound } from "./whatsapp";
  */
 export const SCHEDULED_PREFIX = "[scheduled task] ";
 
-/** Set in a session's storage once a trusted app has talked in it; see `openrouterKey`. */
-const APP_KEYED = "app_keyed";
+/**
+ * A caller may pay for its own message: an OpenRouter key sent in this header on `stream`
+ * or `chat` is used for that turn instead of the agent's. Without it nothing changes.
+ */
+export const CALLER_KEY_HEADER = "x-openrouter-key";
 
 export class SessionAgent extends Think<Env> {
   /**
@@ -253,25 +255,27 @@ export class SessionAgent extends Think<Env> {
   /**
    * The agent's own OpenRouter key. There is deliberately no deployment-wide fallback, so
    * no agent can spend the deployment's credit. Read per call so a new key applies at once.
-   *
-   * A session a trusted app has talked in is the app's for good: every call in it, from
-   * replies to titles, compaction and scheduled tasks, uses the key the app sent, and with
-   * none in hand (the object was evicted since) it uses none, never the agent's.
+   * A caller's own key (`CALLER_KEY_HEADER`) takes its place for the turn it sent.
    */
   private openrouterKey(): string {
-    if (this.ctx.storage.kv.get(APP_KEYED)) return this.appKey;
-    return this.config().openrouter_api_key;
+    return this.callerKey || this.config().openrouter_api_key;
   }
 
-  /** The key the last message from a trusted app was paid with; memory only, never stored. */
-  private appKey = "";
+  /** The key the caller of the running turn pays with, if it sent one; memory only. */
+  private callerKey = "";
 
-  /** Only the Worker sets the header, for a trusted app's message (see `withAppKey`). */
-  private takeAppKey(request: Request) {
-    const appKey = request.headers.get(APP_KEY_HEADER);
-    if (!appKey) return;
-    this.ctx.storage.kv.put(APP_KEYED, true);
-    this.appKey = appKey;
+  /**
+   * Set by the requests that start a turn, so a key lasts exactly one turn: its reply,
+   * the compaction before it and the title after it. Other requests (a reconnect mid-reply)
+   * leave it alone.
+   */
+  private takeCallerKey(request: Request, path: string) {
+    if (request.method !== "POST") return;
+    if (path === "stream" || path === "chat") {
+      this.callerKey = (request.headers.get(CALLER_KEY_HEADER) ?? "").trim();
+    } else if (path === "telegram" || path === "whatsapp") {
+      this.callerKey = "";
+    }
   }
 
   private model(): string {
@@ -286,9 +290,6 @@ export class SessionAgent extends Think<Env> {
     const session = this.name;
     const key = this.openrouterKey();
     // Said here: OpenRouter answers a blank key with a bare 401 that names nothing actionable.
-    if (!key && this.ctx.storage.kv.get(APP_KEYED)) {
-      throw new Error("This chat is paid for by the app it was started in. Continue it there.");
-    }
     if (!key) {
       throw new Error("OpenRouter API key is missing. Add it in Settings.");
     }
@@ -443,13 +444,13 @@ export class SessionAgent extends Think<Env> {
   async onRequest(request: Request): Promise<Response> {
     this.ensureSchema();
     await this.loadConfig();
-    this.takeAppKey(request);
 
     const url = new URL(request.url);
     const segments = url.pathname.split("/").filter(Boolean);
     // Everything after /agents/session-agent/<session-id>.
     const route = segments.slice(segments.indexOf("session-agent") + 2);
     const path = route[0] ?? "";
+    this.takeCallerKey(request, path);
 
     // Streaming owns its own metering: the object stays billable until the last token.
     if (request.method === "POST" && path === "stream") {
@@ -668,6 +669,8 @@ export class SessionAgent extends Think<Env> {
   async runScheduledTask(payload: { prompt: string }) {
     this.ensureSchema();
     await this.loadConfig();
+    // A scheduled task is the agent's own turn, paid with its own key.
+    this.callerKey = "";
     // Over the spend ceiling the task is dropped, not queued for next month; logged, since
     // nobody watches a scheduled task.
     console.log(`scheduled task running in session ${this.name}`);

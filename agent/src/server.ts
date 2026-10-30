@@ -1,7 +1,6 @@
 import { routeAgentRequest } from "agents";
 import { api, asJsonRequest, isApiPath } from "./api";
 import type { Env } from "./env";
-import { withAppKey } from "./clerk-oauth";
 import { agentIdOf } from "./registry";
 import { fileBusinessRequest, handleAdmin } from "./routes/admin";
 import { handleAgents } from "./routes/agents";
@@ -187,31 +186,27 @@ export default {
     const refused = await gate(request, env, segments);
     if (refused) return refused;
 
-    // A trusted app's OpenRouter key, moved where only the Worker can put it.
-    const keyed = await withAppKey(request, env);
-    if (keyed instanceof Response) return withCors(keyed);
-
     touchOnMessage(env, ctx, segments);
-    if (isApiPath(segments)) return await api.fetch(await asJsonRequest(keyed), env, ctx);
+    if (isApiPath(segments)) return await api.fetch(await asJsonRequest(request), env, ctx);
 
     if (segments[0] === "api") {
       const handled =
         segments[1] === "fleets"
-          ? await handleFleets(keyed, env, url, segments)
+          ? await handleFleets(request, env, url, segments)
           : segments[1] === "agents"
-            ? await handleAgents(keyed, env, url, segments)
+            ? await handleAgents(request, env, url, segments)
             : segments[1] === "salts"
-              ? await handleSaltsBrowser(keyed, env, segments)
+              ? await handleSaltsBrowser(request, env, segments)
               : segments[1] === "wallet"
-                ? await handleWallet(keyed, env, segments)
+                ? await handleWallet(request, env, segments)
                 : undefined;
       if (handled) return handled;
     }
 
-    const channel = await channelRoute(keyed, env, ctx, url, segments);
+    const channel = await channelRoute(request, env, ctx, url, segments);
     if (channel) return channel;
 
-    const routed = await routeAgentRequest(keyed, env);
+    const routed = await routeAgentRequest(request, env);
     if (routed) return withCors(routed);
 
     if (url.pathname === "/") return json(ROUTE_INDEX);
