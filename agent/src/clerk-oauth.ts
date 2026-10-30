@@ -1,6 +1,6 @@
 import { jwtVerify } from "jose";
 import type { Env } from "./env";
-import { clerkEmail, issuerOf, jwks, tokenKey } from "./clerk";
+import { issuerOf, jwks, tokenKey } from "./clerk";
 
 /**
  * Clerk OAuth access tokens from trusted apps, as a narrow alternative to a Salts login.
@@ -112,44 +112,4 @@ export async function oauthEmail(request: Request, env: Env): Promise<string> {
   }
   const email = info.email_verified === true ? (info.email ?? "").trim().toLowerCase() : "";
   return remember(email, until);
-}
-
-/** What a trusted app sends: the OpenRouter key its user's messages are paid with. */
-export const OPENROUTER_KEY_HEADER = "x-openrouter-key";
-/**
- * How the Worker hands that key to the session object. Set only here, after the caller
- * was identified; a copy arriving from outside is dropped, so nobody can set it directly.
- */
-export const APP_KEY_HEADER = "x-salts-app-openrouter-key";
-
-/**
- * The request to route to a session object, with a trusted app's key moved to
- * `APP_KEY_HEADER`, or a refusal. On `stream` and `chat`, a caller identified by an OAuth
- * access token (not a Salts login) must send its key: an app's users never spend the
- * agent's own. From anyone else the header is ignored.
- */
-export async function withAppKey(request: Request, env: Env): Promise<Request | Response> {
-  const offered = (request.headers.get(OPENROUTER_KEY_HEADER) ?? "").trim();
-  const headers = new Headers(request.headers);
-  headers.delete(OPENROUTER_KEY_HEADER);
-  headers.delete(APP_KEY_HEADER);
-
-  const [first, second, third, fourth] = new URL(request.url).pathname.split("/").filter(Boolean);
-  const message =
-    first === "agents" &&
-    second === "session-agent" &&
-    !!third &&
-    (fourth === "stream" || fourth === "chat") &&
-    request.method === "POST";
-  // `clerkEmail` first: a Salts login is never treated as an app, whatever it sends.
-  if (message && !(await clerkEmail(request, env)) && (await oauthEmail(request, env))) {
-    if (!offered) {
-      return Response.json(
-        { error: `send the OpenRouter key this message is paid with in ${OPENROUTER_KEY_HEADER}` },
-        { status: 400 }
-      );
-    }
-    headers.set(APP_KEY_HEADER, offered);
-  }
-  return new Request(request, { headers });
 }
