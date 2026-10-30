@@ -91,7 +91,7 @@
     // agent sessions with the access token, if it was issued for this resource and to one
     // of these client ids (see src/clerk-oauth.ts). Empty OAUTH_CLIENTS keeps it off.
     "OAUTH_RESOURCE": "https://api.salts.dev",
-    "OAUTH_CLIENTS": "geQHhP5zqbQ0yXhh https://web3pack.bonfires.ai/oauth/client-metadata.json",
+    "OAUTH_CLIENTS": "geQHhP5zqbQ0yXhh https://web3pack.bonfires.ai/oauth/client-metadata.json https://web3pack.bonfires.ai/oauth/dev3pack-client.json",
     // The JSON-RPC endpoint each payment network's transactions are read back from. Where
     // payments go is set from the admin CLI (`/api/admin/payment-addresses`), not here.
     // Ethereum's also serves the Chainlink ETH/USD price. A missing one switches it off.
