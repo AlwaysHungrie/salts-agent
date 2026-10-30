@@ -8,7 +8,8 @@ import { issuerOf, jwks, tokenKey } from "./clerk";
  * An app that signs its users in with this deployment's Clerk instance (OAuth, not a
  * Clerk session) can open their agents' sessions with the access token it was given,
  * rather than holding an agent API key. `clerkEmail` refuses these tokens, and they stay
- * refused everywhere but the session routes in `oauthRoute`. A token is accepted only when:
+ * refused everywhere but the session routes in `oauthRoute`: start, list and delete
+ * sessions, talk in one, and read its transcript. A token is accepted only when:
  *
  *   a. it is signed by the issuer's keys, from `CLERK_ISSUER`, within its validity window,
  *   b. it has no `sid` (an OAuth access token, not a session token),
@@ -34,12 +35,14 @@ export function oauthRoute(request: Request): boolean {
     .filter(Boolean);
   if (!third) return false;
   if (first === "api" && second === "agents") {
-    return fourth === "sessions" && !fifth && request.method === "POST";
+    return (
+      fourth === "sessions" && !fifth && (request.method === "POST" || request.method === "GET")
+    );
   }
   if (first === "api" && second === "sessions") return !fourth && request.method === "DELETE";
-  return (
-    first === "agents" && second === "session-agent" && (fourth === "stream" || fourth === "chat")
-  );
+  if (first !== "agents" || second !== "session-agent") return false;
+  if (fourth === "messages") return !fifth && request.method === "GET";
+  return fourth === "stream" || fourth === "chat";
 }
 
 const listOf = (value: string | undefined) =>
