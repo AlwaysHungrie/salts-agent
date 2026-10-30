@@ -7,8 +7,8 @@ import { clerkToken, signedIn } from "./clerk";
  * A trusted app's Clerk OAuth access token as a way into its user's agent sessions.
  *
  * The suite trusts `https://trusted.test/client.json` for resource `https://worker.test`
- * (vitest.config.ts). Such a token may start a session on an agent the user is on, talk
- * in it and delete it; it is no Salts login anywhere else, and a token for another
+ * (vitest.config.ts). Such a token may start, list and delete sessions on an agent the
+ * user is on, talk in one and read its transcript; it is no Salts login anywhere else, and a token for another
  * resource or client, or for an unverified address, opens nothing.
  *
  * Also here: any caller may pay for its own message with `x-openrouter-key`, and narrow
@@ -86,6 +86,69 @@ describe("OAuth access tokens from a trusted app", () => {
     expect(deleted.status).toBe(200);
   });
 
+  it("list the agent's sessions and read one's transcript", async () => {
+    const member = someone();
+    const agentId = await createAgent(member);
+    const token = accessToken(member);
+    const { id } = (await (await startSession(agentId, token)).json()) as { id: string };
+    const sent = await SELF.fetch(`${BASE}/agents/session-agent/${encodeURIComponent(id)}/stream`, {
+      method: "POST",
+      headers: bearer(token),
+      body: JSON.stringify({ message: "hello" }),
+    });
+    await sent.text();
+
+    const listed = await SELF.fetch(`${BASE}/api/agents/${agentId}/sessions`, {
+      headers: bearer(token),
+    });
+    expect(listed.status).toBe(200);
+    const { sessions } = (await listed.json()) as { sessions: { id: string }[] };
+    expect(sessions.map((s) => s.id)).toContain(id);
+
+    const read = await SELF.fetch(
+      `${BASE}/agents/session-agent/${encodeURIComponent(id)}/messages`,
+      { headers: bearer(token) }
+    );
+    expect(read.status).toBe(200);
+    const { messages } = (await read.json()) as { messages: { role: string; content: string }[] };
+    expect(messages.find((m) => m.role === "user")?.content).toBe("hello");
+  });
+
+  it("list and read nothing on an agent the user is not on", async () => {
+    const member = someone();
+    const agentId = await createAgent(member);
+    const { id } = (await (await startSession(agentId, accessToken(member))).json()) as {
+      id: string;
+    };
+    const stranger = accessToken(someone("stranger"));
+    const listed = await SELF.fetch(`${BASE}/api/agents/${agentId}/sessions`, {
+      headers: bearer(stranger),
+    });
+    expect(listed.status).toBe(404);
+    const read = await SELF.fetch(
+      `${BASE}/agents/session-agent/${encodeURIComponent(id)}/messages`,
+      { headers: bearer(stranger) }
+    );
+    expect(read.status).toBe(404);
+  });
+
+  it("change nothing else about a session", async () => {
+    const member = someone();
+    const agentId = await createAgent(member);
+    const token = accessToken(member);
+    const { id } = (await (await startSession(agentId, token)).json()) as { id: string };
+    const renamed = await SELF.fetch(`${BASE}/api/sessions/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      headers: bearer(token),
+      body: JSON.stringify({ title: "Renamed" }),
+    });
+    expect(renamed.status).toBe(401);
+    const files = await SELF.fetch(`${BASE}/agents/session-agent/${encodeURIComponent(id)}/files`, {
+      headers: bearer(token),
+    });
+    expect(files.status).toBe(401);
+  });
+
   it("open nothing on an agent the user is not on", async () => {
     const agentId = await createAgent(someone());
     const res = await startSession(agentId, accessToken(someone("stranger")));
@@ -96,11 +159,7 @@ describe("OAuth access tokens from a trusted app", () => {
     const member = someone();
     const agentId = await createAgent(member);
     const token = accessToken(member);
-    for (const path of [
-      "/api/agents",
-      `/api/agents/${agentId}`,
-      `/api/agents/${agentId}/sessions`,
-    ]) {
+    for (const path of ["/api/agents", `/api/agents/${agentId}`, `/api/agents/${agentId}/mcp`]) {
       const res = await SELF.fetch(`${BASE}${path}`, { headers: bearer(token) });
       expect(res.status, path).toBe(401);
     }
