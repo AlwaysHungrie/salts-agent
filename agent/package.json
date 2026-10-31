@@ -28,10 +28,13 @@
     "@cloudflare/think": "^0.17.0",
     "@evan/opus": "^1.0.3",
     "@hono/zod-openapi": "^1.6.3",
+    "@noble/curves": "^1.9.1",
+    "@scure/base": "^1.2.6",
     "agents": "^0.22.0",
     "ai": "^7.0.93",
     "hono": "^4.13.12",
     "jose": "^6.2.12",
+    "viem": "^2.57.13",
     "zod": "^4.5.4"
   },
   "devDependencies": {

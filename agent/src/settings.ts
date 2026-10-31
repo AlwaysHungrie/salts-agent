@@ -38,6 +38,7 @@ export const SETTABLE_CONFIG_KEYS = [
   "cap_telegram",
   "cap_whatsapp",
   "cap_mcp",
+  "cap_wallet",
 ] as const;
 
 export type SettableConfigKey = (typeof SETTABLE_CONFIG_KEYS)[number];
@@ -64,6 +65,10 @@ export type DeploymentSettings = {
   default_agent_limit: number;
   /** How many keys one account's OpenRouter wallet may hold. */
   max_wallet_keys: number;
+  /** How many networks the Wallet capability may have configured, EVM and Solana together. */
+  max_chain_networks: number;
+  /** How many tokens one of those networks may track. */
+  max_chain_tokens: number;
   /**
    * The service fee on a credit purchase, in basis points of the credit (600 = 6%). It
    * covers OpenRouter's own charge when the Worker tops up a key, and moving the funds.
@@ -152,6 +157,8 @@ export const SETTINGS_FIELDS: readonly SettingsField[] = [
   INT("max_members", 1, 100_000, "addresses one agent's access list may hold"),
   INT("default_agent_limit", 1, 100_000, "agents an ordinary account may administer"),
   INT("max_wallet_keys", 1, 1000, "keys one account's OpenRouter wallet may hold"),
+  INT("max_chain_networks", 1, 1000, "networks one agent's Wallet capability may configure"),
+  INT("max_chain_tokens", 1, 1000, "tokens one configured network may track"),
   INT("wallet_fee_bps", 0, 5000, "service fee on a credit purchase, in basis points (600 = 6%)"),
   INT("max_wallet_purchase_usd", 1, 10_000, "most credit one wallet purchase may buy, in dollars"),
   {

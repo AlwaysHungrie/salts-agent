@@ -2,7 +2,7 @@
 title: What your agent can do
 section: Using your agent
 order: 1
-summary: Every capability on the Capabilities page, such as web search, files, images, voice notes, reminders and memory, what each one does and how to use it.
+summary: Every capability on the Capabilities page, such as web search, files, images, voice notes, reminders, memory and a wallet, what each one does and how to use it.
 featured: true
 ---
 
@@ -65,6 +65,16 @@ Lets your agent remember things you tell it, such as your name, your preferences
 Your agent decides on its own what is worth remembering, and you can also ask it directly, for example "Remember that I am vegetarian". Its memory is private to this agent. Your other agents do not see it.
 
 Anyone who can talk to your agent can ask it what it remembers. If your agent is used by other people, read [Telegram safety tips](/guide/telegram-safety) first.
+
+## Wallet
+
+Gives your agent a crypto wallet of its own, with one address on EVM networks such as Ethereum and Base, and one on Solana. Both addresses appear under **Wallet** once you switch it on, so you can copy them and send funds there. The wallet's private key stays with Salts and is never shown, not even to you.
+
+To let your agent check its balances, click **Add network** under EVM or Solana. Give the network a name such as "Solana Devnet", its RPC URL, and the tokens to track with their address and decimals. You can also add the network's explorer URL, so you can open the wallet on the explorer from its network. Then ask your agent in your own words, for example "What is your USDC balance on Solana Devnet?".
+
+Your agent can also sign transactions with this wallet, for example a USDC transfer, and hand them to an MCP server that sends them. Signing on its own moves nothing.
+
+Anyone who can talk to your agent can ask it to sign. We recommend keeping only small amounts in the wallet, and reading [Telegram safety tips](/guide/telegram-safety) first if other people use your agent.
 
 ## MCP servers
 
