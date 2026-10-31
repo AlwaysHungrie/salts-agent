@@ -213,6 +213,7 @@ export type Config = {
   cap_telegram: number;
   cap_whatsapp: number;
   cap_mcp: number;
+  cap_wallet: number;
 
   /**
    * The agent's own OpenRouter key. Every model call it makes is billed here, so one

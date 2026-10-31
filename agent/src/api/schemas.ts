@@ -1,3 +1,4 @@
+import type { ChainNetwork } from "../chain-networks";
 import { z } from "@hono/zod-openapi";
 import type { Capability, ScheduledTask } from "../capabilities";
 import type { McpServerView } from "../mcp";
@@ -73,6 +74,7 @@ export const ConfigSchema = z
     cap_telegram: flag,
     cap_whatsapp: flag,
     cap_mcp: flag,
+    cap_wallet: flag,
     openrouter_api_key: z.string(),
     openrouter_key_id: z.string(),
     brave_api_key: z.string(),
@@ -338,3 +340,22 @@ export const MetaPatchSchema = checkedByHandler(
 );
 
 export const ConfigPatchSchema = checkedByHandler(ConfigPatchShape, "ConfigPatch");
+
+export const ChainNetworkSchema = z
+  .object({
+    id: z.string().openapi({ description: "Set from the name on save; what the model passes." }),
+    family: z.enum(["evm", "solana"]),
+    name: z.string(),
+    rpc_url: z.string(),
+    explorer_url: z.string().openapi({ description: "Block explorer home; blank when not set." }),
+    native_symbol: z.string(),
+    tokens: z.array(
+      z.object({
+        symbol: z.string(),
+        address: z.string().openapi({ description: "ERC-20 contract (EVM) or mint (Solana)." }),
+        decimals: z.number().int(),
+      })
+    ),
+  })
+  .openapi("ChainNetwork");
+pin<Same<z.infer<typeof ChainNetworkSchema>, ChainNetwork>>();

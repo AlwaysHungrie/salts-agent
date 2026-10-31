@@ -1,6 +1,7 @@
 import { agentRoutes } from "../routes/agent";
 import { settingsRoutes } from "../routes/agent-settings";
 import { apiKeyRoutes } from "../routes/api-keys";
+import { chainWalletRoutes } from "../routes/chain-wallet";
 import { mcpRoutes } from "../routes/mcp";
 import { sessionAgentRoutes } from "../routes/session-agent";
 import { sessionRoutes } from "../routes/sessions";
@@ -13,6 +14,7 @@ import { createApiApp, serveDocs } from "./app";
 export const api = createApiApp();
 agentRoutes(api);
 settingsRoutes(api);
+chainWalletRoutes(api);
 mcpRoutes(api);
 apiKeyRoutes(api);
 sessionRoutes(api);

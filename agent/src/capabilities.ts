@@ -12,6 +12,14 @@ import {
 } from "./mcp";
 import { VOICE_SAMPLE_RATE, pcm16ToOggOpus } from "./opus";
 import { base64ToBytes } from "./util/bytes";
+import type { Hex } from "viem";
+import { balances, describeNetworks, findNetwork } from "./chain-networks";
+import {
+  signEvmTransaction,
+  signEvmTypedData,
+  signSolanaTransaction,
+  walletAddresses,
+} from "./chain-wallet";
 
 /**
  * Something the agent can do beyond writing. Tool capabilities give the model functions;
@@ -29,7 +37,8 @@ export type CapabilityId =
   | "memory"
   | "telegram"
   | "whatsapp"
-  | "mcp";
+  | "mcp"
+  | "wallet";
 
 /** A credential or endpoint the user fills in on the capabilities page. */
 export type CapabilityField = {
@@ -315,6 +324,22 @@ export const CAPABILITIES: Capability[] = [
     summary:
       "Let the agent remember facts from conversations. These facts are not shared with other agents.",
     tools: ["remember", "recall"],
+    fields: [],
+  },
+  {
+    id: "wallet",
+    flag: "cap_wallet",
+    label: "Wallet",
+    summary:
+      "Give the agent its own EVM and Solana wallet. It can sign any transaction, for an MCP server to send.",
+    note: "Anyone who can chat with this agent can ask it to sign. Never allow public access to agents with wallets.",
+    tools: [
+      "wallet_address",
+      "wallet_balance",
+      "sign_evm_transaction",
+      "sign_evm_typed_data",
+      "sign_solana_transaction",
+    ],
     fields: [],
   },
 ];
@@ -760,7 +785,123 @@ export const TOOLS: ToolSpec[] = [
       return memories.map((m) => `#${m.id} ${m.text}`).join("\n");
     },
   },
+  {
+    name: "wallet_address",
+    description:
+      "Your own wallet's addresses: one EVM address (the same on every EVM chain) and one Solana address, and the networks configured for wallet_balance.",
+    parameters: { type: "object", properties: {} },
+    async run(_args, ctx) {
+      const { evm, solana } = walletAddresses(await walletKey(ctx));
+      const networks = describeNetworks(await ctx.registry.chainNetworks());
+      return `EVM address: ${evm}\nSolana address: ${solana}\nNetworks:\n${networks}`;
+    },
+  },
+  {
+    name: "wallet_balance",
+    description:
+      "Look up balances on one of the networks the user configured for your wallet: the native coin and each tracked token, in whole units. Checks your own address unless given another. wallet_address lists the networks.",
+    parameters: {
+      type: "object",
+      properties: {
+        network: { type: "string", description: "The network's id or name, e.g. solana-devnet." },
+        token: {
+          type: "string",
+          description: "One symbol to check, e.g. USDC. Leave out for every tracked coin.",
+        },
+        address: {
+          type: "string",
+          description: "Another address to check. Leave out for your own.",
+        },
+      },
+      required: ["network"],
+    },
+    async run(args, ctx) {
+      const networks = await ctx.registry.chainNetworks();
+      const network = findNetwork(networks, str(args.network));
+      if (!network) {
+        throw new Error(
+          `no network named ${str(args.network)}. Configured:\n${describeNetworks(networks)}`
+        );
+      }
+      const own = walletAddresses(await walletKey(ctx));
+      const address = str(args.address).trim() || own[network.family];
+      return await balances(network, address, str(args.token) || undefined);
+    },
+  },
+  {
+    name: "sign_evm_transaction",
+    description:
+      "Sign an EVM transaction with your wallet. Returns the signed raw transaction (for eth_sendRawTransaction, e.g. through an MCP server) and its hash. Signing sends nothing.",
+    parameters: {
+      type: "object",
+      properties: {
+        transaction: {
+          type: "object",
+          description:
+            "chainId (required), to, value (wei), data (0x hex), nonce, gas, and either maxFeePerGas + maxPriorityFeePerGas or gasPrice. Amounts as decimal or 0x strings.",
+        },
+      },
+      required: ["transaction"],
+    },
+    async run(args, ctx) {
+      const tx = args.transaction;
+      if (typeof tx !== "object" || tx === null) throw new Error("transaction must be an object");
+      const { raw, hash } = await signEvmTransaction(
+        await walletKey(ctx),
+        tx as Record<string, unknown>
+      );
+      return `Signed. Raw transaction: ${raw}\nHash: ${hash}`;
+    },
+  },
+  {
+    name: "sign_evm_typed_data",
+    description:
+      "Sign EIP-712 typed data with your EVM wallet (permits, x402 payments, orders). Returns the signature.",
+    parameters: {
+      type: "object",
+      properties: {
+        typed_data: {
+          type: "object",
+          description: "{ domain, types, primaryType, message }, as the requester gave it.",
+        },
+      },
+      required: ["typed_data"],
+    },
+    async run(args, ctx) {
+      const typed = args.typed_data;
+      if (typeof typed !== "object" || typed === null)
+        throw new Error("typed_data must be an object");
+      return `Signature: ${await signEvmTypedData(await walletKey(ctx), typed as Record<string, unknown>)}`;
+    },
+  },
+  {
+    name: "sign_solana_transaction",
+    description:
+      "Sign a serialized Solana transaction (legacy or v0, base64) with your Solana wallet, which must be one of its signers. Returns the signed transaction, base64, for sendTransaction. Signing sends nothing.",
+    parameters: {
+      type: "object",
+      properties: {
+        transaction: {
+          type: "string",
+          description: "The transaction or message, base64, exactly as the requester gave it.",
+        },
+      },
+      required: ["transaction"],
+    },
+    async run(args, ctx) {
+      const tx = str(args.transaction).trim();
+      if (!tx) throw new Error("transaction was empty");
+      return `Signed transaction (base64): ${signSolanaTransaction(await walletKey(ctx), tx)}`;
+    },
+  },
 ];
+
+/** The agent's wallet secret, drawn the first time a wallet tool needs it. */
+async function walletKey(ctx: ToolContext): Promise<Hex> {
+  const key = await ctx.registry.chainWalletKey(true);
+  if (!key) throw new Error("the wallet could not be created");
+  return key;
+}
 
 const TOOL_BY_NAME = new Map(TOOLS.map((t) => [t.name, t]));
 

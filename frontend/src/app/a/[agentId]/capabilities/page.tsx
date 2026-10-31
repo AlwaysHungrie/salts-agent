@@ -7,6 +7,7 @@ import {
   CapabilitySection,
   visionBlockedNote,
 } from "@/components/CapabilitySection";
+import { ChainWallet } from "@/components/ChainWallet";
 import { McpServers } from "@/components/McpServers";
 import { SaltsToolsInfo } from "@/components/SaltsToolsInfo";
 import type { Capability, Config, ModelOption } from "@/lib/agent";
@@ -237,8 +238,8 @@ export default function Capabilities({
                   capability.id === "mcp" && (
                     <>
                       Salts also has tools that run on your own computer, for
-                      web search, spreadsheet analysis, screening candidates
-                      and more. Set them up by running{" "}
+                      web search, spreadsheet analysis, screening candidates and
+                      more. Set them up by running{" "}
                       <code className="text-ink">npx salts-tools</code>.
                       <SaltsToolsInfo />
                     </>
@@ -247,6 +248,9 @@ export default function Capabilities({
               >
                 {/* MCP is configured by the servers themselves, not by fields. */}
                 {capability.id === "mcp" && <McpServers agentId={agentId} />}
+                {capability.id === "wallet" && (
+                  <ChainWallet agentId={agentId} />
+                )}
               </CapabilitySection>
             ))}
           </div>
