@@ -28,11 +28,11 @@ export type ChainNetwork = {
   tokens: ChainToken[];
 };
 
-const NATIVE_DECIMALS: Record<ChainFamily, number> = { evm: 18, solana: 9 };
+export const NATIVE_DECIMALS: Record<ChainFamily, number> = { evm: 18, solana: 9 };
 const EVM_ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 const SOLANA_ADDRESS = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 /** SPL Token and Token-2022. */
-const SOLANA_TOKEN_PROGRAMS = [
+export const SOLANA_TOKEN_PROGRAMS = [
   "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
   "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
 ];
@@ -138,7 +138,11 @@ export function describeNetworks(networks: ChainNetwork[]): string {
     .join("\n");
 }
 
-async function rpc(network: ChainNetwork, method: string, params: unknown[]): Promise<unknown> {
+export async function rpc(
+  network: ChainNetwork,
+  method: string,
+  params: unknown[]
+): Promise<unknown> {
   let res: Response;
   try {
     res = await fetch(network.rpc_url, {

@@ -13,7 +13,8 @@ import {
 import { VOICE_SAMPLE_RATE, pcm16ToOggOpus } from "./opus";
 import { base64ToBytes } from "./util/bytes";
 import type { Hex } from "viem";
-import { balances, describeNetworks, findNetwork } from "./chain-networks";
+import { balances, describeNetworks, findNetwork, type ChainNetwork } from "./chain-networks";
+import { sendTransaction, transfer } from "./chain-send";
 import {
   signEvmTransaction,
   signEvmTypedData,
@@ -336,6 +337,8 @@ export const CAPABILITIES: Capability[] = [
     tools: [
       "wallet_address",
       "wallet_balance",
+      "wallet_transfer",
+      "send_transaction",
       "sign_evm_transaction",
       "sign_evm_typed_data",
       "sign_solana_transaction",
@@ -788,7 +791,7 @@ export const TOOLS: ToolSpec[] = [
   {
     name: "wallet_address",
     description:
-      "Your own wallet's addresses: one EVM address (the same on every EVM chain) and one Solana address, and the networks configured for wallet_balance.",
+      "Your own wallet's addresses: one EVM address (the same on every EVM chain) and one Solana address, and the networks configured for wallet_balance, wallet_transfer and send_transaction.",
     parameters: { type: "object", properties: {} },
     async run(_args, ctx) {
       const { evm, solana } = walletAddresses(await walletKey(ctx));
@@ -816,22 +819,66 @@ export const TOOLS: ToolSpec[] = [
       required: ["network"],
     },
     async run(args, ctx) {
-      const networks = await ctx.registry.chainNetworks();
-      const network = findNetwork(networks, str(args.network));
-      if (!network) {
-        throw new Error(
-          `no network named ${str(args.network)}. Configured:\n${describeNetworks(networks)}`
-        );
-      }
+      const network = await networkNamed(ctx, str(args.network));
       const own = walletAddresses(await walletKey(ctx));
       const address = str(args.address).trim() || own[network.family];
       return await balances(network, address, str(args.token) || undefined);
     },
   },
   {
+    name: "wallet_transfer",
+    description:
+      "Send the native coin or a tracked token from your wallet to an address, on one of the configured networks: builds, signs and broadcasts the transfer. Real funds move; send only what the user asked for. Returns the transaction hash.",
+    parameters: {
+      type: "object",
+      properties: {
+        network: { type: "string", description: "The network's id or name, e.g. solana-devnet." },
+        to: { type: "string", description: "The recipient's address." },
+        amount: {
+          type: "string",
+          description: "How much, in whole units as a decimal string, e.g. 0.01.",
+        },
+        token: {
+          type: "string",
+          description: "A tracked token's symbol, e.g. USDC. Leave out for the native coin.",
+        },
+      },
+      required: ["network", "to", "amount"],
+    },
+    async run(args, ctx) {
+      const network = await networkNamed(ctx, str(args.network));
+      return await transfer(
+        await walletKey(ctx),
+        network,
+        str(args.to).trim(),
+        String(args.amount ?? ""),
+        str(args.token) || undefined
+      );
+    },
+  },
+  {
+    name: "send_transaction",
+    description:
+      "Broadcast a signed transaction on one of the configured networks: 0x hex on EVM chains, base64 on Solana, e.g. from sign_evm_transaction or sign_solana_transaction. Returns the transaction hash.",
+    parameters: {
+      type: "object",
+      properties: {
+        network: { type: "string", description: "The network's id or name, e.g. base." },
+        transaction: { type: "string", description: "The signed transaction." },
+      },
+      required: ["network", "transaction"],
+    },
+    async run(args, ctx) {
+      const network = await networkNamed(ctx, str(args.network));
+      const tx = str(args.transaction).trim();
+      if (!tx) throw new Error("transaction was empty");
+      return await sendTransaction(network, tx);
+    },
+  },
+  {
     name: "sign_evm_transaction",
     description:
-      "Sign an EVM transaction with your wallet. Returns the signed raw transaction (for eth_sendRawTransaction, e.g. through an MCP server) and its hash. Signing sends nothing.",
+      "Sign an EVM transaction with your wallet. Returns the signed raw transaction (for send_transaction or an MCP server) and its hash. Signing sends nothing.",
     parameters: {
       type: "object",
       properties: {
@@ -877,7 +924,7 @@ export const TOOLS: ToolSpec[] = [
   {
     name: "sign_solana_transaction",
     description:
-      "Sign a serialized Solana transaction (legacy or v0, base64) with your Solana wallet, which must be one of its signers. Returns the signed transaction, base64, for sendTransaction. Signing sends nothing.",
+      "Sign a serialized Solana transaction (legacy or v0, base64) with your Solana wallet, which must be one of its signers. Returns the signed transaction, base64, for send_transaction or an MCP server. Signing sends nothing.",
     parameters: {
       type: "object",
       properties: {
@@ -895,6 +942,15 @@ export const TOOLS: ToolSpec[] = [
     },
   },
 ];
+
+/** The configured network the model named, or the list of them to choose from. */
+async function networkNamed(ctx: ToolContext, named: string): Promise<ChainNetwork> {
+  const networks = await ctx.registry.chainNetworks();
+  const network = findNetwork(networks, named);
+  if (!network)
+    throw new Error(`no network named ${named}. Configured:\n${describeNetworks(networks)}`);
+  return network;
+}
 
 /** The agent's wallet secret, drawn the first time a wallet tool needs it. */
 async function walletKey(ctx: ToolContext): Promise<Hex> {
