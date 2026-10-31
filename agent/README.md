@@ -416,7 +416,7 @@ that page renders, so a new capability needs no frontend change.
 | WhatsApp | a Meta app and number ([docs/whatsapp-setup.md](../docs/whatsapp-setup.md)) | — |
 | MCP servers | the server's URL, or a catalogue template | the server's own |
 | Private Memory | — | `remember`, `recall` |
-| Wallet | networks (RPC URL and tokens) for balances | `wallet_address`, `wallet_balance`, `sign_evm_transaction`, `sign_evm_typed_data`, `sign_solana_transaction` |
+| Wallet | networks (RPC URL and tokens) for balances and sends | `wallet_address`, `wallet_balance`, `wallet_transfer`, `send_transaction`, `sign_evm_transaction`, `sign_evm_typed_data`, `sign_solana_transaction` |
 
 **Tool capabilities** hand the model functions it may call. A turn runs up to `max_tool_rounds`
 tool rounds (a deployment setting) — call, run, feed the results back — before it must answer, on both the streaming
@@ -470,17 +470,24 @@ The wallet is one secret per agent: 32 random bytes drawn the first time the cap
 is used, kept in the registry's own `chain_wallet` table (never a `config` column, so no
 config read, copy or redaction path can carry it). The same bytes are the secp256k1 key
 behind the EVM address and the ed25519 seed behind the Solana address
-([`src/chain-wallet.ts`](src/chain-wallet.ts)). The tools only sign: the model gets back a
-signed transaction or a signature, and hands it to an MCP server to send. `GET /api/agents/:agentId/chain-wallet`
+([`src/chain-wallet.ts`](src/chain-wallet.ts)). The sign tools return a signed transaction or a
+signature for `send_transaction` or an MCP server to send. `GET /api/agents/:agentId/chain-wallet`
 returns the two addresses and the networks for the capabilities page; nothing returns the
 key. Balances need no MCP server: the owner lists networks per chain (name, RPC URL,
 native symbol, optional explorer URL, tokens with address and decimals) from the gear on each address, stored as
 one JSON list in the registry's `chain_networks` table and capped by the
 `max_chain_networks` and `max_chain_tokens` settings ([`src/chain-networks.ts`](src/chain-networks.ts)).
 `wallet_balance` calls that RPC directly; Solana tokens are read per token program and
-filtered by mint, because public RPCs refuse the `mint` filter. Anyone who
-can chat with the agent can ask it to sign, so a wallet should hold only what the owner
-can afford to lose.
+filtered by mint, because public RPCs refuse the `mint` filter. `wallet_transfer`
+builds, signs and broadcasts a transfer of the native coin or a tracked token over the
+same RPC ([`src/chain-send.ts`](src/chain-send.ts)): on EVM an EIP-1559 transaction
+(legacy gas price where the chain has no base fee) with an ERC-20 `transfer` for tokens;
+on Solana a SystemProgram transfer, or a token `TransferChecked` after an idempotent
+create of the recipient's associated token account. `send_transaction` broadcasts an
+already signed transaction (0x hex on EVM, base64 on Solana). Both return once the RPC
+accepts the transaction, with an explorer link when the network has one. Anyone who
+can chat with the agent can ask it to send or sign, so a wallet should hold only what
+the owner can afford to lose.
 
 Scheduled tasks use the Agents SDK's own scheduling (`schedule`/`getSchedules`), so they
 survive eviction. A scheduled turn writes into the transcript like any other, and bills

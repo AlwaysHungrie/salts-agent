@@ -72,9 +72,9 @@ Gives your agent a crypto wallet of its own, with one address on EVM networks su
 
 To let your agent check its balances, click **Add network** under EVM or Solana. Give the network a name such as "Solana Devnet", its RPC URL, and the tokens to track with their address and decimals. You can also add the network's explorer URL, so you can open the wallet on the explorer from its network. Then ask your agent in your own words, for example "What is your USDC balance on Solana Devnet?".
 
-Your agent can also sign transactions with this wallet, for example a USDC transfer, and hand them to an MCP server that sends them. Signing on its own moves nothing.
+Your agent can send from this wallet too. Ask it something like "Send 0.01 SOL to <address> on Solana Devnet", and it sends the native coin or any token you track on that network, then replies with the transaction and an explorer link. It can also sign other transactions, for example from an MCP server, and send them through the same network.
 
-Anyone who can talk to your agent can ask it to sign. We recommend keeping only small amounts in the wallet, and reading [Telegram safety tips](/guide/telegram-safety) first if other people use your agent.
+Anyone who can talk to your agent can ask it to send or sign. We recommend keeping only small amounts in the wallet, and reading [Telegram safety tips](/guide/telegram-safety) first if other people use your agent.
 
 ## MCP servers
 
