@@ -266,4 +266,31 @@ export const SESSION_REGISTRY_MIGRATIONS: readonly Migration[] = [
       );
     },
   },
+  {
+    name: "chain wallet",
+    up: (sql) => {
+      addColumnIfMissing(sql, "config", `cap_wallet INTEGER NOT NULL DEFAULT 0`);
+      // Its own table, not a config column: config is read back, copied and redacted
+      // field by field, and this secret must never be on any of those paths.
+      sql.exec(
+        `CREATE TABLE IF NOT EXISTS chain_wallet (
+           id INTEGER PRIMARY KEY CHECK (id = 1),
+           private_key TEXT NOT NULL,
+           created_at INTEGER NOT NULL
+         )`
+      );
+    },
+  },
+  {
+    name: "chain networks",
+    up: (sql) => {
+      // The Wallet capability's networks, as one JSON list: read whole, written whole.
+      sql.exec(
+        `CREATE TABLE IF NOT EXISTS chain_networks (
+           id INTEGER PRIMARY KEY CHECK (id = 1),
+           networks TEXT NOT NULL
+         )`
+      );
+    },
+  },
 ];

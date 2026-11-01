@@ -41,6 +41,7 @@ export type Config = {
   cap_telegram: number;
   cap_whatsapp: number;
   cap_mcp: number;
+  cap_wallet: number;
 
   /**
    * The agent's own OpenRouter key, billed for every call. No fallback: blank means the
