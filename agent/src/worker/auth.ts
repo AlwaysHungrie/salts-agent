@@ -1,5 +1,6 @@
 import type { Env } from "../env";
 import { clerkEmail } from "../clerk";
+import { oauthEmail, oauthRoute } from "../clerk-oauth";
 import {
   type AccessRow,
   type AgentRow,
@@ -33,10 +34,14 @@ export function unconfigured(env: Env): string[] {
 
 /**
  * The caller's address, or "" (which matches no access list). Only a verified Clerk token
- * names anyone; `API_SECRET` unlocks the owner routes, never another person's identity.
+ * names anyone: a session token anywhere, or a trusted app's OAuth access token on the
+ * session routes alone (see clerk-oauth.ts). `API_SECRET` unlocks the owner routes, never
+ * another person's identity.
  */
 export async function callerEmail(request: Request, env: Env): Promise<string> {
-  return await clerkEmail(request, env);
+  const session = await clerkEmail(request, env);
+  if (session || !oauthRoute(request)) return session;
+  return await oauthEmail(request, env);
 }
 
 /**
