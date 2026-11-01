@@ -50,6 +50,18 @@ const EVENTS =
 const tag = ["Messages"];
 const middleware = [keepForward];
 
+/** A caller's choices for its own message; see `CALLER_KEY_HEADER` in agent.ts. */
+const CallerKeyHeaders = z.object({
+  "x-openrouter-key": z.string().optional().openapi({
+    description:
+      "An OpenRouter key to pay for this message with, instead of the agent's own key. Used for this turn only and never stored; without it the agent's key is used.",
+  }),
+  "x-mcp-servers": z.string().optional().openapi({
+    description:
+      "Comma-separated MCP server names: this message may use only these of the agent's enabled servers (none, if it names none of them). For this turn only; without it every enabled server is offered.",
+  }),
+});
+
 const chat = createRoute({
   method: "post",
   path: "/agents/session-agent/{sessionId}/chat",
@@ -58,6 +70,7 @@ const chat = createRoute({
   middleware,
   request: {
     params: SessionParams,
+    headers: CallerKeyHeaders,
     body: {
       required: true,
       content: {
@@ -81,6 +94,7 @@ const stream = createRoute({
   middleware,
   request: {
     params: SessionParams,
+    headers: CallerKeyHeaders,
     body: {
       required: true,
       content: {

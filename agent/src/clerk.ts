@@ -9,7 +9,7 @@ import type { Env } from "./env";
 const BEARER = /^bearer\s+(.+)$/i;
 
 /** Where the token says it came from has to match what the deployment was told. */
-function issuerOf(env: Env): string {
+export function issuerOf(env: Env): string {
   return (env.CLERK_ISSUER ?? "").trim().replace(/\/+$/, "");
 }
 
@@ -19,7 +19,7 @@ function issuerOf(env: Env): string {
  */
 const jwksByIssuer = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
 
-function jwks(issuer: string) {
+export function jwks(issuer: string) {
   let set = jwksByIssuer.get(issuer);
   if (!set) {
     set = createRemoteJWKSet(new URL(`${issuer}/.well-known/jwks.json`), {
@@ -45,7 +45,7 @@ const MAX_ENTRIES = 500;
 const FAILURE_TTL = 30_000;
 
 /** The token, hashed, so a bearer credential is never a key in memory. */
-async function tokenKey(token: string): Promise<string> {
+export async function tokenKey(token: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
