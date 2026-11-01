@@ -56,6 +56,7 @@
 - `agent/` — agent code
 - `frontend/` — Next.js app (pnpm)
 - `app-experiments/devcon-jobs-matchmaker/` — Next.js app (pnpm, local MongoDB): standalone jobs matchmaker on the staging agent via its API key
+- `app-experiments/hsk-swap-mcp/` — MCP server (Python/uv), runs locally: a wallet's HSKswap positions and P&L on HSK Chain testnet, read live
 - `salts-tools/` — laptop CLI: runs local services behind one ngrok tunnel, pushes their URLs to the agent
 - `local-mcps/` — MCP servers salts-tools runs (`matchmaker-mcp`, `analyst-mcp` for Excel/CSV analysis; Python/uv)
 
