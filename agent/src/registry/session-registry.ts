@@ -1,4 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
+import type { Hex } from "viem";
+import type { ChainNetwork } from "../chain-networks";
+import { newWalletKey } from "../chain-wallet";
 import type { McpServerRow } from "../mcp";
 import { applyMigrations } from "../schema";
 import type { SettableConfigKey } from "../settings";
@@ -392,6 +395,50 @@ export class SessionRegistry extends DurableObject {
   forget(id: number) {
     this.ensureSchema();
     return forget(this.ctx.storage, id);
+  }
+
+  /**
+   * The agent's wallet secret (see chain-wallet.ts), drawn on first ask when `create`.
+   * Only the Worker calls this; nothing it returns may reach a response or the model.
+   */
+  chainWalletKey(create: boolean): Hex | undefined {
+    this.ensureSchema();
+    const row = this.ctx.storage.sql
+      .exec(`SELECT private_key FROM chain_wallet WHERE id = 1`)
+      .toArray()[0] as { private_key: Hex } | undefined;
+    if (row || !create) return row?.private_key;
+    const key = newWalletKey();
+    this.ctx.storage.sql.exec(
+      `INSERT INTO chain_wallet (id, private_key, created_at) VALUES (1, ?, ?)`,
+      key,
+      Date.now()
+    );
+    return key;
+  }
+
+  /** The networks the Wallet capability reads balances on; empty until some are saved. */
+  chainNetworks(): ChainNetwork[] {
+    this.ensureSchema();
+    const row = this.ctx.storage.sql
+      .exec(`SELECT networks FROM chain_networks WHERE id = 1`)
+      .toArray()[0] as { networks: string } | undefined;
+    if (!row) return [];
+    // Saved before networks had an explorer: read as blank.
+    return (JSON.parse(row.networks) as ChainNetwork[]).map((n) => ({
+      ...n,
+      explorer_url: n.explorer_url ?? "",
+    }));
+  }
+
+  /** Replace the whole list; the caller has validated it. */
+  setChainNetworks(networks: ChainNetwork[]): ChainNetwork[] {
+    this.ensureSchema();
+    this.ctx.storage.sql.exec(
+      `INSERT INTO chain_networks (id, networks) VALUES (1, ?)
+       ON CONFLICT (id) DO UPDATE SET networks = excluded.networks`,
+      JSON.stringify(networks)
+    );
+    return networks;
   }
 
   /** Drop all of this agent's storage (called on agent delete, after its sessions). */
