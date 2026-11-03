@@ -4,7 +4,9 @@ MCP server that shows a wallet's [HSKswap](https://app.hskswap.com) positions an
 own computer in testnet mode (chain 133) by default. Every tool call reads the chain live; nothing is cached between
 calls except past prices, which never change.
 
-It only reads. It holds no key, signs nothing and cannot trade.
+It also gives each agent a trading vault: a contract that holds the agent's trading funds and only swaps within limits
+the user sets. The server holds no key and signs nothing. For vault actions it prepares an unsigned transaction; the
+agent signs it with its own wallet (`sign_evm_transaction`) and broadcasts it (`send_transaction`).
 
 Python 3.12, `uv`. Chain reads go through the public RPC. History comes from the network's Blockscout API.
 
@@ -51,7 +53,32 @@ The agent sends `Authorization: Bearer <MCP_AUTH_TOKEN>`. On the agent, go to **
 | `get_pnl {wallet}` | Value now, net deposits and total P&L. Per token: amount, average cost, price, value, realized and unrealized P&L. Per liquidity position: what went in, what came out, value now and P&L. Also gas spent, the 10 latest trades, and warnings. |
 
 `wallet` is any EVM address. For the agent's own wallet, use its EVM address from the Wallet capability (`wallet_address`).
+When that address owns a vault, both tools read the vault (`read_vault: false` reads the address itself).
 About 5–15 s per call on testnet: the public RPC throttles bursts, and the server backs off and retries.
+
+## Trading vault
+
+`contracts/` holds `HskVaultFactory` (one vault per owner, created with CREATE2) and `HskTradingVault`. On the testnet
+the factory is `0xb1fe58b7f75Df824e18A4D176FF1365A54e0e151`. The vault:
+
+- trades only tokens on its allow-list, with a per-trade and a per-day sell limit for each;
+- refuses a swap whose minimum output is below the pool price less the max slippage (at most 10%);
+- can be paused, which stops swaps but not withdrawals;
+- keeps swap output in the vault, and pays withdrawals only to its owner;
+- wraps HSK sent to it into WHSK.
+
+The owner is the agent's wallet, so the agent can change its own limits. The limits protect against mistakes in the
+agent's loop, not against the agent itself. Fund the vault by sending HSK to its address.
+
+| Tool | What it does |
+|---|---|
+| `vault_status {owner}` | The vault's address, pause flag, slippage, each token's limits and what is left of today's, its holdings, and the owner's gas balance. Start here. |
+| `vault_create_tx {owner}` | Unsigned transaction that creates the vault. |
+| `vault_policy_tx {owner, tokens?, max_slippage_bps?, paused?}` | Unsigned transaction for one limit change. One change per call; for several, send each before building the next. |
+| `vault_swap_tx {owner, sell, buy, amount, slippage_bps?}` | Unsigned swap through the best pool. Refuses up front what the vault would refuse. |
+| `vault_withdraw_tx {owner, token, amount}` | Unsigned withdrawal to the owner; `all` for the whole balance. |
+
+Contract tests run against the live testnet: `cd contracts && forge test --fork-url https://testnet.hsk.xyz`.
 
 ## How the numbers are worked out
 
@@ -102,7 +129,8 @@ breaks that equality by its cost basis.
 
 | File | Role |
 |---|---|
-| `server.py` | The two tools, `{code, message}` errors, `/healthz`, transports |
+| `server.py` | The tools, `{code, message}` errors, `/healthz`, transports |
+| `vault.py` | Vault status and the unsigned create, policy, swap and withdraw transactions |
 | `networks.py` | Per network: RPC, explorer, factory, position manager, WHSK, stablecoins |
 | `chain.py` | JSON-RPC with retries, ABI encoding by signature, Multicall3, `eth_call` as a sender |
 | `explorer.py` | Blockscout API, paged |
