@@ -121,6 +121,16 @@
       "headers": {"Authorization": "Bearer SALTS-TOOLS-TOKEN"}
     },
     {
+      "id": "zcash-wallet",
+      "name": "zcash-wallet",
+      "url": "https://your-tunnel.trycloudflare.com/zcash-wallet/mcp",
+      "auth": "headers",
+      "description": "A Zcash light wallet on your laptop, via salts-tools: show its addresses, check the balance, make a shielded address and send ZEC.",
+      "guide": "salts-tools-zcash-wallet",
+      "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PGNpcmNsZSBjeD0iMzIiIGN5PSIzMiIgcj0iMzIiIGZpbGw9IiNGNEI3MjgiLz48cGF0aCBkPSJNMzUuMiA4aC02LjR2Ni40SDE4djYuOWgxNy4zTDE4IDQ0LjF2NS4zaDEwLjhWNTZoNi40di02LjZINDZ2LTYuOUgyOC43TDQ2IDE5LjJ2LTUuM0gzNS4yeiIgZmlsbD0iI2ZmZiIvPjwvc3ZnPgo=",
+      "headers": {"Authorization": "Bearer SALTS-TOOLS-TOKEN"}
+    },
+    {
       "id": "swiggy",
       "name": "Swiggy",
       "url": "https://mcp.swiggy.com/food",
