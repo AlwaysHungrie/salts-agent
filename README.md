@@ -17,6 +17,7 @@
 </p>
 
 <p align="center">
+  <a href="https://salts.dev"><b>salts.dev</b></a> •
   <a href="https://app.salts.dev">Get an agent</a> •
   <a href="https://salts.dev/guide">User guide</a> •
   <a href="https://salts.dev/guide/api-playground">API</a> •
@@ -30,7 +31,7 @@
 
 ## What it is
 
-Salts gives you an AI agent of your own. You message it like a friend, it remembers what
+[Salts](https://salts.dev) gives you an AI agent of your own. You message it like a friend, it remembers what
 you tell it, and it messages you back when something is due. Each agent runs in the
 cloud, costs nothing while nobody is talking to it, and bills you per message on your own
 OpenRouter key: about $0.001 a reply on small models, up to $0.03 on the largest.
@@ -53,7 +54,8 @@ OpenRouter key: about $0.001 a reply on small models, up to $0.03 on the largest
 
 ## Quick start
 
-**Hosted:** sign in at [app.salts.dev](https://app.salts.dev), add an OpenRouter key
+**Hosted:** see what it does at [salts.dev](https://salts.dev), then sign in at
+[app.salts.dev](https://app.salts.dev), add an OpenRouter key
 (from [openrouter.ai](https://openrouter.ai), or buy one with a crypto wallet in the
 app), create an agent. Takes a few minutes; the
 [step-by-step guide](https://salts.dev/guide/step-by-step-agent) walks through it.

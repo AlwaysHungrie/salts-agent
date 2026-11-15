@@ -1,6 +1,9 @@
+import type { Metadata } from "next";
+
 import { FaqSection } from "@/components/Faq";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader } from "@/components/SiteHeader";
+import { StructuredData } from "@/components/StructuredData";
 import {
   Capabilities,
   Cta,
@@ -18,9 +21,12 @@ import {
  * listed in a NAV group in components/content.ts — add a section, add its id
  * to the group it belongs to, and the highlight stays unbroken.
  */
+export const metadata: Metadata = { alternates: { canonical: "/" } };
+
 export default function Page() {
   return (
     <>
+      <StructuredData />
       <SiteHeader />
 
       {/* The sheet: opaque, above the footer, rounded where it lifts off it. */}
