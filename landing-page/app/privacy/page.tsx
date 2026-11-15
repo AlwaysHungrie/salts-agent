@@ -7,6 +7,7 @@ import { PRIVACY } from "@/components/legal";
 export const metadata: Metadata = {
   title: `${PRIVACY.title} — ${BRAND.name}`,
   description: `What ${BRAND.name} collects when you use it, why, and how to have it deleted.`,
+  alternates: { canonical: "/privacy" },
 };
 
 export default function Page() {
