@@ -14,6 +14,7 @@ const nextConfig: NextConfig = {
       { source: "/guide", destination: `${APP}/zone/guide` },
       { source: "/guide/:path+", destination: `${APP}/zone/guide/:path+` },
       { source: "/llms.txt", destination: `${APP}/zone/llms.txt` },
+      { source: "/llms-full.txt", destination: `${APP}/zone/llms-full.txt` },
       { source: "/app-static/:path+", destination: `${APP}/app-static/:path+` },
       // Screenshots in the guide, from the app's `public/guides/`.
       { source: "/guides/:path+", destination: `${APP}/guides/:path+` },

@@ -37,7 +37,11 @@ export async function generateMetadata({
     title: `${guide.title} — Salts user guide`,
     description: guide.summary,
     // The guide's one address is salts.dev, whichever host served this copy.
-    alternates: { canonical: `https://salts.dev/guide/${guide.slug}` },
+    alternates: {
+      canonical: `https://salts.dev/guide/${guide.slug}`,
+      // The same article as markdown, for AI agents.
+      types: { "text/markdown": `/guide/${guide.slug}.md` },
+    },
   };
 }
 
