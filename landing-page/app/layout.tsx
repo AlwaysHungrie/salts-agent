@@ -37,6 +37,11 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={inter.variable}>
+      <head>
+        {/* For AI agents: what Salts is and the whole user guide, as plain text. */}
+        <link rel="alternate" type="text/plain" href="/llms.txt" title="llms.txt" />
+        <link rel="alternate" type="text/plain" href="/llms-full.txt" title="llms-full.txt" />
+      </head>
       <body className="antialiased">
         {children}
         {/* Cloudflare Web Analytics: cookieless visitor counts. salts.dev is DNS-only on

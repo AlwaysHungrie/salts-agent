@@ -5,7 +5,7 @@ import type { NextConfig } from "next";
  * these paths to this app:
  *
  *   salts.dev/guide/*      -> app.salts.dev/zone/guide/*
- *   salts.dev/llms.txt     -> app.salts.dev/zone/llms.txt
+ *   salts.dev/llms.txt     -> app.salts.dev/zone/llms.txt  (and llms-full.txt)
  *   salts.dev/app-static/* -> app.salts.dev/app-static/*  (this app's JS, CSS, fonts)
  *   salts.dev/guides/*     -> app.salts.dev/guides/*      (screenshots in `public/`)
  *
@@ -27,6 +27,7 @@ const nextConfig: NextConfig = {
       { source: "/zone/guide", destination: "/guide" },
       { source: "/zone/guide/:path*", destination: "/guide/:path*" },
       { source: "/zone/llms.txt", destination: "/llms.txt" },
+      { source: "/zone/llms-full.txt", destination: "/llms-full.txt" },
     ];
   },
   async redirects() {
@@ -38,6 +39,7 @@ const nextConfig: NextConfig = {
       { source: "/guide", has: onApp, destination: `${SITE}/guide`, permanent: true },
       { source: "/guide/:path*", has: onApp, destination: `${SITE}/guide/:path*`, permanent: true },
       { source: "/llms.txt", has: onApp, destination: `${SITE}/llms.txt`, permanent: true },
+      { source: "/llms-full.txt", has: onApp, destination: `${SITE}/llms-full.txt`, permanent: true },
     ];
   },
 };
