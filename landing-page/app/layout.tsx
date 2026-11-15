@@ -9,7 +9,7 @@ const inter = Inter({
   weight: ["300", "400", "500", "600", "700"],
 });
 
-const TITLE = "Salts — your own AI agent, always on";
+const TITLE = "Salts — Pay per use personal AI agents. No subscriptions. No setup required.";
 const DESCRIPTION =
   "A personal AI agent that is always on and free to run. Talk to it in your browser, on Telegram or on WhatsApp. It remembers what you tell it, reminds you when things are due, and gets things done in the apps you already use.";
 
