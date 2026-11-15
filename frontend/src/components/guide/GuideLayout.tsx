@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { BackToTop } from "./BackToTop";
 import { GuideSearch } from "./GuideSearch";
 import { guideSections } from "@/lib/guide";
+import { APP_HOME } from "@/lib/guide-link";
 
 /**
  * The shell every guide route shares: a bar that goes back to the app, the article
@@ -28,7 +29,10 @@ export function GuideLayout({
       <header className="border-hairline-soft bg-canvas/85 sticky top-0 z-20 border-b backdrop-blur">
         <div className="mx-auto flex h-16 w-full max-w-[1320px] items-center justify-between gap-4 px-6">
           <div className="flex items-center gap-3">
-            <Link href="/" className="flex items-center gap-2.5">
+            {/* The site's home: salts.dev in production, where the guide is a separate
+                zone, so a full load rather than a soft navigation. */}
+            {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+            <a href="/" className="flex items-center gap-2.5">
               <span className="bg-ink grid size-8 place-items-center rounded-[10px]">
                 <span className="grid grid-cols-2 gap-[3px]">
                   <span className="size-[5px] rounded-[1.5px] bg-white" />
@@ -38,7 +42,7 @@ export function GuideLayout({
                 </span>
               </span>
               <span className="text-[17px] font-[650] tracking-[-0.02em]">Salts</span>
-            </Link>
+            </a>
             <Link
               href="/guide"
               className="bg-canvas-soft text-muted hover:text-ink rounded-full px-2.5 py-1 text-xs font-semibold tracking-[0.02em] transition-colors"
@@ -90,9 +94,9 @@ export function GuideLayout({
               Ask here
             </a>
           </span>
-          <Link href="/" className="hover:text-ink transition-colors">
+          <a href={APP_HOME} className="hover:text-ink transition-colors">
             Your agents
-          </Link>
+          </a>
         </div>
       </footer>
     </div>
