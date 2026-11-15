@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { AuthModal } from "@/components/auth/AuthModal";
 import { UserMenu } from "@/components/auth/UserMenu";
 import { MetaSettingsDialog } from "@/components/MetaSettings";
@@ -20,6 +19,7 @@ import { useWalletPanel } from "@/components/wallet/WalletPanel";
 import { claim } from "@/lib/cache";
 import { useIdentity } from "@/lib/identity";
 import type { AgentRow, FleetRow, MetaSettings } from "@/lib/agent";
+import { guideHref } from "@/lib/guide-link";
 
 /**
  * Every agent this account may open, and the fleets it administers. Agents share
@@ -59,12 +59,12 @@ export default function Agents() {
   return (
     <div className="bg-canvas text-ink relative min-h-screen">
       <div className="absolute top-4 right-5 flex flex-col items-end gap-1 md:right-8">
-        <Link
-          href="/guide"
+        <a
+          href={guideHref()}
           className="text-muted hover:text-ink text-sm font-semibold transition-colors"
         >
           User guide
-        </Link>
+        </a>
         {signedIn && (
           <button
             onClick={() => openWallet()}

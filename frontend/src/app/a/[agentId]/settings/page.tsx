@@ -22,6 +22,7 @@ import { ApiKeys } from "@/components/ApiKeys";
 import { WalletKeyPicker } from "@/components/wallet/WalletKeyPicker";
 import { MetaSettingsDialog } from "@/components/MetaSettings";
 import { cached, keys, remember, revise } from "@/lib/cache";
+import { guideHref } from "@/lib/guide-link";
 
 const REASONING: { id: ReasoningEffort; label: string; hint: string }[] = [
   { id: "off", label: "Off", hint: "Answers right away. Cheapest." },
@@ -754,7 +755,7 @@ export default function Settings({
                   Use this to reach your agent from your own code. Try it in
                   the{" "}
                   <a
-                    href="/guide/api-playground"
+                    href={guideHref("api-playground")}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-ink underline underline-offset-2"
