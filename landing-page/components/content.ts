@@ -76,11 +76,11 @@ export const LINKS = {
   telegram: "https://t.me/+ErLH1BA0hHUzZGM1" as string | null,
   privacy: "/privacy",
   terms: "/terms",
-  guide: `${APP_URL}/guide`,
-  stepByStepGuide: `${APP_URL}/guide/step-by-step-agent`,
+  guide: "/guide",
+  stepByStepGuide: "/guide/step-by-step-agent",
   github: "https://github.com/AlwaysHungrie/salts-agent",
   githubIssues: "https://github.com/AlwaysHungrie/salts-agent/issues/new",
-  fleetGuide: `${APP_URL}/guide/fleets`,
+  fleetGuide: "/guide/fleets",
 } as const;
 
 /* ----------------------------------------------------------------- Copy -- */

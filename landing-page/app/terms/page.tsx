@@ -7,6 +7,7 @@ import { TERMS } from "@/components/legal";
 export const metadata: Metadata = {
   title: `${TERMS.title} — ${BRAND.name}`,
   description: `The terms you agree to when you use ${BRAND.name}.`,
+  alternates: { canonical: "/terms" },
 };
 
 export default function Page() {

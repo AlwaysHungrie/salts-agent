@@ -10,6 +10,7 @@ import {
   type CapabilityField,
   type Config,
 } from "@/lib/agent";
+import { GUIDE_ORIGIN } from "@/lib/guide-link";
 
 export function Toggle({
   on,
@@ -440,8 +441,8 @@ export function CapabilitySection({
             <a
               href={
                 agentId
-                  ? `${capability.guide.href}?agent=${encodeURIComponent(agentId)}`
-                  : capability.guide.href
+                  ? `${GUIDE_ORIGIN}${capability.guide.href}?agent=${encodeURIComponent(agentId)}`
+                  : `${GUIDE_ORIGIN}${capability.guide.href}`
               }
               target="_blank"
               rel="noreferrer"

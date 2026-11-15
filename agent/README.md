@@ -338,7 +338,7 @@ The same two layers apply to the [deployment settings](#deployment-settings): th
 preflight runs `admin-cli check` and refuses while any setting is unset (exit 2, a live
 Worker older than the settings route, is let through once), and the Worker returns 503
 with `Deployment is missing default settings` until they are written. `npm run deploy` runs `admin-cli
-init` after `wrangler deploy`. The root [README](../README.md#deployment-settings) has
+init` after `wrangler deploy`. [docs/development.md](../docs/development.md#deployment-settings) has
 the full sequence.
 
 Set the admin key with `wrangler secret put API_SECRET`, or in `agent/.dev.vars` for

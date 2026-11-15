@@ -9,6 +9,8 @@ export const metadata: Metadata = {
   title: "User guide — Salts",
   description:
     "How to set up your agent, talk to it on Telegram and WhatsApp, and run agents for other people.",
+  // The guide's one address is salts.dev, whichever host served this copy.
+  alternates: { canonical: "https://salts.dev/guide" },
 };
 
 export default function Page() {
