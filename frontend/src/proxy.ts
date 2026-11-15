@@ -22,8 +22,10 @@ export default proxy;
 export const config = {
   matcher: [
     // Everything except Next's own build output and static files, which no
-    // session check has anything to say about.
-    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
+    // session check has anything to say about, and `/zone/...`: the guide as the
+    // landing site proxies it to salts.dev. There the request URL names this host,
+    // so a Clerk handshake would send the reader back to app.salts.dev/zone/....
+    "/((?!_next|app-static|zone/|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
     "/(api|trpc)(.*)",
   ],
 };

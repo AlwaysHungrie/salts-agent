@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import type { SessionRow } from "@/lib/agent";
 import { formatDate } from "@/lib/format";
+import { guideHref } from "@/lib/guide-link";
 
 /** How long typing has to settle before the list is filtered. */
 const SEARCH_DEBOUNCE_MS = 200;
@@ -265,7 +266,7 @@ export function Sidebar({
               </button>
 
               <a
-                href="/guide"
+                href={guideHref()}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-muted hover:text-ink text-sm font-light leading-[1.43] underline underline-offset-2 transition"
