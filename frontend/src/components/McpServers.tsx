@@ -19,6 +19,7 @@ import {
 import { SaveButton, Toggle } from "@/components/CapabilitySection";
 import { McpPresetStrip, type McpPreset } from "@/components/McpPresets";
 import { cached, remember } from "@/lib/cache";
+import { guideHref } from "@/lib/guide-link";
 
 const AUTH_MODES: { id: McpAuth; label: string; hint?: string }[] = [
   {
@@ -276,7 +277,7 @@ function ServerCard({
             </button>
             {guide && (
               <a
-                href={`/guide/${guide}`}
+                href={guideHref(guide)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-muted hover:text-ink inline-flex items-center gap-1 underline underline-offset-2 transition"
