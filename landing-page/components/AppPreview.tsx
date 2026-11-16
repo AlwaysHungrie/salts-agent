@@ -430,7 +430,7 @@ function SessionIcon({
   return (
     <Image
       src={icon === "chef" ? chefIcon : wheelbarrowIcon}
-      alt=""
+      alt={icon === "chef" ? "Chef's hat session icon" : "Wheelbarrow session icon"}
       sizes="36px"
       className={`shrink-0 rounded-full object-cover ${className}`}
     />
