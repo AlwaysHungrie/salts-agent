@@ -132,7 +132,8 @@ worth at today's rate, rounded down to the cent. The rate is read at runtime fro
 Frankfurter (the ECB's daily reference rates; `src/fx.ts`), cached for an hour, with the
 last rate standing in for up to three days if Frankfurter is down; past that, card checkout
 closes (`razorpay_key_id: ""`) and orders answer 503. Each order locks its rate in.
-`POST /api/wallet/card-orders { amount_inr }` makes a Razorpay order and a `wallet_purchases`
+`POST /api/wallet/card-orders { amount_inr }` makes a Razorpay order (returning the buyer's email, which checkout pre-fills so Razorpay's
+receipt reaches them) and a `wallet_purchases`
 row with `network: "razorpay"`, `asset: "inr"`, the order id in `to_address` and paise in
 `units`. Razorpay's checkout pays it in the browser, which then sends the payment id to
 `POST /api/wallet/card-orders/:id/confirm`. The Worker fetches that payment from Razorpay
