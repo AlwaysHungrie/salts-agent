@@ -4,6 +4,7 @@ import { callerEmail, trustedCaller } from "../worker/auth";
 import { json, jsonError, readJson } from "../worker/http";
 import { PAY_NETWORKS, payerAddress } from "../payments";
 import { isProvisioningKey } from "../worker/provisioned-keys";
+import { razorpayKeysWork } from "../razorpay";
 import { directory, syncSessionCount } from "../worker/stores";
 
 const methodNotAllowed = () => jsonError("method not allowed", 405);
@@ -33,6 +34,7 @@ export async function handleAdmin(
     "users",
     "provisioning-key",
     "payments",
+    "razorpay",
   ];
   if (!known.includes(route)) return undefined;
   if (!trustedCaller(request, env)) return jsonError("unauthorized", 401);
@@ -41,6 +43,7 @@ export async function handleAdmin(
   if (route === "settings") return await handleSettings(request, env);
   if (route === "provisioning-key") return await handleProvisioningKey(request, env);
   if (route === "payments") return await handlePayments(request, env);
+  if (route === "razorpay") return await handleRazorpay(request, env);
   if (route === "business-requests")
     return await handleBusinessRequests(request, env, url, segments);
   if (route === "stats") {
@@ -170,6 +173,38 @@ async function handlePayments(request: Request, env: Env): Promise<Response> {
   }
   if (body.reown_project_id !== undefined) await dir.setReownProjectId(reown);
   for (const [id, url] of rpcs) await dir.setPaymentRpc(id, url.slice(0, 2000));
+  return json(await view());
+}
+
+/**
+ * Razorpay's credentials for card and UPI payments. The key id is public (the checkout
+ * page carries it); the key secret and webhook secret are write-only, shown by their last
+ * four characters. PATCH sets any of `key_id`, `key_secret`, `webhook_secret`; a blank one
+ * removes it. Once a key id and secret are both set, Razorpay must accept them.
+ */
+async function handleRazorpay(request: Request, env: Env): Promise<Response> {
+  const dir = directory(env);
+  const hidden = (v: string) => ({ set: Boolean(v), hint: v ? v.slice(-4) : "" });
+  const view = async () => {
+    const keys = await dir.razorpayKeys();
+    return { key_id: keys.key_id, key_secret: hidden(keys.key_secret), webhook_secret: hidden(keys.webhook_secret) };
+  };
+  if (request.method === "GET") return json(await view());
+  if (request.method !== "PATCH") return methodNotAllowed();
+  const body = await readJson<Record<string, unknown>>(request);
+  const names = (["key_id", "key_secret", "webhook_secret"] as const).filter((f) => body[f] !== undefined);
+  if (!names.length) return jsonError("Give key_id, key_secret or webhook_secret.", 400);
+  const patch = Object.fromEntries(
+    names.map((f) => [f, typeof body[f] === "string" ? body[f].trim().slice(0, 500) : ""])
+  ) as Partial<Record<(typeof names)[number], string>>;
+  if (patch.key_id && !/^rzp_(test|live)_[A-Za-z0-9]+$/.test(patch.key_id)) {
+    return jsonError("A Razorpay key id starts rzp_test_ or rzp_live_.", 400);
+  }
+  const next = { ...(await dir.razorpayKeys()), ...patch };
+  if ((patch.key_id || patch.key_secret) && next.key_id && next.key_secret && !(await razorpayKeysWork(next))) {
+    return jsonError("Razorpay didn't accept that key id and secret together.", 400);
+  }
+  await dir.setRazorpayKeys(patch);
   return json(await view());
 }
 

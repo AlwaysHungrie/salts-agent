@@ -29,6 +29,24 @@ export function createPurchase(
     )
     .toArray();
   if (clash.length) return { error: "clash" };
+  return insertPurchase(storage, p);
+}
+
+/**
+ * Record a card purchase: its `to_address` is the Razorpay order it is paid through, which
+ * already ties a payment to it, so amounts may repeat.
+ */
+export function createCardPurchase(
+  storage: DurableObjectStorage,
+  p: Omit<WalletPurchase, "id" | "status" | "tx" | "claimed_at">
+): WalletPurchase {
+  return insertPurchase(storage, p);
+}
+
+function insertPurchase(
+  storage: DurableObjectStorage,
+  p: Omit<WalletPurchase, "id" | "status" | "tx" | "claimed_at">
+): WalletPurchase {
   const row: WalletPurchase = { ...p, id: PURCHASE_ID(), status: "pending", tx: null, claimed_at: 0 };
   storage.sql.exec(
     `INSERT INTO wallet_purchases
@@ -57,6 +75,16 @@ export function purchase(
 ): WalletPurchase | undefined {
   return storage.sql
     .exec(`SELECT * FROM wallet_purchases WHERE id = ? AND email = ? LIMIT 1`, id, email)
+    .toArray()[0] as unknown as WalletPurchase | undefined;
+}
+
+/** The purchase paid through the Razorpay order `orderId`, whoever made it. */
+export function purchaseByOrder(storage: DurableObjectStorage, orderId: string): WalletPurchase | undefined {
+  return storage.sql
+    .exec(
+      `SELECT * FROM wallet_purchases WHERE network = 'razorpay' AND to_address = ? LIMIT 1`,
+      orderId
+    )
     .toArray()[0] as unknown as WalletPurchase | undefined;
 }
 
