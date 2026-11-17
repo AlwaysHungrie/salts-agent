@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, Menu, Pencil, X } from "lucide-react";
+import { Check, Menu, Pencil, Wallet, X } from "lucide-react";
 import type { Summary } from "@/lib/agent";
 import { formatCountShort, formatDate, formatUsdShort } from "@/lib/format";
 
@@ -29,6 +29,26 @@ function Stat({
   );
 }
 
+/** The OpenRouter wallet, from beside what the session has cost. */
+function WalletButton({
+  onClick,
+  size,
+}: {
+  onClick: () => void;
+  size: number;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title="Open your OpenRouter wallet"
+      aria-label="Open your OpenRouter wallet"
+      className="text-muted hover:text-ink shrink-0 transition"
+    >
+      <Wallet size={size} strokeWidth={1.75} />
+    </button>
+  );
+}
+
 /**
  * The session's own facts: its name, when it was created and how much it has been
  * used. The title is edited here in place — renaming is the one thing about a
@@ -45,12 +65,15 @@ export function SessionHeader({
   summary,
   onRename,
   onOpenSidebar,
+  onOpenWallet,
 }: {
   title: string;
   createdAt: number | null;
   summary: Summary | null;
   onRename: (title: string) => Promise<void> | void;
   onOpenSidebar: () => void;
+  /** Opens the OpenRouter wallet, with the agent's own key marked. */
+  onOpenWallet?: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   /** The rename dialog, which is how a phone renames: the header has no room to edit in. */
@@ -165,9 +188,12 @@ export function SessionHeader({
             </div>
           )}
           {/* A phone has no room for the usage column, so it takes the date's line. */}
-          <div className="text-muted tnum truncate text-sm font-light leading-[1.43] md:hidden">
-            {formatUsdShort(summary?.llm.cost_usd)} ·{" "}
-            {formatCountShort(summary?.messages ?? 0)} msgs
+          <div className="text-muted tnum flex items-center gap-1.5 truncate text-sm font-light leading-[1.43] md:hidden">
+            {onOpenWallet && <WalletButton onClick={onOpenWallet} size={14} />}
+            <span className="truncate">
+              {formatUsdShort(summary?.llm.cost_usd)} ·{" "}
+              {formatCountShort(summary?.messages ?? 0)} msgs
+            </span>
           </div>
           <div className="text-muted hidden truncate text-sm font-light leading-[1.43] md:block">
             {formatDate(createdAt)}
@@ -177,7 +203,8 @@ export function SessionHeader({
         {/* What this session has cost, over how many messages it took. Both are
             formatted to a fixed shape — two decimals, counts abbreviated past four
             figures — so a long session cannot widen the header it sits in. */}
-        <div className="hidden shrink-0 md:block">
+        <div className="hidden shrink-0 items-center gap-3 md:flex">
+          {onOpenWallet && <WalletButton onClick={onOpenWallet} size={18} />}
           <Stat
             value={formatUsdShort(summary?.llm.cost_usd)}
             hint={`${formatCountShort(summary?.messages ?? 0)} msgs`}
