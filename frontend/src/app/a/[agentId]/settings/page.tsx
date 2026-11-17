@@ -687,7 +687,7 @@ export default function Settings({
 
             {!locked.has("openrouter_api_key") && (
               <Row
-                title="OpenRouter"
+                title="Key"
                 hint="Your agent needs a key to reply."
               >
                 <WalletKeyPicker
@@ -698,7 +698,7 @@ export default function Settings({
                 />
                 {!config.openrouter_api_key && (
                   <p className="text-faint mt-2 text-xs leading-[1.33]">
-                    Pick a key from your OpenRouter wallet.
+                    Pick a key from Keys &amp; credits.
                   </p>
                 )}
               </Row>

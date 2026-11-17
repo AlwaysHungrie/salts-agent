@@ -40,8 +40,8 @@ function WalletButton({
   return (
     <button
       onClick={onClick}
-      title="Open your OpenRouter wallet"
-      aria-label="Open your OpenRouter wallet"
+      title="Open Keys & credits"
+      aria-label="Open Keys & credits"
       className="text-muted hover:text-ink shrink-0 transition"
     >
       <Wallet size={size} strokeWidth={1.75} />

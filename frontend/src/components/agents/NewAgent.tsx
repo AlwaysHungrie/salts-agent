@@ -108,7 +108,7 @@ export function NewAgent({
         >
           <p className="text-faint text-xs leading-[1.33]">Step 2 of 2</p>
           <p className="text-lg font-semibold leading-[1.38]">
-            {fleet ? "Admin settings" : "OpenRouter key"}
+            {fleet ? "Admin settings" : "Key"}
           </p>
           <p className="text-muted mt-1 text-xs font-light leading-[1.33]">
             {fleet
@@ -199,7 +199,7 @@ export function NewAgent({
             </span>
             <span className="text-muted block text-xs font-light leading-[1.33]">
               One agent for each person in your community. They can share your
-              OpenRouter key, and you manage them all.
+              key, and you manage them all.
             </span>
           </span>
         </label>

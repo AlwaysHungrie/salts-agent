@@ -1,24 +1,24 @@
 ---
-title: What is the OpenRouter wallet
-section: OpenRouter wallet
+title: What is Keys & credits
+section: Keys & credits
 order: 1
 summary: The place in Salts that holds your OpenRouter keys, so you can give one to any of your agents.
 featured: true
 ---
 
-Your agent needs an OpenRouter key to talk to an AI model, and every reply it writes is paid for from the credit on that key. The OpenRouter wallet is where Salts keeps your keys, so you can pick one for any of your agents without copying it around.
+Your agent needs an OpenRouter key to talk to an AI model, and every reply it writes is paid for from the credit on that key. Keys & credits is where Salts keeps your keys, so you can pick one for any of your agents without copying it around.
 
 For example, you might keep one key for your personal agent and another for an agent you share with your team, each with its own credit, and see at a glance how much each one has left.
 
 ## Why you need a key in your wallet
 
-An agent without a key cannot reply to anything. When you create an agent, the **OpenRouter key** dropdown lists the keys in your wallet, so you need at least one there first. If your wallet is empty, the dropdown says **No keys in your wallet**, and you can open the wallet straight from it to add one.
+An agent without a key cannot reply to anything. When you create an agent, the **Key** dropdown lists the keys in your wallet, so you need at least one there first. If your wallet is empty, the dropdown says **No keys in your wallet**, and you can open the wallet straight from it to add one.
 
 The first time you create an agent, we give you a small key called **Starter key**. If it is the only key in your wallet, it is already picked in the dropdown, so your first agent can reply straight away. It holds just a cent of credit, enough to try a low-cost model such as DeepSeek or GLM Flash, so add a key of your own once you know you want to keep going. Everyone gets the starter key once, and removing it doesn't bring it back.
 
 ## Opening your wallet
 
-On the Salts home page, click **OpenRouter wallet** in the top right corner. You can also open it from the wallet icon at the end of any **OpenRouter key** dropdown.
+On the Salts home page, click **Keys & credits** in the top right corner. You can also open it from the wallet icon at the end of any **Key** dropdown.
 
 Each key in your wallet has a nickname, such as "Amber Falcon", so you can tell your keys apart. Under the nickname you can see how much credit the key has left, and how many of your agents use it.
 

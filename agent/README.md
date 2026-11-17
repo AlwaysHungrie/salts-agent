@@ -78,7 +78,7 @@ no deployment-wide fallback to stand in for it. One agent's spend and rate limit
 its own, and an agent with no key says so instead of answering. That is deliberate: a
 fallback would mean any agent anyone creates here spends the deployment's own credit.
 
-Keys live in each account's OpenRouter wallet (`wallet_keys` in `AgentDirectory`), and
+Keys live in each account's wallet, shown as Keys & credits (`wallet_keys` in `AgentDirectory`), and
 agents are given one by its id, `openrouter_key_id`. The Worker copies the key into the
 agent's `openrouter_api_key`, so turns never look the wallet up, and records which agents
 hold which key (`wallet_key_uses`) so removing a key clears it from every one of them. A

@@ -62,7 +62,7 @@ export function WalletKeyPicker({
             if (e.target.value !== ELSEWHERE) onChange(e.target.value);
           }}
           disabled={loading}
-          aria-label="OpenRouter key"
+          aria-label="Key"
           className="bg-field text-ink focus:ring-ink w-full appearance-none rounded-2xl py-3 pr-12 pl-4 text-sm outline-none focus:ring-2"
         >
           {loading && <option value={LOADING}>Loading your keys…</option>}
@@ -90,8 +90,8 @@ export function WalletKeyPicker({
         </select>
         <button
           onClick={() => openWallet(() => void wallet.load())}
-          title="Open your OpenRouter wallet"
-          aria-label="Open your OpenRouter wallet"
+          title="Open Keys & credits"
+          aria-label="Open Keys & credits"
           className="text-muted hover:text-ink absolute top-1/2 right-4 -translate-y-1/2 transition"
         >
           <Wallet size={16} />
@@ -104,11 +104,10 @@ export function WalletKeyPicker({
             onClick={() => openWallet(() => void wallet.load())}
             className="text-ink font-normal underline underline-offset-2"
           >
-            Your wallet
+            Keys &amp; credits
           </button>{" "}
-          does not have any OpenRouter API keys. In order to use your agent,
-          either add your own key created from your OpenRouter account or get a
-          new one from us.
+          has no keys yet. In order to use your agent, either add your own key
+          created from your OpenRouter account or get a new one from us.
         </p>
       )}
     </div>

@@ -1,6 +1,6 @@
 ---
 title: Buy a key with UPI or card
-section: OpenRouter wallet
+section: Keys & credits
 order: 3
 summary: Pay in rupees by card, UPI or netbanking and get an OpenRouter key with that much credit, without making an OpenRouter account.
 featured: false
@@ -10,7 +10,7 @@ If you would rather not create an OpenRouter account of your own, or pay with cr
 
 ## 1. Open the checkout
 
-Open your **OpenRouter wallet** from the top right corner of the home page. Under **Get new key**, click **Pay with UPI or card**.
+Open **Keys & credits** from the top right corner of the home page. Under **Get new key**, click **Pay with UPI or card**.
 
 ## 2. Choose how much credit you want
 

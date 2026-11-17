@@ -44,9 +44,9 @@ These change how the model answers:
 
 We recommend leaving all four as they are until you have a reason to change them. See [Choose the right model](/guide/choosing-a-model) for when to.
 
-## OpenRouter
+## Key
 
-The OpenRouter API key that pays for your agent's replies. Your agent cannot reply without one. Choose a key from your OpenRouter wallet by its nickname, or click the wallet icon at the end of the dropdown to add one. See [Get an OpenRouter API key](/guide/openrouter).
+The OpenRouter API key that pays for your agent's replies. Your agent cannot reply without one. Choose a key from Keys & credits by its nickname, or click the wallet icon at the end of the dropdown to add one. See [Get an OpenRouter API key](/guide/openrouter).
 
 ## Name
 

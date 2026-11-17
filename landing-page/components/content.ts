@@ -238,7 +238,7 @@ export const STEPS = [
   {
     n: "02",
     title: "Create your agent",
-    body: "Sign in and add or buy a key in your OpenRouter wallet. Then create an agent, give it a name and pick that key. That's it.",
+    body: "Sign in and add or buy a key in Keys & credits. Then create an agent, give it a name and pick that key. That's it.",
   },
   {
     n: "03",

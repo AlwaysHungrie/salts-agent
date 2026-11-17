@@ -72,7 +72,7 @@ export function MetaSettingsForm({
   return (
     <div>
       <Section
-        title="OpenRouter"
+        title="Key"
         hint="The key every model call is billed to."
         {...editor.lock("openrouter_api_key")}
       >

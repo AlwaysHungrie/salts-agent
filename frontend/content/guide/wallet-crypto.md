@@ -1,6 +1,6 @@
 ---
 title: Buy a key with crypto
-section: OpenRouter wallet
+section: Keys & credits
 order: 2
 summary: Pay with USDC or ETH from your crypto wallet and get an OpenRouter key with that much credit, without making an OpenRouter account.
 featured: true
@@ -12,7 +12,7 @@ This guide will help you buy your first key. It takes a few minutes, and you wil
 
 ## 1. Open the checkout
 
-Open your **OpenRouter wallet** from the top right corner of the home page. Under **Get new key**, click **Pay with crypto**. The list under it shows which coins and networks you can pay with.
+Open **Keys & credits** from the top right corner of the home page. Under **Get new key**, click **Pay with crypto**. The list under it shows which coins and networks you can pay with.
 
 ## 2. Choose how much credit you want
 

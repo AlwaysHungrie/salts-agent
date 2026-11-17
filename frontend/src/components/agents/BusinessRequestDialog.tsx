@@ -95,7 +95,7 @@ export function BusinessRequestDialog({
             </h1>
             <p className="text-muted mt-4 max-w-lg text-base font-light leading-[1.4] sm:text-xl">
               Create an agent for everyone in your community. They can share
-              your OpenRouter key, each with its own spending limit, so they
+              your key, each with its own spending limit, so they
               work out of the box.
             </p>
 
@@ -105,7 +105,7 @@ export function BusinessRequestDialog({
               {[
                 [
                   "One shared key",
-                  "Every agent can run on your OpenRouter key, and you decide how much each one can spend.",
+                  "Every agent can run on your key, and you decide how much each one can spend.",
                 ],
                 [
                   "Easier for them",
@@ -221,7 +221,7 @@ function RequestSent({
         <p className="text-muted mt-2 text-sm leading-relaxed">
           You&apos;ll be able to create agents for your community as a
           fleet, and manage them one by one or all together. They can share
-          your OpenRouter key, each with its own spending limit, so every
+          your key, each with its own spending limit, so every
           agent works out of the box.
         </p>
       </div>
