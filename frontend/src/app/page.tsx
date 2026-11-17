@@ -157,6 +157,22 @@ export default function Agents() {
             )}
           </>
         )}
+
+        <footer className="border-t border-canvas-soft mt-12 flex justify-center pt-6">
+          <a
+            href="https://programmerneeds.com/tools/salts?utm_source=maker-site&utm_medium=badge&utm_campaign=salts"
+            target="_blank"
+            rel="noopener"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element -- third-party badge, served as-is */}
+            <img
+              src="https://programmerneeds.com/api/badge/salts?v=10"
+              alt="Find Salts on ProgrammerNeeds"
+              width={220}
+              height={54}
+            />
+          </a>
+        </footer>
       </div>
 
       {authing && (
