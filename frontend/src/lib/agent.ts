@@ -625,6 +625,8 @@ export type CardOrder = {
   /** The credit's dollar worth: what the key can spend. */
   amount_usd: number;
   total_usd: number;
+  /** The buyer's email, filled into checkout for Razorpay's receipt. */
+  email: string;
 };
 
 /** What the buyer's wallet must send: exactly `units` of the asset to `to`. */

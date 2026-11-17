@@ -99,6 +99,7 @@ export function CardCheckout({
         currency: order.currency,
         name: "Salts",
         description: `₹${order.credit_inr.toLocaleString("en-IN")} AI credits`,
+        prefill: { email: order.email },
         handler: (r: { razorpay_payment_id: string }) => void finish(order, r.razorpay_payment_id),
         modal: {
           ondismiss: () => {
