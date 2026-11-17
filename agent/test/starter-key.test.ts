@@ -5,9 +5,8 @@ import { PROVISIONING_KEY } from "./openrouter-mock";
 import { SHIPPED } from "./shipped";
 
 /**
- * The starter key: a brand-new account is given one small provisioned key, once, so its
- * first agent can answer before its owner has found the wallet. Anyone already here (an
- * agent of their own, a place on someone's fleet, a key in the wallet) is not new.
+ * The starter key: every account is given one small provisioned key, once, so a first
+ * agent can answer before its owner has found the wallet.
  */
 
 const BASE = "https://worker.test";
@@ -56,7 +55,7 @@ describe("the starter key", () => {
     await settings({ starter_key_cents: SHIPPED.starter_key_cents });
   });
 
-  it("gives a new account one provisioned key, held to the shipped credit", async () => {
+  it("gives an account one provisioned key, held to the shipped credit", async () => {
     const owner = someone("new");
     const res = await starter(owner);
     expect(res.status).toBe(200);
@@ -84,7 +83,7 @@ describe("the starter key", () => {
     expect(await wallet(owner)).toHaveLength(1);
   });
 
-  it("is not given to someone already on a fleet", async () => {
+  it("is given to fleet members and admins too, once each", async () => {
     const admin = someone("admin");
     const member = someone("member");
     await SELF.fetch(
@@ -94,15 +93,30 @@ describe("the starter key", () => {
         body: JSON.stringify({ name: "Fleet", allowed_emails: `${admin}, ${member}` }),
       })
     );
+    expect((await starter(member)).status).toBe(200);
+    expect((await starter(admin)).status).toBe(200);
     expect((await starter(member)).status).toBe(409);
-    // Their admin already runs an agent, so is not new either.
-    expect((await starter(admin)).status).toBe(409);
   });
 
-  it("is not given to someone who already holds a key", async () => {
+  it("is given beside keys already in the wallet", async () => {
     const owner = someone("owner");
     await SELF.fetch(`${BASE}/api/wallet`, as(owner, { method: "POST", body: JSON.stringify({ key: "sk-or-own" }) }));
-    expect((await starter(owner)).status).toBe(409);
+    expect((await starter(owner)).status).toBe(200);
+    expect(await wallet(owner)).toHaveLength(2);
+  });
+
+  it("waits for room in a full wallet, and undoes the key it made", async () => {
+    const owner = someone("full");
+    for (let i = 0; i < SHIPPED.max_wallet_keys; i++) {
+      await directory().addWalletKey(owner, { kind: "own", secret: `sk-or-full-${i}` }, SHIPPED.max_wallet_keys);
+    }
+    expect((await starter(owner)).status).toBe(400);
+    const named = Object.values(await madeKeys()).filter((k) => k.name === `Salts ${owner} starter`);
+    expect(named).toHaveLength(0);
+
+    const [first] = await wallet(owner);
+    await SELF.fetch(`${BASE}/api/wallet/${first.id}`, as(owner, { method: "DELETE" }));
+    expect((await starter(owner)).status).toBe(200);
   });
 
   it("is off while the setting is 0 or no provisioning key is set", async () => {

@@ -239,9 +239,10 @@ export function NewAgent({
 }
 
 /**
- * Ask for the starter key: a brand-new account is given a small one once, so its first
- * agent can answer straight away. `onKey` gets its id to pick it. Resolves to whether the
- * ask has answered (anyone else is simply refused).
+ * Ask for the starter key: every account is given a small one once, so a first agent can
+ * answer straight away. `onKey` gets its id to pick it, but only when it is the wallet's
+ * one key: someone with keys of their own chooses among them. Resolves to whether the
+ * ask has answered (a second ask is simply refused).
  */
 function useStarterKey(onKey: (id: string) => void): boolean {
   const [asked, setAsked] = useState(false);
@@ -254,11 +255,20 @@ function useStarterKey(onKey: (id: string) => void): boolean {
       const key = res?.ok
         ? ((await res.json().catch(() => null)) as { id?: string } | null)
         : null;
-      if (key?.id) pick.current(key.id);
+      if (key?.id && (await walletSize()) === 1) pick.current(key.id);
       setAsked(true);
     })();
   }, []);
   return asked;
+}
+
+/** How many keys the caller's wallet holds; 0 when it can't be read. */
+async function walletSize(): Promise<number> {
+  const res = await fetch("/api/wallet", { cache: "no-store" }).catch(() => null);
+  const body = res?.ok
+    ? ((await res.json().catch(() => null)) as { keys?: unknown[] } | null)
+    : null;
+  return body?.keys?.length ?? 0;
 }
 
 /** The fleet's own fields: its name, and one address per agent to be made. */

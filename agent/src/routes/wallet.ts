@@ -149,16 +149,16 @@ export async function handleWallet(
 }
 
 /**
- * A brand-new account's one free key, so a first agent can answer before its owner has
- * found the wallet: `starter_key_cents` of credit, made with the provisioning key. 409
- * for an account that is not new; 404 while the deployment offers none.
+ * Every account's one free key, so a first agent can answer before its owner has found
+ * the wallet: `starter_key_cents` of credit, made with the provisioning key. 409 once it
+ * has been given; 404 while the deployment offers none.
  */
 async function starter(env: Env, email: string): Promise<Response> {
   const settings = await deploymentSettings(env);
   const dir = directory(env);
   const provisioning = await dir.provisioningKey();
   if (!settings.starter_key_cents || !provisioning) return jsonError("No starter key on offer.", 404);
-  if (!(await dir.claimStarter(email))) return jsonError("Only a new account gets a starter key.", 409);
+  if (!(await dir.claimStarter(email))) return jsonError("This account already had its starter key.", 409);
   let made: { secret: string; openrouter_hash: string };
   try {
     made = await createKey(provisioning, `Salts ${email} starter`, settings.starter_key_cents / 100);
@@ -178,7 +178,9 @@ async function starter(env: Env, email: string): Promise<Response> {
     settings.max_wallet_keys
   );
   if ("error" in added) {
+    // A full wallet: the key is undone, and the claim kept for when there is room.
     await deleteKey(provisioning, made.openrouter_hash).catch(() => undefined);
+    await dir.releaseStarter(email);
     return jsonError(added.error, 400);
   }
   return json(await view(added));
