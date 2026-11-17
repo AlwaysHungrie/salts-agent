@@ -18,11 +18,16 @@ import {
 } from "@/lib/agent";
 import { cached, forget, keys, remember } from "@/lib/cache";
 import { PageNotice } from "@/components/PageNotice";
+import { useWalletPanel } from "@/components/wallet/WalletPanel";
 
 /** What `/api/agents/:id/config` answers with, as far as this page reads it. */
 type ConfigPayload = {
   agent?: AgentRow;
-  config?: { cap_telegram?: number; telegram_bot_username?: string };
+  config?: {
+    cap_telegram?: number;
+    telegram_bot_username?: string;
+    openrouter_key_id?: string;
+  };
 };
 
 /** The bot's handle, or "" while Telegram is off or unconfigured. */
@@ -124,6 +129,9 @@ export default function AgentPage({
    * the capability is off or unconfigured.
    */
   const [botUsername, setBotUsername] = useState(() => botOf(held));
+  /** The wallet key the agent uses, marked when the wallet is opened from here. */
+  const [keyId, setKeyId] = useState(held?.config?.openrouter_key_id ?? "");
+  const openWallet = useWalletPanel();
   /** A forked question handed to one session's composer, waiting to be edited. */
   const [draft, setDraft] = useState<{
     sessionId: string;
@@ -169,6 +177,7 @@ export default function AgentPage({
         remember(keys.config(agentId), payload);
         setAgent(payload.agent ?? null);
         setBotUsername(botOf(payload));
+        setKeyId(payload.config?.openrouter_key_id ?? "");
       })
       .catch(() => setBotUsername(""));
   }, [agentId]);
@@ -461,6 +470,7 @@ export default function AgentPage({
               summary={summary}
               onRename={(title) => renameSession(selected, title)}
               onOpenSidebar={() => setSidebarOpen(true)}
+              onOpenWallet={() => openWallet(undefined, { highlight: keyId })}
             />
             {loaded?.sessionId !== selected ? (
               <div className="text-muted flex flex-1 items-center justify-center text-xl font-light mb-16">
