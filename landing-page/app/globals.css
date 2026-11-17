@@ -24,18 +24,18 @@
    the footer actually needs at each width, or the page sheet uncovers too much
    ink or clips the last row of links. */
 :root {
-  --footer-h: 430px;
+  --footer-h: 500px;
 }
 
 @media (min-width: 640px) {
   :root {
-    --footer-h: 420px;
+    --footer-h: 490px;
   }
 }
 
 @media (min-width: 768px) {
   :root {
-    --footer-h: 320px;
+    --footer-h: 390px;
   }
 }
 
