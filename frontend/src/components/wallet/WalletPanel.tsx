@@ -213,8 +213,8 @@ function WalletSidebar({ onClose }: { onClose: () => void }) {
                 )}
                 <PayOption
                   icon={<Link2 className="h-4 w-4" />}
-                  title="New key from OpenRouter"
-                  note="Sign in to OpenRouter and create a new key"
+                  title="Connect OpenRouter account"
+                  note="Directly get from your own account with a credit limit"
                   onClick={() => void startConnect()}
                 />
                 <div className="flex flex-col items-center">
