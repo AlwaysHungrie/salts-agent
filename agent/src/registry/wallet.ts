@@ -26,6 +26,11 @@ function freshNickname(taken: Set<string>): string {
   }
 }
 
+/** `wanted` when the wallet does not already use it, else a fresh random one. */
+function nicknameFor(wanted: string | undefined, taken: Set<string>): string {
+  return wanted && !taken.has(wanted.toLowerCase()) ? wanted : freshNickname(taken);
+}
+
 export function walletKeys(storage: DurableObjectStorage, email: string): WalletKeyRow[] {
   const rows = storage.sql
     .exec(
@@ -50,14 +55,15 @@ export function walletKey(
 }
 
 /**
- * Add a key to `email`'s wallet under a nickname of its own, unique in that wallet.
+ * Add a key to `email`'s wallet under a nickname of its own (the one asked for, when the
+ * wallet does not use it yet), unique in that wallet.
  * Refused as `{ error }` (not thrown, so the route can answer 400) when the wallet is full
  * or already holds this key.
  */
 export function addWalletKey(
   storage: DurableObjectStorage,
   email: string,
-  key: { kind: WalletKeyKind; secret: string; openrouter_hash?: string },
+  key: { kind: WalletKeyKind; secret: string; openrouter_hash?: string; nickname?: string },
   max: number
 ): WalletKeyRow | { error: string } {
   const owner = email.trim().toLowerCase();
@@ -67,7 +73,7 @@ export function addWalletKey(
   const row: WalletKeyRow = {
     id: WALLET_ID(),
     email: owner,
-    nickname: freshNickname(new Set(existing.map((k) => k.nickname.toLowerCase()))),
+    nickname: nicknameFor(key.nickname, new Set(existing.map((k) => k.nickname.toLowerCase()))),
     kind: key.kind,
     secret: key.secret,
     created_at: Date.now(),
@@ -120,4 +126,34 @@ export function setWalletKeyUse(storage: DurableObjectStorage, agentId: string, 
     agentId,
     keyId
   );
+}
+
+/**
+ * Take up `email`'s one starter key: true only for an account that is new here — it runs
+ * no agent, belongs to none (a fleet member was set up by its admin), holds no key, and
+ * was never given one. Checked and recorded in one step, so two calls cannot both win.
+ */
+export function claimStarter(storage: DurableObjectStorage, email: string, now: number): boolean {
+  const owner = email.trim().toLowerCase();
+  const known = storage.sql
+    .exec(
+      `SELECT 1 FROM agents WHERE admin_email = ?
+       UNION ALL SELECT 1 FROM agent_members WHERE email = ?
+       UNION ALL SELECT 1 FROM wallet_keys WHERE email = ?
+       UNION ALL SELECT 1 FROM starter_grants WHERE email = ?
+       LIMIT 1`,
+      owner,
+      owner,
+      owner,
+      owner
+    )
+    .toArray();
+  if (known.length) return false;
+  storage.sql.exec(`INSERT INTO starter_grants (email, granted_at) VALUES (?, ?)`, owner, now);
+  return true;
+}
+
+/** Hand a claim back when the key could not be made, so a later call may try again. */
+export function releaseStarter(storage: DurableObjectStorage, email: string) {
+  storage.sql.exec(`DELETE FROM starter_grants WHERE email = ?`, email.trim().toLowerCase());
 }

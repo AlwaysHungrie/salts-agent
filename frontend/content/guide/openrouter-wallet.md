@@ -14,6 +14,8 @@ For example, you might keep one key for your personal agent and another for an a
 
 An agent without a key cannot reply to anything. When you create an agent, the **OpenRouter key** dropdown lists the keys in your wallet, so you need at least one there first. If your wallet is empty, the dropdown says **No keys in your wallet**, and you can open the wallet straight from it to add one.
 
+If you are new to Salts, we give you a small key called **Starter key** the first time you create an agent. It is already picked in the dropdown, so your first agent can reply straight away. It holds just a cent of credit, enough to try a low-cost model such as DeepSeek or GLM Flash, so add a key of your own once you know you want to keep going. The starter key isn't given to someone who already has an agent, a key in their wallet, or a place on someone else's fleet.
+
 ## Opening your wallet
 
 On the Salts home page, click **OpenRouter wallet** in the top right corner. You can also open it from the wallet icon at the end of any **OpenRouter key** dropdown.
