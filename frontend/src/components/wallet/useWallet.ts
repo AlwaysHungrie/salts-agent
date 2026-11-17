@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { PayNetwork, PayQuote, WalletKey } from "@/lib/agent";
+import type { CardOrder, PayNetwork, PayQuote, WalletKey } from "@/lib/agent";
 
 /** The error a wallet route answered with, or a fallback when it said nothing readable. */
 async function errorOf(res: Response, fallback: string): Promise<string> {
@@ -15,8 +15,21 @@ type WalletRead = {
   feeBps: number;
   maxUsd: number;
   reownProjectId: string;
+  razorpayKeyId: string;
+  inrPerUsd: number;
+  cardRange: CardRange;
   error: string | null;
 };
+
+/** The Indian card checkout's range and quick picks, in whole rupees. */
+export type CardRange = {
+  min: number;
+  max: number;
+  presets: number[];
+  start: number;
+};
+
+const NO_RANGE: CardRange = { min: 0, max: 0, presets: [], start: 0 };
 
 /** The wallet as the Worker holds it, or the error it answered with. */
 async function readWallet(): Promise<WalletRead> {
@@ -28,6 +41,9 @@ async function readWallet(): Promise<WalletRead> {
       feeBps: 0,
       maxUsd: 0,
       reownProjectId: "",
+      razorpayKeyId: "",
+      inrPerUsd: 0,
+      cardRange: NO_RANGE,
       error: await errorOf(res, "Couldn't load your wallet."),
     };
   }
@@ -37,6 +53,12 @@ async function readWallet(): Promise<WalletRead> {
     fee_bps?: number;
     max_usd?: number;
     reown_project_id?: string;
+    razorpay_key_id?: string;
+    inr_per_usd?: number;
+    card_min_inr?: number;
+    card_max_inr?: number;
+    card_presets_inr?: number[];
+    card_default_inr?: number;
   };
   return {
     keys: body.keys,
@@ -44,6 +66,14 @@ async function readWallet(): Promise<WalletRead> {
     feeBps: body.fee_bps ?? 0,
     maxUsd: body.max_usd ?? 0,
     reownProjectId: body.reown_project_id ?? "",
+    razorpayKeyId: body.razorpay_key_id ?? "",
+    inrPerUsd: body.inr_per_usd ?? 0,
+    cardRange: {
+      min: body.card_min_inr ?? 0,
+      max: body.card_max_inr ?? 0,
+      presets: body.card_presets_inr ?? [],
+      start: body.card_default_inr ?? 0,
+    },
     error: null,
   };
 }
@@ -61,6 +91,11 @@ export function useWallet() {
   const [maxUsd, setMaxUsd] = useState(0);
   /** Reown's project id, which the wallet modal is opened with; blank when payments are off. */
   const [reownProjectId, setReownProjectId] = useState("");
+  /** Razorpay's key id, which card checkout is opened with; blank when card payments are off. */
+  const [razorpayKeyId, setRazorpayKeyId] = useState("");
+  /** Rupees charged per dollar of a card purchase. */
+  const [inrPerUsd, setInrPerUsd] = useState(0);
+  const [cardRange, setCardRange] = useState<CardRange>(NO_RANGE);
   const [error, setError] = useState<string | null>(null);
 
   const apply = useCallback((read: WalletRead) => {
@@ -69,6 +104,9 @@ export function useWallet() {
     setFeeBps(read.feeBps);
     setMaxUsd(read.maxUsd);
     setReownProjectId(read.reownProjectId);
+    setRazorpayKeyId(read.razorpayKeyId);
+    setInrPerUsd(read.inrPerUsd);
+    setCardRange(read.cardRange);
     setError(read.error);
   }, []);
 
@@ -139,6 +177,39 @@ export function useWallet() {
     return "paid";
   };
 
+  /** Make a Razorpay order for whole rupees of credit. Resolves to the order, or an error to show. */
+  const cardOrder = async (amountInr: number): Promise<CardOrder | string> => {
+    const res = await fetch("/api/wallet/card-orders", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ amount_inr: amountInr }),
+    });
+    if (!res.ok) return await errorOf(res, "Couldn't start the payment.");
+    return (await res.json()) as CardOrder;
+  };
+
+  /**
+   * Ask the Worker to count a card payment by its Razorpay id: "paid", "pending" while
+   * Razorpay or the key isn't done, or an error to show.
+   */
+  const cardConfirm = async (
+    id: string,
+    paymentId: string,
+  ): Promise<"paid" | "pending" | string> => {
+    const res = await fetch(
+      `/api/wallet/card-orders/${encodeURIComponent(id)}/confirm`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ payment_id: paymentId }),
+      },
+    );
+    if (res.status === 202) return "pending";
+    if (!res.ok) return await errorOf(res, "Couldn't check the payment.");
+    await load();
+    return "paid";
+  };
+
   /**
    * Count a payment the page lost track of, by its network and transaction id: "paid",
    * "pending" while the chain or the delivery isn't done, or `{ error, final }`, final
@@ -176,12 +247,17 @@ export function useWallet() {
     feeBps,
     maxUsd,
     reownProjectId,
+    razorpayKeyId,
+    inrPerUsd,
+    cardRange,
     error,
     load,
     add,
     remove,
     quote,
     confirm,
+    cardOrder,
+    cardConfirm,
     recover,
   };
 }

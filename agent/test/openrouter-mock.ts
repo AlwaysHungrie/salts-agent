@@ -888,6 +888,59 @@ async function provisionedKeysMock(request: Request, url: URL): Promise<Response
   return json({ error: "unmocked" }, 405);
 }
 
+/** The rupees per dollar the stand-in rate source answers with. */
+export const INR_PER_USD = 93.93;
+
+/** The Razorpay key secret the stand-in accepts; any other is refused. */
+export const RAZORPAY_SECRET = "rzp-secret-ok";
+
+const razorpayOrders = new Map<string, { amount: number; currency: string }>();
+const razorpayPayments = new Map<
+  string,
+  { id: string; order_id: string; amount: number; currency: string; status: string }
+>();
+
+/**
+ * A stand-in for Razorpay's API. A test pays an order with `POST
+ * https://api.razorpay.com/__pay { order_id, status?, amount? }`, as the checkout would,
+ * and gets the payment's id back; the Worker then reads it through the ordinary API.
+ */
+async function razorpayMock(request: Request, url: URL): Promise<Response> {
+  const json = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+  const rid = (prefix: string) => `${prefix}_${crypto.randomUUID().replace(/-/g, "").slice(0, 14)}`;
+  if (url.pathname === "/__pay") {
+    const body = (await request.json()) as { order_id: string; status?: string; amount?: number };
+    const order = razorpayOrders.get(body.order_id);
+    const payment = {
+      id: rid("pay"),
+      order_id: body.order_id,
+      amount: body.amount ?? order?.amount ?? 0,
+      currency: order?.currency ?? "INR",
+      status: body.status ?? "captured",
+    };
+    razorpayPayments.set(payment.id, payment);
+    return json(payment);
+  }
+  const auth = request.headers.get("authorization") ?? "";
+  const secret = atob(auth.replace(/^Basic\s+/i, "")).split(":")[1];
+  if (secret !== RAZORPAY_SECRET) {
+    return json({ error: { description: "Authentication failed" } }, 401);
+  }
+  if (url.pathname === "/v1/orders" && request.method === "GET") return json({ items: [] });
+  if (url.pathname === "/v1/orders" && request.method === "POST") {
+    const body = (await request.json()) as { amount: number; currency: string };
+    const id = rid("order");
+    razorpayOrders.set(id, body);
+    return json({ id, ...body, status: "created" });
+  }
+  const paid = url.pathname.match(/^\/v1\/payments\/([^/]+)(\/capture)?$/);
+  const payment = paid && razorpayPayments.get(paid[1]);
+  if (!payment) return json({ error: { description: "The id provided does not exist" } }, 400);
+  if (paid[2] && request.method === "POST") payment.status = "captured";
+  return json(payment);
+}
+
 export async function openrouterMock(request: Request): Promise<Response> {
   const url = new URL(request.url);
   if (url.hostname === "rpc.test") return rpcMock(request, url);
@@ -907,6 +960,13 @@ export async function openrouterMock(request: Request): Promise<Response> {
     } catch {
       return json({ error: "invalid_token" }, 401);
     }
+  }
+  if (url.hostname === "api.razorpay.com") return razorpayMock(request, url);
+  // Frankfurter's daily rupee rate.
+  if (url.hostname === "api.frankfurter.dev") {
+    return new Response(JSON.stringify({ base: "USD", rates: { INR: INR_PER_USD } }), {
+      headers: { "content-type": "application/json" },
+    });
   }
   if (url.hostname !== "openrouter.ai") {
     return new Response(`blocked outbound request to ${url.hostname}`, { status: 503 });

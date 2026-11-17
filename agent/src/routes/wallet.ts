@@ -20,6 +20,8 @@ import {
 import type { WalletPurchase } from "../registry";
 import { createKey, deleteKey, ProvisioningError } from "../worker/provisioned-keys";
 import { keyCredit } from "../worker/wallet";
+import { cardConfirm, cardKeyId, cardOrder } from "./card";
+import { inrPerUsd } from "../fx";
 
 /**
  * A key as its owner sees it: a pasted key in full (it is theirs), a provisioned one
@@ -113,9 +115,23 @@ export async function handleWallet(
         max_usd: settings.max_wallet_purchase_usd,
         reown_project_id: reownProjectId,
         networks,
+        // Razorpay's key id, for card and UPI payments; "" while they are closed, which
+        // includes while no rupee rate can be read (nothing could be priced).
+        ...(await cardOffer(env)),
+        // Indian card payments: priced in rupees, with their own range and quick picks.
+        card_min_inr: settings.card_min_inr,
+        card_max_inr: settings.card_max_inr,
+        card_presets_inr: settings.card_presets_inr,
+        card_default_inr: settings.card_default_inr,
       });
     }
     if (method === "POST") return await addKey(request, env, email);
+    return undefined;
+  }
+
+  if (id === "card-orders" && method === "POST") {
+    if (!action) return await cardOrder(request, env, email);
+    if (segments[4] === "confirm" && !segments[5]) return await cardConfirm(request, env, email, action);
     return undefined;
   }
 
@@ -144,6 +160,14 @@ export async function handleWallet(
     return json({ removed: id, agents: agents.length });
   }
   return undefined;
+}
+
+/** Card checkout as the page opens it: Razorpay's key id and today's rupee rate. */
+async function cardOffer(env: Env): Promise<{ razorpay_key_id: string; inr_per_usd: number }> {
+  const keyId = await cardKeyId(env);
+  if (!keyId) return { razorpay_key_id: "", inr_per_usd: 0 };
+  const rate = await inrPerUsd().catch(() => 0);
+  return rate ? { razorpay_key_id: keyId, inr_per_usd: rate } : { razorpay_key_id: "", inr_per_usd: 0 };
 }
 
 /**
@@ -310,7 +334,7 @@ const delivering = () => json({ status: "pending", reason: "Setting up your key.
  * time, so it happens once. The key is named at OpenRouter by its buyer and purchase, so
  * the deployment's OpenRouter dashboard says whose each key is.
  */
-async function deliver(env: Env, p: WalletPurchase): Promise<Response> {
+export async function deliver(env: Env, p: WalletPurchase): Promise<Response> {
   if (p.status === "fulfilled") return json({ status: "paid", key_id: p.key_id });
   const dir = directory(env);
   const provisioning = await dir.provisioningKey();

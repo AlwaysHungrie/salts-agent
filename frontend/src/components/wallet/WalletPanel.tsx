@@ -15,13 +15,14 @@ import {
   Check,
   ChevronRight,
   Copy,
+  CreditCard,
   KeyRoundIcon,
   Link2,
   Wallet,
   X,
 } from "lucide-react";
 import type { WalletKey } from "@/lib/agent";
-import { formatUsdShort } from "@/lib/format";
+import { formatDaysAgo, formatUsdShort } from "@/lib/format";
 import { startConnect } from "@/lib/openrouter-connect";
 import { BuyCredits } from "./BuyCredits";
 import { PayOption } from "./PayOption";
@@ -73,7 +74,8 @@ const SLIDE_MS = 200;
 function WalletSidebar({ onClose }: { onClose: () => void }) {
   const wallet = useWallet();
   /** Whether the crypto checkout for a new key is open. */
-  const [buying, setBuying] = useState(false);
+  /** Which checkout for a new key is open, if any. */
+  const [buying, setBuying] = useState<"crypto" | "card" | false>(false);
   const [shown, setShown] = useState(false);
 
   // Slide in once mounted; slide out before unmounting.
@@ -156,6 +158,16 @@ function WalletSidebar({ onClose }: { onClose: () => void }) {
                 quote: wallet.quote,
                 confirm: wallet.confirm,
               }}
+              card={
+                buying === "card"
+                  ? {
+                      inrPerUsd: wallet.inrPerUsd,
+                      range: wallet.cardRange,
+                      order: wallet.cardOrder,
+                      confirm: wallet.cardConfirm,
+                    }
+                  : undefined
+              }
               onPaid={() => void wallet.load()}
             />
           ) : (
@@ -176,25 +188,41 @@ function WalletSidebar({ onClose }: { onClose: () => void }) {
                     No keys yet.
                   </p>
                 )}
-                {wallet.keys?.map((key) => (
-                  <KeyRow
-                    key={key.id}
-                    walletKey={key}
-                    onRemove={() => wallet.remove(key.id)}
-                  />
-                ))}
+                {[...(wallet.keys ?? [])]
+                  .sort((a, b) => b.created_at - a.created_at)
+                  .map((key) => (
+                    <KeyRow
+                      key={key.id}
+                      walletKey={key}
+                      onRemove={() => wallet.remove(key.id)}
+                    />
+                  ))}
               </div>
 
               <p className="text-muted mt-8 mb-3 text-xs font-medium">
                 Get new key
               </p>
               <div className="space-y-3">
+                {wallet.razorpayKeyId && (
+                  <PayOption
+                    icon={<CreditCard className="h-4 w-4" />}
+                    title="🇮🇳 Pay with UPI or card"
+                    note="Charged in INR, secured by Razorpay"
+                    onClick={() => setBuying("card")}
+                  />
+                )}
+                <PayOption
+                  icon={<Link2 className="h-4 w-4" />}
+                  title="New key from OpenRouter"
+                  note="Sign in to OpenRouter and create a new key"
+                  onClick={() => void startConnect()}
+                />
                 <div className="flex flex-col items-center">
                   <PayOption
                     icon={<Wallet className="h-4 w-4" />}
                     title="Pay with crypto"
                     note="USDC or ETH on Ethereum, Base, Solana and more"
-                    onClick={() => setBuying(true)}
+                    onClick={() => setBuying("crypto")}
                   />
                   {wallet.networks.length > 0 && (
                     <div>
@@ -205,12 +233,6 @@ function WalletSidebar({ onClose }: { onClose: () => void }) {
                     </div>
                   )}
                 </div>
-                <PayOption
-                  icon={<Link2 className="h-4 w-4" />}
-                  title="New key from OpenRouter"
-                  note="Sign in to OpenRouter and create a new key"
-                  onClick={() => void startConnect()}
-                />
                 <AddKey onAdd={wallet.add} />
               </div>
             </>
@@ -290,12 +312,7 @@ function KeyRow({
           </div>
         ) : (
           <span className="shrink-0">
-            Purchased{" "}
-            {new Date(key.created_at).toLocaleDateString(undefined, {
-              day: "numeric",
-              month: "short",
-              year: "2-digit",
-            })}
+            Purchased {formatDaysAgo(key.created_at)}
           </span>
         )}
       </div>

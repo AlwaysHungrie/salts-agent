@@ -76,6 +76,14 @@ export type DeploymentSettings = {
   wallet_fee_bps: number;
   /** The most credit one purchase may buy, in dollars. */
   max_wallet_purchase_usd: number;
+  /** The least credit one Indian (rupee) card or UPI purchase may buy, in whole rupees. */
+  card_min_inr: number;
+  /** The most credit one Indian (rupee) card or UPI purchase may buy, in whole rupees. */
+  card_max_inr: number;
+  /** The rupee amounts the Indian card checkout offers with one click. */
+  card_presets_inr: number[];
+  /** The rupee amount the Indian card checkout starts on. */
+  card_default_inr: number;
   /** Attachment ceilings, per kind. */
   max_upload_bytes: UploadLimits;
   /** Past this, a first-page render is not a thumbnail. */
@@ -161,6 +169,22 @@ export const SETTINGS_FIELDS: readonly SettingsField[] = [
   INT("max_chain_tokens", 1, 1000, "tokens one configured network may track"),
   INT("wallet_fee_bps", 0, 5000, "service fee on a credit purchase, in basis points (600 = 6%)"),
   INT("max_wallet_purchase_usd", 1, 10_000, "most credit one wallet purchase may buy, in dollars"),
+  INT("card_min_inr", 1, 1_000_000, "least credit one Indian card/UPI purchase may buy, in rupees"),
+  INT("card_max_inr", 1, 1_000_000, "most credit one Indian card/UPI purchase may buy, in rupees"),
+  {
+    key: "card_presets_inr",
+    kind: "json",
+    doc: "rupee amounts the Indian card checkout offers with one click: [45, 225, 999]",
+    group: "default",
+  },
+  {
+    key: "card_default_inr",
+    kind: "int",
+    min: 1,
+    max: 1_000_000,
+    doc: "rupee amount the Indian card checkout starts on",
+    group: "default",
+  },
   {
     key: "max_upload_bytes",
     kind: "json",
@@ -430,6 +454,13 @@ export function validateSettingsPatch(input: unknown, current: StoredSettings): 
         next.default_model = value.trim();
         break;
       }
+      case "card_presets_inr": {
+        if (!Array.isArray(value) || !value.length || value.length > 6) {
+          throw new SettingsError("card_presets_inr must be a list of one to six amounts");
+        }
+        next.card_presets_inr = value.map((n, i) => requireInt(`card_presets_inr[${i}]`, n, 1, 1_000_000));
+        break;
+      }
       case "system_prompt": {
         if (typeof value !== "string") throw new SettingsError(`${key} must be a string`);
         next.system_prompt = value;
@@ -457,6 +488,22 @@ export function validateSettingsPatch(input: unknown, current: StoredSettings): 
     if (size !== undefined && ceiling !== undefined && size > ceiling) {
       throw new SettingsError(`${page} cannot exceed ${max}`);
     }
+  }
+
+  if (
+    next.card_min_inr !== undefined &&
+    next.card_max_inr !== undefined &&
+    next.card_min_inr > next.card_max_inr
+  ) {
+    throw new SettingsError("card_min_inr cannot exceed card_max_inr");
+  }
+  const start = next.card_default_inr;
+  if (
+    start !== undefined &&
+    ((next.card_min_inr !== undefined && start < next.card_min_inr) ||
+      (next.card_max_inr !== undefined && start > next.card_max_inr))
+  ) {
+    throw new SettingsError("card_default_inr must be from card_min_inr to card_max_inr");
   }
 
   // Checked once the whole patch is in, so a catalogue and a lowered ceiling sent

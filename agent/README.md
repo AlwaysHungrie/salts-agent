@@ -124,6 +124,28 @@ wallet lists no networks and quotes answer 503. Removing a bought key deletes it
 OpenRouter too. The keys spend the deployment's OpenRouter credit, so that balance has to
 be kept funded.
 
+Keys can also be bought by card, UPI or netbanking through Razorpay. The buyer picks the
+credit in whole rupees, from `card_min_inr` to `card_max_inr`, with `card_presets_inr` as
+the quick picks and `card_default_inr` selected to start; these are the Indian (rupee) range, kept apart from any future
+international one. The fee is added in paise, rounded up, and the key gets the credit's dollar
+worth at today's rate, rounded down to the cent. The rate is read at runtime from
+Frankfurter (the ECB's daily reference rates; `src/fx.ts`), cached for an hour, with the
+last rate standing in for up to three days if Frankfurter is down; past that, card checkout
+closes (`razorpay_key_id: ""`) and orders answer 503. Each order locks its rate in.
+`POST /api/wallet/card-orders { amount_inr }` makes a Razorpay order and a `wallet_purchases`
+row with `network: "razorpay"`, `asset: "inr"`, the order id in `to_address` and paise in
+`units`. Razorpay's checkout pays it in the browser, which then sends the payment id to
+`POST /api/wallet/card-orders/:id/confirm`. The Worker fetches that payment from Razorpay
+with its own key, checks that it pays exactly this order in full, captures it if it was only
+authorized, and counts it once (`tx` is the payment id). Delivery is the same as for crypto.
+`POST /razorpay/webhook` (`payment.captured`, `order.paid`; signed with the webhook
+secret) does the same for a page that closed first, and answers 503 while the key can't be
+delivered so Razorpay retries. The key id, key secret and webhook secret are set from the
+admin CLI's Payments tab (`GET|PATCH /api/admin/razorpay`; stored in `AgentDirectory`,
+secrets write-only; a key pair is checked with Razorpay before it is kept). Until a key id,
+key secret and provisioning key are all set, `GET /api/wallet` returns `razorpay_key_id: ""`
+and orders answer 503.
+
 A payment the page lost track of (a refresh, a closed tab, an RPC that was down) is
 recovered with `POST /api/wallet/purchases/recover { network, tx }`: the transaction is
 checked, exactly as a confirm checks it, against the caller's own unpaid purchases on that

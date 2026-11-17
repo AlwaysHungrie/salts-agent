@@ -31,12 +31,14 @@ export const ROUTE_INDEX = {
       "GET /api/admin/settings -> { settings, missing, fields }; PATCH /api/admin/settings { <field>: value } -> owner only, via API_SECRET",
     payments:
       "GET /api/admin/payments -> { evm, solana, reown_project_id, provisioning_key: { set, hint } }; PATCH { evm?, solana?, reown_project_id? } (blank switches it off) -> owner only, via API_SECRET",
+    razorpay:
+      "GET /api/admin/razorpay -> { key_id, key_secret: { set, hint }, webhook_secret: { set, hint } }; PATCH { key_id?, key_secret?, webhook_secret? } (blank removes it) -> owner only, via API_SECRET; POST /razorpay/webhook <- Razorpay, signed",
     provisioning_key:
       "GET /api/admin/provisioning-key -> { set, hint }; PUT { key }, DELETE -> owner only, via API_SECRET",
     business_requests:
       "POST /api/business-requests { increase } -> signed-in caller; GET /api/admin/business-requests, POST .../:id/approve, DELETE .../:id -> owner only, via API_SECRET",
     wallet:
-      "GET /api/wallet, POST /api/wallet { key }, DELETE /api/wallet/:id, POST /api/wallet/purchases { amount, network, asset, payer }, POST /api/wallet/purchases/:id/confirm { tx } -> signed-in caller's own OpenRouter keys",
+      "GET /api/wallet, POST /api/wallet { key }, DELETE /api/wallet/:id, POST /api/wallet/purchases { amount, network, asset, payer }, POST /api/wallet/purchases/:id/confirm { tx }, POST /api/wallet/card-orders { amount_inr }, POST /api/wallet/card-orders/:id/confirm { payment_id } -> signed-in caller's own OpenRouter keys",
   },
   note: "A session id is `<agentId>~<local>`; every /agents/session-agent route takes that whole id.",
 };
