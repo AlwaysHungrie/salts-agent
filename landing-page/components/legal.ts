@@ -4,7 +4,8 @@
  *
  * Factual basis: agent/src/capabilities.ts (integrations), agent/src/registry and
  * agent/src/agent.ts (what is stored), agent/src/clerk.ts (authentication),
- * agent/src/whatsapp.ts (WhatsApp), agent/src/payments.ts (crypto payments).
+ * agent/src/whatsapp.ts (WhatsApp), agent/src/payments.ts (crypto payments),
+ * agent/src/razorpay.ts and agent/src/routes/card.ts (card and UPI payments in India).
  */
 
 export const LEGAL = {
@@ -18,7 +19,7 @@ export const LEGAL = {
   courts: "Mumbai, India",
   email: "salts-dev@proton.me",
   site: "salts.dev",
-  updated: "26 October 2026",
+  updated: "17 November 2026",
   minimumAge: 18,
   /** One month, extendable by two. */
   responseDays: 30,
@@ -80,7 +81,7 @@ export const TERMS: LegalDoc = {
         `"Administrator" means the Account designated as administrator of an Agent, and "Authorised User" means any Account listed on that Agent's access list.`,
         `"Fleet" means a group of Agents created and managed from one Account (the "Fleet Owner") for use by other people.`,
         `"Credentials" means an API key, bot token, access token, server URL, header or other secret you supply so that a Capability can operate, including OpenRouter API keys, a Telegram bot token and a WhatsApp access token.`,
-        `"Wallet" means the part of the Service that holds your OpenRouter keys, and "Bought Key" means an OpenRouter key we create for you after you pay for it with cryptocurrency.`,
+        `"Wallet" means the part of the Service that holds your OpenRouter keys, and "Bought Key" means an OpenRouter key we create for you after you pay for it, by card, UPI or netbanking through Razorpay or with cryptocurrency.`,
         `"Input" means any message, instruction, file or other material submitted to an Agent, and "Output" means material an Agent generates in response.`,
         `"Model Provider" means the third party whose model generates an Output, reached on your behalf through OpenRouter.`,
         `"Connected Service" means any third-party service an Agent is configured to reach, including Telegram, WhatsApp, search providers and MCP servers.`,
@@ -133,21 +134,47 @@ export const TERMS: LegalDoc = {
       ],
     },
     {
-      heading: "7. Fees, Bought Keys and crypto payments",
+      heading: "7. Fees and Bought Keys",
       summary:
-        "Using Salts is free. If you buy a key with crypto, you pay its credit plus a service fee, and neither can be refunded.",
+        "Using Salts is free. If you buy a key, you pay its credit plus a service fee. Credits once issued cannot be transferred or refunded.",
       clauses: [
-        `There is no charge for an Account or an Agent. We charge only when you buy a Bought Key, and we will give notice under clause 18 before introducing any other fee.`,
-        `When you buy a Bought Key, you pay the credit you choose plus the service fee shown at checkout, in USDC or ETH on one of the networks the checkout lists. The price is fixed for the period shown at checkout, and a payment that arrives after that period, on another network, or in another amount does not count as payment for that checkout.`,
-        `Cryptocurrency payments are final once made. We do not hold or control your crypto wallet, cannot reverse a transaction, and are not responsible for network fees, for a payment sent to the wrong address or network, or for losses caused by your wallet software. Where a payment reached us but no key was delivered, we will deliver the key or help you recover it as described in the user guide.`,
-        `Credit on a Bought Key, and the service fee paid for it, cannot be refunded, transferred to another key or exchanged for cash, save where the law requires otherwise. A Bought Key cannot be topped up. Removing a Bought Key from your Wallet deletes it, and any credit remaining on it is lost.`,
-        `A Bought Key is an OpenRouter key we create and hold for you, and it can be used only from your Wallet. Its credit is consumed under OpenRouter's terms at OpenRouter's prices.`,
+        `There is no charge for an Account or an Agent. We charge only when you buy a Bought Key, and we will give notice under clause 20 before introducing any other fee.`,
+        `When you buy a Bought Key, you pay the credit you choose plus the service fee shown at checkout, either in Indian rupees by card, UPI or netbanking through Razorpay under clause 8, or in USDC or ETH under clause 9. The credit on a Bought Key is held in US dollars. Where you pay in rupees, the credit is the dollar equivalent of the rupee amount you chose, at the rate we apply at checkout, rounded down to the cent.`,
+        `Every purchase is final. Credit on a Bought Key, and the service fee paid for it, cannot be refunded, transferred to another key or Account, or exchanged for cash, save where the law requires otherwise. A Bought Key cannot be topped up. Removing a Bought Key from your Wallet deletes it, and any credit remaining on it is lost.`,
+        `We deliver a Bought Key once we have confirmed your payment. Where a payment was confirmed but no key was delivered, our sole obligation, and your sole remedy, is that we deliver the key, or a key holding the same credit, as described in the user guide.`,
+        `A Bought Key is an OpenRouter key we create and hold for you, and it can be used only from your Wallet. Its credit is consumed under OpenRouter's terms at OpenRouter's prices, which we do not set or control.`,
         `Charges levied by OpenRouter, a Model Provider, a search provider or any other Connected Service under an account of your own are payable by you directly to that party. No refund is available from us in respect of those charges.`,
         `You are responsible for any tax that applies to your purchases.`,
       ],
     },
     {
-      heading: "8. Acceptable use",
+      heading: "8. Card and UPI payments in India",
+      summary:
+        "Rupee payments go through Razorpay, a third party. We never see your card or UPI details, and we are not responsible when Razorpay, your bank or UPI fails.",
+      clauses: [
+        `Payments by card, UPI or netbanking are charged in Indian rupees and processed by Razorpay Software Private Limited ("Razorpay"), a third-party payment aggregator. Razorpay's terms and privacy policy govern the payment. We do not receive or store your card number, CVV, UPI PIN or bank credentials.`,
+        `A payment counts only once Razorpay confirms to us that it was completed for the amount of your checkout. We are not responsible for a payment that is declined, delayed, interrupted or not confirmed, or for any amount that your bank debits without Razorpay confirming the payment to us. Such an amount is reversed, if at all, by Razorpay or your bank on their own timelines, and any claim for it lies against them. We will give you the payment reference we hold, on request.`,
+        `We are not liable for any failure, outage, delay, error or security incident of Razorpay, your bank, a card network, the Unified Payments Interface, the National Payments Corporation of India or any other party in the payment chain, nor for any fee, currency conversion charge or limit that your bank or card issuer applies.`,
+        `Where Razorpay confirmed your payment but no Bought Key was delivered, there is no self-service recovery for card or UPI payments. You must contact us at ${LEGAL.email} with the Razorpay payment reference, and we will deliver the key under clause 7.`,
+        `If you raise a chargeback or payment dispute for a purchase whose Bought Key was delivered, we may disable that Bought Key and suspend your Account until the dispute is resolved.`,
+      ],
+    },
+    {
+      heading: "9. Crypto payments",
+      summary:
+        "Crypto payments are at your own risk. Networks can be congested, down or drop transactions, and payments cannot be reversed. If a payment does not reach us as quoted, we owe you nothing for it.",
+      clauses: [
+        `A crypto payment counts only if the exact amount quoted at checkout, in the asset and on the network quoted, from the wallet you connected, arrives at our address within the period shown at checkout and is confirmed on that network to the depth our systems require. A payment that does not meet every one of these conditions does not count as payment for that checkout, and we have no obligation to return, refund or credit it.`,
+        `Cryptocurrency payments are irreversible. We do not hold or control your crypto wallet and cannot cancel, reverse or recover a transaction.`,
+        `Where a payment that counts under this clause reached us but no Bought Key was delivered, you can recover the key yourself from your Wallet with the transaction id, as described in the user guide. If that recovery fails, you must contact us at ${LEGAL.email} with the transaction id, and we will deliver the key under clause 7.`,
+        `YOU BEAR ALL RISK OF USING A BLOCKCHAIN NETWORK. WE ARE NOT RESPONSIBLE FOR, AND HAVE NO LIABILITY FOR ANY LOSS ARISING FROM: NETWORK CONGESTION, OUTAGES OR HALTS; DROPPED, STUCK, FAILED OR REPLACED TRANSACTIONS; DELAYS IN CONFIRMATION OR FINALITY; CHAIN REORGANISATIONS OR FORKS; THE FAILURE OF A BRIDGE, NODE OR RPC PROVIDER; A TOKEN ISSUER FREEZING, BLOCKING OR REVERSING A TOKEN; NETWORK OR GAS FEES; PRICE MOVEMENTS OF ANY ASSET; ERRORS, BUGS OR COMPROMISE OF YOUR WALLET SOFTWARE OR DEVICE; OR A PAYMENT SENT TO THE WRONG ADDRESS, ON THE WRONG NETWORK, IN THE WRONG ASSET OR IN THE WRONG AMOUNT.`,
+        `Where a network is congested or unavailable, we may delay counting a payment or close crypto checkout without notice. A payment that is confirmed only after its checkout period has ended does not count, whatever the cause of the delay.`,
+        `We do not provide any financial, investment, custody, exchange or money transmission service. A Bought Key is a prepaid credit for the Service, not a digital asset, and we make no representation as to the value of any cryptocurrency.`,
+        `You are solely responsible for ensuring that holding and paying with cryptocurrency is lawful where you live, and for any tax, reporting or withholding obligation that arises from your payment.`,
+      ],
+    },
+    {
+      heading: "10. Acceptable use",
       summary: "Do not use an Agent to break the law, harm anyone, or abuse the infrastructure.",
       clauses: [
         `You shall not, and shall not permit any Authorised User or any person with access to a connected conversation to, use the Service to:`,
@@ -167,7 +194,7 @@ export const TERMS: LegalDoc = {
       ],
     },
     {
-      heading: "9. Content, licence and Output",
+      heading: "11. Content, licence and Output",
       summary:
         "Your Inputs stay yours. Output is yours as between us. Output is machine-generated, so verify it.",
       clauses: [
@@ -176,20 +203,20 @@ export const TERMS: LegalDoc = {
         `As between you and us, you own the Outputs generated for you, subject to the terms of the applicable Model Provider. Outputs are generated probabilistically, and identical or similar Outputs may be generated for other users. We make no claim to exclusivity in any Output.`,
         `We do not use your Inputs or Outputs to train models. Model Providers may do so under their own terms; where that matters to you, select a Model Provider whose terms prohibit it.`,
         `OUTPUTS MAY BE INACCURATE, INCOMPLETE OR FABRICATED, AND DO NOT CONSTITUTE LEGAL, MEDICAL, FINANCIAL OR OTHER PROFESSIONAL ADVICE. You are solely responsible for evaluating an Output before relying upon it and for any action an Agent takes on your instruction, including tool calls, scheduled tasks and messages it sends.`,
-        `We may remove content that we reasonably believe breaches clause 8, and may use automated means to detect material we are legally obliged to act upon.`,
+        `We may remove content that we reasonably believe breaches clause 10, and may use automated means to detect material we are legally obliged to act upon.`,
       ],
     },
     {
-      heading: "10. Service limits and changes",
+      heading: "12. Service limits and changes",
       summary: "There are usage limits, and features can change. Self-host if the limits do not suit you.",
       clauses: [
         `We may impose and vary usage limits, including limits on the number of Agents an Account may create, the number of chat sessions an Agent retains, file storage, the size of an upload, the number of keys in a Wallet, the amount of a single purchase and the rate of requests. Where an Agent exceeds a session limit, older sessions must be deleted before new ones are created.`,
-        `We may add, modify, suspend or discontinue any feature. Where a change materially reduces the functionality of the Service, we will use reasonable efforts to give notice under clause 18.`,
+        `We may add, modify, suspend or discontinue any feature. Where a change materially reduces the functionality of the Service, we will use reasonable efforts to give notice under clause 20.`,
         `The Service is open source and may be deployed by you on infrastructure you control. A deployment you operate is not the Service, is not covered by these Terms, and is your responsibility including as to security, availability and compliance.`,
       ],
     },
     {
-      heading: "11. Suspension and termination",
+      heading: "13. Suspension and termination",
       summary: "Leave whenever you like. We can suspend an Account that breaches these Terms.",
       clauses: [
         `You may terminate these Terms at any time by ceasing use of the Service and deleting your Agents. Deleting an Agent deletes its configuration, Credentials, sessions, messages, attachments and memories.`,
@@ -199,7 +226,7 @@ export const TERMS: LegalDoc = {
       ],
     },
     {
-      heading: "12. Intellectual property",
+      heading: "14. Intellectual property",
       summary: "Our name and marks remain ours. The code is open source under its own licence.",
       clauses: [
         `The source code of the Service is published under the open-source licence stated in its repository, and your use of that code is governed by that licence. Subject to these Terms, we grant you a limited, revocable, non-exclusive, non-transferable licence to access and use the hosted Service.`,
@@ -208,7 +235,7 @@ export const TERMS: LegalDoc = {
       ],
     },
     {
-      heading: "13. Privacy and data protection",
+      heading: "15. Privacy and data protection",
       summary:
         "The Privacy Policy explains what we process. If other people message your Agent, you are responsible for what they send.",
       clauses: [
@@ -219,28 +246,29 @@ export const TERMS: LegalDoc = {
       ],
     },
     {
-      heading: "14. Disclaimers",
+      heading: "16. Disclaimers",
       summary: "The Service is provided as it is, with no warranties.",
       clauses: [
         `THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTY OF ANY KIND. TO THE MAXIMUM EXTENT PERMITTED BY LAW, WE DISCLAIM ALL WARRANTIES, EXPRESS, IMPLIED OR STATUTORY, INCLUDING THE IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, ACCURACY AND NON-INFRINGEMENT.`,
-        `WE DO NOT WARRANT THAT THE SERVICE WILL BE UNINTERRUPTED, TIMELY, SECURE OR ERROR-FREE, THAT ANY OUTPUT WILL BE ACCURATE OR SUITABLE FOR YOUR PURPOSE, OR THAT ANY CONNECTED SERVICE, MODEL PROVIDER OR BLOCKCHAIN NETWORK WILL CONTINUE TO BE AVAILABLE OR TO BEHAVE CONSISTENTLY.`,
-        `Neither party is liable for any failure or delay in performance caused by an event beyond its reasonable control, including acts of God, natural disaster, epidemic, war, civil unrest, labour dispute, act of government, failure of a telecommunications, hosting or blockchain network provider, and denial-of-service or other malicious attack.`,
+        `WE DO NOT WARRANT THAT THE SERVICE WILL BE UNINTERRUPTED, TIMELY, SECURE OR ERROR-FREE, THAT ANY OUTPUT WILL BE ACCURATE OR SUITABLE FOR YOUR PURPOSE, OR THAT ANY CONNECTED SERVICE, MODEL PROVIDER, PAYMENT PROCESSOR, BANK OR BLOCKCHAIN NETWORK WILL CONTINUE TO BE AVAILABLE OR TO BEHAVE CONSISTENTLY.`,
+        `Neither party is liable for any failure or delay in performance caused by an event beyond its reasonable control, including acts of God, natural disaster, epidemic, war, civil unrest, labour dispute, act of government, failure of a telecommunications, hosting, payment or blockchain network provider, and denial-of-service or other malicious attack.`,
         `Some jurisdictions do not allow the exclusion of implied warranties or of consumer rights. Nothing in this clause limits a right you hold that cannot lawfully be excluded.`,
       ],
     },
     {
-      heading: "15. Limitation of liability",
+      heading: "17. Limitation of liability",
       summary:
         "No liability for indirect loss, and our total liability is capped at what you paid us in the last year or USD 100, whichever is greater.",
       clauses: [
         `TO THE MAXIMUM EXTENT PERMITTED BY LAW, WE SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY OR PUNITIVE DAMAGES, OR FOR ANY LOSS OF PROFITS, REVENUE, DATA, BUSINESS OR GOODWILL, WHETHER IN CONTRACT, TORT OR OTHERWISE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.`,
         `OUR TOTAL AGGREGATE LIABILITY ARISING OUT OF OR RELATING TO THE SERVICE OR THESE TERMS SHALL NOT EXCEED THE GREATER OF (A) THE AMOUNT YOU PAID US IN THE TWELVE MONTHS PRECEDING THE EVENT GIVING RISE TO THE CLAIM, AND (B) USD 100.`,
         `We are not liable for charges incurred on any OpenRouter key or with any other Connected Service, including charges resulting from configuration you chose or from use of your Credentials by a person you granted access.`,
+        `We are not liable for any loss arising from a payment that is declined, delayed, dropped, not confirmed or not counted under clause 8 or clause 9. For a purchase, our liability shall in no event exceed the amount we actually received for it.`,
         `Nothing in these Terms excludes or limits liability for death or personal injury caused by negligence, for fraud or fraudulent misrepresentation, or for any other liability that cannot lawfully be excluded.`,
       ],
     },
     {
-      heading: "16. Indemnification",
+      heading: "18. Indemnification",
       summary: "If a third party sues us over your use of the Service, you cover the cost.",
       clauses: [
         `You shall indemnify and hold harmless ${O} against any third-party claim, and against damages, liabilities and reasonable legal costs finally awarded or agreed in settlement, arising out of or relating to your use of the Service, your Inputs, your Credentials, your operation of an Agent in a conversation involving other individuals or in a Fleet, or your breach of these Terms or of any applicable law.`,
@@ -248,7 +276,7 @@ export const TERMS: LegalDoc = {
       ],
     },
     {
-      heading: "17. Governing law and disputes",
+      heading: "19. Governing law and disputes",
       summary: `Indian law governs. Write to us first; if that does not resolve it, the courts of ${LEGAL.courts} decide.`,
       clauses: [
         `These Terms and any dispute arising out of them are governed by the laws of ${LEGAL.jurisdiction}, without regard to conflict-of-laws principles, and subject to any mandatory law of your country of residence that cannot be excluded by agreement.`,
@@ -257,7 +285,7 @@ export const TERMS: LegalDoc = {
       ],
     },
     {
-      heading: "18. Changes to the Terms",
+      heading: "20. Changes to the Terms",
       summary: `We may amend these Terms on ${LEGAL.noticeDays} days' notice for material changes.`,
       clauses: [
         `We may amend these Terms. A material amendment takes effect no earlier than ${LEGAL.noticeDays} days after we publish the amended Terms and notify you within the Service or by email to the address on your Account. A non-material amendment takes effect on publication.`,
@@ -265,7 +293,7 @@ export const TERMS: LegalDoc = {
       ],
     },
     {
-      heading: "19. General provisions",
+      heading: "21. General provisions",
       summary: "The usual boilerplate: notices, assignment, severability, and the whole agreement.",
       clauses: [
         `These Terms and the Privacy Policy constitute the entire agreement between the parties in respect of the Service and supersede all prior understandings relating to it.`,
@@ -274,12 +302,12 @@ export const TERMS: LegalDoc = {
         `You may not assign or transfer these Terms without our prior written consent. We may assign them to a company we form to operate the Service, or in connection with a merger, acquisition or sale of the Service, in which case we will notify you.`,
         `Nothing in these Terms creates a partnership, agency, joint venture or employment relationship between the parties.`,
         `Notices to you may be given by email to the address on your Account or by posting within the Service. Notices to us must be sent to ${LEGAL.email}. You consent to receive communications from us electronically.`,
-        `Model Providers are intended third-party beneficiaries of clauses 6, 8 and 9 to the extent those clauses govern your use of their models. No other person has any right to enforce these Terms.`,
+        `Model Providers are intended third-party beneficiaries of clauses 6, 10 and 11 to the extent those clauses govern your use of their models. No other person has any right to enforce these Terms.`,
         `Headings are for convenience only and do not affect interpretation.`,
       ],
     },
     {
-      heading: "20. Contact",
+      heading: "22. Contact",
       summary: "Where to reach us.",
       clauses: [`${O}, ${LEGAL.country}. Email: ${LEGAL.email}.`],
     },
@@ -312,7 +340,7 @@ export const PRIVACY: LegalDoc = {
     {
       heading: "3. Personal data we process",
       summary:
-        "Your email, your Agent's settings and keys, everything sent to the Agent, what each reply cost, and the wallet address you pay from.",
+        "Your email, your Agent's settings and keys, everything sent to the Agent, what each reply cost, and how you paid for a key.",
       clauses: [
         `We process the categories of personal data set out below. Personal data is obtained directly from you, except where the source column states otherwise.`,
         `Account data and the Credentials an Agent needs are required to provide the Service: without them we cannot create an Account or operate an Agent.`,
@@ -358,8 +386,8 @@ export const PRIVACY: LegalDoc = {
           ],
           [
             "Payment data",
-            "For each crypto purchase: the amount, network and coin, the wallet address you paid from, the transaction hash and the key it bought",
-            "You; the public blockchain",
+            "For each card or UPI purchase: the amount in rupees, the Razorpay order and payment references and the key it bought. For each crypto purchase: the amount, network and coin, the wallet address you paid from, the transaction hash and the key it bought",
+            "You; Razorpay; the public blockchain",
           ],
           [
             "Technical data",
@@ -392,7 +420,7 @@ export const PRIVACY: LegalDoc = {
             "Performance of a contract with you",
           ],
           [
-            "Selling a Bought Key: quoting a price, confirming your payment on the blockchain and creating the key",
+            "Selling a Bought Key: quoting a price, confirming your payment with Razorpay or on the blockchain, and creating the key",
             "Account data, payment data",
             "Performance of a contract with you",
           ],
@@ -417,7 +445,7 @@ export const PRIVACY: LegalDoc = {
     {
       heading: "5. Who we share data with",
       summary:
-        "Cloudflare hosts it, Clerk signs you in, OpenRouter routes the model call, Telegram and Meta carry the chat.",
+        "Cloudflare hosts it, Clerk signs you in, OpenRouter routes the model call, Telegram and Meta carry the chat, Razorpay processes rupee payments.",
       clauses: [
         `We share personal data with the service providers listed below, each under a contract that limits its use of the data to providing its service to us.`,
         `We will give notice within the Service or by email before adding or replacing a service provider that processes your conversation content, and you may object by writing to ${LEGAL.email} within ${LEGAL.noticeDays} days. Where an objection cannot be accommodated, you may delete the affected Agent.`,
@@ -447,6 +475,11 @@ export const PRIVACY: LegalDoc = {
             "United States and other countries",
           ],
           [
+            "Razorpay Software Private Limited",
+            "Processing card, UPI and netbanking payments in rupees, and confirming them to us",
+            "India",
+          ],
+          [
             "Blockchain node providers",
             "Reading your payment transaction from the blockchain to confirm it",
             "Varies by provider",
@@ -473,10 +506,12 @@ export const PRIVACY: LegalDoc = {
       ],
     },
     {
-      heading: "7. Crypto payments",
-      summary: "A blockchain payment is public and permanent. We never see your crypto wallet's keys.",
+      heading: "7. Payments",
+      summary:
+        "Razorpay handles rupee payments, so we never see your card or UPI details. A blockchain payment is public and permanent, and we never see your crypto wallet's keys.",
       clauses: [
-        `When you buy a Bought Key, you pay from your own crypto wallet directly to our address. We do not use a payment processor and never receive or store your wallet's private keys or recovery phrase.`,
+        `When you pay in rupees by card, UPI or netbanking, the payment is processed by Razorpay, which collects the details needed to make it under its own privacy policy. We never receive or store your card number, CVV, UPI PIN or bank credentials. Razorpay tells us whether the payment was completed and its amount, and we keep the Razorpay order and payment references with the purchase.`,
+        `When you pay with cryptocurrency, you pay from your own crypto wallet directly to our address, with no payment processor in between. We never receive or store your wallet's private keys or recovery phrase.`,
         `Transactions on a public blockchain, including the paying address, the amount and the time, are visible to anyone and cannot be altered or deleted, by us or anyone else. Linking that transaction to your Account happens only in our records.`,
       ],
     },
