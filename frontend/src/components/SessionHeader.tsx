@@ -40,8 +40,8 @@ function WalletButton({
   return (
     <button
       onClick={onClick}
-      title="Open Keys & credits"
-      aria-label="Open Keys & credits"
+      title="Open AI credits"
+      aria-label="Open AI credits"
       className="text-muted hover:text-ink shrink-0 transition"
     >
       <Wallet size={size} strokeWidth={1.75} />

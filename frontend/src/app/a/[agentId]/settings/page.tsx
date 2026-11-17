@@ -698,7 +698,7 @@ export default function Settings({
                 />
                 {!config.openrouter_api_key && (
                   <p className="text-faint mt-2 text-xs leading-[1.33]">
-                    Pick a key from Keys &amp; credits.
+                    Pick a key from AI credits.
                   </p>
                 )}
               </Row>

@@ -125,7 +125,7 @@ function WalletSidebar({
       <aside
         role="dialog"
         aria-modal="true"
-        aria-label="Keys & credits"
+        aria-label="AI credits"
         className={`bg-canvas text-ink absolute inset-y-0 right-0 flex w-full max-w-md flex-col shadow-xl transition-transform duration-200 ease-out ${
           shown ? "translate-x-0" : "translate-x-full"
         }`}
@@ -142,7 +142,7 @@ function WalletSidebar({
           )}
           <div className="min-w-0 flex-1">
             <p className="truncate text-lg font-semibold leading-[1.38]">
-              {buying ? "Get key" : "Keys & credits"}
+              {buying ? "Get key" : "AI credits"}
             </p>
             <p className="text-muted text-xs font-light leading-[1.33]">
               {buying

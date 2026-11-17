@@ -2,7 +2,7 @@
 title: Step-by-step: a basic agent
 section: Get started
 order: 2
-summary: Everything from signing in to your agent's first reply, on one page: sign in, put a key in Keys & credits, create the agent and say hello.
+summary: Everything from signing in to your agent's first reply, on one page: sign in, put a key in AI credits, create the agent and say hello.
 featured: true
 ---
 
@@ -14,9 +14,9 @@ Open the Salts home page and click **Connect your account**. Click **Continue wi
 
 If this is your first time on Salts, click **Create one** at the bottom of the window before you enter your email.
 
-## 2. Put a key in Keys & credits
+## 2. Put a key in AI credits
 
-Your agent needs an OpenRouter key to pay for its replies, and Salts keeps your keys in Keys & credits. Open it by clicking **Keys & credits** in the top right corner of the home page. There are two ways to get a key into it, and you only need one.
+Your agent needs an OpenRouter key to pay for its replies, and Salts keeps your keys in AI credits. Open it by clicking **AI credits** in the top right corner of the home page. There are two ways to get a key into it, and you only need one.
 
 **Add your own OpenRouter key.** Create an account on [openrouter.ai](https://openrouter.ai), buy some credit and create a key. Then paste the key under **Already have an OpenRouter key?** in your wallet and click **Add key**. [Get an OpenRouter API key](/guide/openrouter) walks you through each step.
 

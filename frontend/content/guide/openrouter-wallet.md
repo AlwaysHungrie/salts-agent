@@ -1,12 +1,12 @@
 ---
-title: What is Keys & credits
-section: Keys & credits
+title: What are AI credits
+section: AI credits
 order: 1
 summary: The place in Salts that holds your OpenRouter keys, so you can give one to any of your agents.
 featured: true
 ---
 
-Your agent needs an OpenRouter key to talk to an AI model, and every reply it writes is paid for from the credit on that key. Keys & credits is where Salts keeps your keys, so you can pick one for any of your agents without copying it around.
+Your agent needs an OpenRouter key to talk to an AI model, and every reply it writes is paid for from the credit on that key. Salts keeps your keys under **AI credits**, so you can pick one for any of your agents without copying it around.
 
 For example, you might keep one key for your personal agent and another for an agent you share with your team, each with its own credit, and see at a glance how much each one has left.
 
@@ -18,7 +18,7 @@ The first time you create an agent, we give you a small key called **Starter key
 
 ## Opening your wallet
 
-On the Salts home page, click **Keys & credits** in the top right corner. You can also open it from the wallet icon at the end of any **Key** dropdown.
+On the Salts home page, click **AI credits** in the top right corner. You can also open it from the wallet icon at the end of any **Key** dropdown.
 
 Each key in your wallet has a nickname, such as "Amber Falcon", so you can tell your keys apart. Under the nickname you can see how much credit the key has left, and how many of your agents use it.
 
