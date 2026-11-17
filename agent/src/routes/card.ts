@@ -106,6 +106,9 @@ export async function cardOrder(request: Request, env: Env, email: string): Prom
     total_inr: rupees(paise),
     amount_usd: usd,
     total_usd: Math.round(paise / rate) / 100,
+    // The buyer's Salts email, filled into Razorpay's checkout: their receipt goes there,
+    // and the dashboard shows who paid.
+    email,
   });
 }
 

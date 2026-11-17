@@ -36,6 +36,7 @@ type OrderView = {
   total_inr: number;
   amount_usd: number;
   total_usd: number;
+  email: string;
 };
 
 async function openCards() {
@@ -134,7 +135,10 @@ describe("buying a key by card", () => {
   });
 
   it("orders rupees of credit plus the service fee, the key getting the credit's dollar worth", async () => {
-    const o = await json<OrderView>(order(someone(), 500));
+    const buyer = someone();
+    const o = await json<OrderView>(order(buyer, 500));
+    // Filled into checkout, so Razorpay's receipt reaches the buyer.
+    expect(o.email).toBe(buyer);
     const fee = Math.ceil((50_000 * SHIPPED.wallet_fee_bps) / 10_000);
     expect(o).toMatchObject({ key_id: KEY_ID, currency: "INR", credit_inr: 500, fee_inr: fee / 100 });
     expect(o.amount).toBe(50_000 + fee);
