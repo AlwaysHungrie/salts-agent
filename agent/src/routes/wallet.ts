@@ -21,6 +21,7 @@ import type { WalletPurchase } from "../registry";
 import { createKey, deleteKey, ProvisioningError } from "../worker/provisioned-keys";
 import { keyCredit } from "../worker/wallet";
 import { cardConfirm, cardKeyId, cardOrder } from "./card";
+import { inrPerUsd } from "../fx";
 
 /**
  * A key as its owner sees it: a pasted key in full (it is theirs), a provisioned one
@@ -43,13 +44,13 @@ async function view(row: WalletKeyRow) {
 }
 
 /** A dollar amount to buy: $1 to `max`, at most two decimals' worth. */
-export function amountOf(value: unknown, max: number): number | undefined {
+function amountOf(value: unknown, max: number): number | undefined {
   const usd = Number(value);
   return Number.isFinite(usd) && usd >= 1 && usd <= max ? Math.round(usd * 100) / 100 : undefined;
 }
 
 /** The service fee on `usd` of credit, in dollars: rounded up to the cent. */
-export function feeOf(usd: number, bps: number): number {
+function feeOf(usd: number, bps: number): number {
   return Math.ceil((Math.round(usd * 100) * bps) / 10_000) / 100;
 }
 
@@ -114,9 +115,14 @@ export async function handleWallet(
         max_usd: settings.max_wallet_purchase_usd,
         reown_project_id: reownProjectId,
         networks,
-        // Razorpay's key id, for card and UPI payments; "" while they are closed.
-        razorpay_key_id: await cardKeyId(env),
-        inr_per_usd: settings.inr_per_usd,
+        // Razorpay's key id, for card and UPI payments; "" while they are closed, which
+        // includes while no rupee rate can be read (nothing could be priced).
+        ...(await cardOffer(env)),
+        // Indian card payments: priced in rupees, with their own range and quick picks.
+        card_min_inr: settings.card_min_inr,
+        card_max_inr: settings.card_max_inr,
+        card_presets_inr: settings.card_presets_inr,
+        card_default_inr: settings.card_default_inr,
       });
     }
     if (method === "POST") return await addKey(request, env, email);
@@ -154,6 +160,14 @@ export async function handleWallet(
     return json({ removed: id, agents: agents.length });
   }
   return undefined;
+}
+
+/** Card checkout as the page opens it: Razorpay's key id and today's rupee rate. */
+async function cardOffer(env: Env): Promise<{ razorpay_key_id: string; inr_per_usd: number }> {
+  const keyId = await cardKeyId(env);
+  if (!keyId) return { razorpay_key_id: "", inr_per_usd: 0 };
+  const rate = await inrPerUsd().catch(() => 0);
+  return rate ? { razorpay_key_id: keyId, inr_per_usd: rate } : { razorpay_key_id: "", inr_per_usd: 0 };
 }
 
 /**

@@ -38,7 +38,7 @@ export const ROUTE_INDEX = {
     business_requests:
       "POST /api/business-requests { increase } -> signed-in caller; GET /api/admin/business-requests, POST .../:id/approve, DELETE .../:id -> owner only, via API_SECRET",
     wallet:
-      "GET /api/wallet, POST /api/wallet { key }, DELETE /api/wallet/:id, POST /api/wallet/purchases { amount, network, asset, payer }, POST /api/wallet/purchases/:id/confirm { tx }, POST /api/wallet/card-orders { amount }, POST /api/wallet/card-orders/:id/confirm { payment_id } -> signed-in caller's own OpenRouter keys",
+      "GET /api/wallet, POST /api/wallet { key }, DELETE /api/wallet/:id, POST /api/wallet/purchases { amount, network, asset, payer }, POST /api/wallet/purchases/:id/confirm { tx }, POST /api/wallet/card-orders { amount_inr }, POST /api/wallet/card-orders/:id/confirm { payment_id } -> signed-in caller's own OpenRouter keys",
   },
   note: "A session id is `<agentId>~<local>`; every /agents/session-agent route takes that whole id.",
 };

@@ -66,14 +66,6 @@ export async function capturePayment(keys: RazorpayKeys, p: RazorpayPayment): Pr
   });
 }
 
-/**
- * What `usd` costs in paise at `inrPerUsd` rupees to the dollar, rounded up so the
- * deployment is never short.
- */
-export function paiseOf(usd: number, inrPerUsd: number): number {
-  return Math.ceil(Math.round(usd * 100) * inrPerUsd);
-}
-
 /** A Razorpay payment id as it writes one, or undefined. */
 export function paymentId(value: unknown): string | undefined {
   const id = typeof value === "string" ? value.trim() : "";

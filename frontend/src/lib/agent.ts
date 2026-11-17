@@ -616,12 +616,15 @@ export type CardOrder = {
   key_id: string;
   order_id: string;
   currency: "INR";
-  /** In paise. */
+  /** What checkout charges, in paise. */
   amount: number;
-  amount_usd: number;
-  fee_usd: number;
-  total_usd: number;
+  /** The credit chosen, in whole rupees. */
+  credit_inr: number;
+  fee_inr: number;
   total_inr: number;
+  /** The credit's dollar worth: what the key can spend. */
+  amount_usd: number;
+  total_usd: number;
 };
 
 /** What the buyer's wallet must send: exactly `units` of the asset to `to`. */
