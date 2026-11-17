@@ -5,30 +5,6 @@ import { Check, Menu, Pencil, Wallet, X } from "lucide-react";
 import type { Summary } from "@/lib/agent";
 import { formatCountShort, formatDate, formatUsdShort } from "@/lib/format";
 
-function Stat({
-  label,
-  value,
-  hint,
-}: {
-  label?: string;
-  value: string;
-  hint?: string;
-}) {
-  return (
-    <div className="min-w-0 text-right">
-      {label && (
-        <div className="text-faint text-xs leading-[1.33]">{label}</div>
-      )}
-      <div className="text-ink tnum text-xl font-[650] leading-[1.3]">
-        {value}
-      </div>
-      {hint && (
-        <div className="text-muted tnum text-xs leading-[1.33]">{hint}</div>
-      )}
-    </div>
-  );
-}
-
 /** The OpenRouter wallet, from beside what the session has cost. */
 function WalletButton({
   onClick,
@@ -189,11 +165,11 @@ export function SessionHeader({
           )}
           {/* A phone has no room for the usage column, so it takes the date's line. */}
           <div className="text-muted tnum flex items-center gap-1.5 truncate text-sm font-light leading-[1.43] md:hidden">
-            {onOpenWallet && <WalletButton onClick={onOpenWallet} size={14} />}
             <span className="truncate">
               {formatUsdShort(summary?.llm.cost_usd)} ·{" "}
               {formatCountShort(summary?.messages ?? 0)} msgs
             </span>
+            {onOpenWallet && <WalletButton onClick={onOpenWallet} size={14} />}
           </div>
           <div className="text-muted hidden truncate text-sm font-light leading-[1.43] md:block">
             {formatDate(createdAt)}
@@ -203,12 +179,16 @@ export function SessionHeader({
         {/* What this session has cost, over how many messages it took. Both are
             formatted to a fixed shape — two decimals, counts abbreviated past four
             figures — so a long session cannot widen the header it sits in. */}
-        <div className="hidden shrink-0 items-center gap-3 md:flex">
-          {onOpenWallet && <WalletButton onClick={onOpenWallet} size={18} />}
-          <Stat
-            value={formatUsdShort(summary?.llm.cost_usd)}
-            hint={`${formatCountShort(summary?.messages ?? 0)} msgs`}
-          />
+        <div className="hidden min-w-0 shrink-0 text-right md:block">
+          <div className="flex items-center justify-end gap-2">
+            <span className="text-ink tnum text-xl font-[650] leading-[1.3]">
+              {formatUsdShort(summary?.llm.cost_usd)}
+            </span>
+            {onOpenWallet && <WalletButton onClick={onOpenWallet} size={18} />}
+          </div>
+          <div className="text-muted tnum text-xs leading-[1.33]">
+            {formatCountShort(summary?.messages ?? 0)} msgs
+          </div>
         </div>
       </div>
 
