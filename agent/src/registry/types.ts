@@ -392,11 +392,13 @@ export type WalletPurchase = {
   email: string;
   key_id: string;
   amount_usd: number;
+  /** A chain id from `PAY_NETWORKS`, or "razorpay" for a card or UPI payment. */
   network: string;
-  asset: "usdc" | "eth";
+  asset: "usdc" | "eth" | "inr";
+  /** Where the payment goes: an address, or for Razorpay the order it is paid through. */
   to_address: string;
   payer: string;
-  /** Base units, as a decimal string: they outgrow a JavaScript number. */
+  /** Base units (paise for rupees), as a decimal string: they outgrow a JavaScript number. */
   units: string;
   /** Quoted; paid (the payment is counted); fulfilled (the key has its credit). */
   status: "pending" | "paid" | "fulfilled";

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, ChevronDown, Loader2, Wallet } from "lucide-react";
+import { ChevronDown, Loader2, Wallet } from "lucide-react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   useAppKit,
@@ -32,7 +32,7 @@ import {
 } from "wagmi";
 import type { PayNetwork, PayQuote } from "@/lib/agent";
 import { appKitFor } from "./appkit";
-import { PAY_TITLE, Step, supported } from "./BuyCredits";
+import { Paid, PAY_TITLE, Step, supported } from "./BuyCredits";
 
 const queryClient = new QueryClient();
 
@@ -353,19 +353,6 @@ function PayStep({
         )
       }
     />
-  );
-}
-
-function Paid() {
-  return (
-    <div className="bg-canvas-soft flex items-center gap-3 rounded-2xl px-4 py-4">
-      <span className="bg-ink text-on-primary flex h-8 w-8 items-center justify-center rounded-full">
-        <Check className="h-4 w-4" />
-      </span>
-      <p className="text-sm font-semibold leading-[1.43]">
-        Payment received. Your key is in your wallet.
-      </p>
-    </div>
   );
 }
 

@@ -609,6 +609,21 @@ export type PayNetwork = {
   assets: ("usdc" | "eth")[];
 };
 
+/** A Razorpay order for a new key: what checkout opens on, and the total both ways. */
+export type CardOrder = {
+  id: string;
+  /** Razorpay's public key id, which checkout is opened with. */
+  key_id: string;
+  order_id: string;
+  currency: "INR";
+  /** In paise. */
+  amount: number;
+  amount_usd: number;
+  fee_usd: number;
+  total_usd: number;
+  total_inr: number;
+};
+
 /** What the buyer's wallet must send: exactly `units` of the asset to `to`. */
 export type PayQuote = {
   id: string;

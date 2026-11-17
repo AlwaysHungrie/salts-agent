@@ -20,6 +20,7 @@ import {
 import type { WalletPurchase } from "../registry";
 import { createKey, deleteKey, ProvisioningError } from "../worker/provisioned-keys";
 import { keyCredit } from "../worker/wallet";
+import { cardConfirm, cardKeyId, cardOrder } from "./card";
 
 /**
  * A key as its owner sees it: a pasted key in full (it is theirs), a provisioned one
@@ -42,13 +43,13 @@ async function view(row: WalletKeyRow) {
 }
 
 /** A dollar amount to buy: $1 to `max`, at most two decimals' worth. */
-function amountOf(value: unknown, max: number): number | undefined {
+export function amountOf(value: unknown, max: number): number | undefined {
   const usd = Number(value);
   return Number.isFinite(usd) && usd >= 1 && usd <= max ? Math.round(usd * 100) / 100 : undefined;
 }
 
 /** The service fee on `usd` of credit, in dollars: rounded up to the cent. */
-function feeOf(usd: number, bps: number): number {
+export function feeOf(usd: number, bps: number): number {
   return Math.ceil((Math.round(usd * 100) * bps) / 10_000) / 100;
 }
 
@@ -113,9 +114,18 @@ export async function handleWallet(
         max_usd: settings.max_wallet_purchase_usd,
         reown_project_id: reownProjectId,
         networks,
+        // Razorpay's key id, for card and UPI payments; "" while they are closed.
+        razorpay_key_id: await cardKeyId(env),
+        inr_per_usd: settings.inr_per_usd,
       });
     }
     if (method === "POST") return await addKey(request, env, email);
+    return undefined;
+  }
+
+  if (id === "card-orders" && method === "POST") {
+    if (!action) return await cardOrder(request, env, email);
+    if (segments[4] === "confirm" && !segments[5]) return await cardConfirm(request, env, email, action);
     return undefined;
   }
 
@@ -310,7 +320,7 @@ const delivering = () => json({ status: "pending", reason: "Setting up your key.
  * time, so it happens once. The key is named at OpenRouter by its buyer and purchase, so
  * the deployment's OpenRouter dashboard says whose each key is.
  */
-async function deliver(env: Env, p: WalletPurchase): Promise<Response> {
+export async function deliver(env: Env, p: WalletPurchase): Promise<Response> {
   if (p.status === "fulfilled") return json({ status: "paid", key_id: p.key_id });
   const dir = directory(env);
   const provisioning = await dir.provisioningKey();

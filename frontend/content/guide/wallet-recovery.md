@@ -1,7 +1,7 @@
 ---
 title: Recover a lost payment
 section: OpenRouter wallet
-order: 3
+order: 4
 summary: Paid with crypto but no key showed up in your wallet? Get it with the transaction id.
 featured: false
 ---

@@ -11,6 +11,7 @@ import { handleSaltsBrowser, handleSaltsMachine } from "./routes/salts";
 import { handleSearxngMcp, handleSearxngUrl } from "./routes/searxng";
 import { handleWebhook } from "./routes/telegram";
 import { handleWallet } from "./routes/wallet";
+import { handleRazorpayWebhook } from "./routes/card";
 import { handleWhatsappWebhook } from "./routes/whatsapp";
 import { deploymentSettings, SettingsIncompleteError } from "./settings";
 import {
@@ -153,6 +154,10 @@ async function channelRoute(
     third
   ) {
     return await handleWhatsappWebhook(request, env, ctx, url, third);
+  }
+  // Razorpay reports card payments here; the webhook secret's signature is the proof.
+  if (method === "POST" && first === "razorpay" && second === "webhook" && !third) {
+    return await handleRazorpayWebhook(request, env);
   }
   // salts-tools computers pair and report here; a device code or credential is the proof.
   if (first === "salts") {

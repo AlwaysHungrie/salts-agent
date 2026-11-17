@@ -76,6 +76,8 @@ export type DeploymentSettings = {
   wallet_fee_bps: number;
   /** The most credit one purchase may buy, in dollars. */
   max_wallet_purchase_usd: number;
+  /** Rupees charged per dollar of a card or UPI purchase (Razorpay charges in rupees). */
+  inr_per_usd: number;
   /** Attachment ceilings, per kind. */
   max_upload_bytes: UploadLimits;
   /** Past this, a first-page render is not a thumbnail. */
@@ -161,6 +163,7 @@ export const SETTINGS_FIELDS: readonly SettingsField[] = [
   INT("max_chain_tokens", 1, 1000, "tokens one configured network may track"),
   INT("wallet_fee_bps", 0, 5000, "service fee on a credit purchase, in basis points (600 = 6%)"),
   INT("max_wallet_purchase_usd", 1, 10_000, "most credit one wallet purchase may buy, in dollars"),
+  INT("inr_per_usd", 1, 1000, "rupees charged per dollar of a card or UPI purchase"),
   {
     key: "max_upload_bytes",
     kind: "json",

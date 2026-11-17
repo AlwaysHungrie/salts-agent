@@ -12,7 +12,8 @@
 //   5 Limits     every ceiling the deployment enforces
 //   6 Payments   what key purchases need: the OpenRouter provisioning key bought keys
 //                are made with (never shown back), the EVM and Solana addresses they
-//                are paid to, and Reown's project id for the wallet modal — `enter`
+//                are paid to, Reown's project id for the wallet modal, and Razorpay's
+//                key id, key secret and webhook secret for card payments — `enter`
 //                sets one, `x` removes it
 //
 // The settings rows, the ranges the Worker refuses and the prose beside each row all
@@ -290,6 +291,8 @@ async function loadSettings() {
 async function loadPayments() {
   try {
     state.payments = await call("/api/admin/payments");
+    // Razorpay's keys, for card payments; a Worker from before them has no such route.
+    state.payments.razorpay = await call("/api/admin/razorpay").catch(() => null);
   } catch (err) {
     // A Worker from before key purchases has no such route: the tab says so.
     state.payments = null;
@@ -344,6 +347,44 @@ function removePayment(field) {
         state.status = err.message;
       }
       render();
+    },
+  };
+  render();
+}
+
+/** Razorpay's settings: the key id is shown; the two secrets are write-only. */
+const RAZORPAY_FIELDS = [
+  { key: "key_id", label: "Razorpay key id", off: "card payments are closed" },
+  { key: "key_secret", label: "Razorpay key secret", off: "card payments are closed", secret: true },
+  { key: "webhook_secret", label: "Razorpay webhook secret", off: "closed pages don't get their key", secret: true },
+];
+
+/** Set or remove one Razorpay setting; the Worker checks the key pair with Razorpay. */
+async function patchRazorpay(field, value) {
+  state.status = value ? "checking with Razorpay…" : state.status;
+  render();
+  state.payments = {
+    ...state.payments,
+    razorpay: await call("/api/admin/razorpay", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ [field.key]: value }),
+    }),
+  };
+  state.status = value ? `${field.label} set` : `${field.label} removed — ${field.off}`;
+  render();
+}
+
+function removeRazorpay(field) {
+  state.confirm = {
+    prompt: `Remove the ${field.label}? Until one is set, ${field.off}.`,
+    run: async () => {
+      try {
+        await patchRazorpay(field, "");
+      } catch (err) {
+        state.status = err.message;
+        render();
+      }
     },
   };
   render();
@@ -722,6 +763,24 @@ function view() {
             unset: !pay[field.key],
             enter: () => startEdit(field.label, pay[field.key] ?? "", (t) => setPayment(field, t)),
             remove: pay[field.key] ? () => removePayment(field) : undefined,
+          });
+        }
+        for (const field of pay.razorpay ? RAZORPAY_FIELDS : []) {
+          const value = pay.razorpay[field.key];
+          const set = field.secret ? value.set : Boolean(value);
+          rows.push({
+            cells: [field.label, set ? (field.secret ? `set (…${value.hint})` : value) : `not set — ${field.off}`],
+            unset: !set,
+            enter: () =>
+              startEdit(field.label, field.secret ? "" : value, (t) => {
+                const text = t.trim();
+                if (!text) {
+                  state.status = "nothing changed";
+                  return render();
+                }
+                return patchRazorpay(field, text);
+              }, field.secret),
+            remove: set ? () => removeRazorpay(field) : undefined,
           });
         }
         // Write-only: the Worker shows only the host, as the URL may carry an API key.
