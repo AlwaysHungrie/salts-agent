@@ -26,7 +26,7 @@ Each key in your wallet has a nickname, such as "Amber Falcon", so you can tell 
 
 There are four ways to put a key in your wallet:
 
-- **Connect your OpenRouter account.** Under **Get new key**, choose **From OpenRouter**. OpenRouter asks you to sign in and create a new key for Salts, then sends you back with the key already in your wallet. You don't need to copy anything. Set a **Credit limit** on that screen: Salts won't accept a new key without one.
+- **Connect your OpenRouter account.** Under **Get new key**, choose **Connect OpenRouter account**. OpenRouter asks you to sign in and create a new key for Salts, then sends you back with the key already in your wallet. You don't need to copy anything. Set a **Credit limit** on that screen: Salts won't accept a new key without one.
 - **Buy one with crypto.** Under **Get new key**, choose **Pay with crypto**, pick how much credit you want and pay from your crypto wallet. Salts creates the key for you and puts it straight into your wallet. See [Buy a key with crypto](/guide/wallet-crypto).
 - **Buy one with UPI or card.** Under **Get new key**, choose **Pay with UPI or card**, pick how much credit you want in rupees and pay through Razorpay. See [Buy a key with UPI or card](/guide/wallet-card).
 - **Add a key you already have.** If you have your own OpenRouter account, paste its key under **Already have an OpenRouter key?** and click **Add key**. See [Get an OpenRouter API key](/guide/openrouter) to create one. Each key can be in your wallet only once; adding the same key again says **Key already imported**.
