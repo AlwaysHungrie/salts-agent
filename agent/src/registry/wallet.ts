@@ -129,26 +129,15 @@ export function setWalletKeyUse(storage: DurableObjectStorage, agentId: string, 
 }
 
 /**
- * Take up `email`'s one starter key: true only for an account that is new here — it runs
- * no agent, belongs to none (a fleet member was set up by its admin), holds no key, and
- * was never given one. Checked and recorded in one step, so two calls cannot both win.
+ * Take up `email`'s one starter key: true the first time only, for anyone, whatever else
+ * they hold. Checked and recorded in one step, so two calls cannot both win.
  */
 export function claimStarter(storage: DurableObjectStorage, email: string, now: number): boolean {
   const owner = email.trim().toLowerCase();
-  const known = storage.sql
-    .exec(
-      `SELECT 1 FROM agents WHERE admin_email = ?
-       UNION ALL SELECT 1 FROM agent_members WHERE email = ?
-       UNION ALL SELECT 1 FROM wallet_keys WHERE email = ?
-       UNION ALL SELECT 1 FROM starter_grants WHERE email = ?
-       LIMIT 1`,
-      owner,
-      owner,
-      owner,
-      owner
-    )
+  const given = storage.sql
+    .exec(`SELECT 1 FROM starter_grants WHERE email = ? LIMIT 1`, owner)
     .toArray();
-  if (known.length) return false;
+  if (given.length) return false;
   storage.sql.exec(`INSERT INTO starter_grants (email, granted_at) VALUES (?, ?)`, owner, now);
   return true;
 }

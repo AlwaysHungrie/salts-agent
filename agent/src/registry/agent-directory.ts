@@ -438,7 +438,7 @@ export class AgentDirectory extends DurableObject {
     return removeWalletKey(this.ctx.storage, email, id);
   }
 
-  /** Take up `email`'s one starter key; false when the account is not new (see wallet.ts). */
+  /** Take up `email`'s one starter key; false once it has been given. */
   claimStarter(email: string): boolean {
     this.ensureSchema();
     return claimStarter(this.ctx.storage, email, Date.now());
