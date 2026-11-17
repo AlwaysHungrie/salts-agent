@@ -8,6 +8,7 @@
   "wallet_fee_bps": 800,
   "max_wallet_purchase_usd": 50,
   "inr_per_usd": 90,
+  "starter_key_cents": 1,
   "default_agent_limit": 5,
   "max_upload_bytes": {
     "text": 1000000,

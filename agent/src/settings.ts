@@ -78,6 +78,11 @@ export type DeploymentSettings = {
   max_wallet_purchase_usd: number;
   /** Rupees charged per dollar of a card or UPI purchase (Razorpay charges in rupees). */
   inr_per_usd: number;
+  /**
+   * The credit on the key a brand-new account is given once, in cents (0 gives none):
+   * enough to try an agent before buying or connecting a key of their own.
+   */
+  starter_key_cents: number;
   /** Attachment ceilings, per kind. */
   max_upload_bytes: UploadLimits;
   /** Past this, a first-page render is not a thumbnail. */
@@ -164,6 +169,7 @@ export const SETTINGS_FIELDS: readonly SettingsField[] = [
   INT("wallet_fee_bps", 0, 5000, "service fee on a credit purchase, in basis points (600 = 6%)"),
   INT("max_wallet_purchase_usd", 1, 10_000, "most credit one wallet purchase may buy, in dollars"),
   INT("inr_per_usd", 1, 1000, "rupees charged per dollar of a card or UPI purchase"),
+  INT("starter_key_cents", 0, 10_000, "credit on the key a new account is given once, in cents; 0 gives none"),
   {
     key: "max_upload_bytes",
     kind: "json",

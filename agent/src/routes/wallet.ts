@@ -129,6 +129,8 @@ export async function handleWallet(
     return undefined;
   }
 
+  if (id === "starter" && method === "POST" && !action) return await starter(env, email);
+
   if (id === "purchases" && method === "POST") {
     if (!action) return await quote(request, env, email);
     if (action === "recover" && !segments[4]) return await recover(request, env, email);
@@ -154,6 +156,42 @@ export async function handleWallet(
     return json({ removed: id, agents: agents.length });
   }
   return undefined;
+}
+
+/**
+ * A brand-new account's one free key, so a first agent can answer before its owner has
+ * found the wallet: `starter_key_cents` of credit, made with the provisioning key. 409
+ * for an account that is not new; 404 while the deployment offers none.
+ */
+async function starter(env: Env, email: string): Promise<Response> {
+  const settings = await deploymentSettings(env);
+  const dir = directory(env);
+  const provisioning = await dir.provisioningKey();
+  if (!settings.starter_key_cents || !provisioning) return jsonError("No starter key on offer.", 404);
+  if (!(await dir.claimStarter(email))) return jsonError("Only a new account gets a starter key.", 409);
+  let made: { secret: string; openrouter_hash: string };
+  try {
+    made = await createKey(provisioning, `Salts ${email} starter`, settings.starter_key_cents / 100);
+  } catch (err) {
+    await dir.releaseStarter(email);
+    if (err instanceof ProvisioningError) return jsonError(err.message, 503);
+    throw err;
+  }
+  const added = await dir.addWalletKey(
+    email,
+    {
+      kind: "provisioned",
+      secret: made.secret,
+      openrouter_hash: made.openrouter_hash,
+      nickname: "Starter key",
+    },
+    settings.max_wallet_keys
+  );
+  if ("error" in added) {
+    await deleteKey(provisioning, made.openrouter_hash).catch(() => undefined);
+    return jsonError(added.error, 400);
+  }
+  return json(await view(added));
 }
 
 /**

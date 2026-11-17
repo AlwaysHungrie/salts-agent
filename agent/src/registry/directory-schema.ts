@@ -242,6 +242,18 @@ export const AGENT_DIRECTORY_MIGRATIONS: readonly Migration[] = [
       );
     },
   },
+  {
+    name: "starter keys",
+    up: (sql) => {
+      // Who has been given the new-account key, so nobody is given it twice.
+      sql.exec(
+        `CREATE TABLE IF NOT EXISTS starter_grants (
+           email TEXT PRIMARY KEY,
+           granted_at INTEGER NOT NULL
+         )`
+      );
+    },
+  },
 ];
 
 export function migrateMembership(storage: DurableObjectStorage) {

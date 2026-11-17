@@ -44,6 +44,11 @@ export function NewAgent({
     field.current?.focus();
   }, []);
 
+  // The key step waits for this, so its dropdown loads with the starter key already there.
+  const starterAsked = useStarterKey((id) =>
+    setMeta((m) => ({ ...m, defaults: { ...m.defaults, openrouter_key_id: id } })),
+  );
+
   // The catalogues the second step picks from. There is no agent to hang them off
   // yet, so they come from the deployment rather than from one agent's config.
   useEffect(() => {
@@ -112,14 +117,20 @@ export function NewAgent({
           </p>
 
           <div className="mt-4">
-            <MetaSettingsForm
-              meta={meta}
-              onChange={setMeta}
-              models={models}
-              mcpCatalog={mcpCatalog}
-              capabilities={capabilities}
-              onlyOpenrouter={!fleet}
-            />
+            {starterAsked ? (
+              <MetaSettingsForm
+                meta={meta}
+                onChange={setMeta}
+                models={models}
+                mcpCatalog={mcpCatalog}
+                capabilities={capabilities}
+                onlyOpenrouter={!fleet}
+              />
+            ) : (
+              <p className="text-muted text-xs font-light leading-[1.33]">
+                Loading your keys…
+              </p>
+            )}
           </div>
 
           {error && <p className="mt-3 text-xs leading-[1.33]">{error}</p>}
@@ -225,6 +236,29 @@ export function NewAgent({
       </div>
     </div>
   );
+}
+
+/**
+ * Ask for the starter key: a brand-new account is given a small one once, so its first
+ * agent can answer straight away. `onKey` gets its id to pick it. Resolves to whether the
+ * ask has answered (anyone else is simply refused).
+ */
+function useStarterKey(onKey: (id: string) => void): boolean {
+  const [asked, setAsked] = useState(false);
+  const pick = useRef(onKey);
+  useEffect(() => {
+    void (async () => {
+      const res = await fetch("/api/wallet/starter", { method: "POST" }).catch(
+        () => null,
+      );
+      const key = res?.ok
+        ? ((await res.json().catch(() => null)) as { id?: string } | null)
+        : null;
+      if (key?.id) pick.current(key.id);
+      setAsked(true);
+    })();
+  }, []);
+  return asked;
 }
 
 /** The fleet's own fields: its name, and one address per agent to be made. */
