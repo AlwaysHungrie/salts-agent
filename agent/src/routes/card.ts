@@ -4,7 +4,6 @@ import {
   capturePayment,
   createOrder,
   fetchPayment,
-  paiseOf,
   paymentId,
   RAZORPAY_NETWORK,
   RazorpayError,
@@ -12,9 +11,10 @@ import {
   signatureValid,
 } from "../razorpay";
 import { deploymentSettings } from "../settings";
+import { FxError, inrPerUsd } from "../fx";
 import { json, jsonError, readJson } from "../worker/http";
 import { directory } from "../worker/stores";
-import { amountOf, deliver, feeOf } from "./wallet";
+import { deliver } from "./wallet";
 
 /** How long a card order is kept open for; Razorpay's own orders don't expire. */
 const ORDER_TTL_MS = 24 * 60 * 60 * 1000;
@@ -35,39 +35,46 @@ export async function cardKeyId(env: Env): Promise<string> {
   return (await openKeys(env))?.key_id ?? "";
 }
 
-/** The order as Razorpay's checkout needs it, and the total in both currencies. */
-function orderView(p: WalletPurchase, keyId: string, fee: number) {
-  return {
-    id: p.id,
-    key_id: keyId,
-    order_id: p.to_address,
-    currency: "INR",
-    amount: Number(p.units),
-    amount_usd: p.amount_usd,
-    fee_usd: fee,
-    total_usd: Math.round((p.amount_usd + fee) * 100) / 100,
-    total_inr: Number(p.units) / 100,
-    status: p.status,
-  };
+/** Rupees to the paisa, as a number with two decimals at most. */
+const rupees = (paise: number) => paise / 100;
+
+/** Whole rupees of credit to buy, from `min` to `max`. */
+function rupeesOf(value: unknown, min: number, max: number): number | undefined {
+  const inr = Number(value);
+  return Number.isInteger(inr) && inr >= min && inr <= max ? inr : undefined;
 }
 
-/** Make a Razorpay order for a new key: the credit plus the service fee, in rupees. */
+/**
+ * Make a Razorpay order for a new key. The credit is chosen in whole rupees; the fee is
+ * added in paise (rounded up), and the key gets the credit's dollar worth at today's rate
+ * (`inrPerUsd`), rounded down to the cent so the deployment is never short.
+ */
 export async function cardOrder(request: Request, env: Env, email: string): Promise<Response> {
-  const body = await readJson<{ amount?: number }>(request);
+  const body = await readJson<{ amount_inr?: number }>(request);
   const settings = await deploymentSettings(env);
-  const max = settings.max_wallet_purchase_usd;
-  const amount = amountOf(body.amount, max);
-  if (!amount) return jsonError(`Choose an amount from $1 to $${max}.`, 400);
+  const min = settings.card_min_inr;
+  const max = settings.card_max_inr;
+  const credit = rupeesOf(body.amount_inr, min, max);
+  if (!credit) return jsonError(`Choose a whole amount from ₹${min} to ₹${max}.`, 400);
   const keys = await openKeys(env);
   if (!keys) return jsonError("Card payments aren't open yet.", 503);
+  // Today's rate, locked into this order: the key's dollar credit is fixed by it.
+  let rate: number;
+  try {
+    rate = await inrPerUsd();
+  } catch (err) {
+    if (err instanceof FxError) return jsonError(err.message, 503);
+    throw err;
+  }
   const dir = directory(env);
   if ((await dir.walletKeys(email)).length >= settings.max_wallet_keys) {
     return jsonError(`A wallet holds at most ${settings.max_wallet_keys} keys.`, 400);
   }
 
-  const fee = feeOf(amount, settings.wallet_fee_bps);
-  const total = Math.round((amount + fee) * 100) / 100;
-  const paise = paiseOf(total, settings.inr_per_usd);
+  const creditPaise = credit * 100;
+  const feePaise = Math.ceil((creditPaise * settings.wallet_fee_bps) / 10_000);
+  const paise = creditPaise + feePaise;
+  const usd = Math.floor(creditPaise / rate) / 100;
   let orderId: string;
   try {
     orderId = await createOrder(keys, paise);
@@ -79,7 +86,7 @@ export async function cardOrder(request: Request, env: Env, email: string): Prom
   const made = await dir.createCardPurchase({
     email,
     key_id: "",
-    amount_usd: amount,
+    amount_usd: usd,
     network: RAZORPAY_NETWORK,
     asset: "inr",
     to_address: orderId,
@@ -88,7 +95,18 @@ export async function cardOrder(request: Request, env: Env, email: string): Prom
     created_at: now,
     expires_at: now + ORDER_TTL_MS,
   });
-  return json(orderView(made, keys.key_id, fee));
+  return json({
+    id: made.id,
+    key_id: keys.key_id,
+    order_id: orderId,
+    currency: "INR",
+    amount: paise,
+    credit_inr: credit,
+    fee_inr: rupees(feePaise),
+    total_inr: rupees(paise),
+    amount_usd: usd,
+    total_usd: Math.round(paise / rate) / 100,
+  });
 }
 
 type Settled = { status: "paid" } | { status: "pending" | "failed"; reason: string };

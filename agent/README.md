@@ -124,9 +124,15 @@ wallet lists no networks and quotes answer 503. Removing a bought key deletes it
 OpenRouter too. The keys spend the deployment's OpenRouter credit, so that balance has to
 be kept funded.
 
-Keys can also be bought by card, UPI or netbanking through Razorpay, charged in rupees at
-`inr_per_usd` (whole rupees per dollar; the credit plus the fee, rounded up to the paisa).
-`POST /api/wallet/card-orders { amount }` makes a Razorpay order and a `wallet_purchases`
+Keys can also be bought by card, UPI or netbanking through Razorpay. The buyer picks the
+credit in whole rupees, from `card_min_inr` to `card_max_inr`, with `card_presets_inr` as
+the quick picks and `card_default_inr` selected to start; these are the Indian (rupee) range, kept apart from any future
+international one. The fee is added in paise, rounded up, and the key gets the credit's dollar
+worth at today's rate, rounded down to the cent. The rate is read at runtime from
+Frankfurter (the ECB's daily reference rates; `src/fx.ts`), cached for an hour, with the
+last rate standing in for up to three days if Frankfurter is down; past that, card checkout
+closes (`razorpay_key_id: ""`) and orders answer 503. Each order locks its rate in.
+`POST /api/wallet/card-orders { amount_inr }` makes a Razorpay order and a `wallet_purchases`
 row with `network: "razorpay"`, `asset: "inr"`, the order id in `to_address` and paise in
 `units`. Razorpay's checkout pays it in the browser, which then sends the payment id to
 `POST /api/wallet/card-orders/:id/confirm`. The Worker fetches that payment from Razorpay

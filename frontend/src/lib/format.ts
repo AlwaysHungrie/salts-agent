@@ -73,3 +73,23 @@ export function formatCountShort(n: number | null | undefined): string {
   if (n < 1_000_000) return `${(n / 1_000).toFixed(n < 100_000 ? 1 : 0)}k`;
   return `${(n / 1_000_000).toFixed(1)}m`;
 }
+
+/**
+ * A past day relative to today: "today", "yesterday", "3 days ago" within a week, then
+ * the date ("12 Nov 26").
+ */
+export function formatDaysAgo(ms: number): string {
+  const day = (t: number) => {
+    const d = new Date(t);
+    return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86_400_000;
+  };
+  const days = day(Date.now()) - day(ms);
+  if (days <= 0) return "today";
+  if (days === 1) return "yesterday";
+  if (days < 7) return `${days} days ago`;
+  return `on ${new Date(ms).toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "2-digit",
+  })}`;
+}

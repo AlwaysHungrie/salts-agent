@@ -17,8 +17,19 @@ type WalletRead = {
   reownProjectId: string;
   razorpayKeyId: string;
   inrPerUsd: number;
+  cardRange: CardRange;
   error: string | null;
 };
+
+/** The Indian card checkout's range and quick picks, in whole rupees. */
+export type CardRange = {
+  min: number;
+  max: number;
+  presets: number[];
+  start: number;
+};
+
+const NO_RANGE: CardRange = { min: 0, max: 0, presets: [], start: 0 };
 
 /** The wallet as the Worker holds it, or the error it answered with. */
 async function readWallet(): Promise<WalletRead> {
@@ -32,6 +43,7 @@ async function readWallet(): Promise<WalletRead> {
       reownProjectId: "",
       razorpayKeyId: "",
       inrPerUsd: 0,
+      cardRange: NO_RANGE,
       error: await errorOf(res, "Couldn't load your wallet."),
     };
   }
@@ -43,6 +55,10 @@ async function readWallet(): Promise<WalletRead> {
     reown_project_id?: string;
     razorpay_key_id?: string;
     inr_per_usd?: number;
+    card_min_inr?: number;
+    card_max_inr?: number;
+    card_presets_inr?: number[];
+    card_default_inr?: number;
   };
   return {
     keys: body.keys,
@@ -52,6 +68,12 @@ async function readWallet(): Promise<WalletRead> {
     reownProjectId: body.reown_project_id ?? "",
     razorpayKeyId: body.razorpay_key_id ?? "",
     inrPerUsd: body.inr_per_usd ?? 0,
+    cardRange: {
+      min: body.card_min_inr ?? 0,
+      max: body.card_max_inr ?? 0,
+      presets: body.card_presets_inr ?? [],
+      start: body.card_default_inr ?? 0,
+    },
     error: null,
   };
 }
@@ -73,6 +95,7 @@ export function useWallet() {
   const [razorpayKeyId, setRazorpayKeyId] = useState("");
   /** Rupees charged per dollar of a card purchase. */
   const [inrPerUsd, setInrPerUsd] = useState(0);
+  const [cardRange, setCardRange] = useState<CardRange>(NO_RANGE);
   const [error, setError] = useState<string | null>(null);
 
   const apply = useCallback((read: WalletRead) => {
@@ -83,6 +106,7 @@ export function useWallet() {
     setReownProjectId(read.reownProjectId);
     setRazorpayKeyId(read.razorpayKeyId);
     setInrPerUsd(read.inrPerUsd);
+    setCardRange(read.cardRange);
     setError(read.error);
   }, []);
 
@@ -153,12 +177,12 @@ export function useWallet() {
     return "paid";
   };
 
-  /** Make a Razorpay order for a new key. Resolves to the order, or an error to show. */
-  const cardOrder = async (amount: number): Promise<CardOrder | string> => {
+  /** Make a Razorpay order for whole rupees of credit. Resolves to the order, or an error to show. */
+  const cardOrder = async (amountInr: number): Promise<CardOrder | string> => {
     const res = await fetch("/api/wallet/card-orders", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ amount }),
+      body: JSON.stringify({ amount_inr: amountInr }),
     });
     if (!res.ok) return await errorOf(res, "Couldn't start the payment.");
     return (await res.json()) as CardOrder;
@@ -225,6 +249,7 @@ export function useWallet() {
     reownProjectId,
     razorpayKeyId,
     inrPerUsd,
+    cardRange,
     error,
     load,
     add,
