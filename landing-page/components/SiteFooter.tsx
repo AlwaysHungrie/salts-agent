@@ -50,6 +50,19 @@ export function SiteFooter() {
             <p className="mt-3 max-w-[320px] text-[13px] leading-relaxed text-faint sm:text-sm">
               {FOOTER.tagline}
             </p>
+            <a
+              href="https://programmerneeds.com/tools/salts?utm_source=maker-site&utm_medium=badge&utm_campaign=salts"
+              target="_blank"
+              rel="noopener"
+              className="mt-4 inline-block"
+            >
+              <img
+                src="https://programmerneeds.com/api/badge/salts?v=10"
+                alt="Find Salts on ProgrammerNeeds"
+                width={220}
+                height={54}
+              />
+            </a>
           </div>
 
           {/* Two-up on a narrow screen; md:contents returns them to the
