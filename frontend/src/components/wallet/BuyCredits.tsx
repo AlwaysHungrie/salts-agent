@@ -1,7 +1,9 @@
 import { useState, type ReactNode } from "react";
+import { Check } from "lucide-react";
 import dynamic from "next/dynamic";
 import type { PayNetwork } from "@/lib/agent";
 import type { CheckoutCalls } from "./CryptoCheckout";
+import { type CardCalls, CardCheckout } from "./CardCheckout";
 
 /** The credit amounts offered with one click, in US dollars. */
 const PRESETS = [5, 10, 25, 50];
@@ -30,6 +32,20 @@ export function Step({ title, hint }: { title: string; hint?: ReactNode }) {
   );
 }
 
+/** What a finished payment shows, by card or crypto. */
+export function Paid() {
+  return (
+    <div className="bg-canvas-soft flex items-center gap-3 rounded-2xl px-4 py-4">
+      <span className="bg-ink text-on-primary flex h-8 w-8 items-center justify-center rounded-full">
+        <Check className="h-4 w-4" />
+      </span>
+      <p className="text-sm font-semibold leading-[1.43]">
+        Payment received. Your key is in your wallet.
+      </p>
+    </div>
+  );
+}
+
 /** Step 2's title, shared with the checkout that renders it once wallets load. */
 export const PAY_TITLE = "Connect your crypto wallet";
 
@@ -48,8 +64,12 @@ export function supported(networks: PayNetwork[]): string {
 /** Dollars to two places. */
 const usd = (n: number) => `$${n.toFixed(2)}`;
 
+/** Rupees to two places, as India writes them. */
+const inr = (n: number) =>
+  `₹${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
 /**
- * Buying a new key with crypto, inside the wallet sidebar. The buyer sees the credit, the
+ * Buying a new key with crypto, or by card when `card` is given, inside the wallet sidebar. The buyer sees the credit, the
  * service fee and the total before anything is asked of their wallet.
  */
 export function BuyCredits({
@@ -58,6 +78,7 @@ export function BuyCredits({
   maxUsd,
   reownProjectId,
   calls,
+  card,
   onPaid,
 }: {
   networks: PayNetwork[];
@@ -73,6 +94,12 @@ export function BuyCredits({
       body: Parameters<CheckoutCalls["quote"]>[0] & { amount: number },
     ) => ReturnType<CheckoutCalls["quote"]>;
     confirm: CheckoutCalls["confirm"];
+  };
+  /** Pay by card or UPI through Razorpay instead, at `inrPerUsd` rupees to the dollar. */
+  card?: {
+    inrPerUsd: number;
+    order: (amount: number) => ReturnType<CardCalls["order"]>;
+    confirm: CardCalls["confirm"];
   };
   onPaid: () => void;
 }) {
@@ -91,6 +118,10 @@ export function BuyCredits({
     ? Math.ceil((Math.round(amount * 100) * feeBps) / 10_000) / 100
     : 0;
   const total = valid ? Math.round((amount + fee) * 100) / 100 : 0;
+  // The Worker's rupee total: paise rounded up.
+  const rupees = card
+    ? Math.ceil(Math.round(total * 100) * card.inrPerUsd) / 100
+    : 0;
 
   return (
     <div>
@@ -151,14 +182,29 @@ export function BuyCredits({
           <span>You pay</span>
           <span>{valid ? usd(total) : "—"}</span>
         </div>
+        {card && (
+          <div className="mt-1 flex justify-between font-semibold">
+            <span className="text-muted font-normal">In rupees</span>
+            <span>{valid ? inr(rupees) : "—"}</span>
+          </div>
+        )}
         <p className="text-muted mt-2 text-xs leading-[1.33]">
-          The service fee covers network, routing and crypto payment costs.
+          {card
+            ? "The service fee covers routing and payment costs."
+            : "The service fee covers network, routing and crypto payment costs."}
           Your key is issued as soon as your payment is confirmed.
         </p>
       </div>
 
       <div className="mt-8">
-        {!reownProjectId || networks.length === 0 ? (
+        {card ? (
+          <CardCheckout
+            total={valid ? rupees : null}
+            calls={{ order: () => card.order(amount), confirm: card.confirm }}
+            onPaid={onPaid}
+            onLock={setLocked}
+          />
+        ) : !reownProjectId || networks.length === 0 ? (
           <>
             <Step title={PAY_TITLE} />
             <p className="text-muted text-sm leading-[1.43]">

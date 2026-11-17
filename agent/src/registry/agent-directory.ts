@@ -65,11 +65,13 @@ import {
 import { AGENT_DIRECTORY_MIGRATIONS, migrateMembership } from "./directory-schema";
 import {
   claimPurchase,
+  createCardPurchase,
   createPurchase,
   deploymentValue,
   fulfilNewKey,
   markPurchasePaid,
   purchase,
+  purchaseByOrder,
   recoverable,
   releasePurchase,
   setDeploymentValue,
@@ -445,6 +447,18 @@ export class AgentDirectory extends DurableObject {
     return createPurchase(this.ctx.storage, p);
   }
 
+  /** Record a card purchase, paid through the Razorpay order in its `to_address`. */
+  createCardPurchase(p: Omit<WalletPurchase, "id" | "status" | "tx" | "claimed_at">): WalletPurchase {
+    this.ensureSchema();
+    return createCardPurchase(this.ctx.storage, p);
+  }
+
+  /** The purchase a Razorpay order pays for, whoever made it: what its webhook names. */
+  purchaseByOrder(orderId: string): WalletPurchase | undefined {
+    this.ensureSchema();
+    return purchaseByOrder(this.ctx.storage, orderId);
+  }
+
   purchase(email: string, id: string): WalletPurchase | undefined {
     this.ensureSchema();
     return purchase(this.ctx.storage, email, id);
@@ -502,6 +516,24 @@ export class AgentDirectory extends DurableObject {
       evm: deploymentValue(this.ctx.storage, "payment_address_evm"),
       solana: deploymentValue(this.ctx.storage, "payment_address_solana"),
     };
+  }
+
+  /** The Razorpay key id, key secret and webhook secret; "" where not set. */
+  razorpayKeys(): { key_id: string; key_secret: string; webhook_secret: string } {
+    this.ensureSchema();
+    return {
+      key_id: deploymentValue(this.ctx.storage, "razorpay_key_id"),
+      key_secret: deploymentValue(this.ctx.storage, "razorpay_key_secret"),
+      webhook_secret: deploymentValue(this.ctx.storage, "razorpay_webhook_secret"),
+    };
+  }
+
+  /** Set any of the Razorpay values; blank removes one. */
+  setRazorpayKeys(values: Partial<{ key_id: string; key_secret: string; webhook_secret: string }>) {
+    this.ensureSchema();
+    for (const [name, value] of Object.entries(values)) {
+      setDeploymentValue(this.ctx.storage, `razorpay_${name}`, value ?? "");
+    }
   }
 
   /** Reown's project id, which the browser's wallet modal is opened with; "" when not set. */

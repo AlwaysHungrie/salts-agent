@@ -15,6 +15,7 @@ import {
   Check,
   ChevronRight,
   Copy,
+  CreditCard,
   KeyRoundIcon,
   Link2,
   Wallet,
@@ -73,7 +74,8 @@ const SLIDE_MS = 200;
 function WalletSidebar({ onClose }: { onClose: () => void }) {
   const wallet = useWallet();
   /** Whether the crypto checkout for a new key is open. */
-  const [buying, setBuying] = useState(false);
+  /** Which checkout for a new key is open, if any. */
+  const [buying, setBuying] = useState<"crypto" | "card" | false>(false);
   const [shown, setShown] = useState(false);
 
   // Slide in once mounted; slide out before unmounting.
@@ -156,6 +158,15 @@ function WalletSidebar({ onClose }: { onClose: () => void }) {
                 quote: wallet.quote,
                 confirm: wallet.confirm,
               }}
+              card={
+                buying === "card"
+                  ? {
+                      inrPerUsd: wallet.inrPerUsd,
+                      order: wallet.cardOrder,
+                      confirm: wallet.cardConfirm,
+                    }
+                  : undefined
+              }
               onPaid={() => void wallet.load()}
             />
           ) : (
@@ -194,7 +205,7 @@ function WalletSidebar({ onClose }: { onClose: () => void }) {
                     icon={<Wallet className="h-4 w-4" />}
                     title="Pay with crypto"
                     note="USDC or ETH on Ethereum, Base, Solana and more"
-                    onClick={() => setBuying(true)}
+                    onClick={() => setBuying("crypto")}
                   />
                   {wallet.networks.length > 0 && (
                     <div>
@@ -205,6 +216,14 @@ function WalletSidebar({ onClose }: { onClose: () => void }) {
                     </div>
                   )}
                 </div>
+                {wallet.razorpayKeyId && (
+                  <PayOption
+                    icon={<CreditCard className="h-4 w-4" />}
+                    title="Pay with card or UPI"
+                    note="Cards, UPI and netbanking, charged in rupees"
+                    onClick={() => setBuying("card")}
+                  />
+                )}
                 <PayOption
                   icon={<Link2 className="h-4 w-4" />}
                   title="New key from OpenRouter"

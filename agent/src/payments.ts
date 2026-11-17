@@ -172,7 +172,8 @@ export async function quoteUnits(env: Env, asset: PayAsset, usd: number): Promis
 /** A quote, as the Worker checks a payment against it. */
 export type Quote = {
   network: string;
-  asset: PayAsset;
+  /** "inr" only on a Razorpay purchase, whose network no chain answers for. */
+  asset: PayAsset | "inr";
   to_address: string;
   payer: string;
   units: string;

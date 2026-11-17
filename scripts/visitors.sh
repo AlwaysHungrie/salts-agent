@@ -37,7 +37,7 @@ gql() {
 }
 
 # One query, grouped by day and the breakdown dimensions; the tables below fold it.
-Q='query($a:String!,$s:String!,$h:String!,$f:Date!){viewer{accounts(filter:{accountTag:$a}){rumPageloadEventsAdaptiveGroups(limit:10000,filter:{siteTag:$s,requestHost:$h,date_geq:$f}){count sum{visits} dimensions{date requestPath refererHost countryName deviceType}}}}}'
+Q='query($a:String!,$s:String!,$h:String!,$f:Date!){viewer{accounts(filter:{accountTag:$a}){rumPageloadEventsAdaptiveGroups(limit:5000,filter:{siteTag:$s,requestHost:$h,date_geq:$f}){count sum{visits} dimensions{date requestPath refererHost countryName deviceType}}}}}'
 
 ROWS=$(jq -n --arg q "$Q" --arg a "$CF_ACCOUNT_ID" --arg s "$SITE_TAG" --arg h "$HOST" --arg f "$FROM" \
   '{query:$q,variables:{a:$a,s:$s,h:$h,f:$f}}' | gql | jq -c '.data.viewer.accounts[0].rumPageloadEventsAdaptiveGroups')
