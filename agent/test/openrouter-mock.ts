@@ -888,6 +888,9 @@ async function provisionedKeysMock(request: Request, url: URL): Promise<Response
   return json({ error: "unmocked" }, 405);
 }
 
+/** The rupees per dollar the stand-in rate source answers with. */
+export const INR_PER_USD = 93.93;
+
 /** The Razorpay key secret the stand-in accepts; any other is refused. */
 export const RAZORPAY_SECRET = "rzp-secret-ok";
 
@@ -959,6 +962,12 @@ export async function openrouterMock(request: Request): Promise<Response> {
     }
   }
   if (url.hostname === "api.razorpay.com") return razorpayMock(request, url);
+  // Frankfurter's daily rupee rate.
+  if (url.hostname === "api.frankfurter.dev") {
+    return new Response(JSON.stringify({ base: "USD", rates: { INR: INR_PER_USD } }), {
+      headers: { "content-type": "application/json" },
+    });
+  }
   if (url.hostname !== "openrouter.ai") {
     return new Response(`blocked outbound request to ${url.hostname}`, { status: 503 });
   }

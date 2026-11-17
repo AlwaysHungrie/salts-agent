@@ -98,7 +98,7 @@ export function CardCheckout({
         amount: order.amount,
         currency: order.currency,
         name: "Salts",
-        description: `$${order.amount_usd.toFixed(2)} of OpenRouter credit`,
+        description: `₹${order.credit_inr.toLocaleString("en-IN")} AI credits`,
         handler: (r: { razorpay_payment_id: string }) => void finish(order, r.razorpay_payment_id),
         modal: {
           ondismiss: () => {

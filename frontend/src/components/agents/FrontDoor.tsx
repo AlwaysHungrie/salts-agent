@@ -13,11 +13,21 @@ export function FrontDoor({ onConnect }: { onConnect: () => void }) {
       </button>
       <p className="text-faint mt-2 ml-2 text-xs leading-[1.33]">
         By signing up and using this platform you agree to our{" "}
-        <a href="/tos" className="text-primary hover:underline">
+        <a
+          href="https://salts.dev/terms"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-primary hover:underline"
+        >
           terms of service
         </a>{" "}
         and{" "}
-        <a href="/privacy" className="text-primary hover:underline">
+        <a
+          href="https://salts.dev/privacy"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-primary hover:underline"
+        >
           privacy policy
         </a>
         .

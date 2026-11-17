@@ -7,8 +7,11 @@
   "max_chain_tokens": 20,
   "wallet_fee_bps": 800,
   "max_wallet_purchase_usd": 50,
-  "inr_per_usd": 90,
   "starter_key_cents": 1,
+  "card_min_inr": 45,
+  "card_max_inr": 2500,
+  "card_presets_inr": [45, 225, 999],
+  "card_default_inr": 225,
   "default_agent_limit": 5,
   "max_upload_bytes": {
     "text": 1000000,
