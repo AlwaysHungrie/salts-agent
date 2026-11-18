@@ -79,6 +79,8 @@ import {
 } from "./wallet-purchases";
 import {
   addWalletKey,
+  claimStarter,
+  releaseStarter,
   removeWalletKey,
   setWalletKeyUse,
   walletKey,
@@ -423,7 +425,7 @@ export class AgentDirectory extends DurableObject {
 
   addWalletKey(
     email: string,
-    key: { kind: WalletKeyKind; secret: string; openrouter_hash?: string },
+    key: { kind: WalletKeyKind; secret: string; openrouter_hash?: string; nickname?: string },
     max: number
   ): WalletKeyRow | { error: string } {
     this.ensureSchema();
@@ -434,6 +436,17 @@ export class AgentDirectory extends DurableObject {
   removeWalletKey(email: string, id: string): string[] | undefined {
     this.ensureSchema();
     return removeWalletKey(this.ctx.storage, email, id);
+  }
+
+  /** Take up `email`'s one starter key; false once it has been given. */
+  claimStarter(email: string): boolean {
+    this.ensureSchema();
+    return claimStarter(this.ctx.storage, email, Date.now());
+  }
+
+  releaseStarter(email: string) {
+    this.ensureSchema();
+    releaseStarter(this.ctx.storage, email);
   }
 
   setWalletKeyUse(agentId: string, keyId: string) {

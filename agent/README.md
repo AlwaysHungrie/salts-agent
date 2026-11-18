@@ -78,7 +78,7 @@ no deployment-wide fallback to stand in for it. One agent's spend and rate limit
 its own, and an agent with no key says so instead of answering. That is deliberate: a
 fallback would mean any agent anyone creates here spends the deployment's own credit.
 
-Keys live in each account's OpenRouter wallet (`wallet_keys` in `AgentDirectory`), and
+Keys live in each account's wallet, shown as AI credits (`wallet_keys` in `AgentDirectory`), and
 agents are given one by its id, `openrouter_key_id`. The Worker copies the key into the
 agent's `openrouter_api_key`, so turns never look the wallet up, and records which agents
 hold which key (`wallet_key_uses`) so removing a key clears it from every one of them. A
@@ -146,6 +146,16 @@ admin CLI's Payments tab (`GET|PATCH /api/admin/razorpay`; stored in `AgentDirec
 secrets write-only; a key pair is checked with Razorpay before it is kept). Until a key id,
 key secret and provisioning key are all set, `GET /api/wallet` returns `razorpay_key_id: ""`
 and orders answer 503.
+
+Every account is given one starter key, once: `POST /api/wallet/starter` (the new-agent
+dialog calls it, and picks the key it returns when it is the wallet's only key) makes a
+provisioned key held to `starter_key_cents`, nicknamed "Starter key" in the wallet and named
+`Salts <email> starter` at OpenRouter. Fleet members, admins and anyone already holding keys
+get one too; what limits it is `starter_grants` in `AgentDirectory`, one row per address,
+kept after the key is removed. The check and the record are one step in the Durable Object,
+so concurrent asks make one key. A failure at OpenRouter (503) or a full wallet (400)
+releases the claim, and the key made for a full wallet is deleted. 409 once the key has been
+given; 404 while `starter_key_cents` is 0 or no provisioning key is set.
 
 A payment the page lost track of (a refresh, a closed tab, an RPC that was down) is
 recovered with `POST /api/wallet/purchases/recover { network, tx }`: the transaction is
@@ -218,6 +228,7 @@ curl -X POST http://localhost:8787/agents/session-agent/my-session/chat \
 | `POST /api/business-requests` | A signed-in account asks for a higher agent limit |
 | `GET\|POST /api/wallet` | The caller's OpenRouter wallet / add a pasted key `{ key, connected? }`, checked with OpenRouter first and given a random nickname. A key already in the wallet is refused ("Key already imported"); `connected` (a key just made through OpenRouter's PKCE flow) also requires the key to carry a credit limit. At most `max_wallet_keys` |
 | `DELETE /api/wallet/:id` | Remove a key, clearing it from every agent that holds it |
+| `POST /api/wallet/starter` | The account's one starter key (`starter_key_cents` of credit); 409 once given, 404 when none is on offer |
 | `POST /api/wallet/purchases` | Quote a new key: `{ amount, network, asset, payer }` → what to send, where, and the `amount_usd` + `fee_usd` = `total_usd` breakdown. `GET /api/wallet` lists the open `networks` (with each one's USDC contract) and `fee_bps` |
 | `POST /api/wallet/purchases/:id/confirm` | `{ tx }`: read the payment back from the chain. 200 paid, 202 not final yet, 400 not a match, 409 already counted |
 | `POST /telegram/webhook/:agentId` | One route per agent, because one bot per agent |

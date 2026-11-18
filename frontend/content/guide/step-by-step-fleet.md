@@ -20,9 +20,9 @@ A Personal Account can only create a limited number of agents, and every agent i
 
 Once your request is approved, your limit goes up automatically. [Get a Fleet Account](/guide/fleet-account) explains how to check your limit.
 
-## 2. Put a key in your OpenRouter wallet
+## 2. Put a key in AI credits
 
-If your agents will use your OpenRouter key, so your users do not need their own, you need a key in your wallet before you create the fleet. Click **OpenRouter wallet** in the top right corner of the home page, and either paste your own key under **Already have an OpenRouter key?** or click **Pay with crypto** under **Get new key** to buy one. [Get an OpenRouter API key](/guide/openrouter) and [Buy a key with crypto](/guide/wallet-crypto) walk you through each way.
+If your agents will use your OpenRouter key, so your users do not need their own, you need a key in your wallet before you create the fleet. Click **AI credits** in the top right corner of the home page, and either paste your own key under **Already have an OpenRouter key?** or click **Pay with crypto** under **Get new key** to buy one. [Get an OpenRouter API key](/guide/openrouter) and [Buy a key with crypto](/guide/wallet-crypto) walk you through each way.
 
 Every agent in the fleet spends from this one key, so we recommend giving it enough credit for all your users.
 
@@ -42,7 +42,7 @@ On the home page, click **Create a new agent**.
 
 The next step is **Admin settings**. These are the settings every agent in the fleet starts with, and each one has a lock. Unlocked settings can be changed by your users on their own agent, while locked settings are hidden from them. At the very least, we recommend that you:
 
-1. Choose your key under **OpenRouter**, and lock it if you do not want users to replace it with their own.
+1. Choose your key under **Key**, and lock it if you do not want users to replace it with their own.
 2. Set a **Monthly spend limit** under **Limits**, so no single agent can run up a large bill.
 
 Everything else can stay as it is for now. [Choose the fleet's settings](/guide/fleet-settings) explains every setting and suggests a good starting point.

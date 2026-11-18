@@ -44,6 +44,11 @@ export function NewAgent({
     field.current?.focus();
   }, []);
 
+  // The key step waits for this, so its dropdown loads with the starter key already there.
+  const starterAsked = useStarterKey((id) =>
+    setMeta((m) => ({ ...m, defaults: { ...m.defaults, openrouter_key_id: id } })),
+  );
+
   // The catalogues the second step picks from. There is no agent to hang them off
   // yet, so they come from the deployment rather than from one agent's config.
   useEffect(() => {
@@ -103,7 +108,7 @@ export function NewAgent({
         >
           <p className="text-faint text-xs leading-[1.33]">Step 2 of 2</p>
           <p className="text-lg font-semibold leading-[1.38]">
-            {fleet ? "Admin settings" : "OpenRouter key"}
+            {fleet ? "Admin settings" : "Key"}
           </p>
           <p className="text-muted mt-1 text-xs font-light leading-[1.33]">
             {fleet
@@ -112,14 +117,20 @@ export function NewAgent({
           </p>
 
           <div className="mt-4">
-            <MetaSettingsForm
-              meta={meta}
-              onChange={setMeta}
-              models={models}
-              mcpCatalog={mcpCatalog}
-              capabilities={capabilities}
-              onlyOpenrouter={!fleet}
-            />
+            {starterAsked ? (
+              <MetaSettingsForm
+                meta={meta}
+                onChange={setMeta}
+                models={models}
+                mcpCatalog={mcpCatalog}
+                capabilities={capabilities}
+                onlyOpenrouter={!fleet}
+              />
+            ) : (
+              <p className="text-muted text-xs font-light leading-[1.33]">
+                Loading your keys…
+              </p>
+            )}
           </div>
 
           {error && <p className="mt-3 text-xs leading-[1.33]">{error}</p>}
@@ -188,7 +199,7 @@ export function NewAgent({
             </span>
             <span className="text-muted block text-xs font-light leading-[1.33]">
               One agent for each person in your community. They can share your
-              OpenRouter key, and you manage them all.
+              key, and you manage them all.
             </span>
           </span>
         </label>
@@ -225,6 +236,39 @@ export function NewAgent({
       </div>
     </div>
   );
+}
+
+/**
+ * Ask for the starter key: every account is given a small one once, so a first agent can
+ * answer straight away. `onKey` gets its id to pick it, but only when it is the wallet's
+ * one key: someone with keys of their own chooses among them. Resolves to whether the
+ * ask has answered (a second ask is simply refused).
+ */
+function useStarterKey(onKey: (id: string) => void): boolean {
+  const [asked, setAsked] = useState(false);
+  const pick = useRef(onKey);
+  useEffect(() => {
+    void (async () => {
+      const res = await fetch("/api/wallet/starter", { method: "POST" }).catch(
+        () => null,
+      );
+      const key = res?.ok
+        ? ((await res.json().catch(() => null)) as { id?: string } | null)
+        : null;
+      if (key?.id && (await walletSize()) === 1) pick.current(key.id);
+      setAsked(true);
+    })();
+  }, []);
+  return asked;
+}
+
+/** How many keys the caller's wallet holds; 0 when it can't be read. */
+async function walletSize(): Promise<number> {
+  const res = await fetch("/api/wallet", { cache: "no-store" }).catch(() => null);
+  const body = res?.ok
+    ? ((await res.json().catch(() => null)) as { keys?: unknown[] } | null)
+    : null;
+  return body?.keys?.length ?? 0;
 }
 
 /** The fleet's own fields: its name, and one address per agent to be made. */

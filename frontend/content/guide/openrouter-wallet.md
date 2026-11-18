@@ -1,22 +1,24 @@
 ---
-title: What is the OpenRouter wallet
-section: OpenRouter wallet
+title: What are AI credits
+section: AI credits
 order: 1
 summary: The place in Salts that holds your OpenRouter keys, so you can give one to any of your agents.
 featured: true
 ---
 
-Your agent needs an OpenRouter key to talk to an AI model, and every reply it writes is paid for from the credit on that key. The OpenRouter wallet is where Salts keeps your keys, so you can pick one for any of your agents without copying it around.
+Your agent needs an OpenRouter key to talk to an AI model, and every reply it writes is paid for from the credit on that key. Salts keeps your keys under **AI credits**, so you can pick one for any of your agents without copying it around.
 
 For example, you might keep one key for your personal agent and another for an agent you share with your team, each with its own credit, and see at a glance how much each one has left.
 
 ## Why you need a key in your wallet
 
-An agent without a key cannot reply to anything. When you create an agent, the **OpenRouter key** dropdown lists the keys in your wallet, so you need at least one there first. If your wallet is empty, the dropdown says **No keys in your wallet**, and you can open the wallet straight from it to add one.
+An agent without a key cannot reply to anything. When you create an agent, the **Key** dropdown lists the keys in your wallet, so you need at least one there first. If your wallet is empty, the dropdown says **No keys in your wallet**, and you can open the wallet straight from it to add one.
+
+The first time you create an agent, we give you a small key called **Starter key**. If it is the only key in your wallet, it is already picked in the dropdown, so your first agent can reply straight away. It holds a few cents of credit, enough to try a low-cost model such as DeepSeek or GLM Flash, so add a key of your own once you know you want to keep going. Everyone gets the starter key once, and removing it doesn't bring it back.
 
 ## Opening your wallet
 
-On the Salts home page, click **OpenRouter wallet** in the top right corner. You can also open it from the wallet icon at the end of any **OpenRouter key** dropdown.
+On the Salts home page, click **AI credits** in the top right corner. You can also open it from the wallet icon at the end of any **Key** dropdown.
 
 Each key in your wallet has a nickname, such as "Amber Falcon", so you can tell your keys apart. Under the nickname you can see how much credit the key has left, and how many of your agents use it.
 
@@ -24,7 +26,7 @@ Each key in your wallet has a nickname, such as "Amber Falcon", so you can tell 
 
 There are four ways to put a key in your wallet:
 
-- **Connect your OpenRouter account.** Under **Get new key**, choose **From OpenRouter**. OpenRouter asks you to sign in and create a new key for Salts, then sends you back with the key already in your wallet. You don't need to copy anything. Set a **Credit limit** on that screen: Salts won't accept a new key without one.
+- **Connect your OpenRouter account.** Under **Get new key**, choose **Connect OpenRouter account**. OpenRouter asks you to sign in and create a new key for Salts, then sends you back with the key already in your wallet. You don't need to copy anything. Set a **Credit limit** on that screen: Salts won't accept a new key without one.
 - **Buy one with crypto.** Under **Get new key**, choose **Pay with crypto**, pick how much credit you want and pay from your crypto wallet. Salts creates the key for you and puts it straight into your wallet. See [Buy a key with crypto](/guide/wallet-crypto).
 - **Buy one with UPI or card.** Under **Get new key**, choose **Pay with UPI or card**, pick how much credit you want in rupees and pay through Razorpay. See [Buy a key with UPI or card](/guide/wallet-card).
 - **Add a key you already have.** If you have your own OpenRouter account, paste its key under **Already have an OpenRouter key?** and click **Add key**. See [Get an OpenRouter API key](/guide/openrouter) to create one. Each key can be in your wallet only once; adding the same key again says **Key already imported**.

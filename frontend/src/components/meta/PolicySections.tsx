@@ -18,7 +18,7 @@ export function LimitsSection({
   return (
     <Section
       title="Limits"
-      hint="Control how much each agent can spend. This matters most when agents share your OpenRouter key."
+      hint="Control how much each agent can spend. This matters most when agents share your key."
     >
       <label className="block">
         <span className="block text-sm font-semibold leading-[1.43]">

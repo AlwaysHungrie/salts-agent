@@ -70,7 +70,7 @@ export default function Agents() {
             onClick={() => openWallet()}
             className="text-muted hover:text-ink text-sm font-semibold transition-colors"
           >
-            OpenRouter wallet
+            AI credits
           </button>
         )}
       </div>

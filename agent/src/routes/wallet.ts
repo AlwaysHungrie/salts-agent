@@ -135,6 +135,8 @@ export async function handleWallet(
     return undefined;
   }
 
+  if (id === "starter" && method === "POST" && !action) return await starter(env, email);
+
   if (id === "purchases" && method === "POST") {
     if (!action) return await quote(request, env, email);
     if (action === "recover" && !segments[4]) return await recover(request, env, email);
@@ -168,6 +170,44 @@ async function cardOffer(env: Env): Promise<{ razorpay_key_id: string; inr_per_u
   if (!keyId) return { razorpay_key_id: "", inr_per_usd: 0 };
   const rate = await inrPerUsd().catch(() => 0);
   return rate ? { razorpay_key_id: keyId, inr_per_usd: rate } : { razorpay_key_id: "", inr_per_usd: 0 };
+}
+
+/**
+ * Every account's one free key, so a first agent can answer before its owner has found
+ * the wallet: `starter_key_cents` of credit, made with the provisioning key. 409 once it
+ * has been given; 404 while the deployment offers none.
+ */
+async function starter(env: Env, email: string): Promise<Response> {
+  const settings = await deploymentSettings(env);
+  const dir = directory(env);
+  const provisioning = await dir.provisioningKey();
+  if (!settings.starter_key_cents || !provisioning) return jsonError("No starter key on offer.", 404);
+  if (!(await dir.claimStarter(email))) return jsonError("This account already had its starter key.", 409);
+  let made: { secret: string; openrouter_hash: string };
+  try {
+    made = await createKey(provisioning, `Salts ${email} starter`, settings.starter_key_cents / 100);
+  } catch (err) {
+    await dir.releaseStarter(email);
+    if (err instanceof ProvisioningError) return jsonError(err.message, 503);
+    throw err;
+  }
+  const added = await dir.addWalletKey(
+    email,
+    {
+      kind: "provisioned",
+      secret: made.secret,
+      openrouter_hash: made.openrouter_hash,
+      nickname: "Starter key",
+    },
+    settings.max_wallet_keys
+  );
+  if ("error" in added) {
+    // A full wallet: the key is undone, and the claim kept for when there is room.
+    await deleteKey(provisioning, made.openrouter_hash).catch(() => undefined);
+    await dir.releaseStarter(email);
+    return jsonError(added.error, 400);
+  }
+  return json(await view(added));
 }
 
 /**

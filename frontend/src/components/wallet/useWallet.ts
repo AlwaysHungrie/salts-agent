@@ -116,7 +116,7 @@ export function useWallet() {
     void readWallet().then(apply);
   }, [apply]);
 
-  /** `connected` marks a key just made through "From OpenRouter", which needs a credit limit. */
+  /** `connected` marks a key just made through "Connect OpenRouter account", which needs a credit limit. */
   const add = async (key: string, connected?: boolean) => {
     const res = await fetch("/api/wallet", {
       method: "POST",

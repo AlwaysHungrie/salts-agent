@@ -48,7 +48,7 @@ export type GuideSection = { title: string; guides: Guide[] };
  */
 const SECTION_ORDER = [
   "Get started",
-  "OpenRouter wallet",
+  "AI credits",
   "Using your agent",
   "Managing costs",
   "Help",

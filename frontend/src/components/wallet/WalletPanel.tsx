@@ -29,10 +29,13 @@ import { PayOption } from "./PayOption";
 import { forgetPayment, sentPayments } from "./sentPayments";
 import { useWallet } from "./useWallet";
 
+/** What the wallet sidebar opens with: `highlight` marks a key, e.g. the one an agent uses. */
+type OpenOptions = { highlight?: string };
+
 /** Opens the wallet sidebar; `onClose` runs once it shuts, e.g. to reread the wallet. */
-const WalletPanelContext = createContext<(onClose?: () => void) => void>(
-  () => {},
-);
+const WalletPanelContext = createContext<
+  (onClose?: () => void, options?: OpenOptions) => void
+>(() => {});
 
 /** Open the one OpenRouter wallet sidebar from anywhere under the provider. */
 export function useWalletPanel() {
@@ -42,10 +45,12 @@ export function useWalletPanel() {
 /** Holds the app's single wallet sidebar, shut until something asks for it. */
 export function WalletPanelProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
+  const [highlight, setHighlight] = useState<string | undefined>(undefined);
   const after = useRef<(() => void) | undefined>(undefined);
 
-  const show = useCallback((onClose?: () => void) => {
+  const show = useCallback((onClose?: () => void, options?: OpenOptions) => {
     after.current = onClose;
+    setHighlight(options?.highlight || undefined);
     setOpen(true);
   }, []);
 
@@ -58,7 +63,7 @@ export function WalletPanelProvider({ children }: { children: ReactNode }) {
   return (
     <WalletPanelContext.Provider value={show}>
       {children}
-      {open && <WalletSidebar onClose={close} />}
+      {open && <WalletSidebar onClose={close} highlight={highlight} />}
     </WalletPanelContext.Provider>
   );
 }
@@ -71,7 +76,14 @@ const SLIDE_MS = 200;
  * agent, by nickname, and the ways to get one. A pasted key can be seen and removed; a
  * bought one is never shown.
  */
-function WalletSidebar({ onClose }: { onClose: () => void }) {
+function WalletSidebar({
+  onClose,
+  highlight,
+}: {
+  onClose: () => void;
+  /** A key to mark, such as the one the agent being viewed uses. */
+  highlight?: string;
+}) {
   const wallet = useWallet();
   /** Whether the crypto checkout for a new key is open. */
   /** Which checkout for a new key is open, if any. */
@@ -113,7 +125,7 @@ function WalletSidebar({ onClose }: { onClose: () => void }) {
       <aside
         role="dialog"
         aria-modal="true"
-        aria-label="OpenRouter wallet"
+        aria-label="AI credits"
         className={`bg-canvas text-ink absolute inset-y-0 right-0 flex w-full max-w-md flex-col shadow-xl transition-transform duration-200 ease-out ${
           shown ? "translate-x-0" : "translate-x-full"
         }`}
@@ -130,12 +142,12 @@ function WalletSidebar({ onClose }: { onClose: () => void }) {
           )}
           <div className="min-w-0 flex-1">
             <p className="truncate text-lg font-semibold leading-[1.38]">
-              {buying ? "Get key" : "OpenRouter wallet"}
+              {buying ? "Get key" : "AI credits"}
             </p>
             <p className="text-muted text-xs font-light leading-[1.33]">
               {buying
-                ? "Get a new OpenRouter API key"
-                : "Manage your OpenRouter API keys."}
+                ? "Get a new API key"
+                : "Manage your API keys and credit."}
             </p>
           </div>
           <button
@@ -194,6 +206,7 @@ function WalletSidebar({ onClose }: { onClose: () => void }) {
                     <KeyRow
                       key={key.id}
                       walletKey={key}
+                      highlighted={key.id === highlight}
                       onRemove={() => wallet.remove(key.id)}
                     />
                   ))}
@@ -213,8 +226,8 @@ function WalletSidebar({ onClose }: { onClose: () => void }) {
                 )}
                 <PayOption
                   icon={<Link2 className="h-4 w-4" />}
-                  title="New key from OpenRouter"
-                  note="Sign in to OpenRouter and create a new key"
+                  title="Connect OpenRouter account"
+                  note="Directly get from your own account with a credit limit"
                   onClick={() => void startConnect()}
                 />
                 <div className="flex flex-col items-center">
@@ -246,12 +259,20 @@ function WalletSidebar({ onClose }: { onClose: () => void }) {
 /** One key, laid out like a pricing card: its name, what it may still spend, its details. */
 function KeyRow({
   walletKey: key,
+  highlighted = false,
   onRemove,
 }: {
   walletKey: WalletKey;
+  /** Marked as the key the agent being viewed uses. */
+  highlighted?: boolean;
   onRemove: () => Promise<string | null>;
 }) {
   const [copied, setCopied] = useState(false);
+  const card = useRef<HTMLDivElement>(null);
+  // Brought into view once, as the wallet opens on it; not again on every redraw.
+  useEffect(() => {
+    if (highlighted) card.current?.scrollIntoView({ block: "nearest" });
+  }, [highlighted]);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -277,7 +298,15 @@ function KeyRow({
       : `Used by ${key.agents === 1 ? "1 agent" : `${key.agents} agents`}.`;
 
   return (
-    <div className="ring-hairline-soft rounded-[24px] p-6 ring-1">
+    <div
+      ref={card}
+      className={`rounded-[24px] p-6 ${highlighted ? "ring-ink ring-2" : "ring-hairline-soft ring-1"}`}
+    >
+      {highlighted && (
+        <p className="text-muted mb-2 text-xs font-semibold leading-[1.33]">
+          Used by this agent
+        </p>
+      )}
       <div className="flex items-start justify-between gap-4">
         <p className="min-w-0 truncate text-xl font-semibold leading-[1.3]">
           {key.nickname}

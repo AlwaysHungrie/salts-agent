@@ -76,6 +76,11 @@ export type DeploymentSettings = {
   wallet_fee_bps: number;
   /** The most credit one purchase may buy, in dollars. */
   max_wallet_purchase_usd: number;
+  /**
+   * The credit on the key a brand-new account is given once, in cents (0 gives none):
+   * enough to try an agent before buying or connecting a key of their own.
+   */
+  starter_key_cents: number;
   /** The least credit one Indian (rupee) card or UPI purchase may buy, in whole rupees. */
   card_min_inr: number;
   /** The most credit one Indian (rupee) card or UPI purchase may buy, in whole rupees. */
@@ -169,6 +174,7 @@ export const SETTINGS_FIELDS: readonly SettingsField[] = [
   INT("max_chain_tokens", 1, 1000, "tokens one configured network may track"),
   INT("wallet_fee_bps", 0, 5000, "service fee on a credit purchase, in basis points (600 = 6%)"),
   INT("max_wallet_purchase_usd", 1, 10_000, "most credit one wallet purchase may buy, in dollars"),
+  INT("starter_key_cents", 0, 10_000, "credit on the key a new account is given once, in cents; 0 gives none"),
   INT("card_min_inr", 1, 1_000_000, "least credit one Indian card/UPI purchase may buy, in rupees"),
   INT("card_max_inr", 1, 1_000_000, "most credit one Indian card/UPI purchase may buy, in rupees"),
   {
