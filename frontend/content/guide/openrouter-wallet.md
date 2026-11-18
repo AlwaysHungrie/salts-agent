@@ -14,7 +14,7 @@ For example, you might keep one key for your personal agent and another for an a
 
 An agent without a key cannot reply to anything. When you create an agent, the **Key** dropdown lists the keys in your wallet, so you need at least one there first. If your wallet is empty, the dropdown says **No keys in your wallet**, and you can open the wallet straight from it to add one.
 
-The first time you create an agent, we give you a small key called **Starter key**. If it is the only key in your wallet, it is already picked in the dropdown, so your first agent can reply straight away. It holds just a cent of credit, enough to try a low-cost model such as DeepSeek or GLM Flash, so add a key of your own once you know you want to keep going. Everyone gets the starter key once, and removing it doesn't bring it back.
+The first time you create an agent, we give you a small key called **Starter key**. If it is the only key in your wallet, it is already picked in the dropdown, so your first agent can reply straight away. It holds a few cents of credit, enough to try a low-cost model such as DeepSeek or GLM Flash, so add a key of your own once you know you want to keep going. Everyone gets the starter key once, and removing it doesn't bring it back.
 
 ## Opening your wallet
 
