@@ -5,7 +5,7 @@ order: 3
 summary: Enter the email address of everyone who should get an agent, choose the settings, and create them all at once.
 ---
 
-This guide will help you create a fleet of agents for your users. Before you start, make sure you have a Fleet Account (see [Get a Fleet Account](/guide/fleet-account)), the email address of every user, and your OpenRouter API key if the agents will use it.
+This guide will help you create a fleet of agents for your users. Before you start, make sure you have a Fleet Account (see [Get a Fleet Account](/guide/fleet-account)), the email address of every user, and a key in AI credits if the agents will use your credits.
 
 ## 1. Choose who gets an agent
 
@@ -22,7 +22,7 @@ On the home page, click **Create a new agent**.
 
 The next step is **Admin settings**, where you choose the settings every agent in the fleet starts with, and which of them your users are allowed to change. At the very least, we recommend that you:
 
-1. Choose your OpenRouter key under **Key**, if the agents will use it. The list shows the keys in AI credits.
+1. Choose your key under **Key**, if the agents will use it. The list shows the keys in AI credits.
 2. Set a **Monthly spend limit** under **Limits**, so no single agent can run up a large bill.
 
 Everything else can stay as it is for now. [Choose the fleet's settings](/guide/fleet-settings) explains every setting in detail.

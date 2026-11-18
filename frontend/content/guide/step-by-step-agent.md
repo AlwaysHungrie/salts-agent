@@ -2,11 +2,11 @@
 title: Step-by-step: a basic agent
 section: Get started
 order: 2
-summary: Everything from signing in to your agent's first reply, on one page: sign in, put a key in AI credits, create the agent and say hello.
+summary: Everything from signing in to your agent's first reply, on one page: sign in, create the agent, say hello and add credits when you want to keep going.
 featured: true
 ---
 
-This guide walks you through every step from signing in to Salts to reading your agent's first reply. It takes about ten minutes, and no technical skills are required. All you need is an email address, and a few dollars to pay for your agent's replies, either by card on OpenRouter or with crypto. If any of the words here are new to you, read [What is Salts](/guide/why-salts) first.
+This guide walks you through every step from signing in to Salts to reading your agent's first reply. It takes about five minutes, and no technical skills are required. All you need is an email address. Your first few messages are on us, and when you want to keep going, you can buy credits by card, UPI or crypto. If any of the words here are new to you, read [What is Salts](/guide/why-salts) first.
 
 ## 1. Sign in
 
@@ -14,35 +14,35 @@ Open the Salts home page and click **Connect your account**. Click **Continue wi
 
 If this is your first time on Salts, click **Create one** at the bottom of the window before you enter your email.
 
-## 2. Put a key in AI credits
+## 2. Create the agent
 
-Your agent needs an OpenRouter key to pay for its replies, and Salts keeps your keys in AI credits. Open it by clicking **AI credits** in the top right corner of the home page. There are two ways to get a key into it, and you only need one.
-
-**Add your own OpenRouter key.** Create an account on [openrouter.ai](https://openrouter.ai), buy some credit and create a key. Then paste the key under **Already have an OpenRouter key?** in your wallet and click **Add key**. [Get an OpenRouter API key](/guide/openrouter) walks you through each step.
-
-**Buy a key with crypto.** If you would rather not create an OpenRouter account, click **Pay with crypto** under **Get new key**, choose how much credit you want and pay with USDC or ETH from your crypto wallet. The key appears in your wallet once your payment is confirmed. [Buy a key with crypto](/guide/wallet-crypto) walks you through each step.
-
-Either way, we recommend starting with $10 of credit. You can always add more later once you have a feel for how much your agent uses.
-
-Each key in your wallet gets a nickname, such as "Amber Falcon", so you can tell your keys apart. You will pick your key by this nickname in the next step.
-
-## 3. Create the agent
-
-Back on the home page, click **Create a new agent**.
+On the home page, click **Create a new agent**.
 
 1. Under **Name**, enter a name for your agent. You can always change it later.
-2. Leave **Create a fleet of agents** unchecked. Fleets are for creating agents for other people, and are covered in [Step-by-step: a fleet](/guide/step-by-step-fleet).
+2. Leave **Create a fleet of agents** unchecked. Fleets are for creating and managing agents for other people, and are covered in [Step-by-step: a fleet](/guide/step-by-step-fleet).
 3. Click **Next**.
-4. Choose your key by its nickname from the dropdown.
+4. Under **Key**, your **Starter key** is already picked. This is a small key we give everyone once, with enough credit for your first few messages.
 5. Click **Create**.
 
 Your agent now shows up in the list on the home page. Click it to open it.
 
-## 4. Send your first message
+## 3. Send your first message
 
 Click **Start a chat** and ask your agent anything. The reply shows up in the same window, along with how much it cost.
 
 Every chat is called a session, and your sessions are listed in the sidebar on the left. We recommend starting a new session whenever you change the subject, since a shorter conversation gives cheaper and better replies.
+
+## 4. Add credits
+
+The starter key holds a few cents, enough to try your agent on a low-cost model. When you know you want to keep going, add credits of your own. Click **AI credits** in the top right corner of the home page, and under **Get new key** choose how you want to pay:
+
+- **Pay with UPI or card.** Pay in rupees by card, UPI or netbanking. See [Buy credits with UPI or card](/guide/wallet-card).
+- **Pay with crypto.** Pay with USDC or ETH from any crypto wallet, such as MetaMask, Coinbase Wallet or Phantom. See [Buy credits with crypto](/guide/wallet-crypto).
+- **Connect OpenRouter account.** If you already use OpenRouter, bring your own key instead. See [Bring your own OpenRouter key](/guide/openrouter).
+
+We recommend starting with about $10 of credit. You can always add more later once you have a feel for how much your agent uses.
+
+Your credits arrive as a new key in AI credits, with a nickname such as "Amber Falcon". To switch your agent to it, open your agent's **Settings**, scroll to **Key** and choose the new key by its nickname.
 
 ## You are done
 
@@ -56,5 +56,6 @@ If something does not work, see [My agent is not replying](/guide/troubleshootin
 
 ## Footnotes
 
-1. If the dropdown in step 3 says **No keys in your wallet**, click the wallet icon at the end of the dropdown to open your wallet and add a key without leaving the window.
-2. You can also create the agent without a key and choose one later from your agent's **Settings**, under **Key**. Your agent cannot reply until it has one.
+1. Everyone gets the starter key once. If you already have keys of your own, the **Key** dropdown in step 2 lets you choose among them instead.
+2. If the dropdown says **No keys in your wallet**, click the wallet icon at the end of the dropdown to open AI credits and add credits without leaving the window.
+3. You can also create the agent without a key and choose one later from your agent's **Settings**, under **Key**. Your agent cannot reply until it has one.

@@ -6,7 +6,7 @@ summary: How much a reply, a day and a month of using your agent costs, why some
 featured: true
 ---
 
-Salts has no subscription. Every reply your agent writes is paid for from the credit in your OpenRouter account, and you pay only for what your agent actually uses. This page gives you a feel for what that comes to.
+Salts has no subscription. Every reply your agent writes is paid for from your AI credits, and you pay only for what your agent actually uses. This page gives you a feel for what that comes to.
 
 ## What you pay for
 
@@ -19,7 +19,7 @@ Reading is usually much cheaper per token than writing, but your agent reads far
 
 ## Some examples
 
-These are rough figures for a reply in a short conversation, with a few capabilities switched on. They are based on OpenRouter's prices at the time of writing, and you can check today's prices on [openrouter.ai/models](https://openrouter.ai/models).
+These are rough figures for a reply in a short conversation, with a few capabilities switched on. They are based on model prices at the time of writing, and you can check today's prices on [openrouter.ai/models](https://openrouter.ai/models).
 
 | Model | One everyday reply | 20 replies a day for a month |
 |---|---|---|
@@ -35,12 +35,13 @@ For most people, the $10 we recommend starting with lasts several months on the 
 ## Where to see what you spent
 
 - **Under every reply.** Each reply in your browser shows what it cost.
-- **On OpenRouter.** The **Activity** page in your OpenRouter account lists every call your agent made, what it cost and which model it used.
+- **In AI credits.** Each key shows how much credit it has left.
+- **On OpenRouter, for your own key.** If you brought your own OpenRouter key, the **Activity** page in your OpenRouter account lists every call your agent made, what it cost and which model it used.
 - **In Settings, for fleet agents.** If your agent is part of a fleet and uses the **Default fleet key**, its **Settings** shows how much of this month's spending limit is left.
 
 ## Keeping costs down
 
-1. Set a credit limit on your OpenRouter key, so your spending can never go past it. See [Get an OpenRouter API key](/guide/openrouter).
+1. Buy credits in small amounts, so your spending can never go past what you put in. If you brought your own OpenRouter key, set a credit limit on it. See [What are AI credits](/guide/openrouter-wallet).
 2. Start a new conversation whenever you change the subject. See [Chat session hygiene](/guide/session-hygiene).
 3. Switch on only the capabilities and app tools you use. See [Must read: Managing costs and MCP tools](/guide/mcp-costs).
 4. Start with the default model, and only move to a stronger one when you need it. See [Choose the right model](/guide/choosing-a-model).
