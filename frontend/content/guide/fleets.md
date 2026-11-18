@@ -8,7 +8,7 @@ featured: true
 
 A fleet lets you create agents for other people. You set them up, you pay for them, and each person gets an agent of their own.
 
-For example, say you run a team of ten and want everyone to have their own AI agent. Instead of each person signing up for OpenRouter and working out which settings to pick, you can create all ten agents at once, share your OpenRouter key with them and decide how they are set up.
+For example, say you run a team of ten and want everyone to have their own AI agent. Instead of each person buying their own credits and working out which settings to pick, you can create all ten agents at once, share your credits with them and decide how they are set up.
 
 On these pages, **you** are the **fleet admin**, and the people you create agents for are your **users**.
 
@@ -20,7 +20,7 @@ Each agent is private to its user. As the fleet admin, you can control how the a
 
 ## What you control
 
-- Whether the agents use your OpenRouter key, so users do not need their own.
+- Whether the agents use your credits, so users do not need their own.
 - How much each agent can spend every month.
 - Which models your users can choose from.
 - Which settings your users are allowed to change.

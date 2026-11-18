@@ -2,7 +2,7 @@
 title: Step-by-step: a fleet
 section: Get started
 order: 3
-summary: Everything from an empty account to a fleet your users are chatting with, on one page: get a Fleet Account, put a key in your wallet, create the fleet, choose its settings and add your users.
+summary: Everything from an empty account to a fleet your users are chatting with, on one page: get a Fleet Account, add credits, create the fleet, choose its settings and add your users.
 featured: true
 ---
 
@@ -20,9 +20,9 @@ A Personal Account can only create a limited number of agents, and every agent i
 
 Once your request is approved, your limit goes up automatically. [Get a Fleet Account](/guide/fleet-account) explains how to check your limit.
 
-## 2. Put a key in AI credits
+## 2. Add credits
 
-If your agents will use your OpenRouter key, so your users do not need their own, you need a key in your wallet before you create the fleet. Click **AI credits** in the top right corner of the home page, and either paste your own key under **Already have an OpenRouter key?** or click **Pay with crypto** under **Get new key** to buy one. [Get an OpenRouter API key](/guide/openrouter) and [Buy a key with crypto](/guide/wallet-crypto) walk you through each way.
+If your agents will share your credits, so your users do not need to buy their own, you need a key in AI credits before you create the fleet. Click **AI credits** in the top right corner of the home page, and under **Get new key** choose **Pay with UPI or card**, **Pay with crypto** or **Connect OpenRouter account**. [Buy credits with UPI or card](/guide/wallet-card), [Buy credits with crypto](/guide/wallet-crypto) and [Bring your own OpenRouter key](/guide/openrouter) walk you through each way.
 
 Every agent in the fleet spends from this one key, so we recommend giving it enough credit for all your users.
 
