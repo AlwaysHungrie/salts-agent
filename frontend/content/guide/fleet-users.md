@@ -9,7 +9,7 @@ Your users do not see a fleet. They see an agent of their own, with a few settin
 
 ## Getting started
 
-Your users sign in to Salts with the email address you entered for them, and their agent is already on their home page. If the agent uses your OpenRouter key, they do not need to set anything up and can start chatting straight away.
+Your users sign in to Salts with the email address you entered for them, and their agent is already on their home page. If the agent uses your credits, they do not need to set anything up and can start chatting straight away.
 
 To talk to their agent from their phone, they can connect their own Telegram bot or WhatsApp number from their agent's **Settings**. You can send them [Connect your agent to Telegram](/guide/telegram) or [Connect your agent to WhatsApp](/guide/whatsapp) to help them.
 

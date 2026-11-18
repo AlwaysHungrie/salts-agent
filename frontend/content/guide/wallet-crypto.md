@@ -1,14 +1,14 @@
 ---
-title: Buy a key with crypto
+title: Buy credits with crypto
 section: AI credits
 order: 2
-summary: Pay with USDC or ETH from your crypto wallet and get an OpenRouter key with that much credit, without making an OpenRouter account.
+summary: Pay with USDC or ETH from any crypto wallet and get that much credit for your agents.
 featured: true
 ---
 
-If you would rather not create an OpenRouter account of your own, you can buy a key straight from your Salts wallet and pay for it with crypto. The key comes loaded with the credit you paid for, and it appears in your wallet as soon as your payment is confirmed.
+You can buy credits for your agents with crypto, straight from AI credits. Your credits arrive as a new key, loaded with what you paid for, as soon as your payment is confirmed.
 
-This guide will help you buy your first key. It takes a few minutes, and you will need a crypto wallet, such as MetaMask, Coinbase Wallet or Phantom, holding USDC or ETH on one of the networks Salts accepts.
+This guide will help you buy your first credits. It takes a few minutes, and you will need a crypto wallet, such as MetaMask, Coinbase Wallet or Phantom, holding USDC or ETH on one of the networks Salts accepts.
 
 ## 1. Open the checkout
 

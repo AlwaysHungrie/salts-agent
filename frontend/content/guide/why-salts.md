@@ -12,7 +12,7 @@ Salts gives you an AI agent of your own. An agent is a program you talk to in pl
 
 Your agent does not write its replies on its own. Every time you send it a message, it passes your message to an AI model, which reads it and writes the answer. A model is the part that actually understands language. There are many of them, made by different companies, and some are cleverer, faster or cheaper than others. You can pick which one your agent uses.
 
-Your agent reaches these models through a service called OpenRouter. You create an OpenRouter account, add some credit, and give your agent the key to that account. Every reply is then paid for from your credit, so there is no subscription, and an agent you do not use costs nothing. On the model your agent starts with, an everyday reply costs a fraction of a cent.
+Every reply is paid for from credit you buy under **AI credits**, by card, UPI or crypto. Your first few messages are on us, and if you already use OpenRouter, you can bring your own key instead. You pay only for what you use, so there is no subscription, and an agent you do not use costs nothing. On the model your agent starts with, an everyday reply costs a fraction of a cent.
 
 ## Salts is different
 
@@ -46,7 +46,7 @@ You can talk to your agent from wherever is most convenient: your browser at you
 
 ## You are in control
 
-Your agent uses your own OpenRouter API key, so you pay the model's price directly and only for what your agent actually uses. A quiet week costs almost nothing. Every reply shows what it cost, and you can set a spending limit on your key so there are never any surprises.
+Your agent pays for each reply from your own credits, and only for what it actually uses. A quiet week costs almost nothing. Every reply shows what it cost, and your agent can never spend more than the credit you put in, so there are never any surprises.
 
 You also decide how your agent behaves. You can pick the model it uses, give it custom instructions on how to answer, switch on only the capabilities you want, and choose who it is allowed to talk to. To learn more, read [Choose the right model](/guide/choosing-a-model).
 
@@ -56,8 +56,9 @@ You also decide how your agent behaves. You can pick the model it uses, give it 
 |---|---|
 | **Agent** | Your own AI helper on Salts. You can create more than one, each with its own settings. |
 | **Model** | The AI that reads your messages and writes the replies. You pick it in your agent's **Settings**. |
-| **OpenRouter** | The service your agent uses to reach the models. Your credit there pays for every reply. |
-| **API key** | A long password that lets one program use another on your behalf, such as your agent using your OpenRouter account. Keep every API key private. |
+| **AI credits** | The credit that pays for every reply. You buy it in Salts, and it arrives as a key you give to your agent. |
+| **OpenRouter** | The service your agent uses to reach the models. You can bring your own OpenRouter key if you have one. |
+| **API key** | A long password that lets one program use another on your behalf, such as your agent using your credits. Keep every API key private. |
 | **Token** | The unit models are paid by. A token is roughly three quarters of a word, and you pay for every token the model reads and writes. |
 | **Session** | One conversation with your agent. Your sessions are listed in the sidebar in your browser. |
 | **Capability** | Something extra your agent can do, such as searching the web or setting reminders. You switch them on in **Capabilities**. |

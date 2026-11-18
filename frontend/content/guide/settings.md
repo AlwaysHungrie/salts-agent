@@ -2,7 +2,7 @@
 title: Your agent's settings
 section: Using your agent
 order: 2
-summary: Every field on your agent's Settings page, from top to bottom, what each one does and where to learn more. Covers Telegram, WhatsApp, model, custom instructions, OpenRouter key, name, Manage access and API key.
+summary: Every field on your agent's Settings page, from top to bottom, what each one does and where to learn more. Covers Telegram, WhatsApp, model, custom instructions, key, name, Manage access and API key.
 ---
 
 Your agent has two pages for setting it up. **Settings** decides how your agent replies and who it talks to, and **Capabilities** decides what it can do. This page goes through **Settings** from top to bottom. For **Capabilities**, see [What your agent can do](/guide/capabilities).
@@ -46,7 +46,7 @@ We recommend leaving all four as they are until you have a reason to change them
 
 ## Key
 
-The OpenRouter API key that pays for your agent's replies. Your agent cannot reply without one. Choose a key from AI credits by its nickname, or click the wallet icon at the end of the dropdown to add one. See [Get an OpenRouter API key](/guide/openrouter).
+The key that pays for your agent's replies. Your agent cannot reply without one. Choose a key from AI credits by its nickname, or click the wallet icon at the end of the dropdown to add credits. See [What are AI credits](/guide/openrouter-wallet).
 
 ## Name
 

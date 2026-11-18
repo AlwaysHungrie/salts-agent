@@ -21,7 +21,7 @@ export const BRAND = {
 /* ------------------------------------------------------------- Numbers -- */
 
 /** Agents live right now. Used by the header counter and the mission maths. */
-export const AGENTS_DEPLOYED = 241;
+export const AGENTS_DEPLOYED = 1251;
 
 /** World population the mission counts up to, in billions. */
 export const WORLD_POPULATION_B = 8.31;
@@ -197,7 +197,7 @@ export const CAPABILITIES = {
 export const FLEET = {
   eyebrow: "Fleet Accounts",
   title: "Give your whole community personal agents.",
-  body: "Create agents for everyone in your community. These agents can share your OpenRouter key, so they work out of the box.",
+  body: "Create agents for everyone in your community. These agents can share your AI credits, so they work out of the box.",
   points: [
     {
       title: "Shared API key, with individual limits",
@@ -216,7 +216,7 @@ export const FLEET = {
   owner: {
     name: "Skipper",
     role: "Fleet Owner",
-    key: "Skipper's OpenRouter API key",
+    key: "Skipper's AI credits",
   },
   /** The community around the owner; sample names only. */
   members: ["Alex", "Marty", "Gloria", "Melman", "Julien", "Kowalski", "Rico", "Private"],
@@ -230,15 +230,15 @@ export const FLEET = {
 export const STEPS = [
   {
     n: "01",
-    title: "Get an OpenRouter API key",
-    body: "Get your own key by purchasing credits directly from openrouter.ai. Or use any crypto wallet to get a key from us. You can start with just $5.",
-    /** The phrase in `body` that links out. */
-    link: { text: "openrouter.ai", href: "https://openrouter.ai" },
+    title: "Create your agent",
+    body: "Sign in, give your agent a name and start chatting. Want to set up and manage agents for other people? Create a fleet instead.",
   },
   {
     n: "02",
-    title: "Create your agent",
-    body: "Sign in and add or buy a key in AI credits. Then create an agent, give it a name and pick that key. That's it.",
+    title: "Add API credits",
+    body: "Your first few messages are on us. After that, buy as many credits as you need, or connect your own OpenRouter account and bring your own API key.",
+    /** The phrase in `body` that links out. */
+    link: { text: "OpenRouter", href: "https://openrouter.ai" },
   },
   {
     n: "03",
@@ -267,8 +267,8 @@ export const FAQ = {
       a: `Up to 5 agents per account, and ${SESSION_LIMIT} chat sessions and ${STORAGE_MB} MB of files per agent. Need more agents? Request a higher limit from the app, or host ${BRAND.name} yourself on Cloudflare with no limits.`,
     },
     {
-      q: "Do I need an OpenRouter account?",
-      a: "No. You can bring your own key from openrouter.ai, or buy one from us with any crypto wallet. Either way, every reply is paid from that key's credit, and you can switch models at any time.",
+      q: "Can I bring my own API keys?",
+      a: "Yes. You can bring your own key from openrouter.ai, or buy one from us. Either way, every reply is paid from that key's credit, and you can switch models at any time.",
       link: { text: "openrouter.ai", href: "https://openrouter.ai" },
     },
     {
@@ -294,7 +294,11 @@ export const FAQ = {
     },
     {
       q: "What happens when my credit runs out?",
-      a: "Your agent stops replying until its key has credit again. Top up on OpenRouter, or buy a new key with crypto, since a bought key cannot be topped up.",
+      a: "Your agent stops replying until it has credit again. Buy more credits by card, UPI or crypto and switch your agent to the new key. If you brought your own OpenRouter key, top it up on OpenRouter.",
+    },
+    {
+      q: "Do you support crypto payments?",
+      a: "Yes. You can buy credits with USDC or ETH from any crypto wallet, such as MetaMask, Coinbase Wallet or Phantom. Card, UPI and netbanking work too.",
     },
     {
       q: "Do I have to use Telegram or WhatsApp?",
@@ -306,7 +310,7 @@ export const FAQ = {
 export const CTA = {
   title: "Your agent is waiting for you.",
   /** Two lines on wide screens, broken where the sentences break. */
-  body: ["Start with a $5 OpenRouter API key.", "It might be more than enough to last a lifetime."],
+  body: ["Start with as low as $5.", "It might be more than enough to last a lifetime."],
   primary: "Get my agent",
   secondary: "Read the user guide",
 } as const;

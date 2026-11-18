@@ -42,7 +42,7 @@ Each user connects their own Telegram or WhatsApp from their agent's **Settings*
 
 If you are not sure what to choose, we recommend starting with this and adjusting later:
 
-1. Your OpenRouter API key, locked.
+1. Your key, locked.
 2. A monthly spend limit you are comfortable paying for every agent.
 3. **Model** unlocked, with a short list of **Model options** you have tried yourself.
 4. Everything else left as it is.

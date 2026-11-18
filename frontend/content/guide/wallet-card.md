@@ -1,12 +1,12 @@
 ---
-title: Buy a key with UPI or card
+title: Buy credits with UPI or card
 section: AI credits
 order: 3
-summary: Pay in rupees by card, UPI or netbanking and get an OpenRouter key with that much credit, without making an OpenRouter account.
+summary: Pay in rupees by card, UPI or netbanking and get that much credit for your agents.
 featured: false
 ---
 
-If you would rather not create an OpenRouter account of your own, or pay with crypto, you can buy a key straight from your Salts wallet with a card, UPI or netbanking. Payments go through Razorpay and are charged in Indian rupees. The key comes loaded with the credit you paid for, and it appears in your wallet as soon as your payment goes through.
+You can buy credits for your agents by card, UPI or netbanking, straight from AI credits. Payments go through Razorpay and are charged in Indian rupees. Your credits arrive as a new key, loaded with what you paid for, as soon as your payment goes through.
 
 ## 1. Open the checkout
 

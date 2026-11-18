@@ -7,7 +7,7 @@ summary: Your bot is public. Here is how to make sure only the right people can 
 
 Anyone on Telegram can search for your bot's username and send it a message. Your agent only replies to the people and groups in its whitelists, so keeping those lists right is what keeps your agent private.
 
-This matters because anyone your agent replies to can spend your OpenRouter credit, use the apps you connected to your agent with your account, and hear anything your agent remembers about you.
+This matters because anyone your agent replies to can spend your credits, use the apps you connected to your agent with your account, and hear anything your agent remembers about you.
 
 ## Keep your agent private
 
@@ -17,15 +17,15 @@ This matters because anyone your agent replies to can spend your OpenRouter cred
 4. **Only allow groups you control.** Everyone in an allowed group can talk to your agent, including people who join later.
 5. **Keep your bot token private.** If it leaks, send `/revoke` to [@BotFather](https://t.me/BotFather) and save the new token in your agent's settings.
 6. **Keep risky apps out of groups.** Each MCP server on the **Capabilities** page has a **Use in Telegram groups** switch. Switch it off for any app that can spend money or change your accounts, and your agent will only use it in your private chats.
-7. **Set a spending limit on your OpenRouter key.** Even if something goes wrong, the limit stops it from turning into a large bill. See [Get an OpenRouter API key](/guide/openrouter).
+7. **Keep little credit on its key.** Even if something goes wrong, a small balance stops it from turning into a large bill. See [What are AI credits](/guide/openrouter-wallet).
 
 ## Making a public agent
 
-Sometimes you might want a bot that anyone can use, for example as a helper for a community or for your customers. If you do, we strongly recommend creating a separate agent for it, with its own bot and its own OpenRouter key. Never make your personal agent public.
+Sometimes you might want a bot that anyone can use, for example as a helper for a community or for your customers. If you do, we strongly recommend creating a separate agent for it, with its own bot and its own key. Never make your personal agent public.
 
 For the public agent, we recommend that you:
 
-- Give it its own OpenRouter key with a low credit limit.
+- Give it its own key with little credit on it.
 - Turn off **Private Memory**, so it does not repeat what one person told it to the next.
 - Do not connect any apps that use your own accounts.
 - Turn off **Schedule tasks**.

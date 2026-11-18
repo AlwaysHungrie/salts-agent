@@ -2,11 +2,11 @@
 title: What are AI credits
 section: AI credits
 order: 1
-summary: The place in Salts that holds your OpenRouter keys, so you can give one to any of your agents.
+summary: Where you buy and keep the credit that pays for your agents' replies, by card, UPI, crypto or your own OpenRouter key.
 featured: true
 ---
 
-Your agent needs an OpenRouter key to talk to an AI model, and every reply it writes is paid for from the credit on that key. Salts keeps your keys under **AI credits**, so you can pick one for any of your agents without copying it around.
+Every reply your agent writes is paid for from credit. You buy that credit under **AI credits**, and it arrives as a key: a balance with a nickname that you can give to any of your agents.
 
 For example, you might keep one key for your personal agent and another for an agent you share with your team, each with its own credit, and see at a glance how much each one has left.
 
@@ -22,14 +22,15 @@ On the Salts home page, click **AI credits** in the top right corner. You can al
 
 Each key in your wallet has a nickname, such as "Amber Falcon", so you can tell your keys apart. Under the nickname you can see how much credit the key has left, and how many of your agents use it.
 
-## Getting a key
+## Getting credits
 
-There are four ways to put a key in your wallet:
+There are three ways to add credits, all under **Get new key**:
 
-- **Connect your OpenRouter account.** Under **Get new key**, choose **Connect OpenRouter account**. OpenRouter asks you to sign in and create a new key for Salts, then sends you back with the key already in your wallet. You don't need to copy anything. Set a **Credit limit** on that screen: Salts won't accept a new key without one.
-- **Buy one with crypto.** Under **Get new key**, choose **Pay with crypto**, pick how much credit you want and pay from your crypto wallet. Salts creates the key for you and puts it straight into your wallet. See [Buy a key with crypto](/guide/wallet-crypto).
-- **Buy one with UPI or card.** Under **Get new key**, choose **Pay with UPI or card**, pick how much credit you want in rupees and pay through Razorpay. See [Buy a key with UPI or card](/guide/wallet-card).
-- **Add a key you already have.** If you have your own OpenRouter account, paste its key under **Already have an OpenRouter key?** and click **Add key**. See [Get an OpenRouter API key](/guide/openrouter) to create one. Each key can be in your wallet only once; adding the same key again says **Key already imported**.
+- **Pay with UPI or card.** Pick how much credit you want in rupees and pay by card, UPI or netbanking through Razorpay. See [Buy credits with UPI or card](/guide/wallet-card).
+- **Pay with crypto.** Pick how much credit you want and pay with USDC or ETH from your crypto wallet. See [Buy credits with crypto](/guide/wallet-crypto).
+- **Bring your own OpenRouter key.** If you already pay for models on OpenRouter, choose **Connect OpenRouter account**, or paste a key under **Already have an OpenRouter key?**. See [Bring your own OpenRouter key](/guide/openrouter).
+
+When you buy credits, Salts creates the key for you and puts it straight into your wallet.
 
 ## Removing a key
 

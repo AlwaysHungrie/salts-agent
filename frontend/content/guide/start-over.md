@@ -32,7 +32,7 @@ Only the person who created an agent can delete it. People you added under **Man
 
 Deleting an agent does not touch anything outside Salts. Once it is gone, we recommend that you:
 
-1. Delete the agent's OpenRouter key on the [API keys page](https://openrouter.ai/workspaces/default/keys), if no other agent uses it.
+1. If the agent used your own OpenRouter key, delete it on the [API keys page](https://openrouter.ai/workspaces/default/keys), if no other agent uses it.
 2. Delete its Telegram bot with `/deletebot` to [@BotFather](https://t.me/BotFather), if you will not use it again.
 3. Delete any API keys you created for it in other apps, such as a GitHub personal access token.
 4. If it used salts-tools, open `npx salts-tools`, open the agent in the **Agents** tab and unregister it.

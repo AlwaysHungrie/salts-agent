@@ -17,7 +17,7 @@ Compacting does not delete anything. Every message is still in your browser, exa
 
 ## Your agent compacts on its own
 
-When a conversation grows past a certain size, your agent automatically summarises the older messages before it replies. You do not need to do anything. The summary is written by the model, so it is billed to your OpenRouter key like any other reply.
+When a conversation grows past a certain size, your agent automatically summarises the older messages before it replies. You do not need to do anything. The summary is written by the model, so it is paid from your agent's key like any other reply.
 
 ## When to compact yourself
 
