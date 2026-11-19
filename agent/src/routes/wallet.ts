@@ -123,6 +123,11 @@ export async function handleWallet(
         card_max_inr: settings.card_max_inr,
         card_presets_inr: settings.card_presets_inr,
         card_default_inr: settings.card_default_inr,
+        // Card payments outside India: priced in US dollars, which PayPal pays.
+        card_min_usd: settings.card_min_usd,
+        card_max_usd: settings.card_max_usd,
+        card_presets_usd: settings.card_presets_usd,
+        card_default_usd: settings.card_default_usd,
       });
     }
     if (method === "POST") return await addKey(request, env, email);

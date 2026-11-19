@@ -12,6 +12,10 @@
   "card_max_inr": 2500,
   "card_presets_inr": [45, 225, 999],
   "card_default_inr": 225,
+  "card_min_usd": 5,
+  "card_max_usd": 100,
+  "card_presets_usd": [5, 25, 50],
+  "card_default_usd": 25,
   "default_agent_limit": 5,
   "max_upload_bytes": {
     "text": 1000000,

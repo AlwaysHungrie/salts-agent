@@ -902,7 +902,7 @@ const razorpayPayments = new Map<
 
 /**
  * A stand-in for Razorpay's API. A test pays an order with `POST
- * https://api.razorpay.com/__pay { order_id, status?, amount? }`, as the checkout would,
+ * https://api.razorpay.com/__pay { order_id, status?, amount?, currency? }`, as the checkout would,
  * and gets the payment's id back; the Worker then reads it through the ordinary API.
  */
 async function razorpayMock(request: Request, url: URL): Promise<Response> {
@@ -910,13 +910,13 @@ async function razorpayMock(request: Request, url: URL): Promise<Response> {
     new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
   const rid = (prefix: string) => `${prefix}_${crypto.randomUUID().replace(/-/g, "").slice(0, 14)}`;
   if (url.pathname === "/__pay") {
-    const body = (await request.json()) as { order_id: string; status?: string; amount?: number };
+    const body = (await request.json()) as { order_id: string; status?: string; amount?: number; currency?: string };
     const order = razorpayOrders.get(body.order_id);
     const payment = {
       id: rid("pay"),
       order_id: body.order_id,
       amount: body.amount ?? order?.amount ?? 0,
-      currency: order?.currency ?? "INR",
+      currency: body.currency ?? order?.currency ?? "INR",
       status: body.status ?? "captured",
     };
     razorpayPayments.set(payment.id, payment);

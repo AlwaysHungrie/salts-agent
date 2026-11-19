@@ -89,6 +89,14 @@ export type DeploymentSettings = {
   card_presets_inr: number[];
   /** The rupee amount the Indian card checkout starts on. */
   card_default_inr: number;
+  /** The least credit one international (US dollar) card purchase may buy, in whole dollars. */
+  card_min_usd: number;
+  /** The most credit one international (US dollar) card purchase may buy, in whole dollars. */
+  card_max_usd: number;
+  /** The dollar amounts the international card checkout offers with one click. */
+  card_presets_usd: number[];
+  /** The dollar amount the international card checkout starts on. */
+  card_default_usd: number;
   /** Attachment ceilings, per kind. */
   max_upload_bytes: UploadLimits;
   /** Past this, a first-page render is not a thumbnail. */
@@ -189,6 +197,22 @@ export const SETTINGS_FIELDS: readonly SettingsField[] = [
     min: 1,
     max: 1_000_000,
     doc: "rupee amount the Indian card checkout starts on",
+    group: "default",
+  },
+  INT("card_min_usd", 1, 10_000, "least credit one international card purchase may buy, in dollars"),
+  INT("card_max_usd", 1, 10_000, "most credit one international card purchase may buy, in dollars"),
+  {
+    key: "card_presets_usd",
+    kind: "json",
+    doc: "dollar amounts the international card checkout offers with one click: [5, 25, 50]",
+    group: "default",
+  },
+  {
+    key: "card_default_usd",
+    kind: "int",
+    min: 1,
+    max: 10_000,
+    doc: "dollar amount the international card checkout starts on",
     group: "default",
   },
   {
@@ -460,11 +484,13 @@ export function validateSettingsPatch(input: unknown, current: StoredSettings): 
         next.default_model = value.trim();
         break;
       }
-      case "card_presets_inr": {
+      case "card_presets_inr":
+      case "card_presets_usd": {
         if (!Array.isArray(value) || !value.length || value.length > 6) {
-          throw new SettingsError("card_presets_inr must be a list of one to six amounts");
+          throw new SettingsError(`${key} must be a list of one to six amounts`);
         }
-        next.card_presets_inr = value.map((n, i) => requireInt(`card_presets_inr[${i}]`, n, 1, 1_000_000));
+        const most = key === "card_presets_inr" ? 1_000_000 : 10_000;
+        next[key as "card_presets_inr" | "card_presets_usd"] = value.map((n, i) => requireInt(`${key}[${i}]`, n, 1, most));
         break;
       }
       case "system_prompt": {
@@ -496,20 +522,17 @@ export function validateSettingsPatch(input: unknown, current: StoredSettings): 
     }
   }
 
-  if (
-    next.card_min_inr !== undefined &&
-    next.card_max_inr !== undefined &&
-    next.card_min_inr > next.card_max_inr
-  ) {
-    throw new SettingsError("card_min_inr cannot exceed card_max_inr");
-  }
-  const start = next.card_default_inr;
-  if (
-    start !== undefined &&
-    ((next.card_min_inr !== undefined && start < next.card_min_inr) ||
-      (next.card_max_inr !== undefined && start > next.card_max_inr))
-  ) {
-    throw new SettingsError("card_default_inr must be from card_min_inr to card_max_inr");
+  for (const cur of ["inr", "usd"] as const) {
+    const [lo, hi, def] = [`card_min_${cur}`, `card_max_${cur}`, `card_default_${cur}`] as const;
+    const min = next[lo];
+    const max = next[hi];
+    if (min !== undefined && max !== undefined && min > max) {
+      throw new SettingsError(`${lo} cannot exceed ${hi}`);
+    }
+    const start = next[def];
+    if (start !== undefined && ((min !== undefined && start < min) || (max !== undefined && start > max))) {
+      throw new SettingsError(`${def} must be from ${lo} to ${hi}`);
+    }
   }
 
   // Checked once the whole patch is in, so a catalogue and a lowered ceiling sent

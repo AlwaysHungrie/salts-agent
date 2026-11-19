@@ -609,25 +609,36 @@ export type PayNetwork = {
   assets: ("usdc" | "eth")[];
 };
 
-/** A Razorpay order for a new key: what checkout opens on, and the total both ways. */
-export type CardOrder = {
+/** What every Razorpay order for a new key carries: what checkout opens on. */
+type CardOrderBase = {
   id: string;
   /** Razorpay's public key id, which checkout is opened with. */
   key_id: string;
   order_id: string;
-  currency: "INR";
-  /** What checkout charges, in paise. */
+  /** What checkout charges, in paise or cents. */
   amount: number;
-  /** The credit chosen, in whole rupees. */
-  credit_inr: number;
-  fee_inr: number;
-  total_inr: number;
   /** The credit's dollar worth: what the key can spend. */
   amount_usd: number;
   total_usd: number;
   /** The buyer's email, filled into checkout for Razorpay's receipt. */
   email: string;
 };
+
+/** A Razorpay order for a new key, in rupees (India) or US dollars (elsewhere, via PayPal). */
+export type CardOrder =
+  | (CardOrderBase & {
+      currency: "INR";
+      /** The credit chosen, in whole rupees. */
+      credit_inr: number;
+      fee_inr: number;
+      total_inr: number;
+    })
+  | (CardOrderBase & {
+      currency: "USD";
+      /** The credit chosen, in whole dollars. */
+      credit_usd: number;
+      fee_usd: number;
+    });
 
 /** What the buyer's wallet must send: exactly `units` of the asset to `to`. */
 export type PayQuote = {

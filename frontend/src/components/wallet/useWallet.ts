@@ -21,15 +21,19 @@ type WalletRead = {
   error: string | null;
 };
 
-/** The Indian card checkout's range and quick picks, in whole rupees. */
+/**
+ * The card checkout's currency, range and quick picks: whole rupees for buyers in India,
+ * whole US dollars (paid by PayPal) elsewhere.
+ */
 export type CardRange = {
+  currency: "INR" | "USD";
   min: number;
   max: number;
   presets: number[];
   start: number;
 };
 
-const NO_RANGE: CardRange = { min: 0, max: 0, presets: [], start: 0 };
+const NO_RANGE: CardRange = { currency: "USD", min: 0, max: 0, presets: [], start: 0 };
 
 /** The wallet as the Worker holds it, or the error it answered with. */
 async function readWallet(): Promise<WalletRead> {
@@ -59,7 +63,14 @@ async function readWallet(): Promise<WalletRead> {
     card_max_inr?: number;
     card_presets_inr?: number[];
     card_default_inr?: number;
+    card_min_usd?: number;
+    card_max_usd?: number;
+    card_presets_usd?: number[];
+    card_default_usd?: number;
+    /** Set by the Next route from the caller's IP country. */
+    card_currency?: "INR" | "USD";
   };
+  const india = body.card_currency === "INR";
   return {
     keys: body.keys,
     networks: body.networks ?? [],
@@ -68,12 +79,21 @@ async function readWallet(): Promise<WalletRead> {
     reownProjectId: body.reown_project_id ?? "",
     razorpayKeyId: body.razorpay_key_id ?? "",
     inrPerUsd: body.inr_per_usd ?? 0,
-    cardRange: {
-      min: body.card_min_inr ?? 0,
-      max: body.card_max_inr ?? 0,
-      presets: body.card_presets_inr ?? [],
-      start: body.card_default_inr ?? 0,
-    },
+    cardRange: india
+      ? {
+          currency: "INR",
+          min: body.card_min_inr ?? 0,
+          max: body.card_max_inr ?? 0,
+          presets: body.card_presets_inr ?? [],
+          start: body.card_default_inr ?? 0,
+        }
+      : {
+          currency: "USD",
+          min: body.card_min_usd ?? 0,
+          max: body.card_max_usd ?? 0,
+          presets: body.card_presets_usd ?? [],
+          start: body.card_default_usd ?? 0,
+        },
     error: null,
   };
 }
@@ -177,12 +197,16 @@ export function useWallet() {
     return "paid";
   };
 
-  /** Make a Razorpay order for whole rupees of credit. Resolves to the order, or an error to show. */
-  const cardOrder = async (amountInr: number): Promise<CardOrder | string> => {
+  /**
+   * Make a Razorpay order for whole units of credit in the checkout's currency. Resolves
+   * to the order, or an error to show.
+   */
+  const cardOrder = async (amount: number): Promise<CardOrder | string> => {
+    const field = cardRange.currency === "INR" ? "amount_inr" : "amount_usd";
     const res = await fetch("/api/wallet/card-orders", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ amount_inr: amountInr }),
+      body: JSON.stringify({ [field]: amount }),
     });
     if (!res.ok) return await errorOf(res, "Couldn't start the payment.");
     return (await res.json()) as CardOrder;

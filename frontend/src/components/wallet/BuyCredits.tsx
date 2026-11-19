@@ -96,22 +96,23 @@ export function BuyCredits({
     ) => ReturnType<CheckoutCalls["quote"]>;
     confirm: CheckoutCalls["confirm"];
   };
-  /** Pay by card or UPI through Razorpay instead, choosing the credit in rupees. */
+  /** Pay by card through Razorpay instead: in rupees in India, in US dollars elsewhere. */
   card?: {
     inrPerUsd: number;
-    /** The Indian range and quick picks, in whole rupees. */
+    /** The currency, range and quick picks, in whole units. */
     range: CardRange;
-    order: (amountInr: number) => ReturnType<CardCalls["order"]>;
+    order: (amount: number) => ReturnType<CardCalls["order"]>;
     confirm: CardCalls["confirm"];
   };
   onPaid: () => void;
 }) {
-  // By card the credit is chosen in whole rupees; by crypto, in dollars.
+  // By card the credit is chosen in whole rupees (India) or dollars; by crypto, in dollars.
+  const rupees = card?.range.currency === "INR";
   const rate = card?.inrPerUsd ?? 0;
   const presets = card ? card.range.presets : PRESETS;
   const min = card ? card.range.min : 1;
   const max = card ? card.range.max : maxUsd;
-  const money = card ? inr : usd;
+  const money = rupees ? inr : usd;
   const [text, setText] = useState(
     String(card ? card.range.start : presets[0]),
   );
@@ -130,8 +131,8 @@ export function BuyCredits({
     ? Math.ceil((Math.round(amount * 100) * feeBps) / 10_000) / 100
     : 0;
   const total = valid ? Math.round((amount + fee) * 100) / 100 : 0;
-  // What a card payment comes to in dollars, for reference.
-  const totalUsd = card && valid ? Math.round((total * 100) / rate) / 100 : 0;
+  // What a rupee payment comes to in dollars, for reference.
+  const totalUsd = rupees && valid ? Math.round((total * 100) / rate) / 100 : 0;
 
   return (
     <div>
@@ -140,7 +141,7 @@ export function BuyCredits({
           <Step title="Credit" />
           <label className="border-hairline focus-within:border-ink flex h-14 items-center gap-1 rounded-2xl border px-4 transition">
             <span className="text-muted text-2xl font-semibold">
-              {card ? "₹" : "$"}
+              {rupees ? "₹" : "$"}
             </span>
             <input
               type="number"
@@ -150,12 +151,12 @@ export function BuyCredits({
               step={1}
               value={text}
               onChange={(e) => setText(e.target.value)}
-              aria-label={card ? "Credit in rupees" : "Credit in US dollars"}
+              aria-label={rupees ? "Credit in rupees" : "Credit in US dollars"}
               className="placeholder:text-faint min-w-0 flex-1 bg-transparent text-2xl font-semibold outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               placeholder="0"
             />
             <span className="text-faint text-xs font-semibold">
-              {card ? "INR" : "USD"}
+              {rupees ? "INR" : "USD"}
             </span>
           </label>
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
@@ -171,13 +172,13 @@ export function BuyCredits({
                       : "bg-canvas-soft hover:bg-hairline"
                   }`}
                 >
-                  {card ? `₹${p.toLocaleString("en-IN")}` : `$${p}`}
+                  {rupees ? `₹${p.toLocaleString("en-IN")}` : `$${p}`}
                 </button>
               ))}
             <span
               className={`ml-auto text-xs ${valid || !text ? "text-faint" : "text-red-600"}`}
             >
-              {card ? `Max ₹${max.toLocaleString("en-IN")}` : `Max $${max}`}
+              {rupees ? `Max ₹${max.toLocaleString("en-IN")}` : `Max $${max}`}
             </span>
           </div>
         </>
@@ -198,7 +199,7 @@ export function BuyCredits({
           <span>You pay</span>
           <span>{valid ? money(total) : "—"}</span>
         </div>
-        {card && (
+        {rupees && (
           <div className="mt-1 flex justify-between">
             <span className="text-muted">In USD</span>
             <span>{valid ? usd(totalUsd) : "—"}</span>
@@ -228,6 +229,7 @@ export function BuyCredits({
       <div className="mt-8">
         {card ? (
           <CardCheckout
+            currency={card.range.currency}
             total={valid ? total : null}
             calls={{ order: () => card.order(amount), confirm: card.confirm }}
             onPaid={onPaid}

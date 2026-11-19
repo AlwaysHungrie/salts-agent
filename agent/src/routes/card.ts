@@ -2,6 +2,7 @@ import type { Env } from "../env";
 import type { WalletPurchase } from "../registry";
 import {
   capturePayment,
+  type CardCurrency,
   createOrder,
   fetchPayment,
   paymentId,
@@ -35,49 +36,55 @@ export async function cardKeyId(env: Env): Promise<string> {
   return (await openKeys(env))?.key_id ?? "";
 }
 
-/** Rupees to the paisa, as a number with two decimals at most. */
-const rupees = (paise: number) => paise / 100;
-
-/** Whole rupees of credit to buy, from `min` to `max`. */
-function rupeesOf(value: unknown, min: number, max: number): number | undefined {
-  const inr = Number(value);
-  return Number.isInteger(inr) && inr >= min && inr <= max ? inr : undefined;
+/** Whole units of credit to buy (rupees or dollars), from `min` to `max`. */
+function wholeOf(value: unknown, min: number, max: number): number | undefined {
+  const n = Number(value);
+  return Number.isInteger(n) && n >= min && n <= max ? n : undefined;
 }
 
 /**
- * Make a Razorpay order for a new key. The credit is chosen in whole rupees; the fee is
- * added in paise (rounded up), and the key gets the credit's dollar worth at today's rate
+ * Make a Razorpay order for a new key, in rupees (`amount_inr`) or US dollars
+ * (`amount_usd`, which PayPal pays for buyers outside India). The credit is chosen in
+ * whole units; the fee is added in paise or cents, rounded up. A dollar key gets its
+ * credit as chosen; a rupee key gets the credit's dollar worth at today's rate
  * (`inrPerUsd`), rounded down to the cent so the deployment is never short.
  */
 export async function cardOrder(request: Request, env: Env, email: string): Promise<Response> {
-  const body = await readJson<{ amount_inr?: number }>(request);
+  const body = await readJson<{ amount_inr?: number; amount_usd?: number }>(request);
   const settings = await deploymentSettings(env);
-  const min = settings.card_min_inr;
-  const max = settings.card_max_inr;
-  const credit = rupeesOf(body.amount_inr, min, max);
-  if (!credit) return jsonError(`Choose a whole amount from ₹${min} to ₹${max}.`, 400);
+  const currency: CardCurrency = body.amount_usd !== undefined ? "USD" : "INR";
+  const [min, max] =
+    currency === "USD" ? [settings.card_min_usd, settings.card_max_usd] : [settings.card_min_inr, settings.card_max_inr];
+  const credit = wholeOf(currency === "USD" ? body.amount_usd : body.amount_inr, min, max);
+  if (!credit) {
+    const sign = currency === "USD" ? "$" : "₹";
+    return jsonError(`Choose a whole amount from ${sign}${min} to ${sign}${max}.`, 400);
+  }
   const keys = await openKeys(env);
   if (!keys) return jsonError("Card payments aren't open yet.", 503);
-  // Today's rate, locked into this order: the key's dollar credit is fixed by it.
-  let rate: number;
-  try {
-    rate = await inrPerUsd();
-  } catch (err) {
-    if (err instanceof FxError) return jsonError(err.message, 503);
-    throw err;
+  // Today's rate, locked into a rupee order: the key's dollar credit is fixed by it.
+  let rate = 1;
+  if (currency === "INR") {
+    try {
+      rate = await inrPerUsd();
+    } catch (err) {
+      if (err instanceof FxError) return jsonError(err.message, 503);
+      throw err;
+    }
   }
   const dir = directory(env);
   if ((await dir.walletKeys(email)).length >= settings.max_wallet_keys) {
     return jsonError(`A wallet holds at most ${settings.max_wallet_keys} keys.`, 400);
   }
 
-  const creditPaise = credit * 100;
-  const feePaise = Math.ceil((creditPaise * settings.wallet_fee_bps) / 10_000);
-  const paise = creditPaise + feePaise;
-  const usd = Math.floor(creditPaise / rate) / 100;
+  // Paise or cents.
+  const creditMinor = credit * 100;
+  const feeMinor = Math.ceil((creditMinor * settings.wallet_fee_bps) / 10_000);
+  const totalMinor = creditMinor + feeMinor;
+  const usd = currency === "USD" ? credit : Math.floor(creditMinor / rate) / 100;
   let orderId: string;
   try {
-    orderId = await createOrder(keys, paise);
+    orderId = await createOrder(keys, totalMinor, currency);
   } catch (err) {
     if (err instanceof RazorpayError) return jsonError(err.message, 502);
     throw err;
@@ -88,27 +95,33 @@ export async function cardOrder(request: Request, env: Env, email: string): Prom
     key_id: "",
     amount_usd: usd,
     network: RAZORPAY_NETWORK,
-    asset: "inr",
+    asset: currency === "USD" ? "usd" : "inr",
     to_address: orderId,
     payer: "",
-    units: String(paise),
+    units: String(totalMinor),
     created_at: now,
     expires_at: now + ORDER_TTL_MS,
   });
-  return json({
+  const common = {
     id: made.id,
     key_id: keys.key_id,
     order_id: orderId,
-    currency: "INR",
-    amount: paise,
-    credit_inr: credit,
-    fee_inr: rupees(feePaise),
-    total_inr: rupees(paise),
+    currency,
+    amount: totalMinor,
     amount_usd: usd,
-    total_usd: Math.round(paise / rate) / 100,
     // The buyer's Salts email, filled into Razorpay's checkout: their receipt goes there,
     // and the dashboard shows who paid.
     email,
+  };
+  if (currency === "USD") {
+    return json({ ...common, credit_usd: credit, fee_usd: feeMinor / 100, total_usd: totalMinor / 100 });
+  }
+  return json({
+    ...common,
+    credit_inr: credit,
+    fee_inr: feeMinor / 100,
+    total_inr: totalMinor / 100,
+    total_usd: Math.round(totalMinor / rate) / 100,
   });
 }
 
@@ -120,7 +133,8 @@ type Settled = { status: "paid" } | { status: "pending" | "failed"; reason: stri
  */
 async function settle(env: Env, keys: RazorpayKeys, p: WalletPurchase, id: string): Promise<Settled> {
   let payment = await fetchPayment(keys, id);
-  if (payment.order_id !== p.to_address || payment.currency !== "INR" || payment.amount !== Number(p.units)) {
+  const currency = p.asset === "usd" ? "USD" : "INR";
+  if (payment.order_id !== p.to_address || payment.currency !== currency || payment.amount !== Number(p.units)) {
     return { status: "failed", reason: "That payment isn't for this purchase." };
   }
   if (payment.status === "authorized") payment = await capturePayment(keys, payment);

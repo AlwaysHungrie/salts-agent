@@ -1,6 +1,6 @@
 /**
  * Card and UPI payments for wallet keys, through Razorpay. The Worker makes an order for
- * the purchase's rupee total; the browser pays it in Razorpay's checkout; the Worker then
+ * the purchase's total, in rupees or US dollars; the browser pays it in Razorpay's checkout; the Worker then
  * reads the payment back from Razorpay with its own key before counting it, so nothing the
  * browser says is taken on trust. A signed webhook counts payments whose page was closed.
  */
@@ -10,12 +10,12 @@ const API = "https://api.razorpay.com/v1";
 /** The deployment's Razorpay credentials, set from the admin CLI; "" where not set. */
 export type RazorpayKeys = { key_id: string; key_secret: string; webhook_secret: string };
 
-/** A purchase paid through Razorpay sits under this network id, priced in rupees. */
+/** A purchase paid through Razorpay sits under this network id, priced in rupees or dollars. */
 export const RAZORPAY_NETWORK = "razorpay";
 
 export class RazorpayError extends Error {}
 
-/** A Razorpay payment, as far as counting it goes. Amounts are in paise. */
+/** A Razorpay payment, as far as counting it goes. Amounts are in paise or cents. */
 export type RazorpayPayment = {
   id: string;
   order_id: string | null;
@@ -48,9 +48,15 @@ export async function razorpayKeysWork(keys: RazorpayKeys): Promise<boolean> {
   return res.ok;
 }
 
-/** An order for `paise` rupee paise, which Razorpay's checkout is opened on. */
-export async function createOrder(keys: RazorpayKeys, paise: number): Promise<string> {
-  const order = await call<{ id: string }>(keys, "POST", "/orders", { amount: paise, currency: "INR" });
+/** The currencies a card order is made in: rupees in India, US dollars elsewhere. */
+export type CardCurrency = "INR" | "USD";
+
+/**
+ * An order for `amount` in the currency's smallest unit (paise or cents), which
+ * Razorpay's checkout is opened on. A USD order is the one PayPal can pay.
+ */
+export async function createOrder(keys: RazorpayKeys, amount: number, currency: CardCurrency): Promise<string> {
+  const order = await call<{ id: string }>(keys, "POST", "/orders", { amount, currency });
   return order.id;
 }
 
