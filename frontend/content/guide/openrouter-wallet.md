@@ -26,7 +26,7 @@ Each key in your wallet has a nickname, such as "Amber Falcon", so you can tell 
 
 There are three ways to add credits, all under **Get new key**:
 
-- **Pay with UPI or card** (in India) or **Pay in USD with card** (everywhere else). In India you pick how much credit you want in rupees and pay by card, UPI or netbanking. Elsewhere you pick it in US dollars and pay with PayPal. Both go through Razorpay. See [Buy credits with UPI or card](/guide/wallet-card).
+- **Pay with UPI or card** (in India) or **Pay with Card** (everywhere else). In India you pick how much credit you want in rupees and pay by card, UPI or netbanking. Elsewhere you pick it in US dollars and pay with PayPal. Both go through Razorpay. See [Buy credits with UPI or card](/guide/wallet-card).
 - **Pay with crypto.** Pick how much credit you want and pay with USDC or ETH from your crypto wallet. See [Buy credits with crypto](/guide/wallet-crypto).
 - **Bring your own OpenRouter key.** If you already pay for models on OpenRouter, choose **Connect OpenRouter account**, or paste a key under **Already have an OpenRouter key?**. See [Bring your own OpenRouter key](/guide/openrouter).
 
