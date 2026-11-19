@@ -42,16 +42,19 @@ const POLL_MS = 3000;
 const POLL_FOR_MS = 5 * 60 * 1000;
 
 /**
- * Pay by card, UPI or netbanking in Razorpay's window. The Worker reads the payment back
- * from Razorpay before it counts, so the key is issued only for a payment that went through.
+ * Pay in Razorpay's window: by card, UPI or netbanking in rupees, or in US dollars by
+ * PayPal outside India. The Worker reads the payment back from Razorpay before it counts,
+ * so the key is issued only for a payment that went through.
  */
 export function CardCheckout({
+  currency,
   total,
   calls,
   onPaid,
   onLock,
 }: {
-  /** What the buyer pays in rupees; null while the amount isn't valid. */
+  currency: "INR" | "USD";
+  /** What the buyer pays, in `currency`; null while the amount isn't valid. */
   total: number | null;
   calls: CardCalls;
   onPaid: () => void;
@@ -98,7 +101,10 @@ export function CardCheckout({
         amount: order.amount,
         currency: order.currency,
         name: "Salts",
-        description: `₹${order.credit_inr.toLocaleString("en-IN")} AI credits`,
+        description:
+          order.currency === "INR"
+            ? `₹${order.credit_inr.toLocaleString("en-IN")} AI credits`
+            : `$${order.credit_usd} AI credits`,
         prefill: { email: order.email },
         handler: (r: { razorpay_payment_id: string }) => void finish(order, r.razorpay_payment_id),
         modal: {
@@ -121,14 +127,24 @@ export function CardCheckout({
 
   return (
     <div>
-      <Step title="Pay with card or UPI" hint="Cards, UPI and netbanking, through Razorpay." />
+      {currency === "INR" ? (
+        <Step title="Pay with card or UPI" hint="Cards, UPI and netbanking, through Razorpay." />
+      ) : (
+        <Step title="Pay in USD with card" hint="via PayPal, secured by Razorpay" />
+      )}
       <button
         onClick={() => void pay()}
         disabled={total === null || state !== "idle"}
         className="bg-ink text-on-primary flex h-12 w-full items-center justify-center gap-2 rounded-full px-6 text-sm font-semibold transition hover:opacity-85 disabled:opacity-40"
       >
         {state === "idle" ? (
-          `Pay ₹${total === null ? "—" : total.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+          total === null ? (
+            `Pay ${currency === "INR" ? "₹" : "$"}—`
+          ) : currency === "INR" ? (
+            `Pay ₹${total.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+          ) : (
+            `Pay $${total.toFixed(2)}`
+          )
         ) : (
           <>
             <Loader2 className="h-4 w-4 animate-spin" />

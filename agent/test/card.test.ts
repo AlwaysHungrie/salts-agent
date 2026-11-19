@@ -52,6 +52,24 @@ function order(email: string, amount_inr: number) {
   );
 }
 
+function orderUsd(email: string, amount_usd: number) {
+  return SELF.fetch(
+    `${BASE}/api/wallet/card-orders`,
+    as(email, { method: "POST", body: JSON.stringify({ amount_usd }) })
+  );
+}
+
+type UsdOrderView = {
+  id: string;
+  order_id: string;
+  amount: number;
+  currency: string;
+  credit_usd: number;
+  fee_usd: number;
+  total_usd: number;
+  amount_usd: number;
+};
+
 function confirm(email: string, id: string, payment_id: string) {
   return SELF.fetch(
     `${BASE}/api/wallet/card-orders/${id}/confirm`,
@@ -60,7 +78,7 @@ function confirm(email: string, id: string, payment_id: string) {
 }
 
 /** Pay an order in the stand-in checkout; the payment's id, as the checkout hands it back. */
-async function pay(order_id: string, extra: { status?: string; amount?: number } = {}) {
+async function pay(order_id: string, extra: { status?: string; amount?: number; currency?: string } = {}) {
   return (await json<{ id: string }>(
     fetch("https://api.razorpay.com/__pay", { method: "POST", body: JSON.stringify({ order_id, ...extra }) })
   )).id;
@@ -75,6 +93,10 @@ async function wallet(email: string) {
     card_max_inr: number;
     card_presets_inr: number[];
     card_default_inr: number;
+    card_min_usd: number;
+    card_max_usd: number;
+    card_presets_usd: number[];
+    card_default_usd: number;
   }>(
     SELF.fetch(`${BASE}/api/wallet`, as(email))
   );
@@ -206,6 +228,51 @@ describe("buying a key by card", () => {
     await openCards();
     await directory().setProvisioningKey("");
     expect((await order(someone(), 500)).status).toBe(503);
+  });
+});
+
+describe("buying a key by card in US dollars", () => {
+  beforeEach(openCards);
+
+  it("hands the browser the international range", async () => {
+    expect(await wallet(someone())).toMatchObject({
+      card_min_usd: SHIPPED.card_min_usd,
+      card_max_usd: SHIPPED.card_max_usd,
+      card_presets_usd: SHIPPED.card_presets_usd,
+      card_default_usd: SHIPPED.card_default_usd,
+    });
+  });
+
+  it("orders dollars of credit plus the service fee, the key getting the credit as chosen", async () => {
+    const o = await json<UsdOrderView>(orderUsd(someone(), 25));
+    const fee = Math.ceil((2_500 * SHIPPED.wallet_fee_bps) / 10_000);
+    expect(o).toMatchObject({ currency: "USD", credit_usd: 25, fee_usd: fee / 100, amount_usd: 25 });
+    expect(o.amount).toBe(2_500 + fee);
+    expect(o.total_usd).toBe((2_500 + fee) / 100);
+  });
+
+  it("keeps to the international range, in whole dollars", async () => {
+    const { card_min_usd: min, card_max_usd: max } = SHIPPED;
+    expect((await orderUsd(someone(), min - 1)).status).toBe(400);
+    expect((await orderUsd(someone(), max + 1)).status).toBe(400);
+    expect((await orderUsd(someone(), 10.5)).status).toBe(400);
+    expect((await orderUsd(someone(), min)).status).toBe(200);
+    expect((await orderUsd(someone(), max)).status).toBe(200);
+  });
+
+  it("makes a key holding the dollars chosen once Razorpay says the order is paid", async () => {
+    const owner = someone("owner");
+    const o = await json<UsdOrderView>(orderUsd(owner, 5));
+    expect(await json(confirm(owner, o.id, await pay(o.order_id)))).toMatchObject({ status: "paid" });
+    const made = Object.values(await madeKeys()).find((k) => k.name.includes(o.id));
+    expect(made?.limit).toBe(5);
+  });
+
+  it("refuses a payment made in another currency", async () => {
+    const owner = someone("owner");
+    const o = await json<UsdOrderView>(orderUsd(owner, 5));
+    expect((await confirm(owner, o.id, await pay(o.order_id, { currency: "INR" }))).status).toBe(400);
+    expect((await wallet(owner)).keys).toHaveLength(0);
   });
 });
 

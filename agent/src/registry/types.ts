@@ -394,7 +394,7 @@ export type WalletPurchase = {
   amount_usd: number;
   /** A chain id from `PAY_NETWORKS`, or "razorpay" for a card or UPI payment. */
   network: string;
-  asset: "usdc" | "eth" | "inr";
+  asset: "usdc" | "eth" | "inr" | "usd";
   /** Where the payment goes: an address, or for Razorpay the order it is paid through. */
   to_address: string;
   payer: string;

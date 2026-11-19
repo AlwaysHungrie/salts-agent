@@ -216,14 +216,22 @@ function WalletSidebar({
                 Get new key
               </p>
               <div className="space-y-3">
-                {wallet.razorpayKeyId && (
-                  <PayOption
-                    icon={<CreditCard className="h-4 w-4" />}
-                    title="🇮🇳 Pay with UPI or card"
-                    note="Charged in INR, secured by Razorpay"
-                    onClick={() => setBuying("card")}
-                  />
-                )}
+                {wallet.razorpayKeyId &&
+                  (wallet.cardRange.currency === "INR" ? (
+                    <PayOption
+                      icon={<CreditCard className="h-4 w-4" />}
+                      title="🇮🇳 Pay with UPI or card"
+                      note="Charged in INR, secured by Razorpay"
+                      onClick={() => setBuying("card")}
+                    />
+                  ) : (
+                    <PayOption
+                      icon={<CreditCard className="h-4 w-4" />}
+                      title="Pay in USD with card"
+                      note="via PayPal, secured by Razorpay"
+                      onClick={() => setBuying("card")}
+                    />
+                  ))}
                 <PayOption
                   icon={<Link2 className="h-4 w-4" />}
                   title="Connect OpenRouter account"
