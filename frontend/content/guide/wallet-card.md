@@ -10,7 +10,7 @@ You can buy credits for your agents straight from AI credits. Payments go throug
 
 ## 1. Open the checkout
 
-Open **AI credits** from the top right corner of the home page. Under **Get new key**, click **Pay with UPI or card** in India, or **Pay in USD with card** anywhere else.
+Open **AI credits** from the top right corner of the home page. Under **Get new key**, click **Pay with UPI or card** in India, or **Pay with Card** anywhere else.
 
 ## 2. Choose how much credit you want
 

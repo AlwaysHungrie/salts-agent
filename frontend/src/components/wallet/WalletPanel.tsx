@@ -227,8 +227,8 @@ function WalletSidebar({
                   ) : (
                     <PayOption
                       icon={<CreditCard className="h-4 w-4" />}
-                      title="Pay in USD with card"
-                      note="via PayPal, secured by Razorpay"
+                      title="Pay with Card"
+                      note="charged in USD, secured by Razorpay"
                       onClick={() => setBuying("card")}
                     />
                   ))}

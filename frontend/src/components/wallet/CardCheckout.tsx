@@ -130,7 +130,7 @@ export function CardCheckout({
       {currency === "INR" ? (
         <Step title="Pay with card or UPI" hint="Cards, UPI and netbanking, through Razorpay." />
       ) : (
-        <Step title="Pay in USD with card" hint="via PayPal, secured by Razorpay" />
+        <Step title="Pay with Card" hint="charged in USD, secured by Razorpay" />
       )}
       <button
         onClick={() => void pay()}
