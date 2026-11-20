@@ -5,18 +5,20 @@
 #     set -a; source .cf.env; set +a
 #     scripts/visitors.sh        # last 7 days, today included
 #     scripts/visitors.sh 30     # last 30 days
+#     HOST=app.salts.dev scripts/visitors.sh   # the web app instead
 #
-# Days are UTC. Counts only salts.dev: Vercel preview URLs carry the same beacon and
+# Days are UTC. Counts only $HOST (salts.dev by default): Vercel preview URLs carry the same beacon and
 # report to the same site, so they are filtered out by host. A visit is a pageload
 # that arrived from outside the site (a link, a search, a typed URL); page views count
-# every pageload. CF_API_TOKEN's "Account Analytics: Read" is enough.
+# every pageload. The web app reports to the same site under app.salts.dev. "Get my
+# agent" clicks are page views of app.salts.dev/start, where those buttons link. CF_API_TOKEN's "Account Analytics: Read" is enough.
 #
 # Keep each GraphQL query on one physical line (see cost.sh for why).
 set -euo pipefail
 
 DAYS=${1:-7}
 SITE_TAG=ff5b07e5c88746df8f53fa8c5812ebd6
-HOST=salts.dev
+HOST=${HOST:-salts.dev}
 : "${CF_ACCOUNT_ID:?set CF_ACCOUNT_ID (source .cf.env)}"
 : "${CF_API_TOKEN:?set CF_API_TOKEN (source .cf.env)}"
 
@@ -68,3 +70,16 @@ top "Pages" requestPath "?"
 top "Referrers" refererHost "(direct)"
 top "Countries" countryName "?"
 top "Devices" deviceType "?"
+
+# "Get my agent" clicks: page views of app.salts.dev/start, the buttons' only target.
+CQ='query($a:String!,$s:String!,$f:Date!){viewer{accounts(filter:{accountTag:$a}){rumPageloadEventsAdaptiveGroups(limit:5000,filter:{siteTag:$s,requestHost:"app.salts.dev",requestPath:"/start",date_geq:$f}){count dimensions{date}}}}}'
+CLICKS=$(jq -n --arg q "$CQ" --arg a "$CF_ACCOUNT_ID" --arg s "$SITE_TAG" --arg f "$FROM" \
+  '{query:$q,variables:{a:$a,s:$s,f:$f}}' | gql | jq -c '.data.viewer.accounts[0].rumPageloadEventsAdaptiveGroups')
+
+echo
+echo '"Get my agent" clicks'
+jq -r --arg from "$FROM" --argjson days "$DAYS" '
+  (map({key: .dimensions.date, value: .count}) | from_entries) as $by
+  | ([range(0; $days)] | map(($from + "T00:00:00Z" | fromdateiso8601) + . * 86400 | strftime("%Y-%m-%d"))[]
+      | "  \(.)\t\($by[.] // 0)"),
+    "  total\t\(map(.count)|add // 0)"' <<<"$CLICKS" | column -t -s $'\t'

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Inter } from "next/font/google";
+import { AnalyticsBeacon } from "@/components/AnalyticsBeacon";
 import { WalletPanelProvider } from "@/components/wallet/WalletPanel";
 import "./globals.css";
 
@@ -21,6 +22,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <html lang="en" className={`${inter.variable} h-full antialiased`}>
         <body className="bg-canvas text-ink min-h-full flex flex-col">
           <WalletPanelProvider>{children}</WalletPanelProvider>
+          <AnalyticsBeacon />
         </body>
       </html>
     </ClerkProvider>
