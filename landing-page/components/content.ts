@@ -71,7 +71,8 @@ const APP_URL = "https://app.salts.dev";
  */
 export const LINKS = {
   signIn: APP_URL as string | null,
-  signUp: APP_URL as string | null,
+  // `/start` is the app home under its own path so the beacon can count these clicks.
+  signUp: `${APP_URL}/start` as string | null,
   x: "https://x.com/saltsdotdev" as string | null,
   telegram: "https://t.me/+ErLH1BA0hHUzZGM1" as string | null,
   privacy: "/privacy",

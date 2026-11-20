@@ -13,7 +13,7 @@ None right now.
 
 | Target | Where | Note |
 | --- | --- | --- |
-| `signIn`, `signUp` (the web app) | Header `Sign in` and `Get my agent`, hero and closing CTA | Built |
+| `signIn`, `signUp` (the web app) | Header `Sign in` and `Get my agent`, hero and closing CTA | Built — `signUp` goes to `/start`, the app home under its own path, so clicks are countable |
 | `guide`, `fleetGuide`, `openRouterGuide` (the app's `/guide`) | How it works, Fleet section, closing CTA, footer → Resources | Built — the user guide lives in the web app, not on this site |
 | `#skills` `#how` `#fleet` `#faq` `#mission` `#start` `#top` | Header, hero, footer | All resolve to a section that exists |
 | `x`, `telegram` | Footer → Company (icons) | x.com/saltsdotdev and the Salts Telegram group |
