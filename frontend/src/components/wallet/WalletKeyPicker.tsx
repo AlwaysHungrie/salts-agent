@@ -90,8 +90,8 @@ export function WalletKeyPicker({
         </select>
         <button
           onClick={() => openWallet(() => void wallet.load())}
-          title="Open AI credits"
-          aria-label="Open AI credits"
+          title="Open Tokens Wallet"
+          aria-label="Open Tokens Wallet"
           className="text-muted hover:text-ink absolute top-1/2 right-4 -translate-y-1/2 transition"
         >
           <Wallet size={16} />
@@ -105,7 +105,7 @@ export function WalletKeyPicker({
             onClick={() => openWallet(() => void wallet.load())}
             className="text-ink font-normal underline underline-offset-2"
           >
-            AI credits
+            Tokens Wallet
           </button>{" "}
           yet. In order to use your agent, either add your own key created from
           your OpenRouter account or get a new one from us.

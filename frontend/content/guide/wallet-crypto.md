@@ -6,13 +6,13 @@ summary: Pay with USDC or ETH from any crypto wallet and get that much credit fo
 featured: true
 ---
 
-You can buy credits for your agents with crypto, straight from AI credits. Your credits arrive as a new key, loaded with what you paid for, as soon as your payment is confirmed.
+You can buy credits for your agents with crypto, straight from your Tokens Wallet. Your credits arrive as a new key, loaded with what you paid for, as soon as your payment is confirmed.
 
 This guide will help you buy your first credits. It takes a few minutes, and you will need a crypto wallet, such as MetaMask, Coinbase Wallet or Phantom, holding USDC or ETH on one of the networks Salts accepts.
 
 ## 1. Open the checkout
 
-Open **AI credits** from the top right corner of the home page. Under **Get new key**, click **Pay with crypto**. The list under it shows which coins and networks you can pay with.
+Open **Tokens Wallet** from the top right corner of the home page. Under **Get new API key**, click **Pay with crypto**. The list under it shows which coins and networks you can pay with.
 
 ## 2. Choose how much credit you want
 

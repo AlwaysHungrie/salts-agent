@@ -15,7 +15,7 @@ If your agent is replying in the browser, you can also just ask it what is wrong
 | If the reply says | Do this |
 |---|---|
 | "OpenRouter API key is missing" | Your agent has no key to pay for replies. Choose one under **Key** in your agent's **Settings**. If you removed a key from your wallet, every agent that used it needs a new one. See [What are AI credits](/guide/openrouter-wallet). |
-| "The provider rejected the call for credits or quota" | Your key is out of credit, or has reached its credit limit. Buy more credits under **AI credits** and pick the new key in **Settings**, or, for your own OpenRouter key, add credit on OpenRouter or raise the key's limit. |
+| "The provider rejected the call for credits or quota" | Your key is out of credit, or has reached its credit limit. Buy more credits under **Tokens Wallet** and pick the new key in **Settings**, or, for your own OpenRouter key, add credit on OpenRouter or raise the key's limit. |
 | "The provider is rate limiting this key" | Too many requests were sent in a short time. Wait a minute and try again, or pick a different model in **Settings**. |
 | "That turn was too large for the model's context" | The conversation has grown longer than the model can read. Send `!compact`, or start a new conversation with `!new`. |
 | "This agent has reached its spending limit for this month" | Your agent is part of a fleet, and you have used this month's allowance on the default fleet key. It starts working again next month, as soon as the person who runs the fleet raises your limit, or when you switch to a key of your own in **Settings**. |

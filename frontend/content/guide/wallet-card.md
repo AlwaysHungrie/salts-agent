@@ -6,11 +6,11 @@ summary: Pay by card, UPI or netbanking in India, or in US dollars with PayPal e
 featured: false
 ---
 
-You can buy credits for your agents straight from AI credits. Payments go through Razorpay. In India they are charged in rupees, and you can pay by card, UPI or netbanking. Everywhere else they are charged in US dollars and you pay with PayPal. Salts works out which one to show from where you are connecting from, so it never asks for your location. Your credits arrive as a new key, loaded with what you paid for, as soon as your payment goes through.
+You can buy credits for your agents straight from your Tokens Wallet. Payments go through Razorpay. In India they are charged in rupees, and you can pay by card, UPI or netbanking. Everywhere else they are charged in US dollars and you pay with PayPal. Salts works out which one to show from where you are connecting from, so it never asks for your location. Your credits arrive as a new key, loaded with what you paid for, as soon as your payment goes through.
 
 ## 1. Open the checkout
 
-Open **AI credits** from the top right corner of the home page. Under **Get new key**, click **Pay with UPI or card** in India, or **Pay with Card** anywhere else.
+Open **Tokens Wallet** from the top right corner of the home page. Under **Get new API key**, click **Pay with UPI or card** in India, or **Pay with Card** anywhere else.
 
 ## 2. Choose how much credit you want
 

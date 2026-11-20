@@ -46,7 +46,7 @@ We recommend leaving all four as they are until you have a reason to change them
 
 ## Key
 
-The key that pays for your agent's replies. Your agent cannot reply without one. Choose a key from AI credits by its nickname, or click the wallet icon at the end of the dropdown to add credits. See [What are AI credits](/guide/openrouter-wallet).
+The key that pays for your agent's replies. Your agent cannot reply without one. Choose a key from your Tokens Wallet by its nickname, or click the wallet icon at the end of the dropdown to add credits. See [What are AI credits](/guide/openrouter-wallet).
 
 ## Name
 

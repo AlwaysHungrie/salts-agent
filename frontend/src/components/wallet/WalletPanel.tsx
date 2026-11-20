@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import type { WalletKey } from "@/lib/agent";
 import { formatDaysAgo, formatUsdShort } from "@/lib/format";
+import { guideHref } from "@/lib/guide-link";
 import { startConnect } from "@/lib/openrouter-connect";
 import { BuyCredits } from "./BuyCredits";
 import { PayOption } from "./PayOption";
@@ -125,7 +126,7 @@ function WalletSidebar({
       <aside
         role="dialog"
         aria-modal="true"
-        aria-label="AI credits"
+        aria-label="Tokens Wallet"
         className={`bg-canvas text-ink absolute inset-y-0 right-0 flex w-full max-w-md flex-col shadow-xl transition-transform duration-200 ease-out ${
           shown ? "translate-x-0" : "translate-x-full"
         }`}
@@ -142,12 +143,25 @@ function WalletSidebar({
           )}
           <div className="min-w-0 flex-1">
             <p className="truncate text-lg font-semibold leading-[1.38]">
-              {buying ? "Get key" : "AI credits"}
+              {buying ? "Get key" : "Tokens Wallet"}
             </p>
             <p className="text-muted text-xs font-light leading-[1.33]">
-              {buying
-                ? "Get a new API key"
-                : "Manage your API keys and credit."}
+              {buying ? (
+                "Get a new API key"
+              ) : (
+                <>
+                  Every agent needs an API key to pay for its tokens. (
+                  <a
+                    href={guideHref("costs")}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-ink underline underline-offset-2"
+                  >
+                    Token use
+                  </a>
+                  )
+                </>
+              )}
             </p>
           </div>
           <button
@@ -191,9 +205,10 @@ function WalletSidebar({
 
               <div className="space-y-3 flex flex-1 flex-col">
                 {wallet.keys === null && (
-                  <p className="text-muted py-4 my-auto text-center flex-1 text-sm leading-[1.43]">
-                    Loading your keys…
-                  </p>
+                  <>
+                    <KeyRowSkeleton />
+                    <KeyRowSkeleton />
+                  </>
                 )}
                 {wallet.keys?.length === 0 && (
                   <p className="text-muted py-4 my-auto text-center flex-1 text-sm leading-[1.43]">
@@ -213,10 +228,18 @@ function WalletSidebar({
               </div>
 
               <p className="text-muted mt-8 mb-3 text-xs font-medium">
-                Get new key
+                Get new API key
               </p>
               <div className="space-y-3">
-                {wallet.razorpayKeyId &&
+                {wallet.keys === null && (
+                  <>
+                    <PayOptionSkeleton />
+                    <PayOptionSkeleton />
+                    <PayOptionSkeleton />
+                  </>
+                )}
+                {wallet.keys !== null &&
+                  wallet.razorpayKeyId &&
                   (wallet.cardRange.currency === "INR" ? (
                     <PayOption
                       icon={<CreditCard className="h-4 w-4" />}
@@ -232,28 +255,32 @@ function WalletSidebar({
                       onClick={() => setBuying("card")}
                     />
                   ))}
-                <PayOption
-                  icon={<Link2 className="h-4 w-4" />}
-                  title="Connect OpenRouter account"
-                  note="Directly get from your own account with a credit limit"
-                  onClick={() => void startConnect()}
-                />
-                <div className="flex flex-col items-center">
-                  <PayOption
-                    icon={<Wallet className="h-4 w-4" />}
-                    title="Pay with crypto"
-                    note="USDC or ETH on Ethereum, Base, Solana and more"
-                    onClick={() => setBuying("crypto")}
-                  />
-                  {wallet.networks.length > 0 && (
-                    <div>
-                      <RecoverPayment
-                        networks={wallet.networks}
-                        recover={wallet.recover}
+                {wallet.keys !== null && (
+                  <>
+                    <PayOption
+                      icon={<Link2 className="h-4 w-4" />}
+                      title="Connect OpenRouter account"
+                      note="Directly get from your own account with a credit limit"
+                      onClick={() => void startConnect()}
+                    />
+                    <div className="flex flex-col items-center">
+                      <PayOption
+                        icon={<Wallet className="h-4 w-4" />}
+                        title="Pay with crypto"
+                        note="USDC or ETH on Ethereum, Base, Solana and more"
+                        onClick={() => setBuying("crypto")}
                       />
+                      {wallet.networks.length > 0 && (
+                        <div>
+                          <RecoverPayment
+                            networks={wallet.networks}
+                            recover={wallet.recover}
+                          />
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
+                  </>
+                )}
                 <AddKey onAdd={wallet.add} />
               </div>
             </>
@@ -302,7 +329,7 @@ function KeyRow({
 
   const usedBy =
     key.agents === 0
-      ? "Not used by any agent yet."
+      ? "Not in use."
       : `Used by ${key.agents === 1 ? "1 agent" : `${key.agents} agents`}.`;
 
   return (
@@ -486,6 +513,45 @@ function RemoveBoughtKey({
 }
 
 /** What the key may still spend, as OpenRouter reports it: one large figure, a caption under. */
+/** A key card's outline while the wallet loads: nickname, credit figure, footer line. */
+function KeyRowSkeleton() {
+  return (
+    <div
+      aria-hidden
+      className="ring-hairline-soft animate-pulse rounded-[24px] p-6 ring-1"
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div className="bg-canvas-soft h-6.5 w-36 rounded-lg" />
+        <div className="bg-canvas-soft h-9 w-20 rounded-full" />
+      </div>
+      <div className="mt-4">
+        <div className="bg-canvas-soft h-9 w-24 rounded-lg" />
+        <div className="bg-canvas-soft mt-1 h-4 w-28 rounded" />
+      </div>
+      <div className="mt-5 flex items-center justify-between gap-3">
+        <div className="bg-canvas-soft h-5 w-24 rounded" />
+        <div className="bg-canvas-soft h-5 w-20 rounded" />
+      </div>
+    </div>
+  );
+}
+
+/** A payment option's outline while the wallet loads: icon, title, note. */
+function PayOptionSkeleton() {
+  return (
+    <div
+      aria-hidden
+      className="ring-hairline-soft flex w-full animate-pulse items-center gap-4 rounded-[24px] p-5 ring-1"
+    >
+      <div className="bg-canvas-soft h-10 w-10 shrink-0 rounded-full" />
+      <div className="min-w-0 flex-1">
+        <div className="bg-canvas-soft h-5.5 w-40 rounded-lg" />
+        <div className="bg-canvas-soft mt-0.5 h-4 w-52 max-w-full rounded" />
+      </div>
+    </div>
+  );
+}
+
 function Credit({ walletKey: key }: { walletKey: WalletKey }) {
   const [figure, caption] = !key.valid
     ? ["—", "OpenRouter isn't accepting this key."]

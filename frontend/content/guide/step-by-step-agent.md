@@ -34,7 +34,7 @@ Every chat is called a session, and your sessions are listed in the sidebar on t
 
 ## 4. Add credits
 
-The starter key holds a few cents, enough to try your agent on a low-cost model. When you know you want to keep going, add credits of your own. Click **AI credits** in the top right corner of the home page, and under **Get new key** choose how you want to pay:
+The starter key holds a few cents, enough to try your agent on a low-cost model. When you know you want to keep going, add credits of your own. Click **Tokens Wallet** in the top right corner of the home page, and under **Get new API key** choose how you want to pay:
 
 - **Pay with UPI or card.** Pay in rupees by card, UPI or netbanking. See [Buy credits with UPI or card](/guide/wallet-card).
 - **Pay with crypto.** Pay with USDC or ETH from any crypto wallet, such as MetaMask, Coinbase Wallet or Phantom. See [Buy credits with crypto](/guide/wallet-crypto).
@@ -42,7 +42,7 @@ The starter key holds a few cents, enough to try your agent on a low-cost model.
 
 We recommend starting with about $10 of credit. You can always add more later once you have a feel for how much your agent uses.
 
-Your credits arrive as a new key in AI credits, with a nickname such as "Amber Falcon". To switch your agent to it, open your agent's **Settings**, scroll to **Key** and choose the new key by its nickname.
+Your credits arrive as a new key in your Tokens Wallet, with a nickname such as "Amber Falcon". To switch your agent to it, open your agent's **Settings**, scroll to **Key** and choose the new key by its nickname.
 
 ## You are done
 
@@ -57,5 +57,5 @@ If something does not work, see [My agent is not replying](/guide/troubleshootin
 ## Footnotes
 
 1. Everyone gets the starter key once. If you already have keys of your own, the **Key** dropdown in step 2 lets you choose among them instead.
-2. If the dropdown says **No keys in your wallet**, click the wallet icon at the end of the dropdown to open AI credits and add credits without leaving the window.
+2. If the dropdown says **No keys in your wallet**, click the wallet icon at the end of the dropdown to open your Tokens Wallet and add credits without leaving the window.
 3. You can also create the agent without a key and choose one later from your agent's **Settings**, under **Key**. Your agent cannot reply until it has one.

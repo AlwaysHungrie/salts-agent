@@ -6,7 +6,7 @@ summary: Where you buy and keep the credit that pays for your agents' replies, b
 featured: true
 ---
 
-Every reply your agent writes is paid for from credit. You buy that credit under **AI credits**, and it arrives as a key: a balance with a nickname that you can give to any of your agents.
+Every reply your agent writes is paid for from credit. You buy that credit under **Tokens Wallet**, and it arrives as a key: a balance with a nickname that you can give to any of your agents.
 
 For example, you might keep one key for your personal agent and another for an agent you share with your team, each with its own credit, and see at a glance how much each one has left.
 
@@ -18,13 +18,13 @@ The first time you create an agent, we give you a small key called **Starter key
 
 ## Opening your wallet
 
-On the Salts home page, click **AI credits** in the top right corner. You can also open it from the wallet icon at the end of any **Key** dropdown.
+On the Salts home page, click **Tokens Wallet** in the top right corner. You can also open it from the wallet icon at the end of any **Key** dropdown.
 
 Each key in your wallet has a nickname, such as "Amber Falcon", so you can tell your keys apart. Under the nickname you can see how much credit the key has left, and how many of your agents use it.
 
 ## Getting credits
 
-There are three ways to add credits, all under **Get new key**:
+There are three ways to add credits, all under **Get new API key**:
 
 - **Pay with UPI or card** (in India) or **Pay with Card** (everywhere else). In India you pick how much credit you want in rupees and pay by card, UPI or netbanking. Elsewhere you pick it in US dollars and pay with PayPal. Both go through Razorpay. See [Buy credits with UPI or card](/guide/wallet-card).
 - **Pay with crypto.** Pick how much credit you want and pay with USDC or ETH from your crypto wallet. See [Buy credits with crypto](/guide/wallet-crypto).

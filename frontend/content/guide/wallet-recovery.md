@@ -10,14 +10,14 @@ Sometimes a crypto payment goes through, but the key never appears in your walle
 
 ## Salts checks for you first
 
-Each time you open **AI credits** in the same browser you paid from, Salts checks any payment it was still waiting on and adds the key if the payment went through. You will see a short note at the top of your wallet while it does this. In most cases, opening your wallet again is all you need to do.
+Each time you open **Tokens Wallet** in the same browser you paid from, Salts checks any payment it was still waiting on and adds the key if the payment went through. You will see a short note at the top of your wallet while it does this. In most cases, opening your wallet again is all you need to do.
 
 ## Recover a payment yourself
 
 If you paid from another device, or the key still has not appeared, you can recover it with the transaction id.
 
 1. Find the transaction id in your crypto wallet's activity or history. It may be called a transaction hash or a signature.
-2. Open **AI credits** and click **Paid but didn't get a key?** under **Pay with crypto**.
+2. Open **Tokens Wallet** and click **Paid but didn't get a key?** under **Pay with crypto**.
 3. In the **Recover a lost payment** window, choose the network you paid on, paste the transaction id and click **Get my key**.
 
 If the payment is confirmed, you will see **Transaction confirmed. The key has been added to your wallet.** If the key had already been added earlier, the message says so instead. Recovering a payment never charges you again or adds a second key.

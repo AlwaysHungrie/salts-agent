@@ -6,7 +6,7 @@ summary: Already use OpenRouter? Pay for your agent's replies from your own Open
 featured: false
 ---
 
-You don't need an OpenRouter account to use Salts, since you can [buy credits](/guide/openrouter-wallet) straight from AI credits. But if you already use OpenRouter, or would rather pay for models there, you can bring your own key. Your agent then pays for each reply from your OpenRouter credit, based on how many tokens the model read and wrote. If any of these words are new to you, read [What is Salts](/guide/why-salts) first.
+You don't need an OpenRouter account to use Salts, since you can [buy credits](/guide/openrouter-wallet) straight from your Tokens Wallet. But if you already use OpenRouter, or would rather pay for models there, you can bring your own key. Your agent then pays for each reply from your OpenRouter credit, based on how many tokens the model read and wrote. If any of these words are new to you, read [What is Salts](/guide/why-salts) first.
 
 It takes about five minutes, and you will need to buy a few dollars of credit on OpenRouter.
 
@@ -20,7 +20,7 @@ Find and open the **Credits** page in the left sidebar and purchase API credits.
 
 ## 3. Create an API key
 
-The quickest way is to let Salts ask for one. On the Salts home page, click **AI credits** in the top right corner, then choose **Connect OpenRouter account**. OpenRouter asks you to create a new key, then sends you back with the key in your wallet, and you can skip straight to step 5. Set a **Credit limit** while you create the key, because Salts won't accept a new key without one.
+The quickest way is to let Salts ask for one. On the Salts home page, click **Tokens Wallet** in the top right corner, then choose **Connect OpenRouter account**. OpenRouter asks you to create a new key, then sends you back with the key in your wallet, and you can skip straight to step 5. Set a **Credit limit** while you create the key, because Salts won't accept a new key without one.
 
 To create the key yourself instead, follow the steps below.
 
@@ -32,7 +32,7 @@ Once the key is created, copy it and keep it somewhere safe. It starts with `sk-
 
 ## 4. Add the key to your wallet
 
-On the Salts home page, click **AI credits** in the top right corner. Paste the key at the bottom and click **Add key**. Salts checks the key with OpenRouter before keeping it, and gives it a nickname, such as "Amber Falcon", so you can tell your keys apart. Each key can be in your wallet only once; adding the same key again says **Key already imported**.
+On the Salts home page, click **Tokens Wallet** in the top right corner. Paste the key at the bottom and click **Add key**. Salts checks the key with OpenRouter before keeping it, and gives it a nickname, such as "Amber Falcon", so you can tell your keys apart. Each key can be in your wallet only once; adding the same key again says **Key already imported**.
 
 Your wallet holds every key you add, and shows how much credit each one has left. You can see or remove a key from there at any time. Removing a key also takes it away from every agent that uses it.
 

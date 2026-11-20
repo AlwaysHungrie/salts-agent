@@ -22,7 +22,7 @@ Once your request is approved, your limit goes up automatically. [Get a Fleet Ac
 
 ## 2. Add credits
 
-If your agents will share your credits, so your users do not need to buy their own, you need a key in AI credits before you create the fleet. Click **AI credits** in the top right corner of the home page, and under **Get new key** choose **Pay with UPI or card**, **Pay with crypto** or **Connect OpenRouter account**. [Buy credits with UPI or card](/guide/wallet-card), [Buy credits with crypto](/guide/wallet-crypto) and [Bring your own OpenRouter key](/guide/openrouter) walk you through each way.
+If your agents will share your credits, so your users do not need to buy their own, you need a key in your Tokens Wallet before you create the fleet. Click **Tokens Wallet** in the top right corner of the home page, and under **Get new API key** choose **Pay with UPI or card**, **Pay with crypto** or **Connect OpenRouter account**. [Buy credits with UPI or card](/guide/wallet-card), [Buy credits with crypto](/guide/wallet-crypto) and [Bring your own OpenRouter key](/guide/openrouter) walk you through each way.
 
 Every agent in the fleet spends from this one key, so we recommend giving it enough credit for all your users.
 

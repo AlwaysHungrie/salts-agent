@@ -12,7 +12,7 @@ Salts gives you an AI agent of your own. An agent is a program you talk to in pl
 
 Your agent does not write its replies on its own. Every time you send it a message, it passes your message to an AI model, which reads it and writes the answer. A model is the part that actually understands language. There are many of them, made by different companies, and some are cleverer, faster or cheaper than others. You can pick which one your agent uses.
 
-Every reply is paid for from credit you buy under **AI credits**, by card, UPI or crypto. Your first few messages are on us, and if you already use OpenRouter, you can bring your own key instead. You pay only for what you use, so there is no subscription, and an agent you do not use costs nothing. On the model your agent starts with, an everyday reply costs a fraction of a cent.
+Every reply is paid for from credit you buy under **Tokens Wallet**, by card, UPI or crypto. Your first few messages are on us, and if you already use OpenRouter, you can bring your own key instead. You pay only for what you use, so there is no subscription, and an agent you do not use costs nothing. On the model your agent starts with, an everyday reply costs a fraction of a cent.
 
 ## Salts is different
 
