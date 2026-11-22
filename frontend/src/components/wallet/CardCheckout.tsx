@@ -18,12 +18,12 @@ type RazorpayWindow = {
   open: () => void;
   on: (event: "payment.failed", fn: (r: { error?: { description?: string } }) => void) => void;
 };
-type RazorpayCtor = new (options: Record<string, unknown>) => RazorpayWindow;
+export type RazorpayCtor = new (options: Record<string, unknown>) => RazorpayWindow;
 
 let loading: Promise<RazorpayCtor> | null = null;
 
 /** Load Razorpay's checkout once per page. */
-function loadCheckout(): Promise<RazorpayCtor> {
+export function loadCheckout(): Promise<RazorpayCtor> {
   loading ??= new Promise((resolve, reject) => {
     const script = document.createElement("script");
     script.src = CHECKOUT_JS;

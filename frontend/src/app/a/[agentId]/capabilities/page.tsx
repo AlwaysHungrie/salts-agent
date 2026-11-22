@@ -26,8 +26,8 @@ type ConfigPayload = {
 };
 
 /**
- * The capabilities this page draws, in its order. Telegram and WhatsApp are
- * connection setup, not tools the agent calls: both live in Settings. MCP goes
+ * The capabilities this page draws, in its order. Telegram, WhatsApp and WhatsApp for
+ * Business are connection setup, not tools the agent calls: all live in Settings. MCP goes
  * first: it is the one capability the user builds out themselves, so it is what they
  * come back to this page for. A locked capability is decided in meta settings and
  * nowhere else, so it is not drawn here at all — a switch this page cannot save is
@@ -38,7 +38,11 @@ function shownCapabilities(payload: ConfigPayload | undefined): Capability[] {
   const locked = new Set(payload.locked ?? []);
   return payload.capabilities
     .filter(
-      (c) => c.id !== "telegram" && c.id !== "whatsapp" && !locked.has(c.id),
+      (c) =>
+        c.id !== "telegram" &&
+        c.id !== "whatsapp" &&
+        c.id !== "whatsapp_business" &&
+        !locked.has(c.id),
     )
     .sort((a, b) => Number(b.id === "mcp") - Number(a.id === "mcp"));
 }

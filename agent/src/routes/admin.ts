@@ -5,6 +5,7 @@ import { json, jsonError, readJson } from "../worker/http";
 import { PAY_NETWORKS, payerAddress } from "../payments";
 import { isProvisioningKey } from "../worker/provisioned-keys";
 import { razorpayKeysWork } from "../razorpay";
+import { twilioKeysWork } from "../twilio";
 import { directory, syncSessionCount } from "../worker/stores";
 
 const methodNotAllowed = () => jsonError("method not allowed", 405);
@@ -35,6 +36,7 @@ export async function handleAdmin(
     "provisioning-key",
     "payments",
     "razorpay",
+    "twilio",
   ];
   if (!known.includes(route)) return undefined;
   if (!trustedCaller(request, env)) return jsonError("unauthorized", 401);
@@ -44,6 +46,7 @@ export async function handleAdmin(
   if (route === "provisioning-key") return await handleProvisioningKey(request, env);
   if (route === "payments") return await handlePayments(request, env);
   if (route === "razorpay") return await handleRazorpay(request, env);
+  if (route === "twilio") return await handleTwilio(request, env);
   if (route === "business-requests")
     return await handleBusinessRequests(request, env, url, segments);
   if (route === "stats") {
@@ -205,6 +208,45 @@ async function handleRazorpay(request: Request, env: Env): Promise<Response> {
     return jsonError("Razorpay didn't accept that key id and secret together.", 400);
   }
   await dir.setRazorpayKeys(patch);
+  return json(await view());
+}
+
+/**
+ * Twilio's credentials, for buying Business Phone Numbers: the account SID (AC…) and an
+ * API key (SK…) with its secret. The SIDs are shown; the secret is write-only, shown by
+ * its last four characters. PATCH sets any of the three; a blank one removes it. Once all
+ * three are set, Twilio must accept them together.
+ */
+async function handleTwilio(request: Request, env: Env): Promise<Response> {
+  const dir = directory(env);
+  const view = async () => {
+    const keys = await dir.twilioKeys();
+    return {
+      account_sid: keys.account_sid,
+      api_key_sid: keys.api_key_sid,
+      api_key_secret: { set: Boolean(keys.api_key_secret), hint: keys.api_key_secret.slice(-4) },
+    };
+  };
+  if (request.method === "GET") return json(await view());
+  if (request.method !== "PATCH") return methodNotAllowed();
+  const body = await readJson<Record<string, unknown>>(request);
+  const names = (["account_sid", "api_key_sid", "api_key_secret"] as const).filter((f) => body[f] !== undefined);
+  if (!names.length) return jsonError("Give account_sid, api_key_sid or api_key_secret.", 400);
+  const patch = Object.fromEntries(
+    names.map((f) => [f, typeof body[f] === "string" ? body[f].trim().slice(0, 200) : ""])
+  ) as Partial<Record<(typeof names)[number], string>>;
+  if (patch.account_sid && !/^AC[0-9a-f]{32}$/.test(patch.account_sid)) {
+    return jsonError("A Twilio account SID is AC followed by 32 hex characters.", 400);
+  }
+  // The account SID works here too, with the account's auth token as the secret.
+  if (patch.api_key_sid && !/^(SK|AC)[0-9a-f]{32}$/.test(patch.api_key_sid)) {
+    return jsonError("A Twilio API key SID is SK (or the account SID, AC) followed by 32 hex characters.", 400);
+  }
+  const next = { ...(await dir.twilioKeys()), ...patch };
+  if (next.account_sid && next.api_key_sid && next.api_key_secret && !(await twilioKeysWork(next))) {
+    return jsonError("Twilio didn't accept that account SID and API key together.", 400);
+  }
+  await dir.setTwilioKeys(patch);
   return json(await view());
 }
 

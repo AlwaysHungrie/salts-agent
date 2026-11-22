@@ -21,6 +21,7 @@ import type { WalletPurchase } from "../registry";
 import { createKey, deleteKey, ProvisioningError } from "../worker/provisioned-keys";
 import { keyCredit } from "../worker/wallet";
 import { cardConfirm, cardKeyId, cardOrder } from "./card";
+import { deliverNumber } from "./phone-numbers";
 import { inrPerUsd } from "../fx";
 
 /**
@@ -380,6 +381,8 @@ const delivering = () => json({ status: "pending", reason: "Setting up your key.
  * the deployment's OpenRouter dashboard says whose each key is.
  */
 export async function deliver(env: Env, p: WalletPurchase): Promise<Response> {
+  // A Business Phone Number paid by card: bought or renewed, not a key.
+  if (p.item === "number" || p.item === "renew") return await deliverNumber(env, p);
   if (p.status === "fulfilled") return json({ status: "paid", key_id: p.key_id });
   const dir = directory(env);
   const provisioning = await dir.provisioningKey();

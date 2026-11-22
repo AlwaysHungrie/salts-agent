@@ -47,11 +47,18 @@ function insertPurchase(
   storage: DurableObjectStorage,
   p: Omit<WalletPurchase, "id" | "status" | "tx" | "claimed_at">
 ): WalletPurchase {
-  const row: WalletPurchase = { ...p, id: PURCHASE_ID(), status: "pending", tx: null, claimed_at: 0 };
+  const row: WalletPurchase = {
+    ...p,
+    id: PURCHASE_ID(),
+    status: "pending",
+    tx: null,
+    claimed_at: 0,
+    item: p.item ?? "key",
+  };
   storage.sql.exec(
     `INSERT INTO wallet_purchases
-       (id, email, key_id, amount_usd, network, asset, to_address, payer, units, created_at, expires_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, email, key_id, amount_usd, network, asset, to_address, payer, units, created_at, expires_at, item)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     row.id,
     row.email,
     row.key_id,
@@ -62,7 +69,8 @@ function insertPurchase(
     row.payer,
     row.units,
     row.created_at,
-    row.expires_at
+    row.expires_at,
+    row.item
   );
   return row;
 }
@@ -184,7 +192,7 @@ export function fulfilNewKey(
   });
 }
 
-function paidRow(storage: DurableObjectStorage, id: string): WalletPurchase | undefined {
+export function paidRow(storage: DurableObjectStorage, id: string): WalletPurchase | undefined {
   return storage.sql
     .exec(`SELECT * FROM wallet_purchases WHERE id = ? AND status = 'paid' LIMIT 1`, id)
     .toArray()[0] as unknown as WalletPurchase | undefined;

@@ -293,4 +293,10 @@ export const SESSION_REGISTRY_MIGRATIONS: readonly Migration[] = [
       );
     },
   },
+  {
+    name: "whatsapp business",
+    up: (sql) => {
+      addColumnIfMissing(sql, "config", `cap_whatsapp_business INTEGER NOT NULL DEFAULT 0`);
+    },
+  },
 ];

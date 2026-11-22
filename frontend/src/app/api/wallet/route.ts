@@ -1,17 +1,20 @@
+import { buyerInIndia } from "@/lib/country";
 import { proxy } from "@/lib/proxy";
 
 export const dynamic = "force-dynamic";
 
 /**
  * The caller's OpenRouter wallet, with the currency card checkout prices in: rupees for
- * buyers in India, US dollars elsewhere. The country is Vercel's read of the caller's IP,
- * so no location prompt; where it is missing (local dev), dollars.
+ * buyers in India, US dollars elsewhere. See `buyerInIndia` for how the
+ * country is read: no location prompt.
  */
 export async function GET(request: Request) {
   const res = await proxy("/api/wallet");
   if (!res.ok) return res;
-  const india = request.headers.get("x-vercel-ip-country") === "IN";
-  return Response.json({ ...(await res.json()), card_currency: india ? "INR" : "USD" });
+  return Response.json({
+    ...(await res.json()),
+    card_currency: buyerInIndia(request) ? "INR" : "USD",
+  });
 }
 
 /** Add a pasted key to it. */

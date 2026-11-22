@@ -941,6 +941,46 @@ async function razorpayMock(request: Request, url: URL): Promise<Response> {
   return json(payment);
 }
 
+/** The Twilio API key secret the stand-in accepts; any other is refused. */
+export const TWILIO_SECRET = "twilio-secret-ok";
+
+/** Numbers the Twilio stand-in holds, by SID; a released one is removed. */
+const twilioNumbers = new Map<string, string>();
+const twilioReleased: string[] = [];
+
+/**
+ * A stand-in for Twilio's REST API, enough to buy a US number and release it. A test
+ * reads which SIDs were released with `GET https://api.twilio.com/__released`.
+ */
+async function twilioMock(request: Request, url: URL): Promise<Response> {
+  const json = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+  if (url.pathname === "/__released") return json(twilioReleased);
+  const auth = request.headers.get("authorization") ?? "";
+  if (atob(auth.replace(/^Basic\s+/i, "")).split(":")[1] !== TWILIO_SECRET) {
+    return json({ message: "Authenticate" }, 401);
+  }
+  const path = url.pathname.replace(/^\/2010-04-01\/Accounts\/[^/.]+/, "");
+  if (path === ".json") return json({ status: "active" });
+  if (path === "/AvailablePhoneNumbers/US/Local.json") {
+    const digits = String(Math.floor(Math.random() * 1e9)).padStart(9, "0");
+    return json({ available_phone_numbers: [{ phone_number: `+1${digits.slice(0, 3)}5${digits.slice(3)}` }] });
+  }
+  if (path === "/IncomingPhoneNumbers.json" && request.method === "POST") {
+    const number = new URLSearchParams(await request.text()).get("PhoneNumber") ?? "";
+    const sid = `PN${crypto.randomUUID().replace(/-/g, "")}`;
+    twilioNumbers.set(sid, number);
+    return json({ sid, phone_number: number }, 201);
+  }
+  const owned = path.match(/^\/IncomingPhoneNumbers\/([^/]+)\.json$/);
+  if (owned && request.method === "DELETE") {
+    if (!twilioNumbers.delete(owned[1])) return json({ message: "not found" }, 404);
+    twilioReleased.push(owned[1]);
+    return new Response(null, { status: 204 });
+  }
+  return json({ message: "not found" }, 404);
+}
+
 export async function openrouterMock(request: Request): Promise<Response> {
   const url = new URL(request.url);
   if (url.hostname === "rpc.test") return rpcMock(request, url);
@@ -962,6 +1002,7 @@ export async function openrouterMock(request: Request): Promise<Response> {
     }
   }
   if (url.hostname === "api.razorpay.com") return razorpayMock(request, url);
+  if (url.hostname === "api.twilio.com") return twilioMock(request, url);
   // Frankfurter's daily rupee rate.
   if (url.hostname === "api.frankfurter.dev") {
     return new Response(JSON.stringify({ base: "USD", rates: { INR: INR_PER_USD } }), {

@@ -283,6 +283,19 @@ describe("channelLabels", () => {
     expect(channelLabels(config({ cap_whatsapp: 1 }))).toEqual([]);
   });
 
+  it("names nothing for WhatsApp for Business while it is only a saved switch", () => {
+    // Messaging through a business number is not built yet: switched on, the agent
+    // would be told it can be reached somewhere it cannot.
+    const on = config({ cap_whatsapp_business: 1 });
+    expect(channelLabels(on)).toEqual([]);
+    expect(capabilityLabels(on)).not.toContain("WhatsApp for Business");
+  });
+
+  it("saves the WhatsApp for Business switch from a settings patch", () => {
+    expect(validateConfig({ cap_whatsapp_business: 1 }).cap_whatsapp_business).toBe(1);
+    expect(validateConfig({ cap_whatsapp_business: 0 }).cap_whatsapp_business).toBe(0);
+  });
+
   it("names nothing when no channel is switched on", () => {
     expect(channelLabels(config())).toEqual([]);
   });
@@ -291,7 +304,7 @@ describe("channelLabels", () => {
     // A channel is marked on the capability rather than matched by id, so a third one
     // added later is described correctly without anyone remembering this file.
     const channels = CAPABILITIES.filter((c) => c.channel);
-    expect(channels.map((c) => c.id).sort()).toEqual(["telegram", "whatsapp"]);
+    expect(channels.map((c) => c.id).sort()).toEqual(["telegram", "whatsapp", "whatsapp_business"]);
     expect(channels.every((c) => c.tools.length === 0)).toBe(true);
   });
 });

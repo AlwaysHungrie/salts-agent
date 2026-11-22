@@ -359,6 +359,7 @@ export function CapabilitySection({
   blocked = false,
   blockedNote,
   tint,
+  badge,
   summaryExtra,
   children,
 }: {
@@ -380,6 +381,8 @@ export function CapabilitySection({
    * the canvas, so its inputs are outlined to stay legible.
    */
   tint?: string;
+  /** A short tag beside the label, such as "Paid". */
+  badge?: string;
   /** More for the line under the label, after the capability's own summary. */
   summaryExtra?: React.ReactNode;
   /**
@@ -409,6 +412,11 @@ export function CapabilitySection({
         <div className="min-w-0">
           <h2 className="text-base font-semibold leading-[1.38]">
             {capability.label}
+            {badge && (
+              <span className="bg-canvas border-hairline ml-2 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
+                {badge}
+              </span>
+            )}
             {blocked && (
               <span className="text-faint ml-2 text-xs font-normal">
                 Unavailable

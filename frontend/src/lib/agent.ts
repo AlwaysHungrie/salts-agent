@@ -212,6 +212,7 @@ export type Config = {
   cap_memory: number;
   cap_telegram: number;
   cap_whatsapp: number;
+  cap_whatsapp_business: number;
   cap_mcp: number;
   cap_wallet: number;
 

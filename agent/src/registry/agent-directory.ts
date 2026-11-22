@@ -87,6 +87,17 @@ import {
   walletKeys,
 } from "./wallet";
 import {
+  addPhoneNumber,
+  dropNumber,
+  expiredNumbers,
+  fulfilNumber,
+  nextExpiry,
+  phoneNumbers,
+  removePhoneNumber,
+  renewNumber,
+} from "./phone-numbers";
+import { releaseNumber, twilioOpen, type TwilioKeys } from "../twilio";
+import {
   clearSettings,
   directorySettings,
   setSettings,
@@ -99,6 +110,8 @@ import type {
   BusinessRequestPage,
   FleetRow,
   MetadataFilter,
+  PhoneNumberKind,
+  PhoneNumberRow,
   UserDetail,
   UserPage,
   WalletKeyKind,
@@ -407,6 +420,102 @@ export class AgentDirectory extends DurableObject {
   approveBusinessRequest(id: string): { email: string; agent_limit: number } | undefined {
     this.ensureSchema();
     return approveBusinessRequest(this.ctx.storage, id);
+  }
+
+  // ─── Business Phone Numbers (see phone-numbers.ts) ──────────────────────────────
+
+  phoneNumbers(email: string): PhoneNumberRow[] {
+    this.ensureSchema();
+    return phoneNumbers(this.ctx.storage, email);
+  }
+
+  addPhoneNumber(
+    email: string,
+    entry: { number: string; kind: PhoneNumberKind },
+    max: number
+  ): PhoneNumberRow | { error: string } {
+    this.ensureSchema();
+    return addPhoneNumber(this.ctx.storage, email, entry, max);
+  }
+
+  /** Remove one of `email`'s numbers, returning it; undefined when it is not theirs. */
+  removePhoneNumber(email: string, id: string): PhoneNumberRow | undefined {
+    this.ensureSchema();
+    return removePhoneNumber(this.ctx.storage, email, id);
+  }
+
+  /** Record a number bought for a paid purchase, and wake when its term ends. */
+  async fulfilNumber(
+    purchaseId: string,
+    bought: { sid: string; number: string },
+    term: number
+  ): Promise<PhoneNumberRow | undefined> {
+    this.ensureSchema();
+    const row = fulfilNumber(this.ctx.storage, purchaseId, bought, term, Date.now());
+    if (row) await this.scheduleExpiry();
+    return row;
+  }
+
+  /** More time on a number for a paid renewal; "gone" when it was released first. */
+  async renewNumber(purchaseId: string, term: number): Promise<PhoneNumberRow | "gone" | undefined> {
+    this.ensureSchema();
+    const row = renewNumber(this.ctx.storage, purchaseId, term, Date.now());
+    if (row && row !== "gone") await this.scheduleExpiry();
+    return row;
+  }
+
+  /** Twilio's account SID and API key; "" where not set. */
+  twilioKeys(): TwilioKeys {
+    this.ensureSchema();
+    return {
+      account_sid: deploymentValue(this.ctx.storage, "twilio_account_sid"),
+      api_key_sid: deploymentValue(this.ctx.storage, "twilio_api_key_sid"),
+      api_key_secret: deploymentValue(this.ctx.storage, "twilio_api_key_secret"),
+    };
+  }
+
+  /** Set any of the Twilio values; blank removes one. */
+  setTwilioKeys(values: Partial<TwilioKeys>) {
+    this.ensureSchema();
+    for (const [name, value] of Object.entries(values)) {
+      setDeploymentValue(this.ctx.storage, `twilio_${name}`, value ?? "");
+    }
+  }
+
+  /** Wake when the next bought number's term ends, unless already due to wake sooner. */
+  private async scheduleExpiry() {
+    const next = nextExpiry(this.ctx.storage);
+    if (next === undefined) return;
+    const current = await this.ctx.storage.getAlarm();
+    if (current === null || next < current) await this.ctx.storage.setAlarm(next);
+  }
+
+  /**
+   * Release every bought number whose paid time has run out, at Twilio and here, then
+   * wake again for the next. A number Twilio would not release yet is kept and tried
+   * again within the hour, so nothing is dropped here that still bills at Twilio.
+   */
+  async alarm() {
+    this.ensureSchema();
+    const now = Date.now();
+    const keys = this.twilioKeys();
+    let retry = false;
+    for (const row of expiredNumbers(this.ctx.storage, now)) {
+      if (!twilioOpen(keys)) {
+        retry = true;
+        break;
+      }
+      try {
+        await releaseNumber(keys, row.twilio_sid);
+        dropNumber(this.ctx.storage, row.id);
+      } catch {
+        retry = true;
+      }
+    }
+    const next = nextExpiry(this.ctx.storage);
+    const soon = retry ? now + 60 * 60 * 1000 : Infinity;
+    const at = Math.min(soon, next !== undefined && next > now ? next : Infinity);
+    if (at !== Infinity) await this.ctx.storage.setAlarm(at);
   }
 
   // ─── OpenRouter wallet (see wallet.ts) ──────────────────────────────────────────

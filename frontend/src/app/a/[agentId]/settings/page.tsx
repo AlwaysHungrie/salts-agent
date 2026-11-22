@@ -21,6 +21,7 @@ import { useIdentity } from "@/lib/identity";
 import { ApiKeys } from "@/components/ApiKeys";
 import { WalletKeyPicker } from "@/components/wallet/WalletKeyPicker";
 import { MetaSettingsDialog } from "@/components/MetaSettings";
+import { PhoneNumbersPanel } from "@/components/phone-numbers/PhoneNumbersPanel";
 import { cached, keys, remember, revise } from "@/lib/cache";
 import { guideHref } from "@/lib/guide-link";
 
@@ -224,6 +225,8 @@ export default function Settings({
    * refused says so before it is saved rather than after.
    */
   const [memberLimit, setMemberLimit] = useState(held?.member_limit ?? 0);
+  /** Whether the Business Phone Numbers sidebar is open. */
+  const [numbersOpen, setNumbersOpen] = useState(false);
   /** Connecting the bot is setup rather than a tool, so it is shown here, first. */
   const [telegram, setTelegram] = useState<Capability | null>(
     held?.capabilities.find((c) => c.id === "telegram") ?? null,
@@ -231,6 +234,9 @@ export default function Settings({
   /** Same reasoning as Telegram: connecting a number is setup, not a tool. */
   const [whatsapp, setWhatsapp] = useState<Capability | null>(
     held?.capabilities.find((c) => c.id === "whatsapp") ?? null,
+  );
+  const [whatsappBusiness, setWhatsappBusiness] = useState<Capability | null>(
+    held?.capabilities.find((c) => c.id === "whatsapp_business") ?? null,
   );
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -290,6 +296,9 @@ export default function Settings({
       );
       setWhatsapp(
         payload.capabilities.find((c) => c.id === "whatsapp") ?? null,
+      );
+      setWhatsappBusiness(
+        payload.capabilities.find((c) => c.id === "whatsapp_business") ?? null,
       );
     })();
     // Only the first render's cache matters here; later ones are this page's own.
@@ -531,6 +540,27 @@ export default function Settings({
                   </Row>
                 )}
               </>
+            )}
+
+            {whatsappBusiness && !locked.has("whatsapp_business") && (
+              <CapabilitySection
+                capability={whatsappBusiness}
+                agentId={agentId}
+                config={config}
+                set={set}
+                tint="#128C7E"
+                badge="Paid"
+              >
+                <button
+                  onClick={() => setNumbersOpen(true)}
+                  className="bg-canvas border-hairline hover:bg-canvas-soft inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-xs font-semibold leading-[1.33] transition"
+                >
+                  Business Phone Numbers
+                </button>
+                {numbersOpen && (
+                  <PhoneNumbersPanel onClose={() => setNumbersOpen(false)} />
+                )}
+              </CapabilitySection>
             )}
 
             {telegram && !locked.has("telegram") && (

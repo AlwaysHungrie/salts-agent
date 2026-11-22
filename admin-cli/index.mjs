@@ -293,6 +293,8 @@ async function loadPayments() {
     state.payments = await call("/api/admin/payments");
     // Razorpay's keys, for card payments; a Worker from before them has no such route.
     state.payments.razorpay = await call("/api/admin/razorpay").catch(() => null);
+    // Twilio's keys, for buying Business Phone Numbers; likewise absent on an older Worker.
+    state.payments.twilio = await call("/api/admin/twilio").catch(() => null);
   } catch (err) {
     // A Worker from before key purchases has no such route: the tab says so.
     state.payments = null;
@@ -354,18 +356,28 @@ function removePayment(field) {
 
 /** Razorpay's settings: the key id is shown; the two secrets are write-only. */
 const RAZORPAY_FIELDS = [
-  { key: "key_id", label: "Razorpay key id", off: "card payments are closed" },
-  { key: "key_secret", label: "Razorpay key secret", off: "card payments are closed", secret: true },
-  { key: "webhook_secret", label: "Razorpay webhook secret", off: "closed pages don't get their key", secret: true },
+  { vendor: "razorpay", key: "key_id", label: "Razorpay key id", off: "card payments are closed" },
+  { vendor: "razorpay", key: "key_secret", label: "Razorpay key secret", off: "card payments are closed", secret: true },
+  { vendor: "razorpay", key: "webhook_secret", label: "Razorpay webhook secret", off: "closed pages don't get their key", secret: true },
 ];
 
-/** Set or remove one Razorpay setting; the Worker checks the key pair with Razorpay. */
-async function patchRazorpay(field, value) {
-  state.status = value ? "checking with Razorpay…" : state.status;
+/** Twilio's settings, for buying Business Phone Numbers: the SIDs are shown; the secret is write-only. */
+const TWILIO_FIELDS = [
+  { vendor: "twilio", key: "account_sid", label: "Twilio account SID", off: "buying numbers is closed" },
+  // The account SID and auth token work in place of an API key and its secret.
+  { vendor: "twilio", key: "api_key_sid", label: "Twilio API key SID", off: "buying numbers is closed" },
+  { vendor: "twilio", key: "api_key_secret", label: "Twilio API key secret", off: "buying numbers is closed", secret: true },
+];
+
+const VENDOR_NAMES = { razorpay: "Razorpay", twilio: "Twilio" };
+
+/** Set or remove one Razorpay or Twilio setting; the Worker checks the keys with the vendor. */
+async function patchVendor(field, value) {
+  state.status = value ? `checking with ${VENDOR_NAMES[field.vendor]}…` : state.status;
   render();
   state.payments = {
     ...state.payments,
-    razorpay: await call("/api/admin/razorpay", {
+    [field.vendor]: await call(`/api/admin/${field.vendor}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ [field.key]: value }),
@@ -375,12 +387,12 @@ async function patchRazorpay(field, value) {
   render();
 }
 
-function removeRazorpay(field) {
+function removeVendorField(field) {
   state.confirm = {
     prompt: `Remove the ${field.label}? Until one is set, ${field.off}.`,
     run: async () => {
       try {
-        await patchRazorpay(field, "");
+        await patchVendor(field, "");
       } catch (err) {
         state.status = err.message;
         render();
@@ -765,8 +777,12 @@ function view() {
             remove: pay[field.key] ? () => removePayment(field) : undefined,
           });
         }
-        for (const field of pay.razorpay ? RAZORPAY_FIELDS : []) {
-          const value = pay.razorpay[field.key];
+        const vendorFields = [
+          ...(pay.razorpay ? RAZORPAY_FIELDS : []),
+          ...(pay.twilio ? TWILIO_FIELDS : []),
+        ];
+        for (const field of vendorFields) {
+          const value = pay[field.vendor][field.key];
           const set = field.secret ? value.set : Boolean(value);
           rows.push({
             cells: [field.label, set ? (field.secret ? `set (…${value.hint})` : value) : `not set — ${field.off}`],
@@ -778,9 +794,9 @@ function view() {
                   state.status = "nothing changed";
                   return render();
                 }
-                return patchRazorpay(field, text);
+                return patchVendor(field, text);
               }, field.secret),
-            remove: set ? () => removeRazorpay(field) : undefined,
+            remove: set ? () => removeVendorField(field) : undefined,
           });
         }
         // Write-only: the Worker shows only the host, as the URL may carry an API key.

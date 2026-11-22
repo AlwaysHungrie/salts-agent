@@ -73,6 +73,7 @@ export const ConfigSchema = z
     cap_memory: flag,
     cap_telegram: flag,
     cap_whatsapp: flag,
+    cap_whatsapp_business: flag,
     cap_mcp: flag,
     cap_wallet: flag,
     openrouter_api_key: z.string(),

@@ -254,6 +254,35 @@ export const AGENT_DIRECTORY_MIGRATIONS: readonly Migration[] = [
       );
     },
   },
+  {
+    name: "business phone numbers",
+    up: (sql) => {
+      // Each account's WhatsApp for Business numbers. `number` is unique across
+      // accounts: WhatsApp registers a number once.
+      sql.exec(
+        `CREATE TABLE IF NOT EXISTS phone_numbers (
+           id TEXT PRIMARY KEY,
+           email TEXT NOT NULL,
+           number TEXT NOT NULL UNIQUE,
+           kind TEXT NOT NULL,
+           created_at INTEGER NOT NULL
+         )`
+      );
+      sql.exec(`CREATE INDEX IF NOT EXISTS idx_phone_numbers_email ON phone_numbers(email)`);
+    },
+  },
+  {
+    name: "bought phone numbers",
+    up: (sql) => {
+      // A bought number's handle at Twilio, when its paid time ends, and when its
+      // renewal reminder went out.
+      addColumnIfMissing(sql, "phone_numbers", `twilio_sid TEXT NOT NULL DEFAULT ''`);
+      addColumnIfMissing(sql, "phone_numbers", `expires_at INTEGER NOT NULL DEFAULT 0`);
+      addColumnIfMissing(sql, "phone_numbers", `reminded_at INTEGER NOT NULL DEFAULT 0`);
+      // What a purchase paid for: a key, a number, or a number's renewal.
+      addColumnIfMissing(sql, "wallet_purchases", `item TEXT NOT NULL DEFAULT 'key'`);
+    },
+  },
 ];
 
 export function migrateMembership(storage: DurableObjectStorage) {

@@ -37,6 +37,7 @@ export const SETTABLE_CONFIG_KEYS = [
   "cap_memory",
   "cap_telegram",
   "cap_whatsapp",
+  "cap_whatsapp_business",
   "cap_mcp",
   "cap_wallet",
 ] as const;
@@ -65,6 +66,12 @@ export type DeploymentSettings = {
   default_agent_limit: number;
   /** How many keys one account's OpenRouter wallet may hold. */
   max_wallet_keys: number;
+  /** How many numbers one account's Business Phone Numbers wallet may hold. */
+  max_phone_numbers: number;
+  /** What a bought US number costs for one term, in whole US dollars. */
+  phone_number_price_usd: number;
+  /** How long one payment keeps a bought number, in months. */
+  phone_number_term_months: number;
   /** How many networks the Wallet capability may have configured, EVM and Solana together. */
   max_chain_networks: number;
   /** How many tokens one of those networks may track. */
@@ -178,6 +185,9 @@ export const SETTINGS_FIELDS: readonly SettingsField[] = [
   INT("max_members", 1, 100_000, "addresses one agent's access list may hold"),
   INT("default_agent_limit", 1, 100_000, "agents an ordinary account may administer"),
   INT("max_wallet_keys", 1, 1000, "keys one account's OpenRouter wallet may hold"),
+  INT("max_phone_numbers", 1, 1000, "numbers one account's Business Phone Numbers wallet may hold"),
+  INT("phone_number_price_usd", 1, 1000, "price of a bought US number for one term, in whole dollars"),
+  INT("phone_number_term_months", 1, 60, "months one payment keeps a bought number"),
   INT("max_chain_networks", 1, 1000, "networks one agent's Wallet capability may configure"),
   INT("max_chain_tokens", 1, 1000, "tokens one configured network may track"),
   INT("wallet_fee_bps", 0, 5000, "service fee on a credit purchase, in basis points (600 = 6%)"),

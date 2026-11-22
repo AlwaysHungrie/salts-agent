@@ -3,6 +3,9 @@
   "max_agent_bytes": 50000000,
   "max_members": 200,
   "max_wallet_keys": 20,
+  "max_phone_numbers": 5,
+  "phone_number_price_usd": 10,
+  "phone_number_term_months": 6,
   "max_chain_networks": 20,
   "max_chain_tokens": 20,
   "wallet_fee_bps": 800,
@@ -65,6 +68,7 @@
     "cap_memory": 0,
     "cap_telegram": 1,
     "cap_whatsapp": 0,
+    "cap_whatsapp_business": 0,
     "cap_mcp": 1,
     "cap_wallet": 0
   },

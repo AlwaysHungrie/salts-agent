@@ -38,6 +38,7 @@ export type CapabilityId =
   | "memory"
   | "telegram"
   | "whatsapp"
+  | "whatsapp_business"
   | "mcp"
   | "wallet";
 
@@ -77,6 +78,11 @@ export type Capability = {
    * the same channel. Listed as a capability, the model offered to message arbitrary numbers.
    */
   channel?: true;
+  /**
+   * The switch is saved but nothing behind it is built yet, so it is never named to the
+   * model: it would claim a channel or an ability the agent does not have.
+   */
+  preview?: true;
   label: string;
   summary: string;
   /** What it costs or risks, shown under the toggle. */
@@ -252,6 +258,17 @@ export const CAPABILITIES: Capability[] = [
     ],
   },
   {
+    id: "whatsapp_business",
+    flag: "cap_whatsapp_business",
+    channel: true,
+    preview: true,
+    label: "WhatsApp for Business",
+    summary:
+      "Let your agent run your business on WhatsApp. Requires a registered business, subject to Meta's terms and conditions.",
+    tools: [],
+    fields: [],
+  },
+  {
     id: "whatsapp",
     flag: "cap_whatsapp",
     channel: true,
@@ -361,12 +378,16 @@ export function capabilityReady(capability: Capability, config: Config): boolean
 
 /** The ready capabilities to name to the model. Channels are excluded: they are not abilities. */
 export function capabilityLabels(config: Config): string[] {
-  return CAPABILITIES.filter((c) => !c.channel && capabilityReady(c, config)).map((c) => c.label);
+  return CAPABILITIES.filter((c) => !c.channel && !c.preview && capabilityReady(c, config)).map(
+    (c) => c.label
+  );
 }
 
 /** Where the agent can be reached, which is a different claim from what it can do. */
 export function channelLabels(config: Config): string[] {
-  return CAPABILITIES.filter((c) => c.channel && capabilityReady(c, config)).map((c) => c.label);
+  return CAPABILITIES.filter((c) => c.channel && !c.preview && capabilityReady(c, config)).map(
+    (c) => c.label
+  );
 }
 
 export function enabled(config: Config, id: CapabilityId): boolean {

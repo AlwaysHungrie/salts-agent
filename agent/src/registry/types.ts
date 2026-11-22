@@ -40,6 +40,7 @@ export type Config = {
   cap_memory: number;
   cap_telegram: number;
   cap_whatsapp: number;
+  cap_whatsapp_business: number;
   cap_mcp: number;
   cap_wallet: number;
 
@@ -365,6 +366,25 @@ export type BusinessRequest = {
   created_at: number;
 };
 
+/** Added by the user (a number they already own), or bought from the deployment. */
+export type PhoneNumberKind = "own" | "bought";
+
+/** One number in an account's Business Phone Numbers wallet, as stored. */
+export type PhoneNumberRow = {
+  id: string;
+  email: string;
+  /** Digits only, country code first, no "+": the form Meta's Cloud API names numbers in. */
+  number: string;
+  kind: PhoneNumberKind;
+  created_at: number;
+  /** A bought number's handle at Twilio, to release it; blank for the user's own. */
+  twilio_sid: string;
+  /** When a bought number's paid time runs out; 0 for the user's own. */
+  expires_at: number;
+  /** When the renewal reminder went out for the current term; 0 before. */
+  reminded_at: number;
+};
+
 /** Pasted by the user, or provisioned by the deployment after a payment. */
 export type WalletKeyKind = "own" | "provisioned";
 
@@ -407,4 +427,12 @@ export type WalletPurchase = {
   expires_at: number;
   /** When delivery was last taken up; 0 when no one holds it. */
   claimed_at: number;
+  /**
+   * What was paid for: an OpenRouter key (the default), a new Business Phone Number, or
+   * more time on one. For a renewal, `key_id` names the number from the start; for a new
+   * number, it names the number once delivered.
+   */
+  item?: PurchaseItem;
 };
+
+export type PurchaseItem = "key" | "number" | "renew";
