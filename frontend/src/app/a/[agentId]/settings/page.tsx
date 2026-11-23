@@ -22,6 +22,11 @@ import { ApiKeys } from "@/components/ApiKeys";
 import { WalletKeyPicker } from "@/components/wallet/WalletKeyPicker";
 import { MetaSettingsDialog } from "@/components/MetaSettings";
 import { PhoneNumbersPanel } from "@/components/phone-numbers/PhoneNumbersPanel";
+import {
+  type BusinessNumber,
+  BusinessNumberPicker,
+} from "@/components/phone-numbers/BusinessNumberPicker";
+import { MessageBalance } from "@/components/phone-numbers/MessageBalance";
 import { cached, keys, remember, revise } from "@/lib/cache";
 import { guideHref } from "@/lib/guide-link";
 
@@ -181,6 +186,8 @@ type ConfigPayload = {
   locked?: string[];
   /** The admin's default OpenRouter key, which may be picked again; blank when none. */
   default_key_id?: string;
+  /** The WhatsApp for Business number the agent answers on; null when none. */
+  business_number?: BusinessNumber;
   spend?: SpendState;
   member_limit?: number;
   error?: string;
@@ -227,6 +234,9 @@ export default function Settings({
   const [memberLimit, setMemberLimit] = useState(held?.member_limit ?? 0);
   /** Whether the Business Phone Numbers sidebar is open. */
   const [numbersOpen, setNumbersOpen] = useState(false);
+  const [businessNumber, setBusinessNumber] = useState<BusinessNumber>(
+    held?.business_number ?? null,
+  );
   /** Connecting the bot is setup rather than a tool, so it is shown here, first. */
   const [telegram, setTelegram] = useState<Capability | null>(
     held?.capabilities.find((c) => c.id === "telegram") ?? null,
@@ -278,6 +288,7 @@ export default function Settings({
       );
       setLocked(new Set(payload.locked ?? []));
       setDefaultKeyId(payload.default_key_id ?? "");
+      setBusinessNumber(payload.business_number ?? null);
       setSpend(payload.spend ?? null);
       setMemberLimit(payload.member_limit ?? 0);
       setAgent(payload.agent ?? null);
@@ -553,10 +564,21 @@ export default function Settings({
               >
                 <button
                   onClick={() => setNumbersOpen(true)}
-                  className="bg-canvas border-hairline hover:bg-canvas-soft inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-xs font-semibold leading-[1.33] transition"
+                  className="bg-canvas border-hairline hover:bg-canvas-soft mb-4 inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-xs font-semibold leading-[1.33] transition"
                 >
-                  Business Phone Numbers
+                  Manage business phone numbers
                 </button>
+                <div className="mb-3">
+                  <p className="mb-2 text-sm font-semibold leading-[1.43]">
+                    Number
+                  </p>
+                  <BusinessNumberPicker
+                    agentId={agentId}
+                    value={businessNumber}
+                    onChange={setBusinessNumber}
+                  />
+                </div>
+                <MessageBalance />
                 {numbersOpen && (
                   <PhoneNumbersPanel onClose={() => setNumbersOpen(false)} />
                 )}

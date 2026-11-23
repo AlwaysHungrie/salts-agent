@@ -50,6 +50,9 @@ export type SettableConfigKey = (typeof SETTABLE_CONFIG_KEYS)[number];
  */
 export const CHOICE_FIELD_KEYS = ["image_model", "transcription_model", "voice_model"] as const;
 
+/** One WhatsApp for Business message pack: `messages` agent replies for `price_usd`. */
+export type MessagePack = { messages: number; price_usd: number };
+
 /** One entry on a fixed-choice menu: an OpenRouter id, and the name it is shown under. */
 export type ChoiceOption = { id: string; label: string };
 
@@ -72,6 +75,11 @@ export type DeploymentSettings = {
   phone_number_price_usd: number;
   /** How long one payment keeps a bought number, in months. */
   phone_number_term_months: number;
+  /**
+   * The WhatsApp for Business message packs on sale: how many agent replies each adds to
+   * the account's balance, and its price in whole dollars. One to six packs.
+   */
+  message_packs: MessagePack[];
   /** How many networks the Wallet capability may have configured, EVM and Solana together. */
   max_chain_networks: number;
   /** How many tokens one of those networks may track. */
@@ -188,6 +196,12 @@ export const SETTINGS_FIELDS: readonly SettingsField[] = [
   INT("max_phone_numbers", 1, 1000, "numbers one account's Business Phone Numbers wallet may hold"),
   INT("phone_number_price_usd", 1, 1000, "price of a bought US number for one term, in whole dollars"),
   INT("phone_number_term_months", 1, 60, "months one payment keeps a bought number"),
+  {
+    key: "message_packs",
+    kind: "json",
+    doc: "WhatsApp for Business message packs on sale: [{messages, price_usd}], one to six",
+    group: "default",
+  },
   INT("max_chain_networks", 1, 1000, "networks one agent's Wallet capability may configure"),
   INT("max_chain_tokens", 1, 1000, "tokens one configured network may track"),
   INT("wallet_fee_bps", 0, 5000, "service fee on a credit purchase, in basis points (600 = 6%)"),
@@ -501,6 +515,19 @@ export function validateSettingsPatch(input: unknown, current: StoredSettings): 
         }
         const most = key === "card_presets_inr" ? 1_000_000 : 10_000;
         next[key as "card_presets_inr" | "card_presets_usd"] = value.map((n, i) => requireInt(`${key}[${i}]`, n, 1, most));
+        break;
+      }
+      case "message_packs": {
+        if (!Array.isArray(value) || !value.length || value.length > 6) {
+          throw new SettingsError(`${key} must be a list of one to six packs`);
+        }
+        next.message_packs = value.map((pack, i) => {
+          if (!isObject(pack)) throw new SettingsError(`${key}[${i}] must be {messages, price_usd}`);
+          return {
+            messages: requireInt(`${key}[${i}].messages`, pack.messages, 1, 10_000_000),
+            price_usd: requireInt(`${key}[${i}].price_usd`, pack.price_usd, 1, 10_000),
+          };
+        });
         break;
       }
       case "system_prompt": {

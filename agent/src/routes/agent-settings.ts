@@ -36,6 +36,16 @@ function refuseUnofferedModel(patch: Partial<Config>, models: ModelChoice[]) {
 
 const SyncResult = z.object({ ok: z.boolean(), error: z.string().optional() });
 
+/** The WhatsApp for Business number an agent answers on; null while it has none. */
+const BusinessNumberSchema = z
+  .object({
+    id: z.string(),
+    /** Digits only, country code first. */
+    number: z.string(),
+  })
+  .nullable()
+  .openapi("BusinessNumber");
+
 const ConfigViewSchema = z
   .object({
     agent: AgentRowSchema,
@@ -51,6 +61,7 @@ const ConfigViewSchema = z
      */
     default_key_id: z.string(),
     guests: GuestsSchema,
+    business_number: BusinessNumberSchema,
     limits: z.object({
       max_files_per_message: z.number(),
       max_upload_bytes: z.record(z.string(), z.number()),
@@ -109,6 +120,35 @@ export function settingsRoutes(app: ApiApp) {
       responses: { 200: jsonOf(ConfigSavedSchema), ...refusals(400, 404) },
     }),
     async (c) => c.json(await patchConfig(c.var.call, c.req.valid("json") as Partial<Config>), 200)
+  );
+
+  app.openapi(
+    createRoute({
+      method: "put",
+      path: "/api/agents/{agentId}/business-number",
+      tags: ["Settings"],
+      summary: "Choose the agent's WhatsApp for Business number",
+      description:
+        "A number from the caller's Business Phone Numbers, in place of any the agent had. A number answers for one agent only. Blank `number_id` leaves the agent with none.",
+      middleware: [agentRoute(may.member)] as const,
+      request: {
+        params: AgentParams,
+        body: {
+          content: { "application/json": { schema: z.object({ number_id: z.string() }) } },
+        },
+      },
+      responses: {
+        200: jsonOf(z.object({ business_number: BusinessNumberSchema })),
+        ...refusals(400, 404),
+      },
+    }),
+    async (c) => {
+      const { env, agentId, email } = c.var.call;
+      const id = c.req.valid("json").number_id.trim();
+      const row = await directory(env).assignPhoneNumber(email, agentId, id);
+      if (row && "error" in row) throw new ApiError(400, row.error);
+      return c.json({ business_number: row ? { id: row.id, number: row.number } : null }, 200);
+    }
   );
 
   app.openapi(
@@ -177,9 +217,10 @@ export function settingsRoutes(app: ApiApp) {
   );
 }
 
-async function getConfig({ env, reg, agent, email, access }: AgentCall) {
+async function getConfig({ env, reg, agent, agentId, email, access }: AgentCall) {
   const meta = await reg.meta();
   const settings = await deploymentSettings(env);
+  const number = await directory(env).agentPhoneNumber(agentId);
   return {
     agent: agentFor(agent, email),
     config: redact(await readConfig(env, reg)),
@@ -193,6 +234,7 @@ async function getConfig({ env, reg, agent, email, access }: AgentCall) {
     locked: meta.locked,
     default_key_id: await defaultKeyId(env, reg, meta),
     guests: guestsView(access),
+    business_number: number ? { id: number.id, number: number.number } : null,
     // Sent rather than compiled in, so the browser refuses at the Worker's numbers.
     limits: {
       max_files_per_message: settings.max_files_per_message,

@@ -54,11 +54,12 @@ function insertPurchase(
     tx: null,
     claimed_at: 0,
     item: p.item ?? "key",
+    messages: p.messages ?? 0,
   };
   storage.sql.exec(
     `INSERT INTO wallet_purchases
-       (id, email, key_id, amount_usd, network, asset, to_address, payer, units, created_at, expires_at, item)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, email, key_id, amount_usd, network, asset, to_address, payer, units, created_at, expires_at, item, messages)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     row.id,
     row.email,
     row.key_id,
@@ -70,7 +71,8 @@ function insertPurchase(
     row.units,
     row.created_at,
     row.expires_at,
-    row.item
+    row.item,
+    row.messages
   );
   return row;
 }

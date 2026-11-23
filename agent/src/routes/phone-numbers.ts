@@ -13,13 +13,25 @@ import { cardConfirm, cardKeyId } from "./card";
 /** How long a number order is kept open for; Razorpay's own orders don't expire. */
 const ORDER_TTL_MS = 24 * 60 * 60 * 1000;
 
-const view = ({ id, number, kind, created_at, expires_at }: PhoneNumberRow) => ({
+const view = ({ id, number, kind, created_at, expires_at, agent_id }: PhoneNumberRow) => ({
   id,
   number,
   kind,
   created_at,
   expires_at,
+  agent_id,
 });
+
+/** The caller's numbers, each with the name of the agent it answers for ("" for none). */
+async function walletView(env: Env, email: string) {
+  const dir = directory(env);
+  return Promise.all(
+    (await dir.phoneNumbers(email)).map(async (n) => ({
+      ...view(n),
+      agent_name: n.agent_id ? ((await dir.get(n.agent_id))?.name ?? "") : "",
+    }))
+  );
+}
 
 /** Everything under `/api/phone-numbers`: the signed-in caller's Business Phone Numbers. */
 export async function handlePhoneNumbers(
@@ -36,18 +48,21 @@ export async function handlePhoneNumbers(
   if (!id) {
     if (method === "GET") {
       const settings = await deploymentSettings(env);
-      const numbers = (await dir.phoneNumbers(email)).map(view);
+      const numbers = await walletView(env, email);
       // Buying is open once both Twilio (to buy from) and Razorpay (to be paid) are set.
       const open = twilioOpen(await dir.twilioKeys());
       const keyId = open ? await cardKeyId(env) : "";
       const rate = keyId ? await inrPerUsd().catch(() => 0) : 0;
+      const inr = (usd: number) => (rate ? Math.ceil(usd * rate) : 0);
       return json({
         numbers,
         max: settings.max_phone_numbers,
         price_usd: settings.phone_number_price_usd,
         term_months: settings.phone_number_term_months,
         razorpay_key_id: rate ? keyId : "",
-        price_inr: rate ? Math.ceil(settings.phone_number_price_usd * rate) : 0,
+        price_inr: inr(settings.phone_number_price_usd),
+        messages_remaining: await dir.messageBalance(email),
+        message_packs: settings.message_packs.map((p) => ({ ...p, price_inr: inr(p.price_usd) })),
       });
     }
     if (method === "POST") return await addOwn(request, env, email);
@@ -98,16 +113,21 @@ async function addOwn(request: Request, env: Env, email: string): Promise<Respon
 }
 
 /**
- * A Razorpay order for one term of a US number at the deployment's price: a new number,
- * or `renew` more time on one the caller bought. In US dollars, or in whole rupees at
- * today's rate (rounded up) for buyers in India.
+ * A Razorpay order at the deployment's price for one term of a US number (a new number, or
+ * `renew` more time on one the caller bought), or for the message pack of `messages`. In
+ * US dollars, or in whole rupees at today's rate (rounded up) for buyers in India.
  */
 async function numberOrder(request: Request, env: Env, email: string): Promise<Response> {
-  const body = await readJson<{ currency?: string; renew?: string }>(request);
+  const body = await readJson<{ currency?: string; renew?: string; messages?: number }>(request);
   const currency: CardCurrency = body?.currency === "INR" ? "INR" : "USD";
   const dir = directory(env);
   const settings = await deploymentSettings(env);
 
+  const pack =
+    body?.messages !== undefined
+      ? settings.message_packs.find((p) => p.messages === body.messages)
+      : undefined;
+  if (body?.messages !== undefined && !pack) return jsonError("That pack isn't on sale.", 400);
   if (!twilioOpen(await dir.twilioKeys())) return jsonError("Buying numbers isn't open yet.", 503);
   const keys = await dir.razorpayKeys();
   if (!keys.key_id || !keys.key_secret || !(await cardKeyId(env))) {
@@ -116,7 +136,9 @@ async function numberOrder(request: Request, env: Env, email: string): Promise<R
 
   const held = await dir.phoneNumbers(email);
   let target = "";
-  if (body?.renew) {
+  if (pack) {
+    // Packs top up a balance: no ceiling, nothing at Twilio.
+  } else if (body?.renew) {
     const number = held.find((n) => n.id === body.renew && n.kind === "bought");
     if (!number) return jsonError("That isn't a number you bought.", 404);
     target = number.id;
@@ -124,10 +146,11 @@ async function numberOrder(request: Request, env: Env, email: string): Promise<R
     return jsonError(`A wallet holds at most ${settings.max_phone_numbers} numbers.`, 400);
   }
 
-  let totalMinor = settings.phone_number_price_usd * 100;
+  const priceUsd = pack ? pack.price_usd : settings.phone_number_price_usd;
+  let totalMinor = priceUsd * 100;
   if (currency === "INR") {
     try {
-      totalMinor = Math.ceil(settings.phone_number_price_usd * (await inrPerUsd())) * 100;
+      totalMinor = Math.ceil(priceUsd * (await inrPerUsd())) * 100;
     } catch (err) {
       if (err instanceof FxError) return jsonError(err.message, 503);
       throw err;
@@ -144,7 +167,7 @@ async function numberOrder(request: Request, env: Env, email: string): Promise<R
   const made = await dir.createCardPurchase({
     email,
     key_id: target,
-    amount_usd: settings.phone_number_price_usd,
+    amount_usd: priceUsd,
     network: RAZORPAY_NETWORK,
     asset: currency === "USD" ? "usd" : "inr",
     to_address: orderId,
@@ -152,7 +175,8 @@ async function numberOrder(request: Request, env: Env, email: string): Promise<R
     units: String(totalMinor),
     created_at: now,
     expires_at: now + ORDER_TTL_MS,
-    item: target ? "renew" : "number",
+    item: pack ? "messages" : target ? "renew" : "number",
+    messages: pack?.messages ?? 0,
   });
   return json({
     id: made.id,
@@ -163,8 +187,18 @@ async function numberOrder(request: Request, env: Env, email: string): Promise<R
     total: totalMinor / 100,
     term_months: settings.phone_number_term_months,
     renew: Boolean(target),
+    messages: pack?.messages ?? 0,
     email,
   });
+}
+
+/** Deliver a paid message pack: its messages go on the buyer's balance, once. */
+export async function deliverMessages(env: Env, p: WalletPurchase): Promise<Response> {
+  const dir = directory(env);
+  if (p.status !== "fulfilled" && (await dir.fulfilMessages(p.id)) === undefined) {
+    return settingUp("Adding your messages.");
+  }
+  return json({ status: "paid", messages_remaining: await dir.messageBalance(p.email) });
 }
 
 const settingUp = (reason = "Setting up your number.") => json({ status: "pending", reason }, 202);

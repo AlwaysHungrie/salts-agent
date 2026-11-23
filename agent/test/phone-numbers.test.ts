@@ -136,7 +136,7 @@ async function openBuying() {
 
 type Order = { id: string; order_id: string; amount: number; currency: string; total: number; renew: boolean };
 
-async function order(email: string, body: { currency?: string; renew?: string } = {}) {
+async function order(email: string, body: { currency?: string; renew?: string; messages?: number } = {}) {
   return SELF.fetch(`${BASE}/api/phone-numbers/orders`, as(email, { method: "POST", body: JSON.stringify(body) }));
 }
 
@@ -156,7 +156,7 @@ function confirm(email: string, id: string, payment_id: string) {
 }
 
 /** Order, pay and confirm a new number; the confirm's answer. */
-async function buy(email: string, body: { currency?: string; renew?: string } = {}) {
+async function buy(email: string, body: { currency?: string; renew?: string; messages?: number } = {}) {
   const made = (await (await order(email, body)).json()) as Order;
   return (await (await confirm(email, made.id, await pay(made.order_id))).json()) as {
     status: string;
@@ -341,5 +341,177 @@ describe("the owner's Twilio settings", () => {
 
   it("is shut to anyone without the API secret", async () => {
     expect((await SELF.fetch(`${BASE}/api/admin/twilio`)).status).toBe(401);
+  });
+});
+
+/* ---------------------------------------------------- a number for an agent -- */
+
+type WalletNumber = NumberView & { agent_id: string; agent_name: string };
+type BusinessNumber = { id: string; number: string } | null;
+
+async function newAgent(owner: string, name = "Shop") {
+  const res = await SELF.fetch(
+    `${BASE}/api/agents`,
+    as(owner, { method: "POST", body: JSON.stringify({ name, allowed_emails: owner }) })
+  );
+  expect(res.ok).toBe(true);
+  return ((await res.json()) as { id: string }).id;
+}
+
+function assign(email: string, agentId: string, numberId: string) {
+  return SELF.fetch(
+    `${BASE}/api/agents/${agentId}/business-number`,
+    as(email, { method: "PUT", body: JSON.stringify({ number_id: numberId }) })
+  );
+}
+
+async function agentNumber(email: string, agentId: string) {
+  const res = await SELF.fetch(`${BASE}/api/agents/${agentId}/config`, as(email));
+  return ((await res.json()) as { business_number: BusinessNumber }).business_number;
+}
+
+async function walletNumbers(email: string) {
+  return (await list(email)).numbers as WalletNumber[];
+}
+
+describe("a business number for an agent", () => {
+  it("gives an agent a number from the caller's wallet, shown on both sides", async () => {
+    const owner = someone("owner");
+    const agent = await newAgent(owner, "Bakery");
+    const n = (await (await add(owner, freshNumber())).json()) as NumberView;
+
+    const res = await assign(owner, agent, n.id);
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { business_number: BusinessNumber }).business_number).toEqual({
+      id: n.id,
+      number: n.number,
+    });
+    expect(await agentNumber(owner, agent)).toEqual({ id: n.id, number: n.number });
+    expect(await walletNumbers(owner)).toMatchObject([
+      { id: n.id, agent_id: agent, agent_name: "Bakery" },
+    ]);
+  });
+
+  it("lets a number answer for one agent only", async () => {
+    const owner = someone("owner");
+    const first = await newAgent(owner);
+    const second = await newAgent(owner);
+    const n = (await (await add(owner, freshNumber())).json()) as NumberView;
+    expect((await assign(owner, first, n.id)).status).toBe(200);
+
+    const res = await assign(owner, second, n.id);
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toMatch(/another agent/);
+    expect(await agentNumber(owner, second)).toBeNull();
+    expect(await agentNumber(owner, first)).toMatchObject({ id: n.id });
+
+    // Picking the same number again for its own agent is fine.
+    expect((await assign(owner, first, n.id)).status).toBe(200);
+  });
+
+  it("swaps an agent's number, freeing the old one, and blank takes it off", async () => {
+    const owner = someone("owner");
+    const agent = await newAgent(owner);
+    const a = (await (await add(owner, freshNumber())).json()) as NumberView;
+    const b = (await (await add(owner, freshNumber())).json()) as NumberView;
+    await assign(owner, agent, a.id);
+    expect((await assign(owner, agent, b.id)).status).toBe(200);
+
+    const held = await walletNumbers(owner);
+    expect(held.find((n) => n.id === a.id)?.agent_id).toBe("");
+    expect(held.find((n) => n.id === b.id)?.agent_id).toBe(agent);
+
+    expect((await assign(owner, agent, "")).status).toBe(200);
+    expect(await agentNumber(owner, agent)).toBeNull();
+    expect((await walletNumbers(owner)).every((n) => n.agent_id === "")).toBe(true);
+  });
+
+  it("refuses a number from someone else's wallet, and a stranger's agent", async () => {
+    const owner = someone("owner");
+    const other = someone("other");
+    const agent = await newAgent(owner);
+    const theirs = (await (await add(other, freshNumber())).json()) as NumberView;
+    const res = await assign(owner, agent, theirs.id);
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toMatch(/not in your/);
+
+    const otherAgent = await newAgent(other);
+    expect((await assign(owner, otherAgent, "")).status).toBe(404);
+  });
+
+  it("frees the agent when its number is removed, and the number when the agent is", async () => {
+    const owner = someone("owner");
+    const agent = await newAgent(owner);
+    const n = (await (await add(owner, freshNumber())).json()) as NumberView;
+    await assign(owner, agent, n.id);
+    await SELF.fetch(`${BASE}/api/phone-numbers/${n.id}`, as(owner, { method: "DELETE" }));
+    expect(await agentNumber(owner, agent)).toBeNull();
+
+    const m = (await (await add(owner, freshNumber())).json()) as NumberView;
+    await assign(owner, agent, m.id);
+    const gone = await SELF.fetch(`${BASE}/api/agents/${agent}`, as(owner, { method: "DELETE" }));
+    expect(gone.status).toBe(200);
+    expect((await walletNumbers(owner))[0]).toMatchObject({ id: m.id, agent_id: "" });
+  });
+});
+
+/* ------------------------------------------------------------- message packs -- */
+
+describe("WhatsApp for Business message packs", () => {
+  beforeEach(openBuying);
+
+  const balance = async (email: string) =>
+    ((await (await SELF.fetch(`${BASE}/api/phone-numbers`, as(email))).json()) as { messages_remaining: number })
+      .messages_remaining;
+
+  it("offers the deployment's packs, in rupees at today's rate too, and starts at zero", async () => {
+    const buyer = someone();
+    const wallet = (await (await SELF.fetch(`${BASE}/api/phone-numbers`, as(buyer))).json()) as Record<
+      string,
+      unknown
+    >;
+    expect(wallet.messages_remaining).toBe(0);
+    expect(wallet.message_packs).toEqual(
+      SHIPPED.message_packs.map((p) => ({ ...p, price_inr: Math.ceil(p.price_usd * INR_PER_USD) }))
+    );
+  });
+
+  it("charges a pack's price and adds its messages once paid, however often confirmed", async () => {
+    const buyer = someone();
+    const [pack] = SHIPPED.message_packs;
+    const made = (await (await order(buyer, { messages: pack.messages })).json()) as Order;
+    expect(made).toMatchObject({ currency: "USD", amount: pack.price_usd * 100 });
+    const payment = await pay(made.order_id);
+    const first = await confirm(buyer, made.id, payment);
+    expect(await first.json()).toEqual({ status: "paid", messages_remaining: pack.messages });
+    await confirm(buyer, made.id, payment);
+    expect(await balance(buyer)).toBe(pack.messages);
+  });
+
+  it("adds a second pack on top of what is left, in rupees too", async () => {
+    const buyer = someone();
+    const [small, big] = SHIPPED.message_packs;
+    await buy(buyer, { messages: small.messages });
+    const made = (await (await order(buyer, { messages: big.messages, currency: "INR" })).json()) as Order;
+    expect(made.amount).toBe(Math.ceil(big.price_usd * INR_PER_USD) * 100);
+    await confirm(buyer, made.id, await pay(made.order_id));
+    expect(await balance(buyer)).toBe(small.messages + big.messages);
+  });
+
+  it("refuses a pack that isn't on sale", async () => {
+    expect((await order(someone(), { messages: 7 })).status).toBe(400);
+  });
+
+  it("takes one message per reply and refuses once none are left", async () => {
+    const buyer = someone();
+    const dir = directory();
+    expect(await dir.spendMessage(buyer)).toBe(false);
+    await runInDurableObject(dir, (_instance, ctx) => {
+      ctx.storage.sql.exec(`INSERT INTO message_balances (email, messages) VALUES (?, 2)`, buyer);
+    });
+    expect(await dir.spendMessage(buyer)).toBe(true);
+    expect(await dir.spendMessage(buyer)).toBe(true);
+    expect(await dir.spendMessage(buyer)).toBe(false);
+    expect(await balance(buyer)).toBe(0);
   });
 });

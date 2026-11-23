@@ -6,6 +6,11 @@
   "max_phone_numbers": 5,
   "phone_number_price_usd": 10,
   "phone_number_term_months": 6,
+  "message_packs": [
+    { "messages": 1000, "price_usd": 10 },
+    { "messages": 5000, "price_usd": 40 },
+    { "messages": 20000, "price_usd": 120 }
+  ],
   "max_chain_networks": 20,
   "max_chain_tokens": 20,
   "wallet_fee_bps": 800,

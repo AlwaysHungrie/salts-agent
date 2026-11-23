@@ -17,7 +17,7 @@ export function normalizeNumber(input: string): string | undefined {
 export function phoneNumbers(storage: DurableObjectStorage, email: string): PhoneNumberRow[] {
   return storage.sql
     .exec(
-      `SELECT id, email, number, kind, created_at, twilio_sid, expires_at, reminded_at
+      `SELECT id, email, number, kind, created_at, twilio_sid, expires_at, reminded_at, agent_id
          FROM phone_numbers WHERE email = ? ORDER BY created_at ASC, id ASC`,
       email.trim().toLowerCase()
     )
@@ -59,6 +59,7 @@ export function addPhoneNumber(
     twilio_sid: entry.twilio_sid ?? "",
     expires_at: entry.expires_at ?? 0,
     reminded_at: 0,
+    agent_id: "",
   };
   storage.sql.exec(
     `INSERT INTO phone_numbers (id, email, number, kind, created_at, twilio_sid, expires_at)
@@ -84,6 +85,49 @@ export function removePhoneNumber(
   const row = phoneNumbers(storage, owner).find((n) => n.id === id);
   if (row) storage.sql.exec(`DELETE FROM phone_numbers WHERE id = ?`, id);
   return row;
+}
+
+/** The number `agentId` answers on, whoever holds it; undefined when it has none. */
+export function agentPhoneNumber(
+  storage: DurableObjectStorage,
+  agentId: string
+): PhoneNumberRow | undefined {
+  if (!agentId) return undefined;
+  return storage.sql
+    .exec(`SELECT * FROM phone_numbers WHERE agent_id = ? LIMIT 1`, agentId)
+    .toArray()[0] as unknown as PhoneNumberRow | undefined;
+}
+
+/**
+ * Give `agentId` one of `email`'s numbers, in place of any number it had; a blank
+ * `numberId` leaves it with none. A number answers for one agent only, so one already
+ * given to another agent is refused as `{ error }` until it is taken off that one.
+ */
+export function assignPhoneNumber(
+  storage: DurableObjectStorage,
+  email: string,
+  agentId: string,
+  numberId: string
+): PhoneNumberRow | undefined | { error: string } {
+  return storage.transactionSync(() => {
+    let row: PhoneNumberRow | undefined;
+    if (numberId) {
+      row = phoneNumbers(storage, email).find((n) => n.id === numberId);
+      if (!row) return { error: "That number is not in your Business Phone Numbers." };
+      if (row.agent_id && row.agent_id !== agentId) {
+        return { error: "That number is already used by another agent." };
+      }
+    }
+    storage.sql.exec(`UPDATE phone_numbers SET agent_id = '' WHERE agent_id = ?`, agentId);
+    if (!row) return undefined;
+    storage.sql.exec(`UPDATE phone_numbers SET agent_id = ? WHERE id = ?`, agentId, row.id);
+    return { ...row, agent_id: agentId };
+  });
+}
+
+/** Take whatever number `agentId` had off it: the agent is gone. */
+export function clearAgentNumber(storage: DurableObjectStorage, agentId: string) {
+  storage.sql.exec(`UPDATE phone_numbers SET agent_id = '' WHERE agent_id = ?`, agentId);
 }
 
 /** `ts` moved by whole calendar months (negative goes back), in UTC. */

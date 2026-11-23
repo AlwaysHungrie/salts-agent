@@ -214,7 +214,7 @@ export function PhoneNumbersPanel({ onClose }: { onClose: () => void }) {
 }
 
 /** How a number is shown everywhere here, in its country's own grouping: +1 318 726 8259. */
-function shownNumber(digits: string): string {
+export function shownNumber(digits: string): string {
   return (
     parsePhoneNumberFromString(`+${digits}`)?.formatInternational() ??
     `+${digits}`

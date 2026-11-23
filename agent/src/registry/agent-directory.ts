@@ -88,6 +88,9 @@ import {
 } from "./wallet";
 import {
   addPhoneNumber,
+  agentPhoneNumber,
+  assignPhoneNumber,
+  clearAgentNumber,
   dropNumber,
   expiredNumbers,
   fulfilNumber,
@@ -97,6 +100,7 @@ import {
   renewNumber,
 } from "./phone-numbers";
 import { releaseNumber, twilioOpen, type TwilioKeys } from "../twilio";
+import { fulfilMessages, messageBalance, spendMessage } from "./message-balances";
 import {
   clearSettings,
   directorySettings,
@@ -389,6 +393,7 @@ export class AgentDirectory extends DurableObject {
     this.ensureSchema();
     this.ctx.storage.sql.exec(`DELETE FROM salts_links WHERE agent_id = ?`, id);
     setWalletKeyUse(this.ctx.storage, id, "");
+    clearAgentNumber(this.ctx.storage, id);
     return removeAgent(this.ctx.storage, id);
   }
 
@@ -444,6 +449,22 @@ export class AgentDirectory extends DurableObject {
     return removePhoneNumber(this.ctx.storage, email, id);
   }
 
+  /** The number `agentId` answers on, whoever holds it. */
+  agentPhoneNumber(agentId: string): PhoneNumberRow | undefined {
+    this.ensureSchema();
+    return agentPhoneNumber(this.ctx.storage, agentId);
+  }
+
+  /** Give `agentId` one of `email`'s numbers (blank: none); see phone-numbers.ts. */
+  assignPhoneNumber(
+    email: string,
+    agentId: string,
+    numberId: string
+  ): PhoneNumberRow | undefined | { error: string } {
+    this.ensureSchema();
+    return assignPhoneNumber(this.ctx.storage, email, agentId, numberId);
+  }
+
   /** Record a number bought for a paid purchase, and wake when its term ends. */
   async fulfilNumber(
     purchaseId: string,
@@ -462,6 +483,26 @@ export class AgentDirectory extends DurableObject {
     const row = renewNumber(this.ctx.storage, purchaseId, term, Date.now());
     if (row && row !== "gone") await this.scheduleExpiry();
     return row;
+  }
+
+  // ─── WhatsApp for Business message balance (see message-balances.ts) ────────────
+
+  /** How many messages `email`'s agents may still send on WhatsApp for Business. */
+  messageBalance(email: string): number {
+    this.ensureSchema();
+    return messageBalance(this.ctx.storage, email);
+  }
+
+  /** Take one message for an agent's reply; false when none are left. */
+  spendMessage(email: string): boolean {
+    this.ensureSchema();
+    return spendMessage(this.ctx.storage, email);
+  }
+
+  /** Put a paid pack's messages on its buyer's balance; the new balance. */
+  fulfilMessages(purchaseId: string): number | undefined {
+    this.ensureSchema();
+    return fulfilMessages(this.ctx.storage, purchaseId);
   }
 
   /** Twilio's account SID and API key; "" where not set. */

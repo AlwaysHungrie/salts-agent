@@ -283,6 +283,31 @@ export const AGENT_DIRECTORY_MIGRATIONS: readonly Migration[] = [
       addColumnIfMissing(sql, "wallet_purchases", `item TEXT NOT NULL DEFAULT 'key'`);
     },
   },
+  {
+    name: "phone number agents",
+    up: (sql) => {
+      // The agent a number answers for: one agent per number, one number per agent.
+      addColumnIfMissing(sql, "phone_numbers", `agent_id TEXT NOT NULL DEFAULT ''`);
+      sql.exec(
+        `CREATE UNIQUE INDEX IF NOT EXISTS idx_phone_numbers_agent
+           ON phone_numbers(agent_id) WHERE agent_id != ''`
+      );
+    },
+  },
+  {
+    name: "whatsapp message balances",
+    up: (sql) => {
+      // Each account's WhatsApp for Business replies left, bought in packs.
+      sql.exec(
+        `CREATE TABLE IF NOT EXISTS message_balances (
+           email TEXT PRIMARY KEY,
+           messages INTEGER NOT NULL DEFAULT 0
+         )`
+      );
+      // How many messages a pack purchase adds.
+      addColumnIfMissing(sql, "wallet_purchases", `messages INTEGER NOT NULL DEFAULT 0`);
+    },
+  },
 ];
 
 export function migrateMembership(storage: DurableObjectStorage) {

@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import { Check, Loader2 } from "lucide-react";
-import { loadCheckout } from "@/components/wallet/CardCheckout";
+import { useCardOrder } from "./useCardOrder";
 
 /** What buying a number costs here, as the Worker offers it. */
 export type NumberOffer = {
@@ -14,26 +13,6 @@ export type NumberOffer = {
   /** Set by the Next route from the caller's IP country. */
   card_currency: "INR" | "USD";
 };
-
-type NumberOrder = {
-  id: string;
-  key_id: string;
-  order_id: string;
-  currency: "INR" | "USD";
-  amount: number;
-  email: string;
-};
-
-/** How often, and for how long, a payment is checked before the buyer is told to wait. */
-const POLL_MS = 3000;
-const POLL_FOR_MS = 5 * 60 * 1000;
-
-async function errorOf(res: Response, fallback: string): Promise<string> {
-  const body = (await res.json().catch(() => null)) as {
-    error?: string;
-  } | null;
-  return body?.error ?? fallback;
-}
 
 /** The price as the buyer is charged it: "$10.00", or "₹940" in India. */
 export function priceOf(offer: NumberOffer): string {
@@ -53,80 +32,14 @@ export function NumberCheckout({
   offer: NumberOffer;
   onPaid: () => void;
 }) {
-  const [state, setState] = useState<"idle" | "busy" | "checking" | "paid">(
-    "idle",
-  );
-  const [error, setError] = useState<string | null>(null);
   const months = `${offer.term_months} ${offer.term_months === 1 ? "month" : "months"}`;
-
-  const finish = async (order: NumberOrder, paymentId: string) => {
-    setState("checking");
-    const until = Date.now() + POLL_FOR_MS;
-    while (Date.now() < until) {
-      const res = await fetch(
-        `/api/phone-numbers/orders/${encodeURIComponent(order.id)}/confirm`,
-        {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ payment_id: paymentId }),
-        },
-      );
-      if (res.ok && res.status !== 202) {
-        setState("paid");
-        onPaid();
-        return;
-      }
-      if (res.status !== 202) {
-        setError(await errorOf(res, "Couldn't check the payment."));
-        setState("idle");
-        return;
-      }
-      await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-    }
-    setError(
-      `Your payment is still being processed. Your number will appear in your wallet once it clears. Payment id: ${paymentId}`,
-    );
-    setState("idle");
-  };
-
-  const pay = async () => {
-    setError(null);
-    setState("busy");
-    try {
-      const [Razorpay, res] = await Promise.all([
-        loadCheckout(),
-        fetch("/api/phone-numbers/orders", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ currency: offer.card_currency }),
-        }),
-      ]);
-      if (!res.ok)
-        throw new Error(await errorOf(res, "Couldn't start the payment."));
-      const order = (await res.json()) as NumberOrder;
-      const window = new Razorpay({
-        key: order.key_id,
-        order_id: order.order_id,
-        amount: order.amount,
-        currency: order.currency,
-        name: "Salts",
-        description: `US phone number, ${months}`,
-        prefill: { email: order.email },
-        handler: (r: { razorpay_payment_id: string }) =>
-          void finish(order, r.razorpay_payment_id),
-        modal: {
-          ondismiss: () => setState((s) => (s === "busy" ? "idle" : s)),
-        },
-      });
-      window.on("payment.failed", (r) =>
-        setError(r.error?.description ?? "The payment didn't go through."),
-      );
-      window.open();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      setState("idle");
-    }
-  };
+  const { state, error, pay } = useCardOrder({
+    body: { currency: offer.card_currency },
+    description: `US phone number, ${months}`,
+    pending:
+      "Your payment is still being processed. Your number will appear in your wallet once it clears.",
+    onPaid,
+  });
 
   if (state === "paid") {
     return (

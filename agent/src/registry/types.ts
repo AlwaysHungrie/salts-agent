@@ -383,6 +383,8 @@ export type PhoneNumberRow = {
   expires_at: number;
   /** When the renewal reminder went out for the current term; 0 before. */
   reminded_at: number;
+  /** The agent this number answers for; blank while it answers for none. */
+  agent_id: string;
 };
 
 /** Pasted by the user, or provisioned by the deployment after a payment. */
@@ -433,6 +435,8 @@ export type WalletPurchase = {
    * number, it names the number once delivered.
    */
   item?: PurchaseItem;
+  /** For a message pack: how many messages it adds to the buyer's balance. */
+  messages?: number;
 };
 
-export type PurchaseItem = "key" | "number" | "renew";
+export type PurchaseItem = "key" | "number" | "renew" | "messages";
