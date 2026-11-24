@@ -95,11 +95,13 @@ import {
   expiredNumbers,
   fulfilNumber,
   nextExpiry,
+  phoneNumber,
   phoneNumbers,
   removePhoneNumber,
   renewNumber,
+  saveWhatsappSetup,
 } from "./phone-numbers";
-import { releaseNumber, twilioOpen, type TwilioKeys } from "../twilio";
+import { numberKeys, releaseNumber, twilioOpen, type TwilioKeys } from "../twilio";
 import { fulfilMessages, messageBalance, spendMessage } from "./message-balances";
 import {
   clearSettings,
@@ -121,7 +123,11 @@ import type {
   WalletKeyKind,
   WalletKeyRow,
   WalletPurchase,
+  WhatsappSetup,
 } from "./types";
+
+/** Meta's app, Embedded Signup configuration and Twilio's Partner Solution, by id. */
+export type WhatsappSignup = { app_id: string; config_id: string; solution_id: string };
 
 /**
  * The index of agents, in one well-known Durable Object (namespaces cannot be
@@ -455,6 +461,18 @@ export class AgentDirectory extends DurableObject {
     return agentPhoneNumber(this.ctx.storage, agentId);
   }
 
+  /** One number by its id, whoever holds it. */
+  phoneNumber(id: string): PhoneNumberRow | undefined {
+    this.ensureSchema();
+    return phoneNumber(this.ctx.storage, id);
+  }
+
+  /** Save part of a number's WhatsApp for Business setup. */
+  saveWhatsappSetup(id: string, patch: Partial<WhatsappSetup>) {
+    this.ensureSchema();
+    saveWhatsappSetup(this.ctx.storage, id, patch);
+  }
+
   /** Give `agentId` one of `email`'s numbers (blank: none); see phone-numbers.ts. */
   assignPhoneNumber(
     email: string,
@@ -523,6 +541,24 @@ export class AgentDirectory extends DurableObject {
     }
   }
 
+  /** Meta's Embedded Signup values the WhatsApp for Business card opens; "" where not set. */
+  whatsappSignup(): WhatsappSignup {
+    this.ensureSchema();
+    return {
+      app_id: deploymentValue(this.ctx.storage, "whatsapp_signup_app_id"),
+      config_id: deploymentValue(this.ctx.storage, "whatsapp_signup_config_id"),
+      solution_id: deploymentValue(this.ctx.storage, "whatsapp_signup_solution_id"),
+    };
+  }
+
+  /** Set any of the Embedded Signup values; blank removes one. */
+  setWhatsappSignup(values: Partial<WhatsappSignup>) {
+    this.ensureSchema();
+    for (const [name, value] of Object.entries(values)) {
+      setDeploymentValue(this.ctx.storage, `whatsapp_signup_${name}`, value ?? "");
+    }
+  }
+
   /** Wake when the next bought number's term ends, unless already due to wake sooner. */
   private async scheduleExpiry() {
     const next = nextExpiry(this.ctx.storage);
@@ -547,7 +583,7 @@ export class AgentDirectory extends DurableObject {
         break;
       }
       try {
-        await releaseNumber(keys, row.twilio_sid);
+        await releaseNumber(numberKeys(keys, row), row.twilio_sid);
         dropNumber(this.ctx.storage, row.id);
       } catch {
         retry = true;

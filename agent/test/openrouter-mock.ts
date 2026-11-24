@@ -945,21 +945,63 @@ async function razorpayMock(request: Request, url: URL): Promise<Response> {
 export const TWILIO_SECRET = "twilio-secret-ok";
 
 /** Numbers the Twilio stand-in holds, by SID; a released one is removed. */
-const twilioNumbers = new Map<string, string>();
+const twilioNumbers = new Map<string, { number: string; account: string; sms_url: string }>();
 const twilioReleased: string[] = [];
+/** Subaccounts the stand-in opened, by SID, with their auth tokens. */
+const twilioSubaccounts = new Map<string, string>();
+/** WhatsApp senders, by SID. */
+const twilioSenders = new Map<string, { account: string; body: unknown; status: string }>();
 
 /**
- * A stand-in for Twilio's REST API, enough to buy a US number and release it. A test
- * reads which SIDs were released with `GET https://api.twilio.com/__released`.
+ * A stand-in for Twilio's REST API: buying, moving and releasing numbers, subaccounts,
+ * and WhatsApp senders. Tests read its state at `https://api.twilio.com/__released`,
+ * `/__numbers/{sid}` and `/__senders/{sid}`, and set a sender's status with a POST to
+ * `/__senders/{sid}` (`{ status }`).
  */
 async function twilioMock(request: Request, url: URL): Promise<Response> {
   const json = (body: unknown, status = 200) =>
     new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
   if (url.pathname === "/__released") return json(twilioReleased);
-  const auth = request.headers.get("authorization") ?? "";
-  if (atob(auth.replace(/^Basic\s+/i, "")).split(":")[1] !== TWILIO_SECRET) {
-    return json({ message: "Authenticate" }, 401);
+  const peek = url.pathname.match(/^\/__(numbers|senders)\/([^/]+)$/);
+  if (peek) {
+    const map = peek[1] === "numbers" ? twilioNumbers : twilioSenders;
+    if (peek[1] === "senders" && request.method === "POST") {
+      const s = twilioSenders.get(peek[2]);
+      if (s) s.status = ((await request.json()) as { status: string }).status;
+    }
+    return json(map.get(peek[2]) ?? null);
   }
+  const [user, secret] = atob((request.headers.get("authorization") ?? "").replace(/^Basic\s+/i, "")).split(":");
+  // The deployment's own credentials, or one subaccount's SID and auth token.
+  const sub = twilioSubaccounts.get(user);
+  const caller = sub !== undefined ? (secret === sub ? user : "") : secret === TWILIO_SECRET ? "parent" : "";
+  if (!caller) return json({ message: "Authenticate" }, 401);
+
+  if (url.hostname === "messaging.twilio.com") {
+    if (caller === "parent") return json({ message: "Use the subaccount" }, 403);
+    if (url.pathname === "/v2/Channels/Senders" && request.method === "POST") {
+      const body = (await request.json()) as { sender_id?: string };
+      const sid = `XE${crypto.randomUUID().replace(/-/g, "")}`;
+      twilioSenders.set(sid, { account: caller, body, status: "CREATING" });
+      return json({ sid, status: "CREATING", sender_id: body.sender_id }, 201);
+    }
+    const one = url.pathname.match(/^\/v2\/Channels\/Senders\/([^/]+)$/);
+    const s = one && twilioSenders.get(one[1]);
+    if (s && s.account === caller) return json({ sid: one![1], status: s.status });
+    return json({ message: "not found" }, 404);
+  }
+
+  if (url.pathname === "/2010-04-01/Accounts.json" && request.method === "POST") {
+    if (caller !== "parent") return json({ message: "Forbidden" }, 403);
+    const sid = `AC${crypto.randomUUID().replace(/-/g, "")}`;
+    const token = crypto.randomUUID().replace(/-/g, "");
+    twilioSubaccounts.set(sid, token);
+    return json({ sid, auth_token: token }, 201);
+  }
+  const account = url.pathname.match(/^\/2010-04-01\/Accounts\/([^/.]+)/)?.[1] ?? "";
+  // A subaccount acts only on itself; the stand-in's parent account is any other SID.
+  const acting = twilioSubaccounts.has(account) ? account : "parent";
+  if (caller !== "parent" && caller !== acting) return json({ message: "Forbidden" }, 403);
   const path = url.pathname.replace(/^\/2010-04-01\/Accounts\/[^/.]+/, "");
   if (path === ".json") return json({ status: "active" });
   if (path === "/AvailablePhoneNumbers/US/Local.json") {
@@ -969,14 +1011,26 @@ async function twilioMock(request: Request, url: URL): Promise<Response> {
   if (path === "/IncomingPhoneNumbers.json" && request.method === "POST") {
     const number = new URLSearchParams(await request.text()).get("PhoneNumber") ?? "";
     const sid = `PN${crypto.randomUUID().replace(/-/g, "")}`;
-    twilioNumbers.set(sid, number);
+    twilioNumbers.set(sid, { number, account: acting, sms_url: "" });
     return json({ sid, phone_number: number }, 201);
   }
   const owned = path.match(/^\/IncomingPhoneNumbers\/([^/]+)\.json$/);
-  if (owned && request.method === "DELETE") {
-    if (!twilioNumbers.delete(owned[1])) return json({ message: "not found" }, 404);
+  const held = owned && twilioNumbers.get(owned[1]);
+  if (!owned || !held || held.account !== acting) return json({ message: "not found" }, 404);
+  if (request.method === "DELETE") {
+    twilioNumbers.delete(owned[1]);
     twilioReleased.push(owned[1]);
     return new Response(null, { status: 204 });
+  }
+  if (request.method === "POST") {
+    const form = new URLSearchParams(await request.text());
+    const to = form.get("AccountSid");
+    if (to) {
+      if (!twilioSubaccounts.has(to)) return json({ message: "No such account" }, 400);
+      held.account = to;
+    }
+    if (form.has("SmsUrl")) held.sms_url = form.get("SmsUrl") ?? "";
+    return json({ sid: owned[1], phone_number: held.number, account_sid: held.account });
   }
   return json({ message: "not found" }, 404);
 }
@@ -1002,7 +1056,9 @@ export async function openrouterMock(request: Request): Promise<Response> {
     }
   }
   if (url.hostname === "api.razorpay.com") return razorpayMock(request, url);
-  if (url.hostname === "api.twilio.com") return twilioMock(request, url);
+  if (url.hostname === "api.twilio.com" || url.hostname === "messaging.twilio.com") {
+    return twilioMock(request, url);
+  }
   // Frankfurter's daily rupee rate.
   if (url.hostname === "api.frankfurter.dev") {
     return new Response(JSON.stringify({ base: "USD", rates: { INR: INR_PER_USD } }), {

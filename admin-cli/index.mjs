@@ -295,6 +295,8 @@ async function loadPayments() {
     state.payments.razorpay = await call("/api/admin/razorpay").catch(() => null);
     // Twilio's keys, for buying Business Phone Numbers; likewise absent on an older Worker.
     state.payments.twilio = await call("/api/admin/twilio").catch(() => null);
+    // Meta's Embedded Signup ids, for connecting WhatsApp for Business; likewise.
+    state.payments["whatsapp-signup"] = await call("/api/admin/whatsapp-signup").catch(() => null);
   } catch (err) {
     // A Worker from before key purchases has no such route: the tab says so.
     state.payments = null;
@@ -369,7 +371,14 @@ const TWILIO_FIELDS = [
   { vendor: "twilio", key: "api_key_secret", label: "Twilio API key secret", off: "buying numbers is closed", secret: true },
 ];
 
-const VENDOR_NAMES = { razorpay: "Razorpay", twilio: "Twilio" };
+/** Meta's Embedded Signup ids, which the WhatsApp for Business card opens signup with. */
+const WHATSAPP_SIGNUP_FIELDS = [
+  { vendor: "whatsapp-signup", key: "app_id", label: "Meta app ID", off: "WhatsApp for Business signup is closed" },
+  { vendor: "whatsapp-signup", key: "config_id", label: "Embedded Signup configuration ID", off: "WhatsApp for Business signup is closed" },
+  { vendor: "whatsapp-signup", key: "solution_id", label: "Twilio Partner Solution ID", off: "WhatsApp for Business signup is closed" },
+];
+
+const VENDOR_NAMES = { razorpay: "Razorpay", twilio: "Twilio", "whatsapp-signup": "the Worker" };
 
 /** Set or remove one Razorpay or Twilio setting; the Worker checks the keys with the vendor. */
 async function patchVendor(field, value) {
@@ -780,6 +789,7 @@ function view() {
         const vendorFields = [
           ...(pay.razorpay ? RAZORPAY_FIELDS : []),
           ...(pay.twilio ? TWILIO_FIELDS : []),
+          ...(pay["whatsapp-signup"] ? WHATSAPP_SIGNUP_FIELDS : []),
         ];
         for (const field of vendorFields) {
           const value = pay[field.vendor][field.key];

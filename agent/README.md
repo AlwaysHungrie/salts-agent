@@ -170,6 +170,31 @@ keeps each sent payment in the browser until a key comes of it and checks it aga
 the wallet opens; the wallet also takes a pasted transaction id ("Paid but didn't get a
 key?").
 
+### WhatsApp for Business: connecting a number
+
+Each business gets its own WhatsApp Business account (WABA), made through Meta's Embedded
+Signup with Salts as a Meta Tech Provider and Twilio as the BSP. Twilio maps one WABA to one
+Twilio account, so each number's business gets a Twilio subaccount. Steps, from the
+agent's settings card (all `may.member`, and only the number's owner may run them):
+
+1. `POST /api/agents/:id/whatsapp-business/prepare` opens the subaccount
+   (`POST /2010-04-01/Accounts.json`; needs the deployment's account SID and auth token,
+   not an API key). A bought number is then moved into it and its `SmsUrl` set to
+   `POST /twilio/sms/:numberId`, which checks `X-Twilio-Signature` against the
+   subaccount's auth token and keeps the code in the text. Safe to repeat.
+2. The card opens Embedded Signup (`FB.login` with the configuration id and
+   `extras.setup.solutionID`). The user makes or picks the WABA there and verifies the
+   number. For a bought number, the card polls `GET /api/agents/:id/whatsapp-business`
+   and shows the code Meta texted to it.
+3. `POST /api/agents/:id/whatsapp-business/connect { waba_id, display_name }` creates the
+   WhatsApp sender in the subaccount (`POST messaging.twilio.com/v2/Channels/Senders`).
+   `GET` refreshes its status from Twilio until it is `ONLINE` or `OFFLINE`.
+
+Setup state is stored on the number's `phone_numbers` row (`wa_*`, `waba_id`). A moved
+number is released from its subaccount. The Meta app id, Embedded Signup configuration id
+and Twilio Partner Solution id are set from the admin CLI's Payments tab
+(`GET|PATCH /api/admin/whatsapp-signup`). The card stays closed until all three are set.
+
 Attachment bytes (images, voice-note clips) live in R2, not in the session's SQLite.
 Create the bucket once before deploying — `wrangler dev` simulates it locally:
 

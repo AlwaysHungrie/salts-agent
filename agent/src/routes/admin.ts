@@ -37,6 +37,7 @@ export async function handleAdmin(
     "payments",
     "razorpay",
     "twilio",
+    "whatsapp-signup",
   ];
   if (!known.includes(route)) return undefined;
   if (!trustedCaller(request, env)) return jsonError("unauthorized", 401);
@@ -47,6 +48,7 @@ export async function handleAdmin(
   if (route === "payments") return await handlePayments(request, env);
   if (route === "razorpay") return await handleRazorpay(request, env);
   if (route === "twilio") return await handleTwilio(request, env);
+  if (route === "whatsapp-signup") return await handleWhatsappSignup(request, env);
   if (route === "business-requests")
     return await handleBusinessRequests(request, env, url, segments);
   if (route === "stats") {
@@ -248,6 +250,28 @@ async function handleTwilio(request: Request, env: Env): Promise<Response> {
   }
   await dir.setTwilioKeys(patch);
   return json(await view());
+}
+
+/**
+ * Meta's Embedded Signup ids, which the WhatsApp for Business card opens signup with: the
+ * Meta app, its Facebook Login for Business configuration, and Twilio's Partner Solution.
+ * None is secret. PATCH sets any of the three; a blank one removes it.
+ */
+async function handleWhatsappSignup(request: Request, env: Env): Promise<Response> {
+  const dir = directory(env);
+  if (request.method === "GET") return json(await dir.whatsappSignup());
+  if (request.method !== "PATCH") return methodNotAllowed();
+  const body = await readJson<Record<string, unknown>>(request);
+  const names = (["app_id", "config_id", "solution_id"] as const).filter((f) => body[f] !== undefined);
+  if (!names.length) return jsonError("Give app_id, config_id or solution_id.", 400);
+  const patch: Partial<Record<(typeof names)[number], string>> = {};
+  for (const f of names) {
+    const value = typeof body[f] === "string" ? body[f].trim() : "";
+    if (value && !/^\d{1,32}$/.test(value)) return jsonError(`${f} is digits only.`, 400);
+    patch[f] = value;
+  }
+  await dir.setWhatsappSignup(patch);
+  return json(await dir.whatsappSignup());
 }
 
 /** An https URL's host, or "" for anything else. */

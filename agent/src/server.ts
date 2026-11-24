@@ -14,6 +14,7 @@ import { handleWallet } from "./routes/wallet";
 import { handlePhoneNumbers } from "./routes/phone-numbers";
 import { handleRazorpayWebhook } from "./routes/card";
 import { handleWhatsappWebhook } from "./routes/whatsapp";
+import { handleTwilioSms } from "./routes/whatsapp-business";
 import { deploymentSettings, SettingsIncompleteError } from "./settings";
 import {
   apiKeyCaller,
@@ -155,6 +156,10 @@ async function channelRoute(
     third
   ) {
     return await handleWhatsappWebhook(request, env, ctx, url, third);
+  }
+  // Twilio posts texts to bought numbers here; the subaccount's signature is the proof.
+  if (method === "POST" && first === "twilio" && second === "sms" && third && !segments[3]) {
+    return await handleTwilioSms(request, env, third);
   }
   // Razorpay reports card payments here; the webhook secret's signature is the proof.
   if (method === "POST" && first === "razorpay" && second === "webhook" && !third) {

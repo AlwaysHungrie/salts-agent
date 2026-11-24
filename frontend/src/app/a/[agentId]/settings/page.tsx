@@ -26,6 +26,7 @@ import {
   type BusinessNumber,
   BusinessNumberPicker,
 } from "@/components/phone-numbers/BusinessNumberPicker";
+import { WhatsAppConnect } from "@/components/phone-numbers/WhatsAppConnect";
 import { MessageBalance } from "@/components/phone-numbers/MessageBalance";
 import { cached, keys, remember, revise } from "@/lib/cache";
 import { guideHref } from "@/lib/guide-link";
@@ -578,6 +579,7 @@ export default function Settings({
                     onChange={setBusinessNumber}
                   />
                 </div>
+                <WhatsAppConnect agentId={agentId} number={businessNumber} />
                 <MessageBalance />
                 {numbersOpen && (
                   <PhoneNumbersPanel onClose={() => setNumbersOpen(false)} />

@@ -308,6 +308,25 @@ export const AGENT_DIRECTORY_MIGRATIONS: readonly Migration[] = [
       addColumnIfMissing(sql, "wallet_purchases", `messages INTEGER NOT NULL DEFAULT 0`);
     },
   },
+  {
+    name: "whatsapp business connection",
+    up: (sql) => {
+      // Each number's WhatsApp for Business setup: its business's Twilio subaccount,
+      // how far setup has got, the WABA and sender, and the last code texted to it.
+      for (const column of [
+        `wa_stage TEXT NOT NULL DEFAULT ''`,
+        `wa_account_sid TEXT NOT NULL DEFAULT ''`,
+        `wa_account_token TEXT NOT NULL DEFAULT ''`,
+        `waba_id TEXT NOT NULL DEFAULT ''`,
+        `wa_sender_sid TEXT NOT NULL DEFAULT ''`,
+        `wa_sender_status TEXT NOT NULL DEFAULT ''`,
+        `wa_code TEXT NOT NULL DEFAULT ''`,
+        `wa_code_at INTEGER NOT NULL DEFAULT 0`,
+      ]) {
+        addColumnIfMissing(sql, "phone_numbers", column);
+      }
+    },
+  },
 ];
 
 export function migrateMembership(storage: DurableObjectStorage) {

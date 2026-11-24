@@ -1,5 +1,16 @@
-import type { PhoneNumberKind, PhoneNumberRow } from "./types";
+import type { PhoneNumberKind, PhoneNumberRow, WhatsappSetup } from "./types";
 import { paidRow } from "./wallet-purchases";
+
+const NO_SETUP: WhatsappSetup = {
+  wa_stage: "",
+  wa_account_sid: "",
+  wa_account_token: "",
+  waba_id: "",
+  wa_sender_sid: "",
+  wa_sender_status: "",
+  wa_code: "",
+  wa_code_at: 0,
+};
 
 /** A number's id: short, and safe to put in a URL. */
 const NUMBER_ID = () => crypto.randomUUID().replace(/-/g, "").slice(0, 12);
@@ -17,8 +28,7 @@ export function normalizeNumber(input: string): string | undefined {
 export function phoneNumbers(storage: DurableObjectStorage, email: string): PhoneNumberRow[] {
   return storage.sql
     .exec(
-      `SELECT id, email, number, kind, created_at, twilio_sid, expires_at, reminded_at, agent_id
-         FROM phone_numbers WHERE email = ? ORDER BY created_at ASC, id ASC`,
+      `SELECT * FROM phone_numbers WHERE email = ? ORDER BY created_at ASC, id ASC`,
       email.trim().toLowerCase()
     )
     .toArray() as unknown as PhoneNumberRow[];
@@ -60,6 +70,7 @@ export function addPhoneNumber(
     expires_at: entry.expires_at ?? 0,
     reminded_at: 0,
     agent_id: "",
+    ...NO_SETUP,
   };
   storage.sql.exec(
     `INSERT INTO phone_numbers (id, email, number, kind, created_at, twilio_sid, expires_at)
@@ -217,4 +228,37 @@ export function nextExpiry(storage: DurableObjectStorage): number | undefined {
 /** Drop a number, whoever holds it: once it has been released at Twilio. */
 export function dropNumber(storage: DurableObjectStorage, id: string) {
   storage.sql.exec(`DELETE FROM phone_numbers WHERE id = ?`, id);
+}
+
+/** One number by its id, whoever holds it. */
+export function phoneNumber(storage: DurableObjectStorage, id: string): PhoneNumberRow | undefined {
+  return storage.sql.exec(`SELECT * FROM phone_numbers WHERE id = ?`, id).toArray()[0] as unknown as
+    | PhoneNumberRow
+    | undefined;
+}
+
+const SETUP_COLUMNS = Object.keys(NO_SETUP) as (keyof WhatsappSetup)[];
+
+/** Save part of a number's WhatsApp for Business setup. */
+export function saveWhatsappSetup(
+  storage: DurableObjectStorage,
+  id: string,
+  patch: Partial<WhatsappSetup>
+) {
+  const names = SETUP_COLUMNS.filter((c) => patch[c] !== undefined);
+  if (!names.length) return;
+  storage.sql.exec(
+    `UPDATE phone_numbers SET ${names.map((c) => `${c} = ?`).join(", ")} WHERE id = ?`,
+    ...names.map((c) => patch[c] as string | number),
+    id
+  );
+}
+
+/**
+ * The code in a text Meta sends to verify a number ("123-456 is your WhatsApp code"),
+ * as six digits; the text itself, trimmed, when no code is found in it.
+ */
+export function codeIn(text: string): string {
+  const m = text.match(/(?<!\d)(\d{3})[\s-]?(\d{3})(?!\d)/);
+  return m ? m[1] + m[2] : text.trim().slice(0, 160);
 }

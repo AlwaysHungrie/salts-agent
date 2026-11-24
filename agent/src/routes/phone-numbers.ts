@@ -4,7 +4,7 @@ import { type CardCurrency, createOrder, RAZORPAY_NETWORK, RazorpayError } from 
 import type { PhoneNumberRow, WalletPurchase } from "../registry";
 import { normalizeNumber } from "../registry/phone-numbers";
 import { deploymentSettings } from "../settings";
-import { buyUsNumber, releaseNumber, TwilioError, twilioOpen } from "../twilio";
+import { buyUsNumber, numberKeys, releaseNumber, TwilioError, twilioOpen } from "../twilio";
 import { callerEmail } from "../worker/auth";
 import { json, jsonError, readJson } from "../worker/http";
 import { directory } from "../worker/stores";
@@ -83,7 +83,7 @@ export async function handlePhoneNumbers(
     // A bought number goes back to Twilio first, so nothing is dropped that still bills.
     if (held.twilio_sid) {
       try {
-        await releaseNumber(await dir.twilioKeys(), held.twilio_sid);
+        await releaseNumber(numberKeys(await dir.twilioKeys(), held), held.twilio_sid);
       } catch (err) {
         if (err instanceof TwilioError) return jsonError(err.message, 502);
         throw err;

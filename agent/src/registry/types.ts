@@ -385,6 +385,29 @@ export type PhoneNumberRow = {
   reminded_at: number;
   /** The agent this number answers for; blank while it answers for none. */
   agent_id: string;
+} & WhatsappSetup;
+
+/**
+ * How far a number is in joining WhatsApp for Business: "" not started; "account" its
+ * business's Twilio subaccount exists; "ready" a bought number has moved into it and
+ * texts reach the Worker, so Meta's signup can run; "sender" registered at Twilio.
+ */
+export type WhatsappStage = "" | "account" | "ready" | "sender";
+
+/** A number's WhatsApp for Business setup, stored on its row. */
+export type WhatsappSetup = {
+  wa_stage: WhatsappStage;
+  /** The business's Twilio subaccount, and its auth token (never sent to a browser). */
+  wa_account_sid: string;
+  wa_account_token: string;
+  /** The business's WhatsApp Business account, from Meta's signup. */
+  waba_id: string;
+  /** The number's WhatsApp sender at Twilio, and its last known status. */
+  wa_sender_sid: string;
+  wa_sender_status: string;
+  /** The last code texted to a bought number (Meta's verification code), and when. */
+  wa_code: string;
+  wa_code_at: number;
 };
 
 /** Pasted by the user, or provisioned by the deployment after a payment. */

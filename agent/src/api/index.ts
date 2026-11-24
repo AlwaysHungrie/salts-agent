@@ -5,6 +5,7 @@ import { chainWalletRoutes } from "../routes/chain-wallet";
 import { mcpRoutes } from "../routes/mcp";
 import { sessionAgentRoutes } from "../routes/session-agent";
 import { sessionRoutes } from "../routes/sessions";
+import { whatsappBusinessRoutes } from "../routes/whatsapp-business";
 import { createApiApp, serveDocs } from "./app";
 
 /**
@@ -14,6 +15,7 @@ import { createApiApp, serveDocs } from "./app";
 export const api = createApiApp();
 agentRoutes(api);
 settingsRoutes(api);
+whatsappBusinessRoutes(api);
 chainWalletRoutes(api);
 mcpRoutes(api);
 apiKeyRoutes(api);

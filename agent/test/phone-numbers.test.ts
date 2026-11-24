@@ -515,3 +515,190 @@ describe("WhatsApp for Business message packs", () => {
     expect(await balance(buyer)).toBe(0);
   });
 });
+
+/* ------------------------------------------- connecting WhatsApp for Business -- */
+
+type WaView = {
+  number: { id: string; number: string; kind: string } | null;
+  stage: string;
+  status: string;
+  code: string;
+  owner: boolean;
+  signup: { app_id: string; config_id: string; solution_id: string };
+};
+
+const SIGNUP = { app_id: "1234567890", config_id: "2345678901", solution_id: "3456789012" };
+
+function wa(email: string, agentId: string, step = "", body?: unknown) {
+  return SELF.fetch(
+    `${BASE}/api/agents/${agentId}/whatsapp-business${step ? `/${step}` : ""}`,
+    as(email, step ? { method: "POST", body: JSON.stringify(body ?? {}) } : {})
+  );
+}
+
+async function twilioState<T>(kind: "numbers" | "senders", sid: string, status?: string) {
+  const res = await fetch(`https://api.twilio.com/__${kind}/${sid}`, {
+    method: status ? "POST" : "GET",
+    body: status ? JSON.stringify({ status }) : undefined,
+  });
+  return (await res.json()) as T;
+}
+
+async function numberRow(id: string) {
+  return (await directory().phoneNumber(id))!;
+}
+
+/** Twilio's X-Twilio-Signature for a form post of `params` to `url`. */
+async function twilioSign(token: string, url: string, params: Record<string, string>) {
+  const data = url + Object.keys(params).sort().map((k) => k + params[k]).join("");
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(token),
+    { name: "HMAC", hash: "SHA-1" },
+    false,
+    ["sign"]
+  );
+  const mac = new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(data)));
+  return btoa(String.fromCharCode(...mac));
+}
+
+function text(numberId: string, params: Record<string, string>, signature: string) {
+  return SELF.fetch(`${BASE}/twilio/sms/${numberId}`, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded", "x-twilio-signature": signature },
+    body: new URLSearchParams(params).toString(),
+  });
+}
+
+/** An agent with a freshly bought number on it. */
+async function agentWithBoughtNumber(owner: string, allowed = owner) {
+  const res = await SELF.fetch(
+    `${BASE}/api/agents`,
+    as(owner, { method: "POST", body: JSON.stringify({ name: "Bakery", allowed_emails: allowed }) })
+  );
+  const agent = ((await res.json()) as { id: string }).id;
+  const { number_id } = await buy(owner);
+  expect((await assign(owner, agent, number_id)).status).toBe(200);
+  return { agent, numberId: number_id };
+}
+
+describe("connecting an agent's number to WhatsApp for Business", () => {
+  beforeEach(async () => {
+    await openBuying();
+    await directory().setWhatsappSignup(SIGNUP);
+  });
+
+  it("shows no number until one is chosen, with the deployment's signup ids", async () => {
+    const owner = someone();
+    const agent = await newAgent(owner);
+    const view = (await (await wa(owner, agent)).json()) as WaView;
+    expect(view).toEqual({ number: null, stage: "", status: "", code: "", owner: false, signup: SIGNUP });
+    expect((await wa(owner, agent, "prepare")).status).toBe(400);
+  });
+
+  it("moves a bought number into its business's own Twilio account, once", async () => {
+    const owner = someone();
+    const { agent, numberId } = await agentWithBoughtNumber(owner);
+    const res = await wa(owner, agent, "prepare");
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as WaView).stage).toBe("ready");
+
+    const row = await numberRow(numberId);
+    expect(row.wa_account_sid).toMatch(/^AC/);
+    expect(await twilioState("numbers", row.twilio_sid)).toMatchObject({
+      account: row.wa_account_sid,
+      sms_url: `${BASE}/twilio/sms/${numberId}`,
+    });
+
+    // Again: nothing new is opened.
+    expect((await wa(owner, agent, "prepare")).status).toBe(200);
+    expect((await numberRow(numberId)).wa_account_sid).toBe(row.wa_account_sid);
+  });
+
+  it("opens an account for the user's own number, without moving anything", async () => {
+    const owner = someone();
+    const agent = await newAgent(owner);
+    const n = (await (await add(owner, freshNumber())).json()) as NumberView;
+    await assign(owner, agent, n.id);
+    const view = (await (await wa(owner, agent, "prepare")).json()) as WaView;
+    expect(view).toMatchObject({ stage: "account", owner: true, number: { id: n.id, kind: "own" } });
+  });
+
+  it("shows the code Meta texts a bought number, only when Twilio signed the text", async () => {
+    const owner = someone();
+    const { agent, numberId } = await agentWithBoughtNumber(owner);
+    await wa(owner, agent, "prepare");
+    const { wa_account_token } = await numberRow(numberId);
+    const url = `${BASE}/twilio/sms/${numberId}`;
+    const params = { From: "+15550001111", Body: "<#> 482-913 is your WhatsApp Business code" };
+
+    expect((await text(numberId, params, await twilioSign("wrong", url, params))).status).toBe(403);
+    expect(((await (await wa(owner, agent)).json()) as WaView).code).toBe("");
+
+    expect((await text(numberId, params, await twilioSign(wa_account_token, url, params))).status).toBe(200);
+    expect(((await (await wa(owner, agent)).json()) as WaView).code).toBe("482913");
+  });
+
+  it("registers the number as a sender in the business's WABA, and follows its status", async () => {
+    const owner = someone();
+    const { agent, numberId } = await agentWithBoughtNumber(owner);
+    const body = { waba_id: "998877665544", display_name: "Bakery on Main" };
+    expect((await wa(owner, agent, "connect", body)).status).toBe(400);
+
+    await wa(owner, agent, "prepare");
+    expect((await wa(owner, agent, "connect", { ...body, waba_id: "abc" })).status).toBe(400);
+    const res = await wa(owner, agent, "connect", body);
+    expect(res.status).toBe(200);
+    expect((await res.json()) as WaView).toMatchObject({ stage: "sender", status: "CREATING" });
+
+    const row = await numberRow(numberId);
+    expect(row.waba_id).toBe(body.waba_id);
+    expect(await twilioState("senders", row.wa_sender_sid)).toMatchObject({
+      account: row.wa_account_sid,
+      body: {
+        sender_id: `whatsapp:+${row.number}`,
+        configuration: { waba_id: body.waba_id },
+        profile: { name: body.display_name },
+      },
+    });
+
+    await twilioState("senders", row.wa_sender_sid, "ONLINE");
+    expect(((await (await wa(owner, agent)).json()) as WaView).status).toBe("ONLINE");
+    expect((await wa(owner, agent, "connect", body)).status).toBe(409);
+  });
+
+  it("lets only the number's owner connect it", async () => {
+    const owner = someone("owner");
+    const member = someone("member");
+    const { agent } = await agentWithBoughtNumber(owner, `${owner}\n${member}`);
+    expect(((await (await wa(member, agent)).json()) as WaView).owner).toBe(false);
+    expect((await wa(member, agent, "prepare")).status).toBe(403);
+  });
+
+  it("releases a moved number from its business's account", async () => {
+    const owner = someone();
+    const { agent, numberId } = await agentWithBoughtNumber(owner);
+    await wa(owner, agent, "prepare");
+    const { twilio_sid } = await numberRow(numberId);
+    const res = await SELF.fetch(`${BASE}/api/phone-numbers/${numberId}`, as(owner, { method: "DELETE" }));
+    expect(res.status).toBe(200);
+    expect(await released()).toContain(twilio_sid);
+  });
+});
+
+describe("the owner's Embedded Signup settings", () => {
+  const admin = (body?: unknown, secret = "test-secret") =>
+    SELF.fetch(`${BASE}/api/admin/whatsapp-signup`, {
+      method: body ? "PATCH" : "GET",
+      headers: { "content-type": "application/json", "x-api-secret": secret },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+
+  it("sets and shows the three ids, digits only, blank removing one", async () => {
+    expect((await admin(SIGNUP)).status).toBe(200);
+    expect(await (await admin()).json()).toEqual(SIGNUP);
+    expect((await admin({ config_id: "abc" })).status).toBe(400);
+    expect(await (await admin({ solution_id: "" })).json()).toEqual({ ...SIGNUP, solution_id: "" });
+    expect((await admin(undefined, "wrong")).status).toBe(401);
+  });
+});
