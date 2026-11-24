@@ -19,7 +19,7 @@ export const LEGAL = {
   courts: "Mumbai, India",
   email: "salts-dev@proton.me",
   site: "salts.dev",
-  updated: "17 November 2026",
+  updated: "24 November 2026",
   minimumAge: 18,
   /** One month, extendable by two. */
   responseDays: 30,
@@ -451,6 +451,7 @@ export const PRIVACY: LegalDoc = {
         `We will give notice within the Service or by email before adding or replacing a service provider that processes your conversation content, and you may object by writing to ${LEGAL.email} within ${LEGAL.noticeDays} days. Where an objection cannot be accommodated, you may delete the affected Agent.`,
         `Content sent to a Model Provider or a Connected Service is processed by that party under its own terms. Some Model Providers use inputs and outputs to improve their models; where that matters to you, select a provider whose terms exclude it. An MCP server you connect is a third party of your choosing, which we do not vet.`,
         `We may also disclose personal data where required by law, court order or a binding request from a competent authority, and to a successor in connection with the transfer of the Service to a company or a buyer, in which case we will notify you.`,
+        `We disclose personal data to a public authority only where we are legally required to. For every such request we (a) review whether it is lawful and within the authority's powers; (b) challenge it, or ask for it to be narrowed, where we consider it unlawful, overbroad or unclear; (c) disclose only the minimum personal data needed to comply; and (d) keep a record of the request, our response, the legal basis we relied on and the people involved.`,
       ],
       table: {
         caption: "Service providers and other recipients",
