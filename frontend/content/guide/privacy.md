@@ -34,7 +34,7 @@ Memories are not deleted when you delete a conversation. There is not yet a way 
 
 Files you send are kept with the conversation they were sent in, so your agent can read them again later. Deleting the conversation also deletes its files.
 
-The matchmaker and the spreadsheet analyst are different. They keep their files on your own computer, not online. See [What is salts-tools](/guide/salts-tools).
+The spreadsheet analyst is different. It keeps its files on your own computer, not online. See [What is salts-tools](/guide/salts-tools).
 
 ## Connected apps
 

@@ -14,7 +14,7 @@ export const KEPT = new Set([".venv", ".env", "data"]);
 const MARKER = ".salts-tools-version";
 
 /**
- * The folder each MCP server `dir` (e.g. "matchmaker-mcp") runs from, and the packaged
+ * The folder each MCP server `dir` (e.g. "analyst-mcp") runs from, and the packaged
  * copy to install there first (undefined when it runs in place from the repo).
  */
 export function mcpSource(here, dir, installRoot) {

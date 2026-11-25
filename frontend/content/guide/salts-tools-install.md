@@ -27,7 +27,7 @@ This guide will help you install salts-tools, connect it to your agent and start
    Otherwise, download it from [Cloudflare's downloads page](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/).
 
 3. If you want **web**, install [Docker Desktop](https://www.docker.com/products/docker-desktop/). If you already use OrbStack or Colima, those work too. You do not need to start Docker yourself, since salts-tools starts it when it is needed. On Linux you can use Docker Engine instead; we recommend starting it with `sudo systemctl enable --now docker` and adding yourself to the `docker` group, so salts-tools can use it without asking for your password.
-4. If you want **matchmaker** or **analyst**, install [uv](https://docs.astral.sh/uv/getting-started/installation/). salts-tools uses it to set these tools up the first time you start them.
+4. If you want **analyst**, install [uv](https://docs.astral.sh/uv/getting-started/installation/). salts-tools uses it to set the analyst up the first time you start it.
 
 If you only want the spreadsheet analyst, you can skip Docker.
 
@@ -51,7 +51,7 @@ Back in your terminal, salts-tools opens its screen on the **Agents** tab. It on
 
 salts-tools then opens the agent. Press **Enter** on each tool you want for it, and salts-tools connects it to that agent within a few seconds. Press **Esc** to go back to the list.
 
-If a tool needs something more, the agent shows it as **to do**: press **Enter** on it to fix it. For example, the analyst needs **File ingest** switched on, which salts-tools does for you, and the matchmaker needs your OpenRouter key, which you type in right there. If something is missing on your computer, such as Docker for web search, the **Services** tab shows that tool as `error` and says what to install.
+If a tool needs something more, the agent shows it as **to do**: press **Enter** on it to fix it. For example, the analyst needs **File ingest** switched on, which salts-tools does for you. If something is missing on your computer, such as Docker for web search, the **Services** tab shows that tool as `error` and says what to install.
 
 ## 5. Start at login
 

@@ -6,11 +6,11 @@ import { connectionStatus, serviceStatus } from "../status.mjs";
 const URL = "https://a-b.trycloudflare.com";
 
 test("a running service is live when an agent uses it, and live · not in use otherwise", () => {
-  const state = { services: ["web"], url: URL, svc: { web: { up: true }, matchmaker: { up: true } } };
+  const state = { services: ["web"], url: URL, svc: { web: { up: true }, example: { up: true } } };
   const live = serviceStatus(state, "web", true);
   assert.equal(live.label, "live");
   assert.equal(live.tone, "good");
-  const unused = serviceStatus(state, "matchmaker", true);
+  const unused = serviceStatus(state, "example", true);
   assert.equal(unused.label, "live · not in use");
   assert.match(unused.note, /Agents tab/);
 });

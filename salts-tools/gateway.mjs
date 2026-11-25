@@ -1,6 +1,6 @@
 // The one door the tunnel opens onto. Every service shares the tunnel address and is told
 // apart by the first path segment: `/web/search` reaches SearXNG as `/search`,
-// `/matchmaker/mcp` reaches the matchmaker as `/mcp`.
+// `/analyst/mcp` reaches the analyst as `/mcp`.
 //
 // Nothing gets past without `Authorization: Bearer <token>`, except a share link
 // (`/<service>/share/…`): it opens in a browser, which has no token, and carries its own
