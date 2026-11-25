@@ -132,6 +132,7 @@ export function Composer({
             <AttachmentStrip
               attachments={attachments}
               sessionId={sessionId}
+              previews={uploads.previews}
               onRemove={(id) => void uploads.remove(id)}
             />
             <GhostStrip ghosts={ghosts} onCancel={uploads.cancelUpload} />
@@ -192,6 +193,30 @@ export function Composer({
             rows={1}
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            onPaste={(e) => {
+              // A pasted screenshot or copied image becomes an attachment, like one picked.
+              if (!ready.has("vision") || uploading) return;
+              const images = Array.from(e.clipboardData.files).filter((f) =>
+                f.type.startsWith("image/"),
+              );
+              if (!images.length) return;
+              // Text copied alongside an image still pastes as text.
+              if (!e.clipboardData.getData("text/plain")) e.preventDefault();
+              // Every pasted image is "image.png"; a stamp keeps them apart in the chat.
+              const stamp = Date.now();
+              void uploads.upload(
+                images.map(
+                  (f, i) =>
+                    new File(
+                      [f],
+                      `pasted-${stamp}-${i + 1}.${f.type.split("/")[1] || "png"}`,
+                      {
+                        type: f.type,
+                      },
+                    ),
+                ),
+              );
+            }}
             onKeyDown={(e) => {
               // Enter sends; Shift+Enter (or Enter mid-IME composition) is a newline.
               if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing)

@@ -55,16 +55,15 @@ export function MessageBalance() {
       <p className="bg-field mt-2 rounded-2xl px-4 py-3 text-sm">
         {balance === null
           ? "Loading…"
-          : `${balance.messages_remaining.toLocaleString("en-US")} left`}
+          : balance.messages_remaining === 0
+            ? "Buy Whatsapp credits (0 messages remaining)"
+            : `${balance.messages_remaining.toLocaleString("en-US")} ${
+                balance.messages_remaining === 1 ? "message" : "messages"
+              } left`}
       </p>
       <p className="text-muted mt-2 text-xs font-light leading-[1.33]">
         Set up per WhatsApp account usage limits to prevent abuse.
       </p>
-      {balance?.messages_remaining === 0 && (
-        <p className="text-muted mt-2 text-xs font-light leading-[1.33]">
-          Your agents can&apos;t reply on WhatsApp until you buy more.
-        </p>
-      )}
       {buying && balance && (
         <CreditsDrawer onClose={() => setBuying(false)}>
           <MessagePackCheckout

@@ -4,6 +4,26 @@ import { useEffect, useRef, useState } from "react";
 import { Check, Menu, Pencil, Wallet, X } from "lucide-react";
 import type { Summary } from "@/lib/agent";
 import { formatCountShort, formatDate, formatUsdShort } from "@/lib/format";
+import { SessionFiles } from "./SessionFiles";
+
+/** How many files the chat holds; opens the list of them. */
+function FilesLink({ sessionId, count }: { sessionId: string; count: number }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        title="Files in this chat"
+        className="hover:text-ink underline-offset-2 transition hover:underline"
+      >
+        {formatCountShort(count)} {count === 1 ? "file" : "files"}
+      </button>
+      {open && (
+        <SessionFiles sessionId={sessionId} onClose={() => setOpen(false)} />
+      )}
+    </>
+  );
+}
 
 /** The OpenRouter wallet, from beside what the session has cost. */
 function WalletButton({
@@ -36,6 +56,7 @@ function WalletButton({
  * docs/cloudflare-durable-object-costs.md.
  */
 export function SessionHeader({
+  sessionId,
   title,
   createdAt,
   summary,
@@ -43,6 +64,7 @@ export function SessionHeader({
   onOpenSidebar,
   onOpenWallet,
 }: {
+  sessionId: string;
   title: string;
   createdAt: number | null;
   summary: Summary | null;
@@ -167,7 +189,8 @@ export function SessionHeader({
           <div className="text-muted tnum flex items-center gap-1.5 truncate text-sm font-light leading-[1.43] md:hidden">
             <span className="truncate">
               {formatUsdShort(summary?.llm.cost_usd)} ·{" "}
-              {formatCountShort(summary?.messages ?? 0)} msgs
+              {formatCountShort(summary?.messages ?? 0)} msgs ·{" "}
+              <FilesLink sessionId={sessionId} count={summary?.files ?? 0} />
             </span>
             {onOpenWallet && <WalletButton onClick={onOpenWallet} size={14} />}
           </div>
@@ -187,7 +210,8 @@ export function SessionHeader({
             {onOpenWallet && <WalletButton onClick={onOpenWallet} size={18} />}
           </div>
           <div className="text-muted tnum text-xs leading-[1.33]">
-            {formatCountShort(summary?.messages ?? 0)} msgs
+            {formatCountShort(summary?.messages ?? 0)} msgs ·{" "}
+            <FilesLink sessionId={sessionId} count={summary?.files ?? 0} />
           </div>
         </div>
       </div>

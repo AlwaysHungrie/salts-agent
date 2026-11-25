@@ -142,18 +142,6 @@ export function BusinessNumberPicker({
           <Phone size={16} />
         </button>
       </div>
-      {!loading && !list.length && !elsewhere && (
-        <p className="text-muted mt-2 text-xs font-light leading-[1.33]">
-          Add or buy a number in{" "}
-          <button
-            onClick={() => setOpen(true)}
-            className="text-ink font-normal underline underline-offset-2"
-          >
-            Business Phone Numbers
-          </button>{" "}
-          first.
-        </p>
-      )}
       {error && (
         <p className="mt-2 text-xs leading-[1.33]">{error}</p>
       )}

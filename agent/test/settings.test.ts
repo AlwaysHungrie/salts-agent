@@ -210,6 +210,7 @@ describe("validating a patch", () => {
     expect(missingSettings(stored)).toEqual([
       "field_options.transcription_model",
       "field_options.voice_model",
+      "field_options.youtube_model",
     ]);
   });
 

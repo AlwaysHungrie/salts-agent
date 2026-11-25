@@ -46,12 +46,11 @@ export function capabilitiesFor(meta: MetaSettings, settings: DeploymentSettings
         if (!field.options) return field;
         const menu = menus[String(field.key)] ?? [];
         const own = meta.field_options[String(field.key)] ?? [];
-        return {
-          ...field,
-          options: own.length
-            ? own.map((id) => ({ value: id, label: menu.find((o) => o.id === id)?.label ?? id }))
-            : menu.map((o) => ({ value: o.id, label: o.label })),
-        };
+        const options = own.length
+          ? own.map((id) => ({ value: id, label: menu.find((o) => o.id === id)?.label ?? id }))
+          : menu.map((o) => ({ value: o.id, label: o.label }));
+        if (field.none) options.unshift({ value: "", label: field.none });
+        return { ...field, options };
       }),
     };
   });

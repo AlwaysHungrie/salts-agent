@@ -19,6 +19,11 @@ export function useUploads(sessionId: string, limits: ClientLimits | null) {
   const [uploading, setUploading] = useState(false);
   const [ghosts, setGhosts] = useState<Ghost[]>([]);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  /**
+   * The browser's own copy of each landed image, by attachment id. The thumbnail keeps
+   * drawing from it, so it does not blank out while the stored copy downloads.
+   */
+  const [previews, setPreviews] = useState<Record<string, string>>({});
 
   /** Counter behind the ghost keys: unique per pick, without reading the clock. */
   const nextKey = useRef(0);
@@ -35,6 +40,17 @@ export function useUploads(sessionId: string, limits: ClientLimits | null) {
   const kept = useRef<Set<string>>(new Set());
   useEffect(() => {
     kept.current = new Set(attachments.map((a) => a.id));
+    // A removed or sent attachment no longer needs its local copy.
+    setPreviews((p) => {
+      const gone = Object.keys(p).filter((id) => !kept.current.has(id));
+      if (!gone.length) return p;
+      const next = { ...p };
+      for (const id of gone) {
+        URL.revokeObjectURL(next[id]);
+        delete next[id];
+      }
+      return next;
+    });
   }, [attachments]);
 
   // An upload that was never sent stays pending in the Durable Object, so the chips
@@ -96,7 +112,9 @@ export function useUploads(sessionId: string, limits: ClientLimits | null) {
 
   const upload = async (picked: File[]) => {
     if (!limits) {
-      setUploadError("Still loading this deployment's limits. Try again in a moment.");
+      setUploadError(
+        "Still loading this deployment's limits. Try again in a moment.",
+      );
       return;
     }
     setUploading(true);
@@ -204,14 +222,17 @@ export function useUploads(sessionId: string, limits: ClientLimits | null) {
         if (payload?.attachment) void remove(payload.attachment.id);
         continue;
       }
-      drop(key, preview);
-
       if (!res.ok || !payload?.attachment) {
+        drop(key, preview);
         setUploadError(uploadFailure(file.name, payload?.error));
         continue;
       }
-      accepted.push(payload.attachment.id);
-      setAttachments((a) => [...a, payload.attachment!]);
+      // Landed: the local copy moves from the ghost to the attachment, not revoked.
+      drop(key, null);
+      const landed = payload.attachment;
+      if (preview) setPreviews((p) => ({ ...p, [landed.id]: preview }));
+      accepted.push(landed.id);
+      setAttachments((a) => [...a, landed]);
     }
     setUploading(false);
     // Only a cancel can leave the Worker holding something the strip does not.
@@ -224,6 +245,7 @@ export function useUploads(sessionId: string, limits: ClientLimits | null) {
   return {
     attachments,
     setAttachments,
+    previews,
     ghosts,
     uploading,
     uploadError,

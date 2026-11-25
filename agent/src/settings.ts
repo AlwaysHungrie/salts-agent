@@ -26,6 +26,7 @@ export const SETTABLE_CONFIG_KEYS = [
   "image_model",
   "transcription_model",
   "voice_model",
+  "youtube_model",
   "cap_web_search",
   "cap_url_fetch",
   "cap_file_ingest",
@@ -40,6 +41,7 @@ export const SETTABLE_CONFIG_KEYS = [
   "cap_whatsapp_business",
   "cap_mcp",
   "cap_wallet",
+  "cap_youtube",
 ] as const;
 
 export type SettableConfigKey = (typeof SETTABLE_CONFIG_KEYS)[number];
@@ -48,7 +50,12 @@ export type SettableConfigKey = (typeof SETTABLE_CONFIG_KEYS)[number];
  * Fixed-choice config columns whose menu the deployment sets (per-agent
  * `field_options` narrows it). Listed here to avoid importing capabilities.ts.
  */
-export const CHOICE_FIELD_KEYS = ["image_model", "transcription_model", "voice_model"] as const;
+export const CHOICE_FIELD_KEYS = [
+  "image_model",
+  "transcription_model",
+  "voice_model",
+  "youtube_model",
+] as const;
 
 /** One WhatsApp for Business message pack: `messages` agent replies for `price_usd`. */
 export type MessagePack = { messages: number; price_usd: number };
@@ -148,6 +155,8 @@ export type DeploymentSettings = {
   models: ModelOption[];
   /** The model every new agent is seeded with. */
   default_model: string;
+  /** The OpenRouter embedding model `search_files` ranks passages with, billed to each agent's key. */
+  embedding_model: string;
   /** What every agent is told before its own `system_prompt`. Blank says nothing. */
   system_prompt: string;
   /** Starting values for the tuning and capability columns — every one of them. */
@@ -194,7 +203,12 @@ export const SETTINGS_FIELDS: readonly SettingsField[] = [
   INT("default_agent_limit", 1, 100_000, "agents an ordinary account may administer"),
   INT("max_wallet_keys", 1, 1000, "keys one account's OpenRouter wallet may hold"),
   INT("max_phone_numbers", 1, 1000, "numbers one account's Business Phone Numbers wallet may hold"),
-  INT("phone_number_price_usd", 1, 1000, "price of a bought US number for one term, in whole dollars"),
+  INT(
+    "phone_number_price_usd",
+    1,
+    1000,
+    "price of a bought US number for one term, in whole dollars"
+  ),
   INT("phone_number_term_months", 1, 60, "months one payment keeps a bought number"),
   {
     key: "message_packs",
@@ -206,7 +220,12 @@ export const SETTINGS_FIELDS: readonly SettingsField[] = [
   INT("max_chain_tokens", 1, 1000, "tokens one configured network may track"),
   INT("wallet_fee_bps", 0, 5000, "service fee on a credit purchase, in basis points (600 = 6%)"),
   INT("max_wallet_purchase_usd", 1, 10_000, "most credit one wallet purchase may buy, in dollars"),
-  INT("starter_key_cents", 0, 10_000, "credit on the key a new account is given once, in cents; 0 gives none"),
+  INT(
+    "starter_key_cents",
+    0,
+    10_000,
+    "credit on the key a new account is given once, in cents; 0 gives none"
+  ),
   INT("card_min_inr", 1, 1_000_000, "least credit one Indian card/UPI purchase may buy, in rupees"),
   INT("card_max_inr", 1, 1_000_000, "most credit one Indian card/UPI purchase may buy, in rupees"),
   {
@@ -223,7 +242,12 @@ export const SETTINGS_FIELDS: readonly SettingsField[] = [
     doc: "rupee amount the Indian card checkout starts on",
     group: "default",
   },
-  INT("card_min_usd", 1, 10_000, "least credit one international card purchase may buy, in dollars"),
+  INT(
+    "card_min_usd",
+    1,
+    10_000,
+    "least credit one international card purchase may buy, in dollars"
+  ),
   INT("card_max_usd", 1, 10_000, "most credit one international card purchase may buy, in dollars"),
   {
     key: "card_presets_usd",
@@ -273,6 +297,12 @@ export const SETTINGS_FIELDS: readonly SettingsField[] = [
     key: "default_model",
     kind: "string",
     doc: "model a new agent is seeded with",
+    group: "default",
+  },
+  {
+    key: "embedding_model",
+    kind: "string",
+    doc: "OpenRouter embedding model search_files ranks a chat's documents with",
     group: "default",
   },
   {
@@ -332,6 +362,9 @@ export function missingSettings(stored: StoredSettings): string[] {
   if (stored.models && !stored.models.length) missing.push("models");
   if (stored.default_model !== undefined && !stored.default_model.trim()) {
     missing.push("default_model");
+  }
+  if (stored.embedding_model !== undefined && !stored.embedding_model.trim()) {
+    missing.push("embedding_model");
   }
   return missing;
 }
@@ -508,13 +541,22 @@ export function validateSettingsPatch(input: unknown, current: StoredSettings): 
         next.default_model = value.trim();
         break;
       }
+      case "embedding_model": {
+        if (typeof value !== "string" || !/^[\w.-]+\/[\w.\-:]+$/.test(value.trim())) {
+          throw new SettingsError("embedding_model must be an OpenRouter model id");
+        }
+        next.embedding_model = value.trim();
+        break;
+      }
       case "card_presets_inr":
       case "card_presets_usd": {
         if (!Array.isArray(value) || !value.length || value.length > 6) {
           throw new SettingsError(`${key} must be a list of one to six amounts`);
         }
         const most = key === "card_presets_inr" ? 1_000_000 : 10_000;
-        next[key as "card_presets_inr" | "card_presets_usd"] = value.map((n, i) => requireInt(`${key}[${i}]`, n, 1, most));
+        next[key as "card_presets_inr" | "card_presets_usd"] = value.map((n, i) =>
+          requireInt(`${key}[${i}]`, n, 1, most)
+        );
         break;
       }
       case "message_packs": {
@@ -522,7 +564,8 @@ export function validateSettingsPatch(input: unknown, current: StoredSettings): 
           throw new SettingsError(`${key} must be a list of one to six packs`);
         }
         next.message_packs = value.map((pack, i) => {
-          if (!isObject(pack)) throw new SettingsError(`${key}[${i}] must be {messages, price_usd}`);
+          if (!isObject(pack))
+            throw new SettingsError(`${key}[${i}] must be {messages, price_usd}`);
           return {
             messages: requireInt(`${key}[${i}].messages`, pack.messages, 1, 10_000_000),
             price_usd: requireInt(`${key}[${i}].price_usd`, pack.price_usd, 1, 10_000),
@@ -567,7 +610,10 @@ export function validateSettingsPatch(input: unknown, current: StoredSettings): 
       throw new SettingsError(`${lo} cannot exceed ${hi}`);
     }
     const start = next[def];
-    if (start !== undefined && ((min !== undefined && start < min) || (max !== undefined && start > max))) {
+    if (
+      start !== undefined &&
+      ((min !== undefined && start < min) || (max !== undefined && start > max))
+    ) {
       throw new SettingsError(`${def} must be from ${lo} to ${hi}`);
     }
   }
@@ -605,10 +651,13 @@ function validateConfigDefault(column: SettableConfigKey, value: unknown): numbe
     if (typeof value === "boolean") return value ? 1 : 0;
     return requireInt(column, value, 0, 1);
   }
-  // The three model columns. An id typed in is not checked against a catalogue —
+  // The model columns. An id typed in is not checked against a catalogue —
   // same reasoning as `models`: the built-in choices are a starting point, not a limit.
   const id = String(value).trim();
-  if (!id) throw new SettingsError(`config_defaults.${column} cannot be blank`);
+  // The YouTube fallback is optional: blank means no fallback.
+  if (!id && column !== "youtube_model") {
+    throw new SettingsError(`config_defaults.${column} cannot be blank`);
+  }
   return id;
 }
 

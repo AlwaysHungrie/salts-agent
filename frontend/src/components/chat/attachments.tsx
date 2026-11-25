@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { Attachment } from "@/lib/agent";
 import {
   Download,
@@ -7,6 +8,7 @@ import {
   Mic,
   X,
 } from "lucide-react";
+import { ImageViewer } from "./ImageViewer";
 import { VoiceNote } from "./VoiceNote";
 import { FADE, fileUrl, isAudio, thumbUrl } from "./files";
 
@@ -21,24 +23,43 @@ export function Thumb({ src }: { src: string }) {
 export function AttachmentStrip({
   attachments,
   sessionId,
+  previews = {},
   onRemove,
 }: {
   attachments: Attachment[];
   sessionId: string;
+  /** Local copies of just-uploaded images, drawn instead of fetching the stored one. */
+  previews?: Record<string, string>;
   onRemove?: (id: string) => void;
 }) {
+  const [open, setOpen] = useState<Attachment | null>(null);
   if (attachments.length === 0) return null;
+  const srcOf = (a: Attachment) => previews[a.id] ?? fileUrl(sessionId, a.id);
   return (
     <div className="flex flex-wrap items-center gap-2">
+      {open && (
+        <ImageViewer
+          src={srcOf(open)}
+          name={open.name}
+          onClose={() => setOpen(null)}
+        />
+      )}
       {attachments.map((a) =>
         a.kind === "image" ? (
           <span key={a.id} className="relative">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={fileUrl(sessionId, a.id)}
-              alt={a.name}
-              className="border-hairline-soft h-16 w-16 rounded-xl border object-cover"
-            />
+            <button
+              type="button"
+              onClick={() => setOpen(a)}
+              aria-label={`View ${a.name}`}
+              className="block cursor-zoom-in"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={srcOf(a)}
+                alt={a.name}
+                className="border-hairline-soft h-16 w-16 rounded-xl border object-cover"
+              />
+            </button>
             {onRemove && (
               <button
                 onClick={() => onRemove(a.id)}
@@ -165,12 +186,26 @@ export function MessageMedia({
   images: Attachment[];
   sessionId: string;
 }) {
+  const [open, setOpen] = useState<Attachment | null>(null);
   if (images.length === 0) return null;
   const single = images.length === 1;
   return (
     <div className={single ? "" : "grid grid-cols-2 gap-1"}>
+      {open && (
+        <ImageViewer
+          src={fileUrl(sessionId, open.id)}
+          name={open.name}
+          onClose={() => setOpen(null)}
+        />
+      )}
       {images.map((a) => (
-        <span key={a.id} className="group relative block">
+        <button
+          key={a.id}
+          type="button"
+          onClick={() => setOpen(a)}
+          aria-label={`View ${a.name}`}
+          className="group relative block w-full cursor-zoom-in"
+        >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={fileUrl(sessionId, a.id)}
@@ -181,7 +216,7 @@ export function MessageMedia({
                 : "aspect-square object-cover"
             }`}
           />
-        </span>
+        </button>
       ))}
     </div>
   );

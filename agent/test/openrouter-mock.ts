@@ -339,6 +339,69 @@ async function graphMock(request: Request, url: URL): Promise<Response> {
 }
 
 /** What a mocked turn reports spending, in US dollars. */
+/** What every PDF parses to: OpenRouter's file parser, answered by name. */
+export const PDF_PARSED_TEXT = "PARSED-PDF-BODY the tenant may cancel with ninety days notice";
+
+/** The PDF parse call: a one-token reply whose annotations carry each file's text. */
+function parsed(body: ChatBody) {
+  const files = (body.messages ?? []).flatMap((m) =>
+    Array.isArray(m.content)
+      ? (m.content as { type?: string; file?: { filename?: string } }[]).filter(
+          (p) => p.type === "file"
+        )
+      : []
+  );
+  return json({
+    id: "chatcmpl-mock",
+    object: "chat.completion",
+    created: 1,
+    model: "mock/model",
+    choices: [
+      {
+        index: 0,
+        message: {
+          role: "assistant",
+          content: ".",
+          annotations: files.map((f) => ({
+            type: "file",
+            file: { name: f.file?.filename, content: [{ type: "text", text: PDF_PARSED_TEXT }] },
+          })),
+        },
+        finish_reason: "stop",
+      },
+    ],
+    usage: usage(),
+  });
+}
+
+/** What one embeddings call costs in the mock. */
+export const EMBEDDING_COST = 0.00001;
+/**
+ * Embeddings that put texts sharing a "topic" close together: each vector counts the
+ * text's words against a few topic lists, so "price" and "cost" land side by side the
+ * way a real model would put them. An input starting "!!embedfail" fails the call.
+ */
+async function embedded(request: Request): Promise<Response> {
+  const body = (await request.json().catch(() => ({}))) as { input?: string[] };
+  const inputs = body.input ?? [];
+  if (inputs.some((t) => t.startsWith("!!embedfail"))) {
+    return json({ error: { message: "embedding provider down" } }, 502);
+  }
+  const topics = [
+    ["cost", "price", "pricing", "dollars", "fee", "cheap"],
+    ["weather", "sunny", "rain", "beach"],
+    ["cancel", "notice", "lease", "terminate"],
+  ];
+  const vector = (text: string) => {
+    const w = text.toLowerCase().match(/[a-z]+/g) ?? [];
+    return [...topics.map((t) => w.filter((x) => t.includes(x)).length), 0.01];
+  };
+  return json({
+    data: inputs.map((t, index) => ({ object: "embedding", index, embedding: vector(t) })),
+    usage: { prompt_tokens: inputs.length, total_tokens: inputs.length, cost: EMBEDDING_COST },
+  });
+}
+
 export const COST_PER_TURN = 0.0025;
 
 /** Tokens a mocked turn reports, so usage rows have something to hold. */
@@ -393,6 +456,7 @@ type ChatBody = {
   messages?: { role: string; content?: unknown }[];
   tool_choice?: unknown;
   tools?: unknown[];
+  plugins?: { id?: string }[];
 };
 
 /**
@@ -910,7 +974,12 @@ async function razorpayMock(request: Request, url: URL): Promise<Response> {
     new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
   const rid = (prefix: string) => `${prefix}_${crypto.randomUUID().replace(/-/g, "").slice(0, 14)}`;
   if (url.pathname === "/__pay") {
-    const body = (await request.json()) as { order_id: string; status?: string; amount?: number; currency?: string };
+    const body = (await request.json()) as {
+      order_id: string;
+      status?: string;
+      amount?: number;
+      currency?: string;
+    };
     const order = razorpayOrders.get(body.order_id);
     const payment = {
       id: rid("pay"),
@@ -971,10 +1040,13 @@ async function twilioMock(request: Request, url: URL): Promise<Response> {
     }
     return json(map.get(peek[2]) ?? null);
   }
-  const [user, secret] = atob((request.headers.get("authorization") ?? "").replace(/^Basic\s+/i, "")).split(":");
+  const [user, secret] = atob(
+    (request.headers.get("authorization") ?? "").replace(/^Basic\s+/i, "")
+  ).split(":");
   // The deployment's own credentials, or one subaccount's SID and auth token.
   const sub = twilioSubaccounts.get(user);
-  const caller = sub !== undefined ? (secret === sub ? user : "") : secret === TWILIO_SECRET ? "parent" : "";
+  const caller =
+    sub !== undefined ? (secret === sub ? user : "") : secret === TWILIO_SECRET ? "parent" : "";
   if (!caller) return json({ message: "Authenticate" }, 401);
 
   if (url.hostname === "messaging.twilio.com") {
@@ -1006,7 +1078,9 @@ async function twilioMock(request: Request, url: URL): Promise<Response> {
   if (path === ".json") return json({ status: "active" });
   if (path === "/AvailablePhoneNumbers/US/Local.json") {
     const digits = String(Math.floor(Math.random() * 1e9)).padStart(9, "0");
-    return json({ available_phone_numbers: [{ phone_number: `+1${digits.slice(0, 3)}5${digits.slice(3)}` }] });
+    return json({
+      available_phone_numbers: [{ phone_number: `+1${digits.slice(0, 3)}5${digits.slice(3)}` }],
+    });
   }
   if (path === "/IncomingPhoneNumbers.json" && request.method === "POST") {
     const number = new URLSearchParams(await request.text()).get("PhoneNumber") ?? "";
@@ -1092,6 +1166,7 @@ export async function openrouterMock(request: Request): Promise<Response> {
     return json(chatKeys.filter((k) => k.body.includes(contains)).map((k) => k.key));
   }
 
+  if (url.pathname === "/api/v1/embeddings") return embedded(request);
   if (url.pathname !== "/api/v1/chat/completions") {
     return json({ error: `unmocked OpenRouter path ${url.pathname}` }, 404);
   }
@@ -1126,6 +1201,9 @@ export async function openrouterMock(request: Request): Promise<Response> {
     return completion(UPDATED_SUMMARY);
   if (!body.stream && message.includes("CONVERSATION TO SUMMARIZE"))
     return completion(FIRST_SUMMARY);
+
+  // A PDF parse: not streamed, so answered before the title call.
+  if (body.plugins?.some((p) => p.id === "file-parser")) return parsed(body);
 
   // The title call: no streaming, and a system prompt asking for a name.
   if (!body.stream) return completion("Mock Title");

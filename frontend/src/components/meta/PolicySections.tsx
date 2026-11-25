@@ -116,11 +116,10 @@ export function ModelOptionSections({
           <IdList
             value={meta.field_options[String(field.key)] ?? []}
             onChange={(next) => setFieldOptions(field, next)}
-            placeholder={field.options?.[0]?.value}
-            suggestions={(field.options ?? []).map((o) => ({
-              id: o.value,
-              label: o.label,
-            }))}
+            placeholder={field.options?.find((o) => o.value !== "")?.value}
+            suggestions={(field.options ?? [])
+              .filter((o) => o.value !== "")
+              .map((o) => ({ id: o.value, label: o.label }))}
             suggestionsHint="Default options"
           />
         </Section>

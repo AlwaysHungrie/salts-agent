@@ -90,4 +90,17 @@ export const SESSION_AGENT_MIGRATIONS: readonly Migration[] = [
       );
     },
   },
+  {
+    // Passage vectors for search_files, keyed by embedding model and a hash of the
+    // passage's text: a passage is embedded once, whichever file it came from.
+    name: "embeddings",
+    up: (sql) => {
+      sql.exec(
+        `CREATE TABLE IF NOT EXISTS embeddings (
+           key TEXT PRIMARY KEY,
+           vector TEXT NOT NULL
+         )`
+      );
+    },
+  },
 ];

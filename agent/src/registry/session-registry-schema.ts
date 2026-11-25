@@ -299,4 +299,16 @@ export const SESSION_REGISTRY_MIGRATIONS: readonly Migration[] = [
       addColumnIfMissing(sql, "config", `cap_whatsapp_business INTEGER NOT NULL DEFAULT 0`);
     },
   },
+  {
+    name: "youtube summaries",
+    up: (sql) => {
+      // Older agents get the capability off and no fallback model, as a new agent does.
+      addColumnIfMissing(sql, "config", `cap_youtube INTEGER NOT NULL DEFAULT 0`);
+      addColumnIfMissing(
+        sql,
+        "config",
+        `youtube_model TEXT NOT NULL DEFAULT ''`
+      );
+    },
+  },
 ];
