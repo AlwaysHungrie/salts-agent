@@ -11,6 +11,7 @@ import {
   MCP_TOOLS,
   MCP_UPLOAD_TOOL,
   MOCK_XLSX_TEXT,
+  PDF_PARSED_TEXT,
   TOOLLOOP_REPLY,
   replyTo,
 } from "./openrouter-mock";
@@ -966,6 +967,123 @@ describe("the suite's own network seal", () => {
  * agent offered to message a phone number it was given, asked for the number, and ran
  * bash when no tool appeared.
  */
+describe("a parsed PDF", () => {
+  it("is named as searchable, and its text stays out of the conversation", async () => {
+    const { sessionId, email, agentId } = await chatFixture();
+    await SELF.fetch(
+      `${BASE}/api/agents/${agentId}/config`,
+      as(email, { method: "PATCH", body: JSON.stringify({ cap_file_ingest: 1 }) })
+    );
+    const form = new FormData();
+    form.set("file", new File(["%PDF-1.4 a lease"], "lease.pdf", { type: "application/pdf" }));
+    const upload = await SELF.fetch(`${BASE}/agents/session-agent/${sessionId}/files`, {
+      method: "POST",
+      headers: signedIn(email),
+      body: form,
+    });
+    expect(upload.ok).toBe(true);
+
+    const token = crypto.randomUUID().slice(0, 8);
+    await say(sessionId, email, `what does it say ${token}`);
+    const all = (await (
+      await fetch(`https://openrouter.ai/__requests?contains=${token}`)
+    ).json()) as {
+      stream?: boolean;
+      messages?: unknown[];
+      tools?: { function?: { name?: string } }[];
+    }[];
+    const turn = all.filter((b) => b.stream).at(-1)!;
+    const sent = JSON.stringify(turn.messages);
+    expect(sent).toContain("lease.pdf has been read and is searchable");
+    expect(sent).not.toContain(PDF_PARSED_TEXT);
+    // Not sent as a file either: the parse stands in for it.
+    expect(sent).not.toContain("data:application/pdf");
+    expect(turn.tools?.map((t) => t.function?.name)).toContain("search_files");
+  });
+});
+
+describe("the chat's files", () => {
+  it("lists every sent file with scope=chat, keeps the default to pending, and counts them", async () => {
+    const { sessionId, email, agentId } = await chatFixture();
+    await SELF.fetch(
+      `${BASE}/api/agents/${agentId}/config`,
+      as(email, { method: "PATCH", body: JSON.stringify({ cap_file_ingest: 1 }) })
+    );
+    const form = new FormData();
+    form.set("file", new File(["# notes"], "notes.md", { type: "text/markdown" }));
+    await SELF.fetch(`${BASE}/agents/session-agent/${sessionId}/files`, {
+      method: "POST",
+      headers: signedIn(email),
+      body: form,
+    });
+    const list = async (query = "") =>
+      (
+        (await (
+          await SELF.fetch(`${BASE}/agents/session-agent/${sessionId}/files${query}`, as(email))
+        ).json()) as { attachments: { name: string }[] }
+      ).attachments.map((a) => a.name);
+    const files = async () =>
+      (
+        (await (
+          await SELF.fetch(`${BASE}/agents/session-agent/${sessionId}/summary`, as(email))
+        ).json()) as { files: number }
+      ).files;
+
+    // Uploaded, not sent: pending, and not yet the chat's.
+    expect(await list()).toEqual(["notes.md"]);
+    expect(await list("?scope=chat")).toEqual([]);
+    expect(await files()).toBe(0);
+
+    await say(sessionId, email, "read this");
+    expect(await list()).toEqual([]);
+    expect(await list("?scope=chat")).toEqual(["notes.md"]);
+    expect(await files()).toBe(1);
+  });
+});
+
+describe("deleting a session", () => {
+  it("removes its files from R2 and from the session, and gives the storage back", async () => {
+    const { sessionId, email, agentId } = await chatFixture();
+    await SELF.fetch(
+      `${BASE}/api/agents/${agentId}/config`,
+      as(email, { method: "PATCH", body: JSON.stringify({ cap_file_ingest: 1 }) })
+    );
+    // Past the workspace's inline threshold (1.5 MB), so the bytes go to R2.
+    const bytes = new Uint8Array(2_000_000).fill(32);
+    bytes.set(new TextEncoder().encode("%PDF-1.4"));
+    const form = new FormData();
+    form.set("file", new File([bytes], "big.pdf", { type: "application/pdf" }));
+    const upload = await SELF.fetch(`${BASE}/agents/session-agent/${sessionId}/files`, {
+      method: "POST",
+      headers: signedIn(email),
+      body: form,
+    });
+    expect(upload.ok).toBe(true);
+    await say(sessionId, email, "keep this");
+
+    const inR2 = async () => (await env.FILES.list({ prefix: `${sessionId}/` })).objects.length;
+    const held = async () =>
+      (await registryFor(agentId).storageState(Number.MAX_SAFE_INTEGER)).bytes;
+    expect(await inR2()).toBeGreaterThan(0);
+    expect(await held()).toBeGreaterThanOrEqual(2_000_000);
+
+    const deleted = await SELF.fetch(
+      `${BASE}/api/sessions/${sessionId}`,
+      as(email, { method: "DELETE" })
+    );
+    expect(deleted.ok).toBe(true);
+
+    expect(await inR2()).toBe(0);
+    expect(await held()).toBe(0);
+    // The session is gone for its owner, files and all.
+    const files = await SELF.fetch(
+      `${BASE}/agents/session-agent/${sessionId}/files?scope=chat`,
+      as(email)
+    );
+    expect(files.ok).toBe(false);
+  });
+});
+
 describe("a PDF sent to an MCP server that takes uploads", () => {
   /** A session on an agent that reads PDFs, with one MCP server connected. */
   async function withServer(url: string, tools: unknown[]) {
@@ -1253,6 +1371,21 @@ describe("what the agent is told it can reach", () => {
     // The line that caused it: WhatsApp among the things the model can do.
     const capabilities = prompt.match(/Capabilities available to you: .*/)?.[0] ?? "";
     expect(capabilities).not.toContain("WhatsApp");
+  });
+
+  it("tells the model to summarize a YouTube screenshot unasked, only while the capability is on", async () => {
+    const { sessionId, email, agentId } = await chatFixture();
+    const off = crypto.randomUUID().slice(0, 8);
+    await say(sessionId, email, `hello ${off}`);
+    expect(await systemPromptFor(off)).not.toContain("summarize that video right away");
+
+    await SELF.fetch(
+      `${BASE}/api/agents/${agentId}/config`,
+      as(email, { method: "PATCH", body: JSON.stringify({ cap_youtube: 1 }) })
+    );
+    const on = crypto.randomUUID().slice(0, 8);
+    await say(sessionId, email, `hello ${on}`);
+    expect(await systemPromptFor(on)).toContain("summarize that video right away");
   });
 
   it("says nothing about reach when no channel is configured", async () => {

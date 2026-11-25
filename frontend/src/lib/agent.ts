@@ -214,6 +214,7 @@ export type Config = {
   cap_whatsapp: number;
   cap_mcp: number;
   cap_wallet: number;
+  cap_youtube: number;
 
   /**
    * The agent's own OpenRouter key. Every model call it makes is billed here, so one
@@ -237,6 +238,7 @@ export type Config = {
   whatsapp_number: string;
   image_model: string;
   transcription_model: string;
+  youtube_model: string;
 };
 
 export const SECRET_MASK = "••••••••";
@@ -534,6 +536,8 @@ export type Summary = {
     cost_usd: number;
   };
   tasks: ScheduledTask[];
+  /** Files in the chat: sent uploads and files the agent made. */
+  files: number;
   sqlite_bytes: number;
 };
 

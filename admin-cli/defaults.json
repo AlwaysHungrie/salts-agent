@@ -45,6 +45,7 @@
     { "id": "anthropic/claude-opus-5.5", "label": "Claude Opus 5.5 (opus)", "vision": true }
   ],
   "default_model": "deepseek/deepseek-v4-flash",
+  "embedding_model": "baai/bge-m3",
   "system_prompt": "You are a concise assistant.\nCite your sources: when you use a guide page, tool result or website, link it inline with its exact URL. Never say \"see X\" without a link, and never invent URLs.",
   "config_defaults": {
     "temperature": 0.7,
@@ -54,6 +55,7 @@
     "image_model": "google/gemini-2.5-flash-image",
     "transcription_model": "google/gemini-2.5-flash-lite",
     "voice_model": "openai/gpt-audio-mini",
+    "youtube_model": "",
     "cap_web_search": 0,
     "cap_url_fetch": 0,
     "cap_file_ingest": 0,
@@ -66,7 +68,8 @@
     "cap_telegram": 1,
     "cap_whatsapp": 0,
     "cap_mcp": 1,
-    "cap_wallet": 0
+    "cap_wallet": 0,
+    "cap_youtube": 0
   },
   "mcp_catalog": [
     {
@@ -163,6 +166,10 @@
     "voice_model": [
       { "id": "openai/gpt-audio-mini", "label": "GPT Audio Mini — cheapest" },
       { "id": "openai/gpt-audio", "label": "GPT Audio — best quality" }
+    ],
+    "youtube_model": [
+      { "id": "google/gemini-2.5-flash-lite", "label": "Gemini 2.5 Flash Lite — cheapest" },
+      { "id": "google/gemini-2.5-flash", "label": "Gemini 2.5 Flash — better summaries" }
     ]
   }
 }

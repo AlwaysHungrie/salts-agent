@@ -4,10 +4,11 @@ import { agentHeaders } from "@/lib/upstream";
 
 export const dynamic = "force-dynamic";
 
-/** Attachments uploaded but not yet sent with a turn. */
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+/** Attachments uploaded but not yet sent with a turn, or with `?scope=chat` every file in it. */
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  return proxy(`/agents/session-agent/${encodeURIComponent(id)}/files`);
+  const scope = new URL(request.url).searchParams.get("scope") === "chat" ? "?scope=chat" : "";
+  return proxy(`/agents/session-agent/${encodeURIComponent(id)}/files${scope}`);
 }
 
 /**

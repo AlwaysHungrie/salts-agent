@@ -26,6 +26,7 @@ import { AGENT_SEPARATOR, agentIdOf, type Config, DEFAULT_CONFIG, type Memory } 
 import { applyMigrations } from "./schema";
 import {
   drawnIds,
+  chatFiles,
   pendingAttachments,
   releaseStorage,
   removeAttachment,
@@ -525,7 +526,11 @@ export class SessionAgent extends Think<Env> {
         body = result.body;
         status = result.status;
       } else if (request.method === "GET" && path === "files") {
-        body = { attachments: pendingAttachments(this.host).map(publicAttachment) };
+        const files =
+          url.searchParams.get("scope") === "chat"
+            ? chatFiles(this.host)
+            : pendingAttachments(this.host);
+        body = { attachments: files.map(publicAttachment) };
       } else if (request.method === "DELETE" && path === "files" && route[1]) {
         await removeAttachment(this.host, route[1]);
         body = { ok: true };
@@ -614,6 +619,7 @@ export class SessionAgent extends Think<Env> {
     this.exec(`DELETE FROM usage`);
     this.exec(`DELETE FROM compaction`);
     this.exec(`DELETE FROM message_files`);
+    this.exec(`DELETE FROM embeddings`);
     this.exec(`DELETE FROM message_text`);
     this.exec(`DELETE FROM attachments`);
     await this.workspace.rm("uploads", { recursive: true, force: true });
@@ -754,6 +760,7 @@ export class SessionAgent extends Think<Env> {
         cost_usd: row?.cost ?? 0,
       },
       tasks: this.listTasks(),
+      files: chatFiles(this.host).length,
       sqlite_bytes: this.ctx.storage.sql.databaseSize,
       // Facets keep their own storage, which the object's own destroy does not
       // reach. Nothing here creates one; this is the tripwire if that changes.

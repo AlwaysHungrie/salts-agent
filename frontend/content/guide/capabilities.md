@@ -2,7 +2,7 @@
 title: What your agent can do
 section: Using your agent
 order: 1
-summary: Every capability on the Capabilities page, such as web search, files, images, voice notes, reminders, memory and a wallet, what each one does and how to use it.
+summary: Every capability on the Capabilities page, such as web search, YouTube summaries, files, images, voice notes, reminders, memory and a wallet, what each one does and how to use it.
 featured: true
 ---
 
@@ -22,15 +22,29 @@ Web search needs a search engine to work. You can either run one for free on you
 
 Lets your agent open a link you send it and read the page, for example "Summarise this article" followed by the link. Together with **Web search**, it also lets your agent read the full pages it finds, not just the search results.
 
+## YouTube summaries
+
+Lets your agent summarise a YouTube video when you send it the link, for example a talk you want the gist of before deciding whether to watch it. It works with ordinary video links, short `youtu.be` links and Shorts. You get the video's title, channel and length along with the summary.
+
+You do not need the link. Name the video, for example "Summarise the 3Blue1Brown video on neural networks", and your agent searches YouTube for it first. You can also send a screenshot of a video. Your agent reads the link from the address bar if it is visible, or otherwise looks the video up by its title and channel. Screenshots need **Image input** switched on as well, with a model that can see images.
+
+Your agent's own model writes the summary from the video's captions, which keeps it cheap, and only the summary is added to your conversation. A few videos have no captions. For those, a Gemini model can watch the whole video instead, which you pick under **Fallback (Gemini only)**. That costs more, about $0.04 for a 20-minute video on the cheapest model, and does not work for videos longer than about an hour. The fallback starts as **None**, and your agent tells you when it cannot summarise a video.
+
+When your agent reads a video's captions, it also keeps the transcript in the conversation as a file, so you can ask follow-up questions such as "What did they say about pricing?". It searches the transcript for the answer instead of summarising the video again.
+
 ## File ingest
 
 Lets you attach files in the chat and ask questions about them, for example "What does this contract say about cancellation?". It works with PDFs up to 8 MB, and with text files such as Markdown, CSV, JSON and code up to 1 MB.
+
+Your agent does not reread the whole file with every message. It searches the file for the parts your question is about, which keeps long documents cheap to talk about. You can keep asking about a file for the rest of the conversation.
+
+To see every file in a conversation, including video transcripts your agent kept, click the file count next to the message count at the top of the chat. Click a file to open it.
 
 Excel workbooks cannot be read this way. To work with spreadsheets, see [Add the spreadsheet analyst](/guide/salts-tools-analyst).
 
 ## Image input
 
-Lets your agent see the photos and screenshots you send it, for example "What does this error message mean?" with a screenshot attached.
+Lets your agent see the photos and screenshots you send it, for example "What does this error message mean?" with a screenshot attached. In the web app you can also paste a screenshot straight into the message box.
 
 Not every model can see images. Models marked **(no image)** in **Settings** cannot, and that includes the model your agent starts with. If you switch this on, also pick a model that can. See [Choose the right model](/guide/choosing-a-model).
 

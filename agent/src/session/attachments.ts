@@ -17,6 +17,14 @@ export function getAttachment(host: SessionHost, id: string): Attachment | undef
   return host.exec<Attachment>(`SELECT * FROM attachments WHERE id = ?`, id)[0];
 }
 
+/**
+ * Every file in the chat, newest first: what was sent with a message, and what a tool
+ * made (a drawn image, an export, a video transcript). Pending uploads are not in it yet.
+ */
+export function chatFiles(host: SessionHost): Attachment[] {
+  return host.exec<Attachment>(`SELECT * FROM attachments WHERE used = 1 ORDER BY ts DESC`);
+}
+
 /** Uploaded but not yet sent: what the next turn will carry. */
 export function pendingAttachments(host: SessionHost): Attachment[] {
   return host.exec<Attachment>(`SELECT * FROM attachments WHERE used = 0 ORDER BY ts ASC`);

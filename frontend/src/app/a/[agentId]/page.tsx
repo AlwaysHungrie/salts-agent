@@ -465,6 +465,7 @@ export default function AgentPage({
         {selected ? (
           <>
             <SessionHeader
+              sessionId={selected}
               title={current?.title ?? "New session"}
               createdAt={current?.created_at ?? null}
               summary={summary}
