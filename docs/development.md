@@ -18,7 +18,7 @@ frontend/      Next.js web app: chat, settings, capabilities, fleets, and the us
 landing-page/  Next.js marketing site
 admin-cli/     Owner dashboard: counts, users, limit requests, deployment settings + their defaults
 salts-tools/   Optional: local services for an agent (SearXNG, local MCPs) behind one tunnel from a laptop
-local-mcps/    MCP servers salts-tools runs locally (matchmaker-mcp)
+local-mcps/    MCP servers salts-tools runs locally (analyst-mcp)
 infra/vercel/  Terraform for the two Vercel projects
 scripts/       Cloudflare cost queries (cost.sh, settle.sh)
 docs/          Architecture, infrastructure, costs, MCP catalogue, WhatsApp setup

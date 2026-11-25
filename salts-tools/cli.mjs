@@ -4,9 +4,8 @@
 // Runs the services below, puts them on the internet through a single cloudflared quick
 // tunnel (no account needed), and reports to the Worker. Every service shares the
 // tunnel's address and is told apart by path (see gateway.mjs): `<tunnel>/web` is
-// SearXNG, `<tunnel>/matchmaker` the matchmaker MCP server, `<tunnel>/analyst` the
-// spreadsheet analyst MCP server, `<tunnel>/coinbase-wallet` Coinbase's wallet MCP
-// server (Payments MCP).
+// SearXNG, `<tunnel>/analyst` the spreadsheet analyst MCP server, `<tunnel>/coinbase-wallet`
+// Coinbase's wallet MCP server (Payments MCP).
 //
 // The computer is paired once from the browser: `start` shows a code and opens the Salts
 // site, where the signed-in user picks the agents it serves. From then on a supervisor
@@ -112,7 +111,6 @@ const HOME = homeFor("salts-tools");
 const STATE_FILE = path.join(HOME, "state.json");
 const PID_FILE = path.join(HOME, "supervisor.pid");
 const LOG_FILE = path.join(HOME, "supervisor.log");
-const MATCHMAKER_LOG = path.join(HOME, "matchmaker.log");
 const ANALYST_LOG = path.join(HOME, "analyst.log");
 const WALLET_LOG = path.join(HOME, "coinbase-wallet.log");
 /** `salts-tools restart` drops this file; the supervisor picks it up (no SIGUSR1 on Windows). */
@@ -171,7 +169,6 @@ const DOCKER_WAIT_MS = 180_000;
 /** Where each free-port scan starts, far enough apart not to race each other. */
 const GATEWAY_PORT = 8080;
 const WEB_PORT = 8180;
-const MATCHMAKER_PORT = 8280;
 const ANALYST_PORT = 8380;
 const WALLET_PORT = 8480;
 
@@ -500,9 +497,7 @@ const webPort = () => publishedPort(WEB_DIR, WEB_PROJECT, "caddy", 8081, webEnv(
 
 /** Installed copies of packaged MCP servers: shared by every target, as the repo's are. */
 const MCP_ROOT = path.join(os.homedir(), ".salts-tools", "mcps");
-const MATCHMAKER_SRC = mcpSource(here, "matchmaker-mcp", MCP_ROOT);
 const ANALYST_SRC = mcpSource(here, "analyst-mcp", MCP_ROOT);
-const MATCHMAKER_DIR = MATCHMAKER_SRC.dir;
 const ANALYST_DIR = ANALYST_SRC.dir;
 
 /**
@@ -519,19 +514,6 @@ function readyMcp(name, src, bin) {
 const ANALYST_BIN = IS_WIN
   ? path.join(ANALYST_DIR, ".venv", "Scripts", "analyst-mcp.exe")
   : path.join(ANALYST_DIR, ".venv", "bin", "analyst-mcp");
-
-const MATCHMAKER_BIN = IS_WIN
-  ? path.join(MATCHMAKER_DIR, ".venv", "Scripts", "matchmaker-mcp.exe")
-  : path.join(MATCHMAKER_DIR, ".venv", "bin", "matchmaker-mcp");
-
-/**
- * The headers the matchmaker's paid tools need on the agent's `matchmaker` MCP server,
- * beside the Authorization salts-tools sets. The cap (USD per tool call) is optional.
- */
-const MATCHMAKER_HEADERS = [
-  ["X-OpenRouter-Api-Key", "<your OpenRouter key>", "pays for its model calls"],
-  ["Tool-Call-Max-Charge", "0.25", "most one call may spend; a judged page of 50 is ~$0.10"],
-];
 
 /**
  * Coinbase Wallet (Coinbase's Payments MCP package): a wallet app and a stdio server, installed by its own npm
@@ -599,61 +581,6 @@ const SERVICES = {
       return compose(WEB_DIR, WEB_PROJECT, ["down"], webEnv());
     },
     reached: (tunnel) => `${tunnel}/web`,
-  },
-
-  matchmaker: {
-    label: "Matchmaker",
-    kind: "mcp",
-    headers: MATCHMAKER_HEADERS.map(([header]) => header),
-    needs: ["cap_mcp"],
-    about: "resumes, cover letters and job matching (uv, no Docker)",
-    log: MATCHMAKER_LOG,
-    docker: false,
-    uv: true,
-    child: null,
-    healthy: (port) => ok(`http://127.0.0.1:${port}/healthz`),
-    async up(token) {
-      readyMcp("matchmaker", MATCHMAKER_SRC, MATCHMAKER_BIN);
-      this.stop();
-      const port = await portFrom(readState().svc?.matchmaker?.port, MATCHMAKER_PORT);
-      const out = openSync(MATCHMAKER_LOG, "a");
-      // Its own .env still applies (MM_DATA_DIR, models, …); these win over it.
-      const child = spawn(MATCHMAKER_BIN, [], {
-        cwd: MATCHMAKER_DIR,
-        stdio: ["ignore", out, out],
-        windowsHide: true,
-        env: {
-          ...process.env,
-          MCP_TRANSPORT: "http",
-          MCP_HOST: "127.0.0.1",
-          MCP_PORT: String(port),
-          MCP_AUTH_TOKEN: token,
-        },
-      });
-      this.child = child;
-      child.on("exit", (code, signal) => {
-        if (this.child === child) this.child = null;
-        log(`matchmaker exited (${signal ?? code})`);
-      });
-      writeSvc("matchmaker", { pid: child.pid });
-      log(`matchmaker started (pid ${child.pid}) on port ${port}; log at ${MATCHMAKER_LOG}`);
-      if (!(await waitUntil(() => this.healthy(port), 60))) {
-        throw new Error(`Matchmaker didn't respond on port ${port}. Details are in ${MATCHMAKER_LOG}`);
-      }
-      return port;
-    },
-    stop() {
-      if (this.child) this.child.kill("SIGTERM");
-      this.child = null;
-      // One left behind by a supervisor killed hard (recruiter-mcp: the server before this one).
-      const stale = readState().svc?.matchmaker?.pid;
-      if (isProcess(stale, /matchmaker-mcp|recruiter-mcp/i)) process.kill(stale, "SIGTERM");
-    },
-    down() {
-      this.stop();
-      return { status: 0, stdout: "", stderr: "" };
-    },
-    reached: (tunnel) => `${tunnel}/matchmaker/mcp`,
   },
 
   analyst: {
@@ -1166,7 +1093,6 @@ async function stopSupervisor() {
   const strays = await endStrays();
   const { tunnelPid, svc } = readState();
   if (isTunnel(tunnelPid)) process.kill(tunnelPid, "SIGTERM");
-  if (isProcess(svc?.matchmaker?.pid, /recruiter-mcp/i)) process.kill(svc.matchmaker.pid, "SIGTERM");
   if (isProcess(svc?.analyst?.pid, /analyst-mcp/i)) process.kill(svc.analyst.pid, "SIGTERM");
   if (isProcess(svc?.["coinbase-wallet"]?.pid, /payments-mcp/i)) process.kill(svc["coinbase-wallet"].pid, "SIGTERM");
   return Boolean(pid || strays);
@@ -1469,8 +1395,7 @@ async function disconnect() {
 /**
  * Back to a first run, as on a machine that never ran salts-tools (or salts-web): stopped,
  * disconnected from Salts (which takes its tools off every agent), and the secrets, state,
- * logs, login item and salts-web's leftovers gone. The matchmaker's people and jobs and
- * the analyst's files are kept.
+ * logs, login item and salts-web's leftovers gone. The analyst's files are kept.
  */
 async function reset() {
   if (pidIn(path.join(homeFor("salts-web"), "supervisor.pid"))) {
@@ -1739,10 +1664,6 @@ function tail(file, bytes = 64 * 1024) {
 
 /** Where a service keeps what it keeps, beyond its address. */
 function serviceFiles(name) {
-  if (name === "matchmaker") {
-    const data = path.join(MATCHMAKER_DIR, "data", "matchmaker");
-    return [["people and jobs", data, "To move it, set MM_DATA_DIR in its .env file.", data]];
-  }
   if (name === "analyst") {
     return [
       ["inbox folder", ANALYST_INBOX, `Files you put here can be read too. To move it, set DATA_DIR or INBOX_DIR in ${path.join(ANALYST_DIR, ".env")}`, ANALYST_INBOX],

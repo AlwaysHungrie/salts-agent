@@ -5,31 +5,31 @@ import { agentIdFrom, openCommand, toolsReport, waitForApproval, wantedServices 
 
 const SERVICES = {
   web: { kind: "searxng", label: "Web search", needs: ["cap_web_search"] },
-  matchmaker: { kind: "mcp", label: "Matchmaker", headers: ["X-OpenRouter-Api-Key"], needs: ["cap_mcp"] },
+  example: { kind: "mcp", label: "Example", headers: ["X-OpenRouter-Api-Key"], needs: ["cap_mcp"] },
   analyst: { kind: "mcp", label: "Spreadsheet analyst", needs: ["cap_mcp", "cap_file_ingest"] },
 };
 
 test("the report says what each tool is, and whether it is ready, starting, off, failed or missing", () => {
   const report = toolsReport(SERVICES, {
-    wanted: ["web", "matchmaker"],
+    wanted: ["web", "example"],
     missing: { analyst: "install uv" },
-    svc: { matchmaker: { error: "" } },
+    svc: { example: { error: "" } },
     ports: { web: 8180 },
   });
   assert.equal(report.web.state, "ready");
   assert.equal(report.web.kind, "searxng");
   assert.deepEqual(report.web.needs, ["cap_web_search"]);
-  assert.equal(report.matchmaker.state, "starting");
-  assert.deepEqual(report.matchmaker.headers, ["X-OpenRouter-Api-Key"]);
+  assert.equal(report.example.state, "starting");
+  assert.deepEqual(report.example.headers, ["X-OpenRouter-Api-Key"]);
   assert.deepEqual([report.analyst.state, report.analyst.detail], ["missing", "install uv"]);
 
   const failed = toolsReport(SERVICES, { wanted: ["web"], missing: {}, svc: { web: { error: "boom" } }, ports: {} });
   assert.deepEqual([failed.web.state, failed.web.detail], ["failed", "boom"]);
-  assert.equal(failed.matchmaker.state, "off");
+  assert.equal(failed.example.state, "off");
 });
 
 test("only services this CLI knows are run, whatever the Worker asks for", () => {
-  assert.deepEqual(wantedServices({ wanted: ["web", "nope", "analyst"] }, ["web", "matchmaker", "analyst"]), [
+  assert.deepEqual(wantedServices({ wanted: ["web", "nope", "analyst"] }, ["web", "example", "analyst"]), [
     "web",
     "analyst",
   ]);

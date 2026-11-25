@@ -69,8 +69,8 @@ export default function Pair({
         </Link>
         <h1 className="mt-4 text-[32px] font-[650] leading-[1.2]">Pair Salts tools</h1>
         <p className="text-muted mt-1 text-sm font-light leading-[1.43]">
-          Salts tools are a collection of local MCP servers (web search, the matchmaker and
-          the spreadsheet analyst) that run on your computer. Pairing links this computer
+          Salts tools are a collection of local MCP servers (web search and the
+          spreadsheet analyst) that run on your computer. Pairing links this computer
           to your Salts account so your agents can use them.
         </p>
 

@@ -30,7 +30,7 @@ Use the arrow keys or the numbers **1** to **4** to move around, **Esc** to go b
 | `npx salts-tools restart` | Gets a fresh address. Your agents follow it on their own. |
 | `npx salts-tools autostart on` | Starts salts-tools when you log in. Use `off` to turn this off. |
 | `npx salts-tools disconnect` | Unpairs this computer and takes its tools off every agent. Run `npx salts-tools` to pair it again. |
-| `npx salts-tools reset` | Disconnects this computer, takes its tools off every agent and forgets everything, so you can start again from scratch. The matchmaker's people and jobs and the analyst's files are kept. |
+| `npx salts-tools reset` | Disconnects this computer, takes its tools off every agent and forgets everything, so you can start again from scratch. The analyst's files are kept. |
 
 ## Footnotes
 

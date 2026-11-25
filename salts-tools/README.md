@@ -6,7 +6,6 @@ the internet through a single cloudflared quick tunnel (free, no account):
 | Service | What it is | Put on the agent as |
 | --- | --- | --- |
 | `web` | [SearXNG](https://github.com/searxng/searxng), a self-hosted metasearch engine (Google, Bing, DuckDuckGo, Brave, Wikipedia and about 70 others, merged, over a JSON API). No account, no API key, no per-query bill. | **SearXNG URL** and **SearXNG token**: `<tunnel>/web` |
-| `matchmaker` | [local-mcps/matchmaker-mcp](../local-mcps/matchmaker-mcp/docs/matchmaker-spec.md): resumes and cover letters in, the best people for a job out, as an MCP server. Files on disk, no Docker. | MCP server `matchmaker`: `<tunnel>/matchmaker/mcp` |
 | `analyst` | [local-mcps/analyst-mcp](../local-mcps/analyst-mcp/README.md): Excel and CSV analysis as an MCP server. It reads workbooks sent in the chat, answers questions about them, previews tables and charts, and returns built workbooks. No Docker. | MCP server `analyst`: `<tunnel>/analyst/mcp` |
 | `coinbase-wallet` | Coinbase Wallet, from Coinbase's [Payments MCP](https://github.com/coinbase/payments-mcp) package: a non-custodial USDC wallet app (Base, Polygon, Solana) plus an MCP server that pays x402 endpoints, such as a Coinbase Business checkout's `x402_url`. It speaks stdio only; salts-tools puts it on loopback HTTP through `stdio-bridge.mjs`. | MCP server `coinbase-wallet`: `<tunnel>/coinbase-wallet/mcp` |
 
@@ -50,7 +49,7 @@ It runs on macOS, Linux and Windows.
   When that installer fails (it gives up when the release Coinbase names as latest has no
   zip yet), salts-tools installs it directly: the newest patch release of that version
   that downloads, unzipped into `~/.payments-mcp`, then `npm install` (`coinbase-wallet.mjs`).
-- For `matchmaker` and `analyst` only: [uv](https://docs.astral.sh/uv/). salts-tools runs
+- For `analyst` only: [uv](https://docs.astral.sh/uv/). salts-tools runs
   `uv sync` the first time.
 - Linux only, optional: `secret-tool` (package `libsecret-tools` on Debian/Ubuntu,
   `libsecret` on Fedora/Arch) to keep the secrets in the desktop keyring. See
@@ -62,7 +61,7 @@ install; the others run regardless.
 ## Install
 
 Nothing to install: run it with `npx salts-tools <command>`. npx fetches the package from
-npm the first time. The package carries the matchmaker and analyst sources, which it
+npm the first time. The package carries the analyst's sources, which it
 installs into `~/.salts-tools/mcps/<name>` (their `.venv`, `.env` and `data` live there and
 are kept when a new version is installed over them). The login item runs it through npx too.
 
@@ -75,7 +74,7 @@ or run `node salts-tools/cli.mjs <command>`. A clone runs the MCP servers in pla
 ```bash
 cd salts-tools
 npm version minor   # a new version makes every npx install copy the MCP servers again
-npm publish         # prepack copies local-mcps/{matchmaker,analyst}-mcp into mcps/
+npm publish         # prepack copies local-mcps/analyst-mcp into mcps/
 ```
 
 ## First run
@@ -98,20 +97,13 @@ There the user presses `a` and enters an agent's ID or a link to it (`POST
 of is refused), then switches tools on for it (`PUT /salts/computer/agents/:id`).
 Unregistering (`DELETE …/:id`) turns every tool off for it and takes it off the list. The agent lists what is still to do before they work, and
 `enter` does it: switch on a capability a tool needs (`POST …/capability`), type in a
-header value such as the matchmaker's OpenRouter key (`PUT …/headers`, never shown or
-sent back). A Brave key that would take over from SearXNG, or a server of the same name
+header value a tool needs (`PUT …/headers`, never shown or sent back). A Brave key that would take over from SearXNG, or a server of the same name
 set up some other way, is pointed out.
 
-## The matchmaker and the analyst
+## The analyst
 
-The Worker creates the agent's MCP server (`matchmaker` or `analyst`) with
-`Authorization: Bearer <gateway token>`. For the matchmaker it adds these headers empty,
-for the user to fill in once on the agent; they are kept when the address changes:
-
-| Header | Suggested value | Covers |
-| --- | --- | --- |
-| `X-OpenRouter-Api-Key` | your OpenRouter key | pays for its model calls |
-| `Tool-Call-Max-Charge` | `0.25` | optional: the most one call may spend, in US dollars (a resume ~$0.001, a judged page of 50 ~$0.10) |
+The Worker creates the agent's MCP server `analyst` with
+`Authorization: Bearer <gateway token>`.
 
 The analyst needs **File ingest** and **MCP** switched on for the agent; the dashboard
 offers to switch them on.
@@ -120,9 +112,8 @@ Deleting the server on the agent switches that tool off for that agent, so it st
 deleted. A server of the same name set up some other way is never touched; the dashboard
 says the name is taken.
 
-Each server's own `.env` still applies (`MM_DATA_DIR`, models, `DATA_DIR`, `INBOX_DIR`,
-`ALLOW_PYTHON`, …). salts-tools overrides the transport, host, port and token. Logs:
-`~/.salts-tools/matchmaker.log`, `~/.salts-tools/analyst.log`.
+Its own `.env` still applies (`DATA_DIR`, `INBOX_DIR`, `ALLOW_PYTHON`, …). salts-tools
+overrides the transport, host, port and token. Log: `~/.salts-tools/analyst.log`.
 
 ## Coinbase Wallet
 
@@ -163,7 +154,7 @@ list explains the selected row. Quitting leaves the services running.
 | `salts-tools stop` | Stops the supervisor, the tunnel and the containers. The next `start` brings back the same services. |
 | `salts-tools restart` | Opens a new tunnel; the agents follow it on the next report. |
 | `salts-tools disconnect` | Unpairs this computer (`DELETE /salts/computer`, which takes its tools off every agent) and stops it. The gateway token and state stay, so pairing again reuses them. |
-| `salts-tools reset` | Stops everything, disconnects this computer (`DELETE /salts/computer`, which takes its tools off every agent), and deletes both secrets, `~/.salts-tools` (except `mcps/` and `staging/`), the login item and any salts-web leftovers. Keeps the matchmaker's people and jobs and the analyst's files. |
+| `salts-tools reset` | Stops everything, disconnects this computer (`DELETE /salts/computer`, which takes its tools off every agent), and deletes both secrets, `~/.salts-tools` (except `mcps/` and `staging/`), the login item and any salts-web leftovers. Keeps the analyst's files. |
 | `salts-tools autostart on` / `off` | Adds or removes the login item. |
 
 ## Staging
@@ -220,14 +211,13 @@ upgraded.
 - The gateway refuses any request without `Authorization: Bearer <gateway token>`
   (compared in constant time) and passes the header on, so SearXNG's Caddy gate and the
   MCP servers check the same token again.
-- The one exception is a `GET` or `POST` to `/<service>/share/…`: a link the matchmaker
-  hands out for the user to open in a browser (a person's files, the bulk upload page).
-  The link is a random 20-character code the matchmaker records with what it opens and
-  when it expires (24 hours by default, `MM_LINK_TTL_HOURS`). The matchmaker checks it;
-  SearXNG and the analyst still refuse the path without the token.
-- The gateway sends each request on with a loopback `Host`, which the matchmaker's MCP
-  library requires, and the address it came in on as `X-Forwarded-Host`, `-Proto` and
-  `-Prefix`, so the matchmaker can write links to itself.
+- The one exception is a `GET` or `POST` to `/<service>/share/…`: a link a service
+  hands out for the user to open in a browser, carrying its own unguessable code that the
+  service checks. SearXNG and the analyst have no share links and still refuse the path
+  without the token.
+- The gateway sends each request on with a loopback `Host`, which the MCP library
+  requires, and the address it came in on as `X-Forwarded-Host`, `-Proto` and `-Prefix`,
+  so a service can write links to itself.
 - The credential proves reports come from this computer. The Worker stores its hash
   only, and changes or removes only what carries this computer's gateway token. Whoever
   holds the credential can point the linked agents' tools at another address; whoever
@@ -250,8 +240,7 @@ upgraded.
 - **State**: `~/.salts-tools/state.json` holds the Worker URL, the services wanted, the
   agents served and the tools as last reported, ports and the tunnel address. It
   contains no secrets.
-- **Logs**: `~/.salts-tools/supervisor.log`, `~/.salts-tools/matchmaker.log`,
-  `~/.salts-tools/analyst.log`.
+- **Logs**: `~/.salts-tools/supervisor.log`, `~/.salts-tools/analyst.log`.
 - **Login item**:
 
   | Platform | Login item |
@@ -276,7 +265,7 @@ T=$(security find-generic-password -s salts-web -a searxng-token -w)   # macOS
 # T=$(cat ~/.salts-tools/token)                                        # Linux, no keyring
 U=$(node -p 'require(process.env.HOME+"/.salts-tools/state.json").url')
 curl -s -H "Authorization: Bearer $T" "$U/web/search?q=solana&format=json" | head -c 400
-curl -s -H "Authorization: Bearer $T" "$U/matchmaker/healthz"
+curl -s -H "Authorization: Bearer $T" "$U/analyst/healthz"
 ```
 
 A request without the token gets a 401.

@@ -16,7 +16,6 @@ salts-tools can run four tools, and you can switch on as many of them as you lik
 | Tool | What it gives your agent |
 |---|---|
 | **web** | Free web search, using a private search engine called SearXNG. There is no account to make and no bill for searches. See [Set up web search](/guide/web-search). |
-| **matchmaker** | Reads resumes and cover letters and finds the best people for a job, for recruiters. See [Add the matchmaker](/guide/salts-tools-matchmaker). |
 | **analyst** | Reads Excel and CSV files sent in the chat, answers questions about them, and builds new sheets with tables and charts. See [Add the spreadsheet analyst](/guide/salts-tools-analyst). |
 | **coinbase-wallet** | Coinbase's non-custodial wallet, which your agent can pay with in USDC on Base, Polygon and Solana, for example a Coinbase Business checkout or a paid API. See [Add Coinbase Wallet](/guide/salts-tools-coinbase-wallet). |
 

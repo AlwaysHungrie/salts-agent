@@ -12,7 +12,6 @@ const out = path.join(root, "mcps");
 
 /** Per server, the files and folders it needs at run time. */
 const SERVERS = {
-  "matchmaker-mcp": ["pyproject.toml", "uv.lock", "src", "prompts"],
   "analyst-mcp": ["pyproject.toml", "uv.lock", "src"],
 };
 

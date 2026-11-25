@@ -18,7 +18,7 @@ const PS = `
   58045 57824 cloudflared tunnel --no-autoupdate --url http://127.0.0.1:8080
   60001     1 cloudflared tunnel --no-autoupdate --url http://127.0.0.1:8090
   60002     1 cloudflared tunnel --url http://localhost:3000
-  60003   500 /usr/local/bin/node /Users/x/salts-tools/cli.mjs start:staging matchmaker
+  60003   500 /usr/local/bin/node /Users/x/salts-tools/cli.mjs start:staging example
 `;
 
 test("parses pid, parent and command", () => {

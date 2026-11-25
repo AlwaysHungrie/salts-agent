@@ -107,17 +107,6 @@
       "headers": {"Authorization": "Bearer API-KEY"}
     },
     {
-      "id": "matchmaker",
-      "name": "matchmaker",
-      "url": "https://your-tunnel.trycloudflare.com/matchmaker/mcp",
-      "auth": "headers",
-      "description": "Match candidates to jobs from resumes on your laptop, via salts-tools.",
-      "guide": "salts-tools-matchmaker",
-      "letter": "M",
-      "color": "#7c3aed",
-      "headers": {"Authorization": "Bearer SALTS-TOOLS-TOKEN", "X-OpenRouter-Api-Key": "", "Tool-Call-Max-Charge": ""}
-    },
-    {
       "id": "analyst",
       "name": "analyst",
       "url": "https://your-tunnel.trycloudflare.com/analyst/mcp",
