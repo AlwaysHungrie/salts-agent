@@ -27,7 +27,7 @@ import { CORS, json, jsonError, notFound, withCors } from "./worker/http";
 import { directory, registry } from "./worker/stores";
 
 export { SessionAgent } from "./agent";
-export { AgentDirectory, SessionRegistry } from "./registry";
+export { AgentDirectory, SessionRegistry, UserLists } from "./registry";
 
 /**
  * Checks before any route: the deployment is configured, CORS preflight, and the

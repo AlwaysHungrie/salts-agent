@@ -1388,6 +1388,35 @@ describe("what the agent is told it can reach", () => {
     expect(await systemPromptFor(on)).toContain("summarize that video right away");
   });
 
+  it("loads the owner's account-wide lists only while User lists is on", async () => {
+    const { sessionId, email, agentId } = await chatFixture();
+    await env.UserLists.get(env.UserLists.idFromName(email)).create("Groceries", "Food to buy", {
+      lists: 5,
+      items: 5,
+      chars: 100,
+    });
+    const lists = () =>
+      SELF.fetch(`${BASE}/agents/session-agent/${sessionId}/lists`, as(email)).then(
+        (r) => r.json() as Promise<{ enabled: boolean; lists: { name: string }[] }>
+      );
+
+    const off = crypto.randomUUID().slice(0, 8);
+    await say(sessionId, email, `hello ${off}`);
+    expect(await systemPromptFor(off)).not.toContain("Groceries");
+    expect(await lists()).toMatchObject({ enabled: false, lists: [] });
+
+    await SELF.fetch(
+      `${BASE}/api/agents/${agentId}/config`,
+      as(email, { method: "PATCH", body: JSON.stringify({ cap_user_lists: 1 }) })
+    );
+    const on = crypto.randomUUID().slice(0, 8);
+    await say(sessionId, email, `hello ${on}`);
+    const prompt = await systemPromptFor(on);
+    expect(prompt).toContain("- Groceries (0 entries): Food to buy");
+    expect(prompt).toContain("You keep lists for the user");
+    expect(await lists()).toMatchObject({ enabled: true, lists: [{ name: "Groceries" }] });
+  });
+
   it("says nothing about reach when no channel is configured", async () => {
     const { sessionId, email } = await chatFixture();
     const token = crypto.randomUUID().slice(0, 8);

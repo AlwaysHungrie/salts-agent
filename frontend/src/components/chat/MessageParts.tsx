@@ -26,6 +26,16 @@ export const TOOL_LABELS: Record<
   cancel_scheduled_task: ["Cancelling", "Cancelled", "Cancelling failed"],
   remember: ["Looking up", "Looked up", "Could not remember"],
   recall: ["Recalling", "Recalled", "Recall failed"],
+  create_list: ["Creating list", "Created list", "Could not create list"],
+  read_list: ["Reading list", "Read list", "Could not read list"],
+  add_to_list: ["Adding to list", "Added to list", "Could not add to list"],
+  edit_list_item: ["Editing list", "Edited list", "Could not edit list"],
+  remove_from_list: [
+    "Removing from list",
+    "Removed from list",
+    "Could not remove from list",
+  ],
+  delete_list: ["Deleting list", "Deleted list", "Could not delete list"],
 };
 
 export function toolLabel(tool: ToolData) {

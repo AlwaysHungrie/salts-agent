@@ -4,6 +4,7 @@ import type { Context } from "hono";
 import { type ApiApp, type ApiEnv, jsonOf, keepForward, refusals } from "../api/app";
 import {
   AttachmentSchema,
+  UserListSchema,
   OkSchema,
   SessionMetaSchema,
   TaskSchema,
@@ -159,6 +160,9 @@ const summary = createRoute({
         files: z
           .number()
           .openapi({ description: "Files in the chat: sent uploads and made files." }),
+        lists: z.number().openapi({
+          description: "The owner's lists, shown beside the files. 0 while User lists is off.",
+        }),
         sqlite_bytes: z.number(),
         sub_agents: z.number(),
       })
@@ -274,6 +278,21 @@ const removeFile = createRoute({
   responses: { 200: jsonOf(withMeta(OkSchema.shape)), ...refusals(404) },
 });
 
+const listLists = createRoute({
+  method: "get",
+  path: "/agents/session-agent/{sessionId}/lists",
+  tags: ["Files"],
+  summary: "The owner's lists, shared by every agent and session",
+  description:
+    "Every list the agent's owner keeps with the User lists capability, most recently changed first, with its entries. While the capability is off, `enabled` is false and no lists are returned.",
+  middleware,
+  request: { params: SessionParams },
+  responses: {
+    200: jsonOf(withMeta({ enabled: z.boolean(), lists: z.array(UserListSchema) })),
+    ...refusals(404),
+  },
+});
+
 const listTasks = createRoute({
   method: "get",
   path: "/agents/session-agent/{sessionId}/tasks",
@@ -334,6 +353,7 @@ export function sessionAgentRoutes(app: ApiApp) {
     download,
     thumbnail,
     removeFile,
+    listLists,
     listTasks,
     cancelTask,
   ]) {

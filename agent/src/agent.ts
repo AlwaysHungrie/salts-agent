@@ -22,7 +22,14 @@ import {
   stripUnsupportedAnnotations,
   turnCost,
 } from "./openrouter";
-import { AGENT_SEPARATOR, agentIdOf, type Config, DEFAULT_CONFIG, type Memory } from "./registry";
+import {
+  AGENT_SEPARATOR,
+  agentIdOf,
+  type Config,
+  DEFAULT_CONFIG,
+  type ListSummary,
+  type Memory,
+} from "./registry";
 import { applyMigrations } from "./schema";
 import {
   drawnIds,
@@ -105,6 +112,10 @@ export class SessionAgent extends Think<Env> {
   /** The deployment's ceilings and defaults, re-read per turn beside the config. */
   private currentSettings: DeploymentSettings | undefined;
   private memories: Memory[] = [];
+  /** The owner's lists, without their entries; null while User lists is off. */
+  private lists: ListSummary[] | null = null;
+  /** The owning account's email, read once: an agent's admin never changes. */
+  private owner: string | undefined;
   /** The external MCP servers, reloaded per turn so a connection made mid-session works. */
   private mcpServers: McpServerRow[] = [];
 
@@ -145,6 +156,8 @@ export class SessionAgent extends Think<Env> {
     settingsNow: () => this.settingsNow(),
     loadConfig: () => this.loadConfig(),
     memories: () => this.memories,
+    lists: () => this.lists,
+    userLists: () => this.userLists(),
     mcpServers: () => this.mcpServers,
     modelSeesImages: (model) => this.modelSeesImages(model),
     openrouter: () => this.openrouter(),
@@ -202,6 +215,19 @@ export class SessionAgent extends Think<Env> {
   }
 
   /**
+   * The lists of the account that owns this agent: one object per owner, so every agent
+   * the account holds shares them.
+   */
+  private async userLists() {
+    if (this.owner === undefined) {
+      const directory = this.env.AgentDirectory.get(this.env.AgentDirectory.idFromName("root"));
+      this.owner = (await directory.get(this.agentId()))?.admin_email ?? "";
+    }
+    if (!this.owner) throw new Error("this agent has no owner account to keep lists for");
+    return this.env.UserLists.get(this.env.UserLists.idFromName(this.owner));
+  }
+
+  /**
    * Settings are read per turn rather than per boot: an object can live for days
    * between messages, and a stale temperature is a confusing thing to debug.
    */
@@ -217,6 +243,12 @@ export class SessionAgent extends Think<Env> {
     this.memories = enabled(this.currentConfig, "memory")
       ? await this.registry().recall("", 50)
       : [];
+    // Off means not loaded at all: the model is told nothing about the lists.
+    this.lists = enabled(this.currentConfig, "user_lists")
+      ? await this.userLists()
+          .then((lists) => lists.index())
+          .catch(() => [])
+      : null;
     this.mcpServers = enabled(this.currentConfig, "mcp")
       ? onlyNamed(
           mcpServersForChat(
@@ -534,6 +566,12 @@ export class SessionAgent extends Think<Env> {
       } else if (request.method === "DELETE" && path === "files" && route[1]) {
         await removeAttachment(this.host, route[1]);
         body = { ok: true };
+      } else if (request.method === "GET" && path === "lists") {
+        // The owner's lists with their entries, shown beside the chat's files. Off, none.
+        body = {
+          enabled: this.lists !== null,
+          lists: this.lists === null ? [] : await (await this.userLists()).all(),
+        };
       } else if (request.method === "GET" && path === "tasks") {
         body = { tasks: this.listTasks() };
       } else if (request.method === "DELETE" && path === "tasks" && route[1]) {
@@ -761,6 +799,7 @@ export class SessionAgent extends Think<Env> {
       },
       tasks: this.listTasks(),
       files: chatFiles(this.host).length,
+      lists: this.lists?.length ?? 0,
       sqlite_bytes: this.ctx.storage.sql.databaseSize,
       // Facets keep their own storage, which the object's own destroy does not
       // reach. Nothing here creates one; this is the tripwire if that changes.

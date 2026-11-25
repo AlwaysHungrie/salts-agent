@@ -41,6 +41,7 @@ export const SETTABLE_CONFIG_KEYS = [
   "cap_mcp",
   "cap_wallet",
   "cap_youtube",
+  "cap_user_lists",
 ] as const;
 
 export type SettableConfigKey = (typeof SETTABLE_CONFIG_KEYS)[number];
@@ -76,6 +77,12 @@ export type DeploymentSettings = {
   max_chain_networks: number;
   /** How many tokens one of those networks may track. */
   max_chain_tokens: number;
+  /** How many lists one account may hold (the User lists capability), across its agents. */
+  max_user_lists: number;
+  /** How many entries one of those lists may hold. */
+  max_list_items: number;
+  /** How long one list entry (or a list's description) may be, in characters. */
+  max_list_item_chars: number;
   /**
    * The service fee on a credit purchase, in basis points of the credit (600 = 6%). It
    * covers OpenRouter's own charge when the Worker tops up a key, and moving the funds.
@@ -189,6 +196,9 @@ export const SETTINGS_FIELDS: readonly SettingsField[] = [
   INT("max_wallet_keys", 1, 1000, "keys one account's OpenRouter wallet may hold"),
   INT("max_chain_networks", 1, 1000, "networks one agent's Wallet capability may configure"),
   INT("max_chain_tokens", 1, 1000, "tokens one configured network may track"),
+  INT("max_user_lists", 1, 10_000, "lists one account may hold, across its agents"),
+  INT("max_list_items", 1, 100_000, "entries one list may hold"),
+  INT("max_list_item_chars", 1, 100_000, "characters one list entry may take"),
   INT("wallet_fee_bps", 0, 5000, "service fee on a credit purchase, in basis points (600 = 6%)"),
   INT("max_wallet_purchase_usd", 1, 10_000, "most credit one wallet purchase may buy, in dollars"),
   INT(

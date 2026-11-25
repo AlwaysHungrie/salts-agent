@@ -6,7 +6,13 @@ import type { ScheduledTask } from "../capabilities";
 import type { Command } from "../commands";
 import type { Env } from "../env";
 import type { McpServerRow } from "../mcp";
-import { type Config, type Memory, SessionRegistry } from "../registry";
+import {
+  type Config,
+  type ListSummary,
+  type Memory,
+  SessionRegistry,
+  UserLists,
+} from "../registry";
 import type { DeploymentSettings } from "../settings";
 import { publicAttachment } from "./files";
 import { LiveTurns } from "./live";
@@ -148,6 +154,10 @@ export type SessionHost = {
   settingsNow(): Promise<DeploymentSettings>;
   loadConfig(): Promise<void>;
   memories(): Memory[];
+  /** The owner's lists, loaded per turn; null while User lists is off. */
+  lists(): ListSummary[] | null;
+  /** The owner's lists object; throws when the agent has no owner account. */
+  userLists(): Promise<DurableObjectStub<UserLists>>;
   mcpServers(): McpServerRow[];
   modelSeesImages(model: string): Promise<boolean>;
   openrouter(): OpenAIProvider;

@@ -43,6 +43,7 @@ export type Config = {
   cap_mcp: number;
   cap_wallet: number;
   cap_youtube: number;
+  cap_user_lists: number;
 
   /**
    * The agent's own OpenRouter key, billed for every call. No fallback: blank means the

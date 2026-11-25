@@ -61,6 +61,22 @@ export function systemPrompt(host: SessionHost): string {
         .join("\n")}`
     );
   }
+  const lists = host.lists();
+  if (lists) {
+    // Names only: entries are read on demand, so a long list costs nothing until needed.
+    parts.push(
+      lists.length === 0
+        ? "Your user's lists: none yet."
+        : `Your user's lists:\n${lists
+            .map(
+              (l) =>
+                `- ${l.name} (${l.items} ${l.items === 1 ? "entry" : "entries"})${
+                  l.description ? `: ${l.description}` : ""
+                }`
+            )
+            .join("\n")}`
+    );
+  }
   const ready = capabilityLabels(host.config());
   if (ready.length > 0) parts.push(`Capabilities available to you: ${ready.join(", ")}.`);
   parts.push(...capabilityInstructions(host.config()));
@@ -405,6 +421,7 @@ export function toolContext(host: SessionHost, config: Config): ToolContext {
     sessionId: host.name(),
     openrouterKey: host.openrouterKey(),
     registry: host.registry(),
+    lists: () => host.userLists(),
     saveImage: async (dataUrl, prompt) => {
       const id = crypto.randomUUID().slice(0, 12);
       const mime = dataUrl.match(/^data:([^;]+)/)?.[1] ?? "image/png";

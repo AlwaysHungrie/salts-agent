@@ -9,3 +9,11 @@ export { METADATA_KEY } from "./directory-listing";
 export type { ComputerLink, ComputerRow } from "./directory-computers";
 export { SessionRegistry } from "./session-registry";
 export { AgentDirectory } from "./agent-directory";
+export {
+  UserLists,
+  listName,
+  type ListItem,
+  type ListLimits,
+  type ListSummary,
+  type UserList,
+} from "./user-lists";
