@@ -13,6 +13,9 @@
   ],
   "max_chain_networks": 20,
   "max_chain_tokens": 20,
+  "max_user_lists": 50,
+  "max_list_items": 500,
+  "max_list_item_chars": 500,
   "wallet_fee_bps": 800,
   "max_wallet_purchase_usd": 50,
   "starter_key_cents": 5,
@@ -78,7 +81,8 @@
     "cap_whatsapp_business": 0,
     "cap_mcp": 1,
     "cap_wallet": 0,
-    "cap_youtube": 0
+    "cap_youtube": 0,
+    "cap_user_lists": 0
   },
   "mcp_catalog": [
     {

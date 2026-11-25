@@ -18,6 +18,7 @@ export const ROUTE_INDEX = {
     chat: "POST /agents/session-agent/:sessionId/chat  { message }",
     messages: "GET /agents/session-agent/:sessionId/messages  ?limit&before",
     files: "GET|POST /agents/session-agent/:sessionId/files, GET|DELETE .../files/:fileId",
+    lists: "GET /agents/session-agent/:sessionId/lists  -> the owner's lists, with entries",
     tasks: "GET /agents/session-agent/:sessionId/tasks, DELETE .../tasks/:taskId",
     metrics: "GET /agents/session-agent/:sessionId/metrics",
     telegram: "POST /telegram/webhook/:agentId",

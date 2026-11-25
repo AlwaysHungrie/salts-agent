@@ -1,4 +1,5 @@
-import type { Config, Memory, SessionRegistry } from "./registry";
+import type { Config, ListLimits, Memory, SessionRegistry, UserList, UserLists } from "./registry";
+import { listName } from "./registry";
 import type { DeploymentSettings } from "./settings";
 import {
   McpClient,
@@ -48,7 +49,8 @@ export type CapabilityId =
   | "whatsapp_business"
   | "mcp"
   | "wallet"
-  | "youtube";
+  | "youtube"
+  | "user_lists";
 
 /** A credential or endpoint the user fills in on the capabilities page. */
 export type CapabilityField = {
@@ -119,6 +121,10 @@ export const TELEGRAM_WHITELIST_DEFAULTS = {
   telegram_user_whitelist: "@no-user",
   telegram_group_whitelist: "-1000000000000",
 } as const;
+
+/** How the model is to use its user's lists; see `systemPrompt` for the index it is shown. */
+export const LISTS_INSTRUCTIONS =
+  'You keep lists for the user: named lists of short entries, such as shopping, to-dos, books to read, places to visit, people to call or ideas. The same lists are shared by every one of the user\'s agents and conversations, so what you add here is there in their next chat. The lists that exist are named in this prompt with how many entries each holds; read_list shows a list\'s entries with their ids. Use the lists whenever the user wants something noted, tracked, ticked off or reviewed that belongs on one, even when they do not say "list": "we\'re out of milk" adds milk to the shopping list, "what do I still need to buy?" reads it. Before creating a list, check whether one already fits and use that; create a new one only for a new kind of thing, with a short plain name and a one-line description of what belongs on it. Read a list before editing or removing entries so you act on its current ids. Remove an entry once it is done or bought, unless the user wants it kept. Delete a whole list only when the user asks. Keep each entry to one item, written so it makes sense on its own. Do not use lists for one-off answers.';
 
 export const CAPABILITIES: Capability[] = [
   {
@@ -383,6 +389,24 @@ export const CAPABILITIES: Capability[] = [
     fields: [],
   },
   {
+    id: "user_lists",
+    flag: "cap_user_lists",
+    label: "User lists",
+    summary:
+      "Let the agent keep lists for you, such as groceries, books to read or people to call. Your lists are shared by all of your agents and conversations.",
+    note: "Anyone who can chat with this agent can read and change your lists.",
+    instructions: LISTS_INSTRUCTIONS,
+    tools: [
+      "create_list",
+      "read_list",
+      "add_to_list",
+      "edit_list_item",
+      "remove_from_list",
+      "delete_list",
+    ],
+    fields: [],
+  },
+  {
     id: "wallet",
     flag: "cap_wallet",
     label: "Wallet",
@@ -463,6 +487,11 @@ export type ToolContext = {
    * URL it downloads from. Throws a reason the model can pass on when it cannot be kept.
    */
   saveFile: (bytes: ArrayBuffer, name: string, mime: string) => Promise<string>;
+  /**
+   * The lists of the account that owns this agent, shared by all of its agents. Throws a
+   * reason the model can pass on when the agent has no owner account.
+   */
+  lists: () => Promise<DurableObjectStub<UserLists>>;
   /** Transcribes a stored audio attachment by id, caching the words on its row. */
   transcribeAttachment: (id: string) => Promise<string>;
   /** Uploads a stored PDF, workbook or CSV attachment to an MCP server; returns its upload id. */
@@ -1204,6 +1233,116 @@ export const TOOLS: ToolSpec[] = [
     },
   },
   {
+    name: "create_list",
+    description:
+      "Create a new, empty list for the user. Check the lists you were shown first: use one that already fits instead of making a second.",
+    parameters: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "A short plain name, e.g. Shopping." },
+        description: {
+          type: "string",
+          description: "One line on what belongs on this list.",
+        },
+      },
+      required: ["name"],
+    },
+    async run(args, ctx) {
+      const list = await (
+        await ctx.lists()
+      ).create(str(args.name), str(args.description), listLimits(ctx));
+      return `Created the list "${list.name}".`;
+    },
+  },
+  {
+    name: "read_list",
+    description: "Show one of the user's lists: every entry with its id, oldest first.",
+    parameters: {
+      type: "object",
+      properties: { name: { type: "string", description: "The list's name." } },
+      required: ["name"],
+    },
+    async run(args, ctx) {
+      return describeList((await (await ctx.lists()).read(str(args.name))) as UserList);
+    },
+  },
+  {
+    name: "add_to_list",
+    description: "Add one or more entries to the end of one of the user's lists.",
+    parameters: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "The list's name." },
+        items: {
+          type: "array",
+          items: { type: "string" },
+          description: "The entries to add, one item each.",
+        },
+      },
+      required: ["name", "items"],
+    },
+    async run(args, ctx) {
+      const texts = Array.isArray(args.items) ? args.items.map((t) => str(t)) : [str(args.items)];
+      const added = await (await ctx.lists()).add(str(args.name), texts, listLimits(ctx));
+      return `Added to "${listName(str(args.name))}":\n${added.map((i) => `#${i.id} ${i.text}`).join("\n")}`;
+    },
+  },
+  {
+    name: "edit_list_item",
+    description: "Change the words of one entry on one of the user's lists, by its id.",
+    parameters: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "The list's name." },
+        id: { type: "integer", description: "The entry's id, from read_list." },
+        text: { type: "string", description: "The entry's new words." },
+      },
+      required: ["name", "id", "text"],
+    },
+    async run(args, ctx) {
+      const item = await (
+        await ctx.lists()
+      ).edit(str(args.name), Number(args.id), str(args.text), listLimits(ctx));
+      return `Changed #${item.id} to: ${item.text}`;
+    },
+  },
+  {
+    name: "remove_from_list",
+    description: "Remove entries from one of the user's lists, by their ids.",
+    parameters: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "The list's name." },
+        ids: {
+          type: "array",
+          items: { type: "integer" },
+          description: "The ids of the entries to remove, from read_list.",
+        },
+      },
+      required: ["name", "ids"],
+    },
+    async run(args, ctx) {
+      const ids = (Array.isArray(args.ids) ? args.ids : [args.ids]).map(Number);
+      const removed = await (await ctx.lists()).remove(str(args.name), ids);
+      return removed === 0
+        ? "No entry with those ids is on that list; read it again for the current ids."
+        : `Removed ${removed} ${removed === 1 ? "entry" : "entries"}.`;
+    },
+  },
+  {
+    name: "delete_list",
+    description:
+      "Delete one of the user's lists and every entry on it, for every agent. Only when the user asks.",
+    parameters: {
+      type: "object",
+      properties: { name: { type: "string", description: "The list's name." } },
+      required: ["name"],
+    },
+    async run(args, ctx) {
+      return `Deleted the list "${await (await ctx.lists()).drop(str(args.name))}".`;
+    },
+  },
+  {
     name: "wallet_address",
     description:
       "Your own wallet's addresses: one EVM address (the same on every EVM chain) and one Solana address, and the networks configured for wallet_balance, wallet_transfer and send_transaction.",
@@ -1365,6 +1504,22 @@ async function networkNamed(ctx: ToolContext, named: string): Promise<ChainNetwo
   if (!network)
     throw new Error(`no network named ${named}. Configured:\n${describeNetworks(networks)}`);
   return network;
+}
+
+/** The deployment's ceilings on the user's lists. */
+function listLimits(ctx: ToolContext): ListLimits {
+  return {
+    lists: ctx.settings.max_user_lists,
+    items: ctx.settings.max_list_items,
+    chars: ctx.settings.max_list_item_chars,
+  };
+}
+
+/** A list as the model reads it: a header, then one entry per line with its id. */
+export function describeList(list: UserList): string {
+  const head = `${list.name}${list.description ? ` — ${list.description}` : ""}`;
+  if (list.items.length === 0) return `${head}\n(empty)`;
+  return `${head}\n${list.items.map((i) => `#${i.id} ${i.text}`).join("\n")}`;
 }
 
 /** The agent's wallet secret, drawn the first time a wallet tool needs it. */

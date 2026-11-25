@@ -6,10 +6,11 @@ import {
   FileText,
   FileType2,
   Image as ImageIcon,
+  ListChecks,
   Mic,
   X,
 } from "lucide-react";
-import type { Attachment } from "@/lib/agent";
+import type { Attachment, UserList } from "@/lib/agent";
 import { formatBytes } from "@/lib/format";
 import { fileUrl, isAudio } from "./chat/files";
 
@@ -70,6 +71,63 @@ function Notice({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** A list as a file: what the preview shows and the download holds. */
+function listText(list: UserList): string {
+  const lines = [`# ${list.name}`, ""];
+  if (list.description) lines.push(list.description, "");
+  if (list.items.length === 0) lines.push("(empty)");
+  else lines.push(...list.items.map((i) => `- ${i.text}`));
+  return `${lines.join("\n")}\n`;
+}
+
+const listFileName = (list: UserList) => `${list.name}.md`;
+
+const entries = (n: number) => `${n} ${n === 1 ? "entry" : "entries"}`;
+
+const ICON = { size: 16, strokeWidth: 1.75, className: "shrink-0" };
+
+function GroupHeading({ children }: { children: React.ReactNode }) {
+  return (
+    <h3 className="text-muted px-3 pt-1 pb-1.5 text-xs font-medium">
+      {children}
+    </h3>
+  );
+}
+
+/** One file or list in the side list. */
+function Row({
+  active,
+  onClick,
+  icon,
+  name,
+  detail,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  name: string;
+  detail: string;
+}) {
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={onClick}
+        aria-current={active ? "true" : undefined}
+        className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm leading-[1.43] transition ${
+          active ? "bg-field text-ink" : "text-ink hover:bg-canvas-soft"
+        }`}
+      >
+        <span className="text-muted">{icon}</span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate">{name}</span>
+          <span className="text-muted tnum block text-xs">{detail}</span>
+        </span>
+      </button>
+    </li>
+  );
+}
+
 /** The selected file, drawn the way the browser can show it. */
 function Preview({ sessionId, file }: { sessionId: string; file: Attachment }) {
   const src = fileUrl(sessionId, file.id);
@@ -110,9 +168,57 @@ function Preview({ sessionId, file }: { sessionId: string; file: Attachment }) {
 }
 
 /**
+ * The chat's files and the owner's lists, fetched together. `first` is what a wide
+ * screen opens on: the newest file, or else a list.
+ */
+function useFilesAndLists(sessionId: string) {
+  const [files, setFiles] = useState<Attachment[] | null>(null);
+  // The owner's lists, in every session alike. Empty while User lists is off.
+  const [lists, setLists] = useState<UserList[]>([]);
+  const [failed, setFailed] = useState(false);
+  const [first, setFirst] = useState<string | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    const read = async <T,>(path: string): Promise<T | null> => {
+      const res = await fetch(
+        `/api/sessions/${encodeURIComponent(sessionId)}/${path}`,
+      ).catch(() => null);
+      return res?.ok
+        ? ((await res.json().catch(() => null)) as T | null)
+        : null;
+    };
+    void (async () => {
+      const [payload, shared] = await Promise.all([
+        read<{ attachments?: Attachment[] }>("files?scope=chat"),
+        read<{ lists?: UserList[] }>("lists"),
+      ]);
+      if (!live) return;
+      if (!payload?.attachments) {
+        setFailed(true);
+        return;
+      }
+      setFiles(payload.attachments);
+      const sharedLists = shared?.lists ?? [];
+      setLists(sharedLists);
+      setFirst(
+        payload.attachments[0]?.id ??
+          (sharedLists[0] ? `list:${sharedLists[0].id}` : null),
+      );
+    })();
+    return () => {
+      live = false;
+    };
+  }, [sessionId]);
+
+  return { files, lists, failed, first };
+}
+
+/**
  * Every file the chat holds — sent uploads and what the agent made, such as video
  * transcripts — as a file explorer: the list down the side, the chosen file previewed
- * beside it with its download. On a phone the list and the preview take turns.
+ * beside it with its download. On a phone the list and the preview take turns. The
+ * owner's lists (User lists) sit above, the same in every session.
  */
 export function SessionFiles({
   sessionId,
@@ -121,39 +227,15 @@ export function SessionFiles({
   sessionId: string;
   onClose: () => void;
 }) {
-  const [files, setFiles] = useState<Attachment[] | null>(null);
-  const [failed, setFailed] = useState(false);
+  const { files, lists, failed, first } = useFilesAndLists(sessionId);
+  // A file's id, or `list:<id>` for a list.
   const [selectedId, setSelectedId] = useState<string | null>(null);
-
-  useEffect(() => {
-    let live = true;
-    void (async () => {
-      const res = await fetch(
-        `/api/sessions/${encodeURIComponent(sessionId)}/files?scope=chat`,
-      ).catch(() => null);
-      const payload = res?.ok
-        ? ((await res.json().catch(() => null)) as {
-            attachments?: Attachment[];
-          } | null)
-        : null;
-      if (!live) return;
-      if (!payload?.attachments) {
-        setFailed(true);
-        return;
-      }
-      setFiles(payload.attachments);
-      // A wide screen has room for both, so it opens on the newest file.
-      if (
-        payload.attachments[0] &&
-        window.matchMedia("(min-width: 768px)").matches
-      ) {
-        setSelectedId(payload.attachments[0].id);
-      }
-    })();
-    return () => {
-      live = false;
-    };
-  }, [sessionId]);
+  // A wide screen has room for both, so it opens on the first entry.
+  const [opened, setOpened] = useState(false);
+  if (first && !opened) {
+    setOpened(true);
+    if (window.matchMedia("(min-width: 768px)").matches) setSelectedId(first);
+  }
 
   // Escape closes, and the page behind stops scrolling while this is open.
   useEffect(() => {
@@ -169,7 +251,10 @@ export function SessionFiles({
     };
   }, [onClose]);
 
-  const selected = files?.find((f) => f.id === selectedId) ?? null;
+  const selectedFile = files?.find((f) => f.id === selectedId) ?? null;
+  const selectedList = lists.find((l) => `list:${l.id}` === selectedId) ?? null;
+  const selected = selectedFile ?? selectedList;
+  const count = (files?.length ?? 0) + lists.length;
   const closeButton = (
     <button
       onClick={onClose}
@@ -201,7 +286,7 @@ export function SessionFiles({
         >
           <div className="flex items-center justify-between gap-2 px-5 pt-5 pb-3">
             <h2 className="text-ink text-lg font-[650] leading-[1.35]">
-              Files{files ? ` (${files.length})` : ""}
+              Files{files ? ` (${count})` : ""}
             </h2>
             <span className="md:hidden">{closeButton}</span>
           </div>
@@ -212,41 +297,46 @@ export function SessionFiles({
               </p>
             ) : files === null ? (
               <p className="text-muted px-3 py-2 text-sm">Loading…</p>
-            ) : files.length === 0 ? (
+            ) : count === 0 ? (
               <p className="text-muted px-3 py-2 text-sm leading-[1.43]">
                 No files yet. Files you send and files your agent makes, such as
                 video transcripts, show up here.
               </p>
             ) : (
-              <ul className="space-y-0.5">
-                {files.map((a) => {
-                  const active = a.id === selectedId;
-                  return (
-                    <li key={a.id}>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedId(a.id)}
-                        aria-current={active ? "true" : undefined}
-                        className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm leading-[1.43] transition ${
-                          active
-                            ? "bg-field text-ink"
-                            : "text-ink hover:bg-canvas-soft"
-                        }`}
-                      >
-                        <span className="text-muted">
-                          <KindIcon a={a} />
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate">{a.name}</span>
-                          <span className="text-muted tnum block text-xs">
-                            {formatBytes(a.bytes)}
-                          </span>
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
+              <>
+                {lists.length > 0 && (
+                  <>
+                    <GroupHeading>
+                      Lists · shared by all your agents
+                    </GroupHeading>
+                    <ul className="mb-3 space-y-0.5">
+                      {lists.map((l) => (
+                        <Row
+                          key={l.id}
+                          active={`list:${l.id}` === selectedId}
+                          onClick={() => setSelectedId(`list:${l.id}`)}
+                          icon={<ListChecks {...ICON} />}
+                          name={listFileName(l)}
+                          detail={entries(l.items.length)}
+                        />
+                      ))}
+                    </ul>
+                    {files.length > 0 && <GroupHeading>This chat</GroupHeading>}
+                  </>
+                )}
+                <ul className="space-y-0.5">
+                  {files.map((a) => (
+                    <Row
+                      key={a.id}
+                      active={a.id === selectedId}
+                      onClick={() => setSelectedId(a.id)}
+                      icon={<KindIcon a={a} />}
+                      name={a.name}
+                      detail={formatBytes(a.bytes)}
+                    />
+                  ))}
+                </ul>
+              </>
             )}
           </div>
         </aside>
@@ -267,18 +357,27 @@ export function SessionFiles({
             )}
             <div className="min-w-0 flex-1">
               <div className="text-ink truncate text-sm font-semibold leading-[1.43]">
-                {selected?.name ?? "No file selected"}
+                {selectedFile?.name ??
+                  (selectedList
+                    ? listFileName(selectedList)
+                    : "No file selected")}
               </div>
               {selected && (
                 <div className="text-muted tnum text-xs">
-                  {formatBytes(selected.bytes)}
+                  {selectedFile
+                    ? formatBytes(selectedFile.bytes)
+                    : `${entries(selectedList!.items.length)} · shared by all your agents`}
                 </div>
               )}
             </div>
             {selected && (
               <a
-                href={fileUrl(sessionId, selected.id)}
-                download={selected.name}
+                href={
+                  selectedFile
+                    ? fileUrl(sessionId, selectedFile.id)
+                    : `data:text/markdown;charset=utf-8,${encodeURIComponent(listText(selectedList!))}`
+                }
+                download={selectedFile?.name ?? listFileName(selectedList!)}
                 className="border-hairline text-ink hover:bg-canvas-soft flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition"
               >
                 <Download size={14} strokeWidth={1.75} />
@@ -288,12 +387,18 @@ export function SessionFiles({
             {closeButton}
           </div>
           <div className="min-h-0 flex-1">
-            {selected ? (
+            {selectedFile ? (
               <Preview
-                key={selected.id}
+                key={selectedFile.id}
                 sessionId={sessionId}
-                file={selected}
+                file={selectedFile}
               />
+            ) : selectedList ? (
+              <div className="h-full overflow-auto p-5 md:p-6">
+                <pre className="text-ink font-mono text-[13px] leading-[1.6] break-words whitespace-pre-wrap">
+                  {listText(selectedList)}
+                </pre>
+              </div>
             ) : (
               <Notice>Choose a file to preview it.</Notice>
             )}

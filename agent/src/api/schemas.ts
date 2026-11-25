@@ -11,6 +11,7 @@ import type {
   MetaSettings,
   SessionPage,
   SessionRow,
+  UserList,
 } from "../registry";
 import type { publicAttachment } from "../session/files";
 import type { StoredMessage, TranscriptPage } from "../session/types";
@@ -77,6 +78,7 @@ export const ConfigSchema = z
     cap_mcp: flag,
     cap_wallet: flag,
     cap_youtube: flag,
+    cap_user_lists: flag,
     openrouter_api_key: z.string(),
     openrouter_key_id: z.string(),
     brave_api_key: z.string(),
@@ -315,6 +317,17 @@ export const TaskSchema = z
   .object({ id: z.string(), prompt: z.string(), when: z.string() })
   .openapi("Task");
 pin<Same<z.infer<typeof TaskSchema>, ScheduledTask>>();
+
+export const UserListSchema = z
+  .object({
+    id: z.number(),
+    name: z.string(),
+    description: z.string(),
+    updated_at: z.number(),
+    items: z.array(z.object({ id: z.number(), text: z.string() })),
+  })
+  .openapi("UserList");
+pin<Same<z.infer<typeof UserListSchema>, UserList>>();
 
 /** What every session-object answer carries beside its body. */
 export const SessionMetaSchema = z

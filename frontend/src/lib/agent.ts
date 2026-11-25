@@ -216,6 +216,7 @@ export type Config = {
   cap_mcp: number;
   cap_wallet: number;
   cap_youtube: number;
+  cap_user_lists: number;
 
   /**
    * The agent's own OpenRouter key. Every model call it makes is billed here, so one
@@ -527,6 +528,15 @@ export type Attachment = {
 
 export type ScheduledTask = { id: string; prompt: string; when: string };
 
+/** One of the owner's lists (User lists capability), shared by every agent and session. */
+export type UserList = {
+  id: number;
+  name: string;
+  description: string;
+  updated_at: number;
+  items: { id: number; text: string }[];
+};
+
 export type Summary = {
   session: string;
   messages: number;
@@ -539,6 +549,8 @@ export type Summary = {
   tasks: ScheduledTask[];
   /** Files in the chat: sent uploads and files the agent made. */
   files: number;
+  /** The owner's lists, shown beside the files. 0 while User lists is off. */
+  lists: number;
   sqlite_bytes: number;
 };
 

@@ -2,7 +2,7 @@
 title: What your agent can do
 section: Using your agent
 order: 1
-summary: Every capability on the Capabilities page, such as web search, YouTube summaries, files, images, voice notes, reminders, memory and a wallet, what each one does and how to use it.
+summary: Every capability on the Capabilities page, such as web search, YouTube summaries, files, images, voice notes, reminders, memory, lists and a wallet, what each one does and how to use it.
 featured: true
 ---
 
@@ -79,6 +79,14 @@ Lets your agent remember things you tell it, such as your name, your preferences
 Your agent decides on its own what is worth remembering, and you can also ask it directly, for example "Remember that I am vegetarian". Its memory is private to this agent. Your other agents do not see it.
 
 Anyone who can talk to your agent can ask it what it remembers. If your agent is used by other people, read [Telegram safety tips](/guide/telegram-safety) first.
+
+## User lists
+
+Lets your agent keep lists for you, such as groceries, books to read, places to visit or people to call. Ask in your own words, for example "Add eggs and bread to my shopping list", "What's left on my to-do list?" or "Start a list of gift ideas for Mum". Your agent also adds to a list on its own when it fits, so "We're out of milk" puts milk on your shopping list.
+
+Your lists belong to your account, not to one agent. Every agent you own, in every conversation, sees and changes the same lists. To look at them, open **Files** at the top of any conversation: your lists are at the top, under **Lists**. You can download a list from there.
+
+Anyone who can talk to your agent can read and change your lists. If your agent is used by other people, keep this switched off. When it is off, your agent does not see your lists at all, and they stay as they are until you switch it on again.
 
 ## Wallet
 
