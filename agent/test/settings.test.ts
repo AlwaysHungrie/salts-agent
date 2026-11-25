@@ -252,11 +252,12 @@ describe("validating a patch", () => {
     const bonfire = SHIPPED.mcp_catalog.find((t) => t.id === "bonfire");
     expect(bonfire?.icon).toMatch(/^data:image\/svg\+xml;base64,/);
     expect(bonfire?.headers).toEqual({ Authorization: "Bearer API-KEY" });
-    const saved = validateSettingsPatch({ mcp_catalog: SHIPPED.mcp_catalog }, SHIPPED as never);
-    expect(saved.mcp_catalog?.find((t) => t.id === "matchmaker")?.headers).toHaveProperty(
-      "X-OpenRouter-Api-Key",
-      ""
-    );
+  });
+
+  it("keeps a template header with an empty value for the user to fill in", () => {
+    const entry = { id: "x", name: "X", url: "https://x.example/mcp", auth: "headers", headers: { "X-Key": "" } };
+    const saved = validateSettingsPatch({ mcp_catalog: [entry] }, {});
+    expect(saved.mcp_catalog?.[0]?.headers).toEqual({ "X-Key": "" });
   });
 
   it("refuses template headers that are not plain names mapped to strings", () => {

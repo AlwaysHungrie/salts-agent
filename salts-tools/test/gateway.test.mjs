@@ -87,6 +87,6 @@ describe("gateway", () => {
   });
 
   it("404s a service that is not running", async () => {
-    assert.equal((await get("/matchmaker/mcp")).status, 404);
+    assert.equal((await get("/example/mcp")).status, 404);
   });
 });
