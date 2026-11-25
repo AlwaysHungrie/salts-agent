@@ -13,6 +13,9 @@ export const TOOL_LABELS: Record<
 > = {
   web_search: ["Searching web", "Searched", "Web search failed"],
   fetch_url: ["Reading page", "Read page", "Page fetch failed"],
+  youtube_summary: ["Summarizing video", "Summarized video", "Video summary failed"],
+  youtube_search: ["Searching YouTube", "Searched YouTube", "YouTube search failed"],
+  search_files: ["Reading files", "Read files", "Could not read files"],
   generate_image: ["Generating", "Generated", "Image generation failed"],
   schedule_task: ["Scheduling", "Scheduled", "Scheduling failed"],
   list_scheduled_tasks: [

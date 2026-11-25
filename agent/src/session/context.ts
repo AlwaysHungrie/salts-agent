@@ -1,6 +1,7 @@
 import { COMPACTION_PREFIX } from "agents/experimental/memory/utils";
 import { jsonSchema, type ModelMessage, tool, type ToolSet } from "ai";
 import {
+  capabilityInstructions,
   capabilityLabels,
   channelLabels,
   enabled,
@@ -26,7 +27,8 @@ import {
 import { isPdf, isSheet, isTextLike, safeName, uploadPath } from "./files";
 import { inWords, textOf, toolNotesOf } from "./format";
 import { transcribeAttachment } from "./transcribe";
-import type { SessionHost } from "./types";
+import { type SearchDocument } from "./search";
+import type { Attachment, SessionHost } from "./types";
 
 /** What the model is told a compaction summary is, ahead of the summary itself. */
 export const SUMMARY_PREAMBLE =
@@ -61,6 +63,7 @@ export function systemPrompt(host: SessionHost): string {
   }
   const ready = capabilityLabels(host.config());
   if (ready.length > 0) parts.push(`Capabilities available to you: ${ready.join(", ")}.`);
+  parts.push(...capabilityInstructions(host.config()));
   // Channels are named apart from capabilities, with the limit spelled out: listed as a
   // capability, the model offered to message numbers it has no way to reach.
   const channels = channelLabels(host.config());
@@ -133,9 +136,11 @@ export async function modelMessages(host: SessionHost, config: Config): Promise<
       { type: "text" as const, text },
       ...(notes ? [{ type: "text" as const, text: notes }] : []),
       ...uploads.map((note) => ({ type: "text" as const, text: note })),
+      // Its text stays out of the conversation: search_files finds the passages a
+      // question needs, so a long PDF is not resent with every later turn.
       ...parsed.map((p) => ({
         type: "text" as const,
-        text: `--- contents of ${p.name} ---\n${p.text}`,
+        text: `--- ${p.name} has been read and is searchable: use search_files to find the passages you need, or to read it part by part ---`,
       })),
       ...parts,
     ];
@@ -278,6 +283,121 @@ export function answerOnLastRound(
   };
 }
 
+/**
+ * The chat's readable documents for `search_files`: text files (uploaded, or kept by a
+ * tool such as a video transcript), voice-note transcripts, and parsed PDFs. Pending
+ * uploads are left out until their message is sent.
+ */
+export async function chatDocuments(host: SessionHost): Promise<SearchDocument[]> {
+  const rows = host.exec<Attachment>(
+    `SELECT * FROM attachments WHERE used = 1 AND kind IN ('text', 'pdf') ORDER BY ts ASC`
+  );
+  const texts = rows
+    .filter((a) => a.kind === "text" && a.text.trim())
+    .map((a) => ({ name: a.name, text: a.text }));
+  const pdfs = await parsedDocuments(
+    host,
+    rows.filter((a) => a.kind === "pdf")
+  );
+  return [...texts, ...pdfs.map((p) => ({ name: p.name, text: p.text }))];
+}
+
+/** Passages per embedding request. */
+const EMBED_BATCH = 64;
+
+async function sha256(text: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/** Embed texts with the deployment's embedding model, billed to the agent's key. */
+async function embed(host: SessionHost, model: string, texts: string[]): Promise<number[][]> {
+  const res = await fetch("https://openrouter.ai/api/v1/embeddings", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${host.openrouterKey()}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ model, input: texts }),
+  });
+  if (!res.ok) throw new Error(`embeddings ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  const json = (await res.json()) as {
+    data?: { embedding?: number[]; index?: number }[];
+    usage?: { cost?: number };
+  };
+  // Spent on this turn's search, so it is this turn's cost.
+  if (typeof json.usage?.cost === "number") host.usage().reported += json.usage.cost;
+  const data = json.data ?? [];
+  if (data.length !== texts.length) throw new Error("embeddings came back short");
+  return [...data].sort((a, b) => (a.index ?? 0) - (b.index ?? 0)).map((d) => d.embedding ?? []);
+}
+
+function cosine(a: number[], b: number[]): number {
+  let dot = 0;
+  let na = 0;
+  let nb = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    na += a[i] * a[i];
+    nb += b[i] * b[i];
+  }
+  return na && nb ? dot / Math.sqrt(na * nb) : 0;
+}
+
+/**
+ * How close in meaning each text is to the query, from -1 to 1. A passage is embedded
+ * once and its vector kept in this session; only the query is embedded on every search.
+ * Null when embedding fails, so search falls back to words alone rather than failing.
+ */
+export async function similarities(
+  host: SessionHost,
+  query: string,
+  texts: string[]
+): Promise<number[] | null> {
+  const model = host.settings().embedding_model;
+  try {
+    const keys = await Promise.all(texts.map(async (t) => `${model}:${await sha256(t)}`));
+    const vectors = new Map<string, number[]>();
+    for (const key of new Set(keys)) {
+      const row = host.exec<{ vector: string }>(
+        `SELECT vector FROM embeddings WHERE key = ?`,
+        key
+      )[0];
+      if (row) vectors.set(key, JSON.parse(row.vector) as number[]);
+    }
+    const missing = [...new Set(keys)].filter((k) => !vectors.has(k));
+    const textOf = new Map(keys.map((k, i) => [k, texts[i]]));
+    const batches: string[][] = [];
+    for (let i = 0; i < missing.length; i += EMBED_BATCH) {
+      batches.push(missing.slice(i, i + EMBED_BATCH));
+    }
+    const [queryVector, ...embedded] = await Promise.all([
+      embed(host, model, [query]).then((v) => v[0]),
+      ...batches.map((batch) =>
+        embed(
+          host,
+          model,
+          batch.map((k) => textOf.get(k)!)
+        )
+      ),
+    ]);
+    batches.forEach((batch, b) =>
+      batch.forEach((key, i) => {
+        vectors.set(key, embedded[b][i]);
+        host.exec(
+          `INSERT OR REPLACE INTO embeddings (key, vector) VALUES (?, ?)`,
+          key,
+          JSON.stringify(embedded[b][i])
+        );
+      })
+    );
+    return keys.map((k) => cosine(queryVector, vectors.get(k) ?? []));
+  } catch (err) {
+    console.error(`search embeddings failed: ${err instanceof Error ? err.message : err}`);
+    return null;
+  }
+}
+
 export function toolContext(host: SessionHost, config: Config): ToolContext {
   return {
     config,
@@ -340,6 +460,8 @@ export function toolContext(host: SessionHost, config: Config): ToolContext {
     transcribeAttachment: (id) => transcribeAttachment(host, id),
     uploadAttachment: (server, id) => uploadAttachment(host, server, id),
     sharedFiles: () => sharedFiles(host),
+    documents: () => chatDocuments(host),
+    similarities: (query, texts) => similarities(host, query, texts),
     latestFiles: () => latestFiles(host),
     sendVoiceNote: (bytes) => sendVoiceNote(host, bytes),
     schedule: async (when, prompt) => {

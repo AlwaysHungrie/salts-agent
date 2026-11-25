@@ -445,7 +445,8 @@ that page renders, so a new capability needs no frontend change.
 |---|---|---|
 | Web search | Brave Search API key, or a SearXNG URL and token (see [salts-tools](../salts-tools/README.md)) | `web_search` |
 | Read a URL | — | `fetch_url` |
-| File ingest | — | — |
+| YouTube summaries | — (summarized by the agent's model; optional video-capable `youtube_model` for videos without captions) | `youtube_summary`, `youtube_search`, `search_files` |
+| File ingest | — | `search_files` |
 | Image input | a multimodal model | — |
 | Image generation | an OpenRouter image model | `generate_image` |
 | Audio input | a transcription model | `transcribe_audio` |
@@ -459,10 +460,21 @@ that page renders, so a new capability needs no frontend change.
 
 **Tool capabilities** hand the model functions it may call. A turn runs up to `max_tool_rounds`
 tool rounds (a deployment setting) — call, run, feed the results back — before it must answer, on both the streaming
-and non-streaming paths. **Input capabilities** change what a turn may carry in: text
-files are inlined into the message, images become `image_url` parts, and audio is
-transcribed by the `transcribe_audio` tool when the words matter, with the transcript
-cached so the model only ever sees text.
+and non-streaming paths. **Input capabilities** change what a turn may carry in: images
+become `image_url` parts, and audio is transcribed by the `transcribe_audio` tool when the
+words matter, with the transcript cached so the model only ever sees text.
+
+Documents stay out of the conversation. A PDF is parsed once and the message only names it;
+text files sit in the workspace. `search_files` ([`src/session/search.ts`](src/session/search.ts))
+cuts every document in the chat (text files, parsed PDFs, voice-note and YouTube transcripts)
+into ~1,200-character passages and ranks them two ways, merged by reciprocal rank fusion:
+BM25 on the words (close spellings count for less, since captions misspell names), and
+cosine similarity of embeddings from the `embedding_model` deployment setting (OpenRouter,
+billed to the agent's key; `baai/bge-m3` by default, which is multilingual). A passage is
+embedded once and its vector kept in the session's `embeddings` table; each search embeds
+only the query. If embedding fails, the word ranking stands alone. With `file` and `part`
+it reads a document in order instead.
+`youtube_summary` keeps each transcript it reads as a text file in the chat for this.
 
 Memory is agent-wide rather than per session, and never shared between agents: a fact worth keeping ("I use pnpm") is worth
 keeping in the next session too. Recent memories are injected into the system prompt, so

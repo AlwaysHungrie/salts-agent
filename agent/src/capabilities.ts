@@ -16,6 +16,13 @@ import type { Hex } from "viem";
 import { balances, describeNetworks, findNetwork, type ChainNetwork } from "./chain-networks";
 import { sendTransaction, transfer } from "./chain-send";
 import {
+  partCounts,
+  passageOf,
+  searchHybrid,
+  type Passage,
+  type SearchDocument,
+} from "./session/search";
+import {
   signEvmTransaction,
   signEvmTypedData,
   signSolanaTransaction,
@@ -39,7 +46,8 @@ export type CapabilityId =
   | "telegram"
   | "whatsapp"
   | "mcp"
-  | "wallet";
+  | "wallet"
+  | "youtube";
 
 /** A credential or endpoint the user fills in on the capabilities page. */
 export type CapabilityField = {
@@ -53,6 +61,11 @@ export type CapabilityField = {
    * here: `capabilitiesFor` fills it from the deployment's `field_options`.
    */
   options?: { value: string; label: string }[];
+  /**
+   * A first choice on the menu that saves an empty value, for an optional menu where
+   * picking nothing is a real answer. Its label is what the menu shows.
+   */
+  none?: string;
   /**
    * The field holds a list, one entry per line, edited as a set of chips rather than
    * as free text.
@@ -81,6 +94,11 @@ export type Capability = {
   summary: string;
   /** What it costs or risks, shown under the toggle. */
   note?: string;
+  /**
+   * A standing instruction for the model while this capability is ready: when to act
+   * without being asked, which a tool description alone does not get a model to do.
+   */
+  instructions?: string;
   /** Setup guide for this capability's credentials, opened in a new tab. */
   guide?: { label: string; href: string };
   tools: string[];
@@ -138,12 +156,33 @@ export const CAPABILITIES: Capability[] = [
     fields: [],
   },
   {
+    id: "youtube",
+    flag: "cap_youtube",
+    label: "YouTube summaries",
+    summary: "Share a YouTube link or screenshot, or name a video, and get a summary of it.",
+    instructions:
+      "When the user sends a YouTube link, or an image that shows a YouTube video (a screenshot of the watch page, the player or a thumbnail), summarize that video right away, even if the message says nothing else. Do not ask what they want first. Take the link from the address bar when it is readable; otherwise search by the title and channel shown, then summarize the result that matches. For a follow-up question about a video already summarized in this chat, use search_files on its kept transcript instead of summarizing it again.",
+    tools: ["youtube_summary", "youtube_search", "search_files"],
+    fields: [
+      {
+        key: "youtube_model",
+        label: "Fallback (Gemini only)",
+        hint: "If captions are unavailable, a Gemini model can watch the video and summarize it. Works only for videos up to about an hour long. Costs approx. $0.04 per 20 minutes on the cheapest Gemini model.",
+        secret: false,
+        required: false,
+        none: "None",
+        // Filled from the deployment's `field_options`: the code ships no menu.
+        options: [],
+      },
+    ],
+  },
+  {
     id: "file_ingest",
     flag: "cap_file_ingest",
     label: "File ingest",
     summary: "Ask questions about files you attach.",
     note: "Markdown, CSV, JSON and code up to 1 MB; PDFs up to 8 MB.",
-    tools: [],
+    tools: ["search_files"],
     fields: [],
   },
   {
@@ -151,7 +190,6 @@ export const CAPABILITIES: Capability[] = [
     flag: "cap_vision",
     label: "Image input",
     summary: "Ask questions about images you attach.",
-    note: "Not available for all models.",
     tools: [],
     fields: [],
   },
@@ -364,6 +402,13 @@ export function capabilityLabels(config: Config): string[] {
   return CAPABILITIES.filter((c) => !c.channel && capabilityReady(c, config)).map((c) => c.label);
 }
 
+/** The standing instructions of the ready capabilities, in catalogue order. */
+export function capabilityInstructions(config: Config): string[] {
+  return CAPABILITIES.filter((c) => c.instructions && capabilityReady(c, config)).map(
+    (c) => c.instructions!
+  );
+}
+
 /** Where the agent can be reached, which is a different claim from what it can do. */
 export function channelLabels(config: Config): string[] {
   return CAPABILITIES.filter((c) => c.channel && capabilityReady(c, config)).map((c) => c.label);
@@ -403,6 +448,13 @@ export type ToolContext = {
   uploadAttachment: (server: McpServerRow, id: string) => Promise<string>;
   /** The PDFs, workbooks and CSVs this chat's messages carried, newest first. */
   sharedFiles: () => { id: string; name: string }[];
+  /** Every readable document in this chat (text files, transcripts, parsed PDFs). */
+  documents: () => Promise<SearchDocument[]>;
+  /**
+   * How close in meaning each text is to the query (embeddings), or null when that
+   * cannot be worked out; search then ranks by words alone.
+   */
+  similarities: (query: string, texts: string[]) => Promise<number[] | null>;
   /** The PDFs, workbooks and CSVs of the latest message that carried any file. */
   latestFiles: () => { id: string; name: string }[];
   /**
@@ -540,6 +592,207 @@ async function braveSearch(key: string, query: string, count: number): Promise<S
   return json.web?.results ?? [];
 }
 
+/** The 11-character video id in any YouTube link (watch, youtu.be, shorts, live, embed), or a bare id. */
+export function youtubeVideoId(raw: string): string | null {
+  const text = raw.trim();
+  const valid = (id: string | null | undefined) => (id && /^[\w-]{11}$/.test(id) ? id : null);
+  if (valid(text)) return text;
+  let url: URL;
+  try {
+    url = new URL(text);
+  } catch {
+    return null;
+  }
+  const host = url.hostname.replace(/^(www|m|music)\./, "");
+  if (host === "youtu.be") return valid(url.pathname.split("/")[1]);
+  if (host !== "youtube.com" && host !== "youtube-nocookie.com") return null;
+  return valid(
+    url.searchParams.get("v") ?? url.pathname.match(/^\/(?:shorts|live|embed|v)\/([\w-]{11})/)?.[1]
+  );
+}
+
+type YoutubeDetails = { title: string; channel: string; seconds: number };
+
+type YoutubePlayer = {
+  playabilityStatus?: { status?: string; reason?: string };
+  videoDetails?: { title?: string; author?: string; lengthSeconds?: string };
+  captions?: {
+    playerCaptionsTracklistRenderer?: {
+      captionTracks?: { baseUrl: string; languageCode: string; kind?: string }[];
+    };
+  };
+};
+
+/**
+ * YouTube's player API, asked as the Android app: the watch page answers Cloudflare's
+ * addresses with a captcha, this endpoint mostly does not. Not a public API, so it can
+ * change under us; the caller falls back to the model watching the video.
+ */
+async function youtubePlayer(id: string): Promise<YoutubePlayer> {
+  const res = await fetch("https://www.youtube.com/youtubei/v1/player?prettyPrint=false", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      context: { client: { clientName: "ANDROID", clientVersion: "20.10.38" } },
+      videoId: id,
+    }),
+  });
+  if (!res.ok) return {};
+  return (await res.json()) as YoutubePlayer;
+}
+
+/** Caption XML to plain text: the words of every cue, entities decoded. */
+export function captionText(xml: string): string {
+  return [...xml.matchAll(/<(text|p)\b[^>]*>([\s\S]*?)<\/\1>/g)]
+    .map((m) => m[2].replace(/<[^>]+>/g, ""))
+    .join(" ")
+    .replace(/&amp;/g, "&")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+    .replace(/&quot;/g, '"')
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * The video's details and caption text. Either may be missing: YouTube sometimes
+ * bot-checks a Worker's address (one retry), and some videos have no captions.
+ */
+async function youtubeTranscript(
+  id: string
+): Promise<{ details: YoutubeDetails | null; transcript: string }> {
+  let player = await youtubePlayer(id);
+  if (player.playabilityStatus?.status !== "OK") player = await youtubePlayer(id);
+  if (player.playabilityStatus?.status !== "OK") return { details: null, transcript: "" };
+  const v = player.videoDetails ?? {};
+  const details = {
+    title: v.title ?? "",
+    channel: v.author ?? "",
+    seconds: Number(v.lengthSeconds) || 0,
+  };
+  const tracks = player.captions?.playerCaptionsTracklistRenderer?.captionTracks ?? [];
+  const english = tracks.filter((t) => t.languageCode.startsWith("en"));
+  // Uploaded captions over automatic ones; English over the rest.
+  const track =
+    english.find((t) => t.kind !== "asr") ??
+    english[0] ??
+    tracks.find((t) => t.kind !== "asr") ??
+    tracks[0];
+  if (!track) return { details, transcript: "" };
+  const res = await fetch(track.baseUrl.replace("&fmt=srv3", ""));
+  if (!res.ok) return { details, transcript: "" };
+  return { details, transcript: captionText(await res.text()) };
+}
+
+type YoutubeSearchItem = {
+  videoRenderer?: {
+    videoId?: string;
+    title?: { runs?: { text?: string }[] };
+    ownerText?: { runs?: { text?: string }[] };
+    lengthText?: { simpleText?: string };
+    viewCountText?: { simpleText?: string };
+    publishedTimeText?: { simpleText?: string };
+  };
+};
+
+/**
+ * YouTube's own search, videos only. Unofficial like the player API, and needs no key;
+ * unlike the watch page it answers Cloudflare's addresses.
+ */
+async function youtubeSearch(query: string, count: number): Promise<string[]> {
+  const res = await fetch("https://www.youtube.com/youtubei/v1/search?prettyPrint=false", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      context: {
+        client: { clientName: "WEB", clientVersion: "2.20251120.01.00", hl: "en", gl: "US" },
+      },
+      query,
+      // The "Videos" filter: channels, playlists and shelves stay out.
+      params: "EgIQAQ==",
+    }),
+  });
+  if (!res.ok) throw new Error(`YouTube search returned ${res.status}`);
+  const json = (await res.json()) as {
+    contents?: {
+      twoColumnSearchResultsRenderer?: {
+        primaryContents?: {
+          sectionListRenderer?: {
+            contents?: { itemSectionRenderer?: { contents?: YoutubeSearchItem[] } }[];
+          };
+        };
+      };
+    };
+  };
+  const sections =
+    json.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents ??
+    [];
+  return sections
+    .flatMap((s) => s.itemSectionRenderer?.contents ?? [])
+    .flatMap((i) => (i.videoRenderer?.videoId ? [i.videoRenderer] : []))
+    .slice(0, count)
+    .map((v) => {
+      const facts = [
+        v.ownerText?.runs?.[0]?.text,
+        v.lengthText?.simpleText,
+        v.viewCountText?.simpleText,
+        v.publishedTimeText?.simpleText,
+      ].filter(Boolean);
+      return `${v.title?.runs?.map((r) => r.text).join("") ?? ""}\n${facts.join(" · ")}\nhttps://www.youtube.com/watch?v=${v.videoId}`;
+    });
+}
+
+const YOUTUBE_SUMMARY_PROMPT =
+  "Summarize this YouTube video: one line on what it is about, then its key points as short bullets. Use only what the video says.";
+
+/** The name of this video's transcript if the chat already keeps one, found by its link line. */
+async function keptTranscript(ctx: ToolContext, link: string): Promise<string | null> {
+  const line = `\nLink: ${link}\n`;
+  return (await ctx.documents()).find((d) => d.text.includes(line))?.name ?? null;
+}
+
+/** The file a video's transcript is kept under in the chat. */
+function transcriptName(details: YoutubeDetails | null, link: string): string {
+  const title = (details?.title || link).replace(/[\\/:*?"<>|]+/g, " ").trim();
+  return `${title.slice(0, 80)} (transcript).txt`;
+}
+
+/**
+ * Keep a video's transcript in the chat as a text file, so follow-up questions can be
+ * answered with search_files instead of the transcript entering the conversation. A
+ * video already kept is not kept twice; a file that cannot be kept costs only the note.
+ */
+async function keepTranscript(
+  ctx: ToolContext,
+  details: YoutubeDetails | null,
+  link: string,
+  transcript: string
+): Promise<string> {
+  const name = transcriptName(details, link);
+  const follow = `The full transcript is kept in this chat as "${name}": for follow-up questions about the video, use search_files.`;
+  const body = `Title: ${details?.title ?? ""}\nChannel: ${details?.channel ?? ""}\nLink: ${link}\n\n${transcript}`;
+  try {
+    await ctx.saveFile(new TextEncoder().encode(body).buffer as ArrayBuffer, name, "text/plain");
+    return follow;
+  } catch (err) {
+    return `The transcript could not be kept in this chat (${err instanceof Error ? err.message : err}), so follow-up questions need youtube_summary again.`;
+  }
+}
+
+/** A passage as the model reads it: where it comes from, then its words. */
+function passageText(p: Passage): string {
+  return `[${p.name}, part ${p.part} of ${p.parts}]\n${p.text}`;
+}
+
+/** `h:mm:ss` or `m:ss`. */
+function clock(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = String(seconds % 60).padStart(2, "0");
+  return h ? `${h}:${String(m).padStart(2, "0")}:${s}` : `${m}:${s}`;
+}
+
 export const TOOLS: ToolSpec[] = [
   {
     name: "web_search",
@@ -602,6 +855,147 @@ export const TOOLS: ToolSpec[] = [
       const text = type.includes("html") ? htmlToText(body) : body;
       // A tool result this long already dominates the prompt; more would just cost.
       return text.length > 12000 ? `${text.slice(0, 12000)}\n\n[truncated]` : text;
+    },
+  },
+  {
+    name: "youtube_summary",
+    description:
+      "Summarize a YouTube video from its link (watch, youtu.be or shorts). Use whenever the user shares a YouTube link, or a screenshot where the link is readable in the address bar. Returns the title, channel, length, link and a summary.",
+    parameters: {
+      type: "object",
+      properties: {
+        url: { type: "string", description: "The YouTube link, as the user sent it." },
+      },
+      required: ["url"],
+    },
+    async run(args, ctx) {
+      const id = youtubeVideoId(str(args.url));
+      if (!id) throw new Error(`"${str(args.url)}" is not a YouTube video link`);
+      const link = `https://www.youtube.com/watch?v=${id}`;
+      // Summarized before in this chat: a follow-up question is answered from the kept
+      // transcript, which a second summary would not do. Found by link, not by name: a
+      // video's title can change between two looks at it.
+      const kept = await keptTranscript(ctx, link);
+      if (kept) {
+        return `This video was already summarized in this chat, and its full transcript is kept as "${kept}". Do not summarize it again: to answer the user's question about it, call search_files with words from the question (file: "${kept}").`;
+      }
+      const { details, transcript } = await youtubeTranscript(id);
+      if (!transcript && !ctx.config.youtube_model.trim()) {
+        throw new Error(
+          "this video has no captions that could be read, and no fallback model is set to watch it"
+        );
+      }
+      const header = [
+        details?.title && `Title: ${details.title}`,
+        details?.channel && `Channel: ${details.channel}`,
+        details?.seconds && `Length: ${clock(details.seconds)}`,
+        `Link: ${link}`,
+      ];
+      // Captions are summarized by the agent's own model in a call of their own, so only
+      // the summary reaches the conversation. With nothing to read, the fallback model
+      // watches the video: hundreds of thousands of tokens, so never the first try.
+      const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${ctx.openrouterKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: transcript ? ctx.config.model : ctx.config.youtube_model,
+          messages: [
+            {
+              role: "user",
+              content: transcript
+                ? `${YOUTUBE_SUMMARY_PROMPT}\n\n${header.filter(Boolean).join("\n")}\n\nTranscript:\n${transcript}`
+                : [
+                    { type: "text", text: YOUTUBE_SUMMARY_PROMPT },
+                    { type: "video_url", video_url: { url: link } },
+                  ],
+            },
+          ],
+        }),
+      });
+      if (!res.ok) throw new Error(`the summary model failed: ${res.status} ${await res.text()}`);
+      const json = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+      const summary = json.choices?.[0]?.message?.content?.trim();
+      if (!summary) throw new Error("the summary model returned nothing");
+      const source = transcript ? "from the captions" : "no captions, made by watching the video";
+      const keptNote = transcript ? await keepTranscript(ctx, details, link, transcript) : "";
+      return [...header, `Summary (${source}):\n${summary}`, keptNote].filter(Boolean).join("\n");
+    },
+  },
+  {
+    name: "youtube_search",
+    description:
+      "Find YouTube videos by title or topic. Use when the user names a video without a link, or sends a screenshot of a YouTube video whose link is not readable: search for the title and channel shown in the image. Pick the result whose title and channel match, then call youtube_summary with its link. Returns titles, channels, lengths, views, age and links.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "The video's title, with the channel name when known.",
+        },
+        count: { type: "integer", description: "How many results, 1-10. Default 5." },
+      },
+      required: ["query"],
+    },
+    async run(args) {
+      const query = str(args.query).trim();
+      if (!query) throw new Error("query was empty");
+      const count = Math.min(10, Math.max(1, Number(args.count) || 5));
+      const results = await youtubeSearch(query, count);
+      if (results.length === 0) return `No YouTube videos found for "${query}".`;
+      return results.map((r, i) => `${i + 1}. ${r}`).join("\n\n");
+    },
+  },
+  {
+    name: "search_files",
+    description:
+      "Search the documents in this chat (attached text files and PDFs, and transcripts of videos you summarized) and return the passages that best match. Use it to answer questions about those documents: their full text is not in the conversation. Search with the words the answer is likely to contain; close spellings match too (video captions often misspell names). If a search misses, try other words or read the document part by part rather than telling the user it is not there. To read a document in order (for a full summary, say), pass `file` and `part` instead of `query`, starting at part 1.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Words to look for." },
+        file: {
+          type: "string",
+          description: "Only this document, by its name as shown in the chat.",
+        },
+        part: {
+          type: "integer",
+          description: "With `file`: return this part of it (from 1) instead of searching.",
+        },
+        count: { type: "integer", description: "How many passages, 1-10. Default 5." },
+      },
+    },
+    async run(args, ctx) {
+      const all = await ctx.documents();
+      if (all.length === 0) return "There are no documents in this chat yet.";
+      const file = str(args.file).trim();
+      const documents = file ? all.filter((d) => d.name === file) : all;
+      if (file && documents.length === 0) {
+        throw new Error(
+          `no document named "${file}"; the documents are: ${all.map((d) => d.name).join(", ")}`
+        );
+      }
+      if (file && args.part !== undefined) {
+        const part = Math.floor(Number(args.part));
+        const passage = passageOf(documents[documents.length - 1], part);
+        if (!passage) throw new Error(`"${file}" has no part ${args.part}`);
+        return passageText(passage);
+      }
+      const query = str(args.query).trim();
+      if (!query) throw new Error("pass a query, or a file and a part");
+      const count = Math.min(10, Math.max(1, Number(args.count) || 5));
+      const found = await searchHybrid(documents, query, count, ctx.similarities);
+      if (found.length === 0) {
+        // Not a dead end: the documents are short enough to read, and a miss is often a
+        // spelling the text does not use.
+        const list = partCounts(documents)
+          .map((d) => `"${d.name}" (${d.parts} ${d.parts === 1 ? "part" : "parts"})`)
+          .join(", ");
+        return `Nothing in ${file ? `"${file}"` : "this chat's documents"} matches "${query}". Try other words, or read the documents part by part with file and part: ${list}.`;
+      }
+      return found.map(passageText).join("\n\n");
     },
   },
   {
@@ -963,10 +1357,11 @@ const TOOL_BY_NAME = new Map(TOOLS.map((t) => [t.name, t]));
 
 /** The tools to offer this turn: those belonging to a ready capability. */
 export function toolsFor(config: Config): ToolSpec[] {
-  return CAPABILITIES.filter((c) => capabilityReady(c, config))
-    .flatMap((c) => c.tools)
-    .map((name) => TOOL_BY_NAME.get(name))
-    .filter((t): t is ToolSpec => !!t);
+  // A tool two ready capabilities share (search_files) is offered once.
+  const names = new Set(
+    CAPABILITIES.filter((c) => capabilityReady(c, config)).flatMap((c) => c.tools)
+  );
+  return [...names].map((name) => TOOL_BY_NAME.get(name)).filter((t): t is ToolSpec => !!t);
 }
 
 /* ------------------------------------------------------------ mcp tools -- */

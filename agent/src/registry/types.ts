@@ -42,6 +42,7 @@ export type Config = {
   cap_whatsapp: number;
   cap_mcp: number;
   cap_wallet: number;
+  cap_youtube: number;
 
   /**
    * The agent's own OpenRouter key, billed for every call. No fallback: blank means the
@@ -65,6 +66,8 @@ export type Config = {
   transcription_model: string;
   /** OpenRouter model that speaks a `send_voice_note` note; same key, same bill. */
   voice_model: string;
+  /** OpenRouter model that summarizes a YouTube video; same key, same bill. Must accept video input. */
+  youtube_model: string;
   /** Bot token from @BotFather. The bot is the agent's face on Telegram. */
   telegram_bot_token: string;
   /** The bot's @handle, without the @: a chat needs it to link back to the bot. */

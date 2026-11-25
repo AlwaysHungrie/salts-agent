@@ -156,6 +156,9 @@ const summary = createRoute({
           cost_usd: z.number(),
         }),
         tasks: z.array(TaskSchema),
+        files: z
+          .number()
+          .openapi({ description: "Files in the chat: sent uploads and made files." }),
         sqlite_bytes: z.number(),
         sub_agents: z.number(),
       })
@@ -178,9 +181,17 @@ const listFiles = createRoute({
   method: "get",
   path: "/agents/session-agent/{sessionId}/files",
   tags: ["Files"],
-  summary: "Files uploaded and not yet sent with a message",
+  summary: "Files uploaded and not yet sent, or every file in the chat",
   middleware,
-  request: { params: SessionParams },
+  request: {
+    params: SessionParams,
+    query: z.object({
+      scope: z.enum(["pending", "chat"]).optional().openapi({
+        description:
+          "`pending` (the default): uploaded and not yet sent with a message. `chat`: every file the chat holds, newest first — sent uploads and files the agent made.",
+      }),
+    }),
+  },
   responses: {
     200: jsonOf(withMeta({ attachments: z.array(AttachmentSchema) })),
     ...refusals(404),
