@@ -13,7 +13,14 @@ import {
 } from "../capabilities";
 import type { Config } from "../registry";
 import { base64ToBytes } from "../util/bytes";
-import { attachmentsOf, insertAttachment, latestFiles, sharedFiles } from "./attachments";
+import {
+  attachmentsOf,
+  getAttachment,
+  insertAttachment,
+  latestFiles,
+  readBase64,
+  sharedFiles,
+} from "./attachments";
 import { COMMAND_TOOL_NAME, commandTool } from "./command-tool";
 import { sendVoiceNote } from "./channels";
 import { compactedMessages } from "./compaction";
@@ -473,6 +480,12 @@ export function toolContext(host: SessionHost, config: Config): ToolContext {
       host.exec(`UPDATE attachments SET used = 1 WHERE id = ?`, id);
       host.turn.made.push(id);
       return `/agents/session-agent/${encodeURIComponent(host.name())}/files/${id}`;
+    },
+    readImage: async (id) => {
+      const row = getAttachment(host, id);
+      if (!row || row.kind !== "image" || row.used !== 1) return null;
+      const base64 = await readBase64(host, row.path);
+      return base64 ? `data:${row.mime};base64,${base64}` : null;
     },
     transcribeAttachment: (id) => transcribeAttachment(host, id),
     uploadAttachment: (server, id) => uploadAttachment(host, server, id),

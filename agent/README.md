@@ -474,7 +474,7 @@ that page renders, so a new capability needs no frontend change.
 | YouTube summaries | — (summarized by the agent's model; optional video-capable `youtube_model` for videos without captions) | `youtube_summary`, `youtube_search`, `search_files` |
 | File ingest | — | `search_files` |
 | Image input | a multimodal model | — |
-| Image generation | an OpenRouter image model | `generate_image` |
+| Image generation | an OpenRouter image model (one that takes image input, to edit images by id via `image_ids`) | `generate_image` |
 | Audio input | a transcription model | `transcribe_audio` |
 | Voice notes | a voice model; Telegram or WhatsApp | `send_voice_note` |
 | Schedule tasks | — | `schedule_task`, `list_scheduled_tasks`, `cancel_scheduled_task` |

@@ -482,6 +482,8 @@ export type ToolContext = {
   registry: DurableObjectStub<SessionRegistry>;
   /** Stores an image and returns a URL this session can serve it from. */
   saveImage: (dataUrl: string, prompt: string) => Promise<string>;
+  /** A data URL of an image in this chat (sent or drawn) by id, or null when there is none. */
+  readImage: (id: string) => Promise<string | null>;
   /**
    * Stores a file a tool made for the user (a workbook, a PDF, a CSV) and returns the
    * URL it downloads from. Throws a reason the model can pass on when it cannot be kept.
@@ -1051,17 +1053,42 @@ export const TOOLS: ToolSpec[] = [
   {
     name: "generate_image",
     description:
-      "Draw an image from a description and show it to the user. Returns Markdown that already renders in the chat, so repeat it in your reply rather than describing the image.",
+      "Draw an image from a description, or change images already in the chat (ones the user sent or you drew), and show it to the user. To edit, pass their ids in image_ids and say in the prompt what to change. Returns Markdown that already renders in the chat, so repeat it in your reply rather than describing the image.",
     parameters: {
       type: "object",
       properties: {
-        prompt: { type: "string", description: "What to draw, in detail." },
+        prompt: {
+          type: "string",
+          description: "What to draw, or what to change in the given images, in detail.",
+        },
+        image_ids: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "Ids of images in this chat to edit or work from, as given in the message or by an earlier drawing. Leave out to draw from scratch.",
+        },
       },
       required: ["prompt"],
     },
     async run(args, ctx) {
       const prompt = str(args.prompt).trim();
       if (!prompt) throw new Error("prompt was empty");
+      const ids = Array.isArray(args.image_ids)
+        ? args.image_ids.map((id) => str(id).trim()).filter(Boolean)
+        : [];
+      const inputs: string[] = [];
+      for (const id of ids) {
+        const dataUrl = await ctx.readImage(id);
+        if (!dataUrl) throw new Error(`there is no image with id "${id}" in this chat`);
+        inputs.push(dataUrl);
+      }
+      const content =
+        inputs.length === 0
+          ? prompt
+          : [
+              { type: "text", text: prompt },
+              ...inputs.map((url) => ({ type: "image_url", image_url: { url } })),
+            ];
       const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -1071,7 +1098,7 @@ export const TOOLS: ToolSpec[] = [
         body: JSON.stringify({
           model: ctx.config.image_model,
           modalities: ["image", "text"],
-          messages: [{ role: "user", content: prompt }],
+          messages: [{ role: "user", content }],
         }),
       });
       if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
@@ -1080,7 +1107,9 @@ export const TOOLS: ToolSpec[] = [
       };
       const dataUrl = json.choices?.[0]?.message?.images?.[0]?.image_url?.url;
       if (!dataUrl) return "Image generation returned no image. Try a different image model.";
-      return `Image ready. Include exactly this in your reply: ![${prompt.slice(0, 60)}](${await ctx.saveImage(dataUrl, prompt)})`;
+      const url = await ctx.saveImage(dataUrl, prompt);
+      const id = url.split("/").pop();
+      return `Image ready (id ${id}). Include exactly this in your reply: ![${prompt.slice(0, 60)}](${url})`;
     },
   },
   {
