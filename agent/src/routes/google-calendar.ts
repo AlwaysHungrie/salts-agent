@@ -3,8 +3,8 @@ import { type ApiApp, jsonOf, refusals } from "../api/app";
 import { GoogleCalendarSchema } from "../api/schemas";
 import type { Env } from "../env";
 import {
-  GOOGLE_REVOKE_URL,
   GOOGLE_TOKEN_URL,
+  forgetGoogleCalendar,
   googleAuthorizeUrl,
   googleRedirectUri,
   grantsCalendar,
@@ -55,15 +55,7 @@ async function connect({ env, url, agentId, reg }: AgentCall, returnTo: string) 
 
 /** Forget the tokens here, and revoke them at Google so the grant does not linger. */
 async function disconnect({ reg }: AgentCall) {
-  const token = await reg.disconnectGoogleCalendar();
-  if (token) {
-    // Best effort: an already-revoked or expired token is no reason to fail the click.
-    await fetch(GOOGLE_REVOKE_URL, {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ token }).toString(),
-    }).catch(() => undefined);
-  }
+  await forgetGoogleCalendar(reg);
   return { connection: await reg.googleCalendar() };
 }
 

@@ -52,7 +52,8 @@ When you connect an app such as Notion or GitHub, your agent uses it with your a
 |---|---|---|
 | One conversation | Delete it from the sidebar in your browser, or send `!delete` | Memories |
 | The current conversation, and start a new one | Send `!clear` | Memories |
-| Everything | Delete the agent. See [Delete an agent or start over](/guide/start-over) | Nothing |
+| Everything in one agent | Delete the agent. See [Delete an agent or start over](/guide/start-over) | Nothing |
+| Your whole account | Delete your agents, then click **Deactivate account** in the menu under your picture. See [Deactivate your account](/guide/start-over) | Payment records, which the law requires us to keep |
 
 Deleting cannot be undone.
 

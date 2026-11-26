@@ -234,6 +234,7 @@ curl -X POST http://localhost:8787/agents/session-agent/my-session/chat \
 | `GET\|POST /agents/session-agent/:id/files` | List pending attachments / upload one |
 | `GET\|DELETE /agents/session-agent/:id/files/:fileId` | Image bytes / drop a pending attachment |
 | `GET /agents/session-agent/:id/lists` | The owner's lists with their entries (User lists); `enabled: false` and none while it is off |
+| `GET\|DELETE /api/account` | The signed-in user's own account (a Salts session token only, never an API key or OAuth app token). `GET` → `{ blockers }`; `DELETE` deactivates it, or 409 with the blockers: agents they administer, Tokens Wallet keys, business numbers. Clears their lists, agent limit, business requests, paired computers and message balance; keeps payment records, the starter grant and memberships on others' agents. The web app then deletes the Clerk user |
 | `GET /agents/session-agent/:id/tasks` | Tasks this session scheduled |
 | `DELETE /agents/session-agent/:id/tasks/:taskId` | Cancel one |
 | `GET\|POST /api/agents` | List / create agents — `{ name, openrouter_api_key?, allowed_emails?, meta? }` (`meta.defaults.openrouter_key_id` picks a wallet key), and a key that OpenRouter rejects is a 400 that creates nothing. `GET` lists only what the caller may open |

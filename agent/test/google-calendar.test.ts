@@ -235,6 +235,16 @@ describe("connecting", () => {
   });
 });
 
+describe("deleting the agent", () => {
+  it("revokes the Google grant before wiping the agent", async () => {
+    const { email, id } = await connected();
+    const calls = stubGoogle();
+    const res = await SELF.fetch(`${BASE}/api/agents/${id}`, as(email, { method: "DELETE" }));
+    expect(res.status).toBe(200);
+    expect(calls.find((c) => c.url === GOOGLE_REVOKE_URL)?.body).toContain("refresh-1");
+  });
+});
+
 describe("tokens", () => {
   it("refreshes a spent token, once for concurrent callers", async () => {
     const { id } = await connected();

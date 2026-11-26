@@ -212,4 +212,10 @@ export class UserLists extends DurableObject {
     });
     return list.name;
   }
+
+  /** Drop every list: the account was deactivated. */
+  async wipe(): Promise<void> {
+    await this.ctx.storage.deleteAll();
+    this.ready = false;
+  }
 }

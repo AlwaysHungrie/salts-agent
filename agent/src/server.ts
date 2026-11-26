@@ -12,6 +12,7 @@ import { handleSaltsBrowser, handleSaltsMachine } from "./routes/salts";
 import { handleSearxngMcp, handleSearxngUrl } from "./routes/searxng";
 import { handleWebhook } from "./routes/telegram";
 import { handleWallet } from "./routes/wallet";
+import { handleAccount } from "./routes/account";
 import { handlePhoneNumbers } from "./routes/phone-numbers";
 import { handleRazorpayWebhook } from "./routes/card";
 import { handleWhatsappWebhook } from "./routes/whatsapp";
@@ -216,7 +217,9 @@ export default {
                 ? await handleWallet(request, env, segments)
                 : segments[1] === "phone-numbers"
                   ? await handlePhoneNumbers(request, env, segments)
-                  : undefined;
+                  : segments[1] === "account"
+                    ? await handleAccount(request, env, segments)
+                    : undefined;
       if (handled) return handled;
     }
 

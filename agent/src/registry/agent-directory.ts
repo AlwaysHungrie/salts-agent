@@ -1,4 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
+import { deactivateAccount, deactivationBlockers } from "./directory-deactivate";
 import { applyMigrations } from "../schema";
 import type { DeploymentSettings, StoredSettings } from "../settings";
 import {
@@ -330,6 +331,18 @@ export class AgentDirectory extends DurableObject {
   }
 
   /** How many agents `email` currently administers — the count `getAgentLimit` bounds. */
+  /** What stands in the way of `email` deactivating their account; empty when nothing. */
+  deactivationBlockers(email: string): string[] {
+    this.ensureSchema();
+    return deactivationBlockers(this.ctx.storage, email);
+  }
+
+  /** Clear the account's own rows, unless something still blocks it (see directory-deactivate.ts). */
+  deactivateAccount(email: string): { blockers: string[] } {
+    this.ensureSchema();
+    return deactivateAccount(this.ctx.storage, email);
+  }
+
   countByAdmin(email: string): number {
     this.ensureSchema();
     return countByAdmin(this.ctx.storage, email);

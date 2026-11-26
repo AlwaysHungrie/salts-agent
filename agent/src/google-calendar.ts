@@ -45,6 +45,23 @@ export function googleAuthorizeUrl(p: {
   return url.toString();
 }
 
+/**
+ * Drop the agent's Google Calendar connection and revoke its token at Google, so the
+ * grant does not outlive it: on Disconnect, and before an agent (or an account's agents)
+ * is deleted. Best effort at Google: an expired or already-revoked token is no failure.
+ */
+export async function forgetGoogleCalendar(reg: {
+  disconnectGoogleCalendar(): Promise<string> | string;
+}): Promise<void> {
+  const token = await reg.disconnectGoogleCalendar();
+  if (!token) return;
+  await fetch(GOOGLE_REVOKE_URL, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ token }).toString(),
+  }).catch(() => undefined);
+}
+
 /** Whether a granted scope string covers everything the tools call. */
 export function grantsCalendar(scope: string): boolean {
   const granted = new Set(scope.split(/\s+/));

@@ -1,19 +1,22 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useUser } from "@clerk/nextjs";
+import { useClerk, useUser } from "@clerk/nextjs";
 import { useIdentity } from "@/lib/identity";
+import { DeactivateAccount } from "./DeactivateAccount";
 
 /**
- * The signed-in avatar and its one menu item.
+ * The signed-in avatar and its menu: log out, or deactivate the account.
  *
  * Clerk's own <UserButton> carries a profile manager, an org switcher and its
  * branding; none of that has a place here. This is the picture and a way out.
  */
 export function UserMenu() {
   const { user } = useUser();
+  const clerk = useClerk();
   const { ready, email, signedIn, signOut } = useIdentity();
   const [open, setOpen] = useState(false);
+  const [deactivating, setDeactivating] = useState(false);
   const root = useRef<HTMLDivElement>(null);
 
   // A dropdown that outlives a click elsewhere is a bug, not a feature.
@@ -82,7 +85,27 @@ export function UserMenu() {
           >
             Log out
           </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              setDeactivating(true);
+            }}
+            className="hover:bg-canvas-soft text-muted w-full cursor-pointer rounded-xl px-3 py-2 text-left text-sm leading-[1.43] transition"
+          >
+            Deactivate account
+          </button>
         </div>
+      )}
+
+      {deactivating && (
+        <DeactivateAccount
+          email={email}
+          onClose={() => setDeactivating(false)}
+          // The sign-in is gone; leave for the home page, signed out.
+          onDone={() => void clerk.signOut({ redirectUrl: "/" })}
+        />
       )}
     </div>
   );

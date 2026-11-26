@@ -1,4 +1,5 @@
 import type { Env } from "../env";
+import { forgetGoogleCalendar } from "../google-calendar";
 import { CAPABILITY_BY_ID, type CapabilityId, TELEGRAM_WHITELIST_DEFAULTS } from "../capabilities";
 import type { McpServerRow } from "../mcp";
 import {
@@ -105,6 +106,9 @@ export async function deleteAgent(env: Env, origin: string, agentId: string): Pr
     }
   }
 
+  // Revoke the Google Calendar grant before its token is wiped with the rest, so deleting
+  // an agent (and so an account) frees the user's Google access too.
+  await forgetGoogleCalendar(reg).catch(() => undefined);
   await reg.wipe();
 }
 
