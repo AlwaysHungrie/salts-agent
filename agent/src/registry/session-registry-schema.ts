@@ -311,4 +311,10 @@ export const SESSION_REGISTRY_MIGRATIONS: readonly Migration[] = [
       );
     },
   },
+  {
+    name: "user lists",
+    up: (sql) => {
+      addColumnIfMissing(sql, "config", `cap_user_lists INTEGER NOT NULL DEFAULT 0`);
+    },
+  },
 ];

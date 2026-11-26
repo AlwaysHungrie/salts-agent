@@ -34,6 +34,7 @@
  *   answered here too, with a token Ogg Opus file.
  * - `!!draw` — the model draws an image, then confirms it. The drawing call is
  *   answered here too, with a one-pixel PNG.
+ * - `!!edit <id>` — the model edits the chat's image with that id, then confirms it.
  * - `!!export <tool>` — the model calls that tool, then answers with a link to the
  *   workbook its result carried, as a model handing over an export does.
  * - `!!exportnamed <tool>` — the same, but the answer only names the workbook in bold,
@@ -1120,6 +1121,15 @@ export async function openrouterMock(request: Request): Promise<Response> {
   if (message.startsWith("!!draw")) {
     if (carriesToolResult(body)) return streamedText("Drew it.");
     return streamedToolCall("generate_image", { prompt: "a mock drawing" });
+  }
+
+  // `!!edit <id>`: change the image with that id, as a model asked to edit a picture does.
+  if (message.startsWith("!!edit")) {
+    if (carriesToolResult(body)) return streamedText("Edited it.");
+    return streamedToolCall("generate_image", {
+      prompt: "add a sad cat",
+      image_ids: [message.split(/\s+/)[1]],
+    });
   }
 
   // `!!repeat <tool>`: call that tool with the same arguments again, as a looping model does.

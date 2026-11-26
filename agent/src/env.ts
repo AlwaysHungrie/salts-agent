@@ -1,11 +1,13 @@
 import { SessionAgent } from "./agent";
-import { AgentDirectory, SessionRegistry } from "./registry";
+import { AgentDirectory, SessionRegistry, UserLists } from "./registry";
 
 export type Env = {
   SessionAgent: DurableObjectNamespace<SessionAgent>;
   SessionRegistry: DurableObjectNamespace<SessionRegistry>;
   /** The index of which agents exist; a DO namespace cannot be enumerated. */
   AgentDirectory: DurableObjectNamespace<AgentDirectory>;
+  /** One account's lists, by the owner's email: shared by every agent the account owns. */
+  UserLists: DurableObjectNamespace<UserLists>;
   /** Object storage the workspace spills large files into: images, PDFs, clips. */
   FILES: R2Bucket;
   /**

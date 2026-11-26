@@ -208,6 +208,7 @@ curl -X POST http://localhost:8787/agents/session-agent/my-session/chat \
 | `GET  /agents/session-agent/:id/live` | Whether a reply is still in flight, for a browser that reloaded mid-stream |
 | `GET\|POST /agents/session-agent/:id/files` | List pending attachments / upload one |
 | `GET\|DELETE /agents/session-agent/:id/files/:fileId` | Image bytes / drop a pending attachment |
+| `GET /agents/session-agent/:id/lists` | The owner's lists with their entries (User lists); `enabled: false` and none while it is off |
 | `GET /agents/session-agent/:id/tasks` | Tasks this session scheduled |
 | `DELETE /agents/session-agent/:id/tasks/:taskId` | Cancel one |
 | `GET\|POST /api/agents` | List / create agents — `{ name, openrouter_api_key?, allowed_emails?, meta? }` (`meta.defaults.openrouter_key_id` picks a wallet key), and a key that OpenRouter rejects is a 400 that creates nothing. `GET` lists only what the caller may open |
@@ -448,7 +449,7 @@ that page renders, so a new capability needs no frontend change.
 | YouTube summaries | — (summarized by the agent's model; optional video-capable `youtube_model` for videos without captions) | `youtube_summary`, `youtube_search`, `search_files` |
 | File ingest | — | `search_files` |
 | Image input | a multimodal model | — |
-| Image generation | an OpenRouter image model | `generate_image` |
+| Image generation | an OpenRouter image model (one that takes image input, to edit images by id via `image_ids`) | `generate_image` |
 | Audio input | a transcription model | `transcribe_audio` |
 | Voice notes | a voice model; Telegram or WhatsApp | `send_voice_note` |
 | Schedule tasks | — | `schedule_task`, `list_scheduled_tasks`, `cancel_scheduled_task` |
@@ -456,7 +457,16 @@ that page renders, so a new capability needs no frontend change.
 | WhatsApp | a Meta app and number ([docs/whatsapp-setup.md](../docs/whatsapp-setup.md)) | — |
 | MCP servers | the server's URL, or a catalogue template | the server's own |
 | Private Memory | — | `remember`, `recall` |
+| User lists | — | `create_list`, `read_list`, `add_to_list`, `edit_list_item`, `remove_from_list`, `delete_list` |
 | Wallet | networks (RPC URL and tokens) for balances and sends | `wallet_address`, `wallet_balance`, `wallet_transfer`, `send_transaction`, `sign_evm_transaction`, `sign_evm_typed_data`, `sign_solana_transaction` |
+
+**User lists** are kept per account, not per agent: one `UserLists` Durable Object per owner
+(the agent's `admin_email`), so every agent that account owns, in every session, reads and
+writes the same lists. While the capability is on, each turn's system prompt names the lists
+and how many entries each holds (entries are read with `read_list`), along with standing
+instructions on when to use them; while it is off nothing is loaded and the tools are not
+offered. The files view shows the lists above the chat's own files. Ceilings are the
+`max_user_lists`, `max_list_items` and `max_list_item_chars` deployment settings.
 
 **Tool capabilities** hand the model functions it may call. A turn runs up to `max_tool_rounds`
 tool rounds (a deployment setting) — call, run, feed the results back — before it must answer, on both the streaming

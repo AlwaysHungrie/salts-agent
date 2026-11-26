@@ -13,7 +13,14 @@ import {
 } from "../capabilities";
 import type { Config } from "../registry";
 import { base64ToBytes } from "../util/bytes";
-import { attachmentsOf, insertAttachment, latestFiles, sharedFiles } from "./attachments";
+import {
+  attachmentsOf,
+  getAttachment,
+  insertAttachment,
+  latestFiles,
+  readBase64,
+  sharedFiles,
+} from "./attachments";
 import { COMMAND_TOOL_NAME, commandTool } from "./command-tool";
 import { sendVoiceNote } from "./channels";
 import { compactedMessages } from "./compaction";
@@ -59,6 +66,22 @@ export function systemPrompt(host: SessionHost): string {
         .memories()
         .map((m) => `- ${m.text}`)
         .join("\n")}`
+    );
+  }
+  const lists = host.lists();
+  if (lists) {
+    // Names only: entries are read on demand, so a long list costs nothing until needed.
+    parts.push(
+      lists.length === 0
+        ? "Your user's lists: none yet."
+        : `Your user's lists:\n${lists
+            .map(
+              (l) =>
+                `- ${l.name} (${l.items} ${l.items === 1 ? "entry" : "entries"})${
+                  l.description ? `: ${l.description}` : ""
+                }`
+            )
+            .join("\n")}`
     );
   }
   const ready = capabilityLabels(host.config());
@@ -405,6 +428,7 @@ export function toolContext(host: SessionHost, config: Config): ToolContext {
     sessionId: host.name(),
     openrouterKey: host.openrouterKey(),
     registry: host.registry(),
+    lists: () => host.userLists(),
     saveImage: async (dataUrl, prompt) => {
       const id = crypto.randomUUID().slice(0, 12);
       const mime = dataUrl.match(/^data:([^;]+)/)?.[1] ?? "image/png";
@@ -456,6 +480,12 @@ export function toolContext(host: SessionHost, config: Config): ToolContext {
       host.exec(`UPDATE attachments SET used = 1 WHERE id = ?`, id);
       host.turn.made.push(id);
       return `/agents/session-agent/${encodeURIComponent(host.name())}/files/${id}`;
+    },
+    readImage: async (id) => {
+      const row = getAttachment(host, id);
+      if (!row || row.kind !== "image" || row.used !== 1) return null;
+      const base64 = await readBase64(host, row.path);
+      return base64 ? `data:${row.mime};base64,${base64}` : null;
     },
     transcribeAttachment: (id) => transcribeAttachment(host, id),
     uploadAttachment: (server, id) => uploadAttachment(host, server, id),

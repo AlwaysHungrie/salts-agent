@@ -6,9 +6,17 @@ import type { Summary } from "@/lib/agent";
 import { formatCountShort, formatDate, formatUsdShort } from "@/lib/format";
 import { SessionFiles } from "./SessionFiles";
 
-/** How many files the chat holds; opens the list of them. */
-function FilesLink({ sessionId, count }: { sessionId: string; count: number }) {
+/** How many files the chat holds, lists included; opens the list of them. */
+function FilesLink({
+  sessionId,
+  summary,
+}: {
+  sessionId: string;
+  summary: Summary | null;
+}) {
   const [open, setOpen] = useState(false);
+  // Lists are files every session holds, so they count beside the chat's own.
+  const count = (summary?.files ?? 0) + (summary?.lists ?? 0);
   return (
     <>
       <button
@@ -190,7 +198,7 @@ export function SessionHeader({
             <span className="truncate">
               {formatUsdShort(summary?.llm.cost_usd)} ·{" "}
               {formatCountShort(summary?.messages ?? 0)} msgs ·{" "}
-              <FilesLink sessionId={sessionId} count={summary?.files ?? 0} />
+              <FilesLink sessionId={sessionId} summary={summary} />
             </span>
             {onOpenWallet && <WalletButton onClick={onOpenWallet} size={14} />}
           </div>
@@ -211,7 +219,7 @@ export function SessionHeader({
           </div>
           <div className="text-muted tnum text-xs leading-[1.33]">
             {formatCountShort(summary?.messages ?? 0)} msgs ·{" "}
-            <FilesLink sessionId={sessionId} count={summary?.files ?? 0} />
+            <FilesLink sessionId={sessionId} summary={summary} />
           </div>
         </div>
       </div>

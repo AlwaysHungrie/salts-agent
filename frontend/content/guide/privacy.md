@@ -30,6 +30,10 @@ If **Private Memory** is switched on, your agent keeps facts you tell it and use
 
 Memories are not deleted when you delete a conversation. There is not yet a way to see or remove a single memory. Deleting the agent removes all of them. If there is something you would rather your agent did not keep, do not tell it while **Private Memory** is on.
 
+## Lists
+
+If **User lists** is switched on, your agent keeps lists for you. Lists belong to your account, so every agent you own can see and change them, as can anyone who talks to one of those agents while it has **User lists** switched on. Deleting a conversation or an agent does not delete your lists. Ask your agent to delete a list you no longer want.
+
 ## Files
 
 Files you send are kept with the conversation they were sent in, so your agent can read them again later. Deleting the conversation also deletes its files.

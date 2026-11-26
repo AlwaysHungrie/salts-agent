@@ -14,13 +14,15 @@
     "bindings": [
       { "name": "SessionAgent", "class_name": "SessionAgent" },
       { "name": "SessionRegistry", "class_name": "SessionRegistry" },
-      { "name": "AgentDirectory", "class_name": "AgentDirectory" }
+      { "name": "AgentDirectory", "class_name": "AgentDirectory" },
+      { "name": "UserLists", "class_name": "UserLists" }
     ]
   },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["SessionAgent"] },
     { "tag": "v2", "new_sqlite_classes": ["SessionRegistry"] },
-    { "tag": "v3", "new_sqlite_classes": ["AgentDirectory"] }
+    { "tag": "v3", "new_sqlite_classes": ["AgentDirectory"] },
+    { "tag": "v4", "new_sqlite_classes": ["UserLists"] }
   ],
   "r2_buckets": [
     { "binding": "FILES", "bucket_name": "salt-agent-files" }
@@ -51,13 +53,15 @@
         "bindings": [
           { "name": "SessionAgent", "class_name": "SessionAgent" },
           { "name": "SessionRegistry", "class_name": "SessionRegistry" },
-          { "name": "AgentDirectory", "class_name": "AgentDirectory" }
+          { "name": "AgentDirectory", "class_name": "AgentDirectory" },
+          { "name": "UserLists", "class_name": "UserLists" }
         ]
       },
       "migrations": [
         { "tag": "v1", "new_sqlite_classes": ["SessionAgent"] },
         { "tag": "v2", "new_sqlite_classes": ["SessionRegistry"] },
-        { "tag": "v3", "new_sqlite_classes": ["AgentDirectory"] }
+        { "tag": "v3", "new_sqlite_classes": ["AgentDirectory"] },
+        { "tag": "v4", "new_sqlite_classes": ["UserLists"] }
       ],
       "r2_buckets": [
         { "binding": "FILES", "bucket_name": "salt-agent-files-staging" }
