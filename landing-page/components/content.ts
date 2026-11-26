@@ -177,6 +177,7 @@ export const CAPABILITIES = {
     "Create images",
     "Set reminders",
     "Remember what matters",
+    "Manage your Google Calendar",
     "Connect to Notion",
     "Connect to GitHub",
     "Analyse spreadsheets",
@@ -283,6 +284,11 @@ export const FAQ = {
     {
       q: "What apps can it connect to?",
       a: "We offer one-click integrations for Notion, GitHub, Swiggy and a few other MCP servers we've built ourselves. You can connect any app that has a public MCP server, or one hosted by a third party. Ask your agent about an app you use.",
+    },
+    {
+      q: "What does it do with my Google Calendar?",
+      a: `Switch on Google Calendar and connect your Google account, and your agent can tell you what's on your schedule and add, move or cancel events when you ask. It uses your calendar only to do what you ask, never for ads or to train AI models, and Disconnect removes its access straight away. Our privacy policy has the details.`,
+      link: { text: "privacy policy", href: LINKS.privacy },
     },
     {
       q: "What if the app I use isn't supported?",

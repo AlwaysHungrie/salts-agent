@@ -19,7 +19,7 @@ export const LEGAL = {
   courts: "Mumbai, India",
   email: "salts-dev@proton.me",
   site: "salts.dev",
-  updated: "24 November 2026",
+  updated: "26 November 2026",
   minimumAge: 18,
   /** One month, extendable by two. */
   responseDays: 30,
@@ -219,7 +219,7 @@ export const TERMS: LegalDoc = {
       heading: "13. Suspension and termination",
       summary: "Leave whenever you like. We can suspend an Account that breaches these Terms.",
       clauses: [
-        `You may terminate these Terms at any time by ceasing use of the Service and deleting your Agents. Deleting an Agent deletes its configuration, Credentials, sessions, messages, attachments and memories.`,
+        `You may terminate these Terms at any time by ceasing use of the Service, deleting your Agents and deactivating your Account. Deleting an Agent deletes its configuration, Credentials, sessions, messages, attachments and memories.`,
         `We may suspend or terminate access to the Service, in whole or in part, where we reasonably believe that you have breached these Terms, that continued access presents a risk to the Service or to another user, or that suspension is required by law. Where the breach is capable of remedy and suspension is not urgent, we will give notice and a reasonable opportunity to remedy it.`,
         `On termination, your right to use the Service ceases immediately. Content remaining in an Agent is deleted in accordance with the Privacy Policy. Credit remaining on a Bought Key is not refunded, except where we terminate without cause.`,
         `Clauses 2, 6.2, 7, 9, 12, 13, 14, 15, 16, 17 and 19 survive termination of these Terms.`,
@@ -318,7 +318,7 @@ export const TERMS: LegalDoc = {
 
 export const PRIVACY: LegalDoc = {
   title: "Privacy Policy",
-  intro: `This Privacy Policy explains what personal data ${P} processes, why, who it is shared with, how long it is kept and what rights you have. ${P} is operated by ${O}, an individual based in ${LEGAL.country} ("${P}", "we", "us"). It is written to meet the Digital Personal Data Protection Act, 2023 of India, the EU and UK General Data Protection Regulation ("GDPR"), and, in section 13, the California Consumer Privacy Act.`,
+  intro: `This Privacy Policy explains what personal data ${P} processes, why, who it is shared with, how long it is kept and what rights you have. ${P} is operated by ${O}, an individual based in ${LEGAL.country} ("${P}", "we", "us"). It is written to meet the Digital Personal Data Protection Act, 2023 of India, the EU and UK General Data Protection Regulation ("GDPR"), and, in section 14, the California Consumer Privacy Act.`,
   sections: [
     {
       heading: "1. Who we are and how to contact us",
@@ -368,6 +368,11 @@ export const PRIVACY: LegalDoc = {
             "Conversation content",
             "Messages, attachments (documents, images, voice notes), text extracted from attachments, scheduled tasks, and facts saved to memory where that capability is enabled",
             "You and anyone you permit to message the Agent",
+          ],
+          [
+            "Google Calendar data",
+            "Where you connect Google Calendar: the connected Google account's email address, OAuth access and refresh tokens, and the calendars and events the Agent reads or changes at your request (titles, times, locations, guests and notes)",
+            "Google, on your authorisation",
           ],
           [
             "Telegram data",
@@ -481,6 +486,11 @@ export const PRIVACY: LegalDoc = {
             "India",
           ],
           [
+            "Google LLC",
+            "Reading and changing the Google Calendar you connect, at your request",
+            "United States",
+          ],
+          [
             "Blockchain node providers",
             "Reading your payment transaction from the blockchain to confirm it",
             "Varies by provider",
@@ -507,7 +517,20 @@ export const PRIVACY: LegalDoc = {
       ],
     },
     {
-      heading: "7. Payments",
+      heading: "7. Google user data",
+      summary:
+        "If you connect Google Calendar, your Agent reads and changes your calendar only to do what you ask. We never sell it, use it for ads, or train AI models on it.",
+      clauses: [
+        `${P}'s use and transfer of information received from Google APIs to any other app will adhere to the Google API Services User Data Policy (https://developers.google.com/terms/api-services-user-data-policy), including the Limited Use requirements.`,
+        `Data accessed. When you connect Google Calendar to an Agent, you authorise ${P} to see the list of your Google calendars, and to view, create, change and delete events on them. We store the email address of the connected Google account and the OAuth access and refresh tokens Google issues. We do not request access to your Gmail, Google Drive, contacts or any other Google service.`,
+        `Data use. Calendar data is used only to provide the Google Calendar capability to you: to answer your questions about your schedule and to create, change or delete events when you, or someone you allow to message your Agent, asks for it. Event details the Agent reads are included in the conversation and sent to the Model Provider you selected, through OpenRouter, solely to generate the Agent's reply.`,
+        `Data sharing. We do not sell Google user data, do not use or transfer it for advertising, retargeting or interest-based purposes, do not use it to determine creditworthiness or for lending, and do not use or transfer it to develop, improve or train generalised or non-personalised AI or machine-learning models. We transfer it only to the service providers in section 5 as needed to provide the capability, as necessary to comply with law, or as part of a merger, acquisition or sale of assets with notice to you. No person reads it unless you give us your explicit consent for specific data, it is needed for security purposes such as investigating abuse, or the law requires it.`,
+        `Storage and protection. The tokens are stored in the Agent's isolated storage, encrypted at rest and in transit, are never returned to a browser, and are used only by the Service to call the Google Calendar API. Event details the Agent reads become part of the conversation and are kept with it, as section 10 describes.`,
+        `Retention and deletion. Clicking Disconnect on the Agent's Capabilities page immediately deletes the stored tokens and asks Google to revoke them; deleting the Agent also deletes and revokes them, and an Account can only be deactivated once its Agents are deleted. You can also revoke ${P}'s access at any time from your Google Account's security settings (https://myaccount.google.com/permissions). To delete calendar details already in a conversation, delete that session; to have anything else deleted, write to ${LEGAL.email}.`,
+      ],
+    },
+    {
+      heading: "8. Payments",
       summary:
         "Razorpay handles rupee payments, so we never see your card or UPI details. A blockchain payment is public and permanent, and we never see your crypto wallet's keys.",
       clauses: [
@@ -517,7 +540,7 @@ export const PRIVACY: LegalDoc = {
       ],
     },
     {
-      heading: "8. International transfers",
+      heading: "9. International transfers",
       summary: "Data leaves your country, because our providers and the model providers are global.",
       clauses: [
         `Personal data is transferred to, and processed in, countries other than your own, including India and the United States.`,
@@ -526,11 +549,12 @@ export const PRIVACY: LegalDoc = {
       ],
     },
     {
-      heading: "9. Retention",
+      heading: "10. Retention",
       summary: "We keep things until you delete them; deleting an Agent deletes its contents.",
       clauses: [
         `Personal data is retained in accordance with the schedule below and then deleted or irreversibly anonymised.`,
-        `Deleting a session deletes its messages, attachments and usage records. Deleting an Agent deletes its configuration, Credentials, sessions and memories. Deleting your Account deletes the Agents you administer.`,
+        `Deleting a session deletes its messages, attachments and usage records. Deleting an Agent deletes its configuration, Credentials, sessions and memories, and revokes any Google Calendar access it held.`,
+        `You can delete your Account yourself with Deactivate account in the account menu, once you administer no Agents and hold no keys in your Wallet and no business phone numbers, or by asking us at ${LEGAL.email}. Deactivating deletes your sign-in, your lists, your agent limit and limit requests, the computers you paired and any unused message balance. Because every Agent you administer is deleted first, no Google Calendar credentials remain. We keep payment records as the law requires and a record that a starter key was given to your address. Your place on the access list of an Agent administered by someone else belongs to that Administrator and is not removed.`,
         `Following deletion, residual copies may persist in backups and in provider logs until overwritten in the ordinary cycle, which is up to ${LEGAL.backupDays} days. Data we are required to retain for a legal purpose is retained for the period of that requirement and processed for no other purpose.`,
       ],
       table: {
@@ -540,6 +564,7 @@ export const PRIVACY: LegalDoc = {
           ["Account data", "Life of the Account", "Account deletion"],
           ["Agent configuration and Credentials", "Life of the Agent, or until the field is cleared", "Agent deletion"],
           ["Wallet keys", "Until removed from your Wallet", "Removal or Account deletion"],
+          ["Google Calendar tokens and account email", "Until you disconnect Google Calendar or delete the Agent", "Disconnect or Agent deletion"],
           ["Conversation content and attachments", "Until the session or Agent is deleted; no automatic expiry", "Session or Agent deletion"],
           ["Memories", "Until deleted by you or the Agent is deleted", "Agent deletion"],
           ["Usage records", "Life of the session", "Session deletion"],
@@ -550,7 +575,7 @@ export const PRIVACY: LegalDoc = {
       },
     },
     {
-      heading: "10. Security",
+      heading: "11. Security",
       summary: "Encryption in transit, per-Agent isolation, and access checked on every request.",
       clauses: [
         `We implement technical and organisational measures appropriate to the risk, including encryption of personal data in transit, isolation of each Agent's storage, authentication of every request against a cryptographically signed session token, and authorisation against the Agent's access list, which is held separately from the configuration it governs.`,
@@ -558,7 +583,7 @@ export const PRIVACY: LegalDoc = {
       ],
     },
     {
-      heading: "11. Your rights",
+      heading: "12. Your rights",
       summary: `Access, correction, deletion, restriction, portability, objection. Email us; we answer within ${LEGAL.responseDays} days.`,
       clauses: [
         `You have the right to ask for access to your personal data, its correction or completion, its deletion, restriction of its processing and a portable copy of data you provided to us, and to object to processing based on legitimate interests. You may also nominate another person to exercise these rights on your behalf in the event of your death or incapacity. We extend these rights to all users, wherever they reside.`,
@@ -570,7 +595,7 @@ export const PRIVACY: LegalDoc = {
       ],
     },
     {
-      heading: "12. Cookies and local storage",
+      heading: "13. Cookies and local storage",
       summary: "Only what is needed to sign you in and remember your interface settings.",
       clauses: [
         `We use strictly necessary cookies and equivalent browser storage. We do not set advertising cookies, do not operate cross-site tracking, and do not run third-party analytics that profile you. Because this storage is strictly necessary, no consent banner is shown.`,
@@ -586,7 +611,7 @@ export const PRIVACY: LegalDoc = {
       },
     },
     {
-      heading: "13. California residents",
+      heading: "14. California residents",
       summary: "We collect the categories below, sell nothing, share nothing for advertising, and will not penalise you for asking.",
       clauses: [
         `This section applies to California residents and supplements the rest of this Policy.`,
@@ -618,7 +643,7 @@ export const PRIVACY: LegalDoc = {
       },
     },
     {
-      heading: "14. Children",
+      heading: "15. Children",
       summary: `The Service is not for anyone under ${LEGAL.minimumAge}.`,
       clauses: [
         `The Service is not directed at children and may not be used by anyone under ${LEGAL.minimumAge} years of age. We do not knowingly collect personal data from anyone under that age.`,
@@ -626,21 +651,21 @@ export const PRIVACY: LegalDoc = {
       ],
     },
     {
-      heading: "15. Self-hosted deployments",
+      heading: "16. Self-hosted deployments",
       summary: "Host it yourself and this Policy does not apply. You become responsible for the data.",
       clauses: [
         `${P} is open source and may be deployed on infrastructure you control. In that case personal data does not reach our systems, we have no role in processing it, and this Policy does not apply. The providers listed in section 5 continue to process data under the accounts you configure, and you are the controller in respect of that processing.`,
       ],
     },
     {
-      heading: "16. Changes to this Policy",
+      heading: "17. Changes to this Policy",
       summary: "We date each version and tell you when a change is material.",
       clauses: [
         `We may amend this Policy. The "Last updated" date identifies the current version. Where an amendment materially affects the processing of your personal data, we will notify you within the Service or by email before it takes effect.`,
       ],
     },
     {
-      heading: "17. Contact and complaints",
+      heading: "18. Contact and complaints",
       summary: "Where to write, and who to complain to if we get it wrong.",
       clauses: [
         `${O}, ${LEGAL.country}. Email: ${LEGAL.email}.`,
