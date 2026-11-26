@@ -35,6 +35,9 @@ export default defineConfig({
   plugins: [
     cloudflareTest({
       wrangler: { configPath: "./wrangler.jsonc" },
+      // `remote` bindings in wrangler.jsonc (the email binding) are for `wrangler dev`;
+      // tests stay local and never send real email.
+      remoteBindings: false,
       miniflare: {
         // The pool ships its own workerd, and it is behind the compatibility date in
         // wrangler.jsonc — workerd refuses to start on a date it does not know. This

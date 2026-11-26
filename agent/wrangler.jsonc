@@ -28,8 +28,10 @@
     { "binding": "FILES", "bucket_name": "salt-agent-files" }
   ],
   // Cloudflare Email Service: order codes go out through it (src/email.ts), from
-  // EMAIL_FROM below, on the salts.dev sending domain. `wrangler dev` only logs them.
-  "send_email": [{ "name": "EMAIL" }],
+  // EMAIL_FROM below, on the salts.dev sending domain. `remote` makes `wrangler dev` send
+  // real email through the account (Swiggy sign-in works only on localhost until Salts is
+  // allowlisted); a deployed Worker ignores it.
+  "send_email": [{ "name": "EMAIL", "remote": true }],
 
   // A second, entirely separate deployment to try a change on before it is the one
   // answering. Not a flag on production: a different Worker name, which means its own
