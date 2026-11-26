@@ -530,6 +530,11 @@ export type ToolContext = {
   /** The PDFs, workbooks and CSVs of the latest message that carried any file. */
   latestFiles: () => { id: string; name: string }[];
   /**
+   * Hold an order call instead of making it: Salts emails the owner a code and places the
+   * order itself when the code is typed in the chat. Returns what the model is told.
+   */
+  holdOrder: (server: McpServerRow, tool: string, args: Record<string, unknown>) => Promise<string>;
+  /**
    * Send an Ogg Opus voice note to this session's chat. Throws a reason the model can act
    * on when the channel cannot carry one.
    */
@@ -1652,6 +1657,42 @@ export function mcpServersForChat(
   return group ? servers.filter((s) => s.in_groups) : servers;
 }
 
+/**
+ * MCP tools that place a paid order, by server host. Swiggy requires the user's explicit
+ * yes before each one, and an order placed cannot be cancelled from here.
+ */
+const ORDER_TOOLS: Record<string, ReadonlySet<string>> = {
+  "mcp.swiggy.com": new Set(["place_food_order", "checkout"]),
+  "mcp-staging.swiggy.com": new Set(["place_food_order", "checkout"]),
+};
+
+/** Whether calling this tool on this server places an order. */
+export function placesOrder(server: McpServerRow, tool: string): boolean {
+  let host = "";
+  try {
+    host = new URL(server.url).hostname;
+  } catch {
+    return false;
+  }
+  return ORDER_TOOLS[host]?.has(tool) ?? false;
+}
+
+/** JSON with object keys sorted, so the same arguments in another order match. */
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, v]) => v !== undefined)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${canonicalJson(v)}`).join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+
+/** What identifies one order: the server, the tool and exactly what it was sent. */
+export const orderKey = (server: McpServerRow, tool: string, args: Record<string, unknown>) =>
+  `${server.id}\n${tool}\n${canonicalJson(args)}`;
+
 /** How the model names an attachment in `upload_id`; swapped for the server's id on call. */
 export const ATTACHMENT_REF = "attachment:";
 
@@ -1701,6 +1742,8 @@ export function mcpToolSpecs(servers: McpServerRow[]): ToolSpec[] {
         description: `[${server.name}] ${tool.description ?? tool.name}`,
         parameters: tool.inputSchema ?? { type: "object", properties: {} },
         async run(args, ctx) {
+          // Never made from a turn: Salts places it once the emailed code is typed.
+          if (placesOrder(server, tool.name)) return await ctx.holdOrder(server, tool.name, args);
           /**
            * A call that needed a file and was sent none, made again with the one file the
            * user's latest message carried. Some models will not copy an upload_id even when

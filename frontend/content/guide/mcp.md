@@ -38,4 +38,6 @@ Anyone who can talk to your agent can ask it to use the apps you connected, with
 
 Everyone in a Telegram group can ask your agent to use its apps, so each server has its own **Use in Telegram groups** switch, which you find by clicking the name of its card. Switch it off and your agent keeps using that app in your private chats and in the browser, but not in any group. We recommend switching it off for any app that can spend money or change things in your accounts.
 
+When your agent orders from Swiggy or Instamart for you, nothing is ordered until you say so yourself. We email you a 6-digit code along with the order's items, total and delivery details. Type that code in your chat with the agent and we place the order for you. The code works once, only for that order, for 10 minutes. If you get a code you didn't ask for, just ignore the email and nothing will be ordered.
+
 When you create an API key for an app, we recommend giving it only the access your agent actually needs, for example read-only access if you only want to ask questions.

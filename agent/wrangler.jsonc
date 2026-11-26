@@ -27,6 +27,9 @@
   "r2_buckets": [
     { "binding": "FILES", "bucket_name": "salt-agent-files" }
   ],
+  // Cloudflare Email Service: order codes go out through it (src/email.ts), from
+  // EMAIL_FROM below, on the salts.dev sending domain. `wrangler dev` only logs them.
+  "send_email": [{ "name": "EMAIL" }],
 
   // A second, entirely separate deployment to try a change on before it is the one
   // answering. Not a flag on production: a different Worker name, which means its own
@@ -66,9 +69,11 @@
       "r2_buckets": [
         { "binding": "FILES", "bucket_name": "salt-agent-files-staging" }
       ],
+      "send_email": [{ "name": "EMAIL" }],
       "vars": {
         "CLERK_ISSUER": "https://rich-horse-1284.clerk.accounts.dev",
         "APP_URL": "https://staging.salts.dev",
+        "EMAIL_FROM": "noreply@salts.dev",
         "PAYMENT_RPC": {
           "ethereum": "https://ethereum-rpc.publicnode.com",
           "base": "https://base-rpc.publicnode.com",
@@ -91,6 +96,9 @@
     "CLERK_ISSUER": "https://clerk.salts.dev",
     // The web app the `!docs`, `!settings` and `!mcp` links point at.
     "APP_URL": "https://app.salts.dev",
+    // The sender of every email Salts sends (order codes). Its domain must be onboarded
+    // in Cloudflare Email Service.
+    "EMAIL_FROM": "noreply@salts.dev",
     // Apps that sign people in with clerk.salts.dev over OAuth may open those people's
     // agent sessions with the access token, if it was issued for this resource and to one
     // of these client ids (see src/clerk-oauth.ts). Empty OAUTH_CLIENTS keeps it off.

@@ -158,6 +158,8 @@ export type SessionHost = {
   lists(): ListSummary[] | null;
   /** The owner's lists object; throws when the agent has no owner account. */
   userLists(): Promise<DurableObjectStub<UserLists>>;
+  /** The agent's owner account email, lowercased as stored; "" when it has none. */
+  ownerEmail(): Promise<string>;
   mcpServers(): McpServerRow[];
   modelSeesImages(model: string): Promise<boolean>;
   openrouter(): OpenAIProvider;

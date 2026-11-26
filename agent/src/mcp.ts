@@ -150,6 +150,46 @@ export function parseHeaders(json: string): Record<string, string> {
  * A Streamable HTTP response is either JSON or a one-shot SSE stream carrying the
  * same envelope. Both are read here so the caller only ever sees the envelope.
  */
+/**
+ * How long one request may spend waiting out 429s, and how many times it is resent.
+ * Swiggy asks user-facing flows to cap retries at 30 seconds and 5 attempts.
+ */
+const RATE_LIMIT_BUDGET_MS = 30_000;
+const RATE_LIMIT_RETRIES = 5;
+/** The wait when a 429 names none. */
+const RATE_LIMIT_DEFAULT_MS = 1_000;
+
+/** A `Retry-After` value (seconds, or an HTTP date) in ms; undefined when unreadable. */
+export function retryAfterMs(header: string | null, now = Date.now()): number | undefined {
+  const value = header?.trim();
+  if (!value) return undefined;
+  if (/^\d+$/.test(value)) return Number(value) * 1000;
+  const at = Date.parse(value);
+  return Number.isNaN(at) ? undefined : Math.max(0, at - now);
+}
+
+/**
+ * A fetch that waits out `429 Too Many Requests` for as long as `Retry-After` says and
+ * sends the same request again. A 429 is refused before the server acts on it, so a
+ * resend cannot run a call twice, even one that places an order. Past the budget it
+ * throws, naming the wait, so the model can tell the user when to try again.
+ */
+export async function fetchHonouringRateLimit(url: string, init: RequestInit): Promise<Response> {
+  const started = Date.now();
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(url, init);
+    if (res.status !== 429) return res;
+    await res.body?.cancel();
+    const wait = retryAfterMs(res.headers.get("retry-after")) ?? RATE_LIMIT_DEFAULT_MS;
+    if (attempt >= RATE_LIMIT_RETRIES || Date.now() - started + wait > RATE_LIMIT_BUDGET_MS) {
+      throw new Error(
+        `rate limited: the server asked to wait ${Math.ceil(wait / 1000)}s before trying again`
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, wait));
+  }
+}
+
 async function readEnvelope(res: Response): Promise<JsonRpcResponse | undefined> {
   const type = res.headers.get("content-type") ?? "";
   const body = await res.text();
@@ -202,7 +242,7 @@ export class McpClient {
     if (params !== undefined) body.params = params;
     if (!notification) body.id = this.nextId++;
 
-    const res = await fetch(this.url, {
+    const res = await fetchHonouringRateLimit(this.url, {
       method: "POST",
       headers: this.headers(),
       body: JSON.stringify(body),

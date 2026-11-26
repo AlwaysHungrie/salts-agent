@@ -427,6 +427,19 @@ CIMD moves over on its next connect. The scopes requested are the MCP server's o
 the `scope` in its 401 challenge, then its resource metadata's `scopes_supported`, and
 the authorization server's list only when the MCP server names none.
 
+MCP calls that get `429 Too Many Requests` are sent again after the `Retry-After` wait
+(1 s when none is given), at most 5 times and within 30 s; past that the call fails
+naming the wait. Swiggy's order tools (`place_food_order`, `checkout` on `mcp.swiggy.com` and
+`mcp-staging.swiggy.com`) are never called from a turn (`src/session/orders.ts`). The call
+is held: Salts reads the cart from Swiggy itself and emails the agent owner a 6-digit code
+with the order (Cloudflare Email Service, binding `EMAIL`, sender `EMAIL_FROM`). A chat
+message that is exactly that code is checked before any turn, on the web, the API and every
+channel. The model never sees it. On a match Salts calls the tool with the held arguments and
+the turn runs with a note saying what Swiggy replied. Only the code's hash is stored. It
+works once, for 10 minutes, and 5 wrong tries cancel the order. A different order needs a
+new code. `wrangler dev` only logs the email (the code is in the console). Sending needs
+salts.dev onboarded under Email Service in the Cloudflare dashboard.
+
 ## Commands
 
 A message that is nothing but a bang command is handled before a turn starts, the same

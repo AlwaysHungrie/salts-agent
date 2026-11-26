@@ -42,6 +42,10 @@ export type Env = {
    */
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
+  /** Cloudflare Email Service binding (src/email.ts). Unset, no email can be sent. */
+  EMAIL?: SendEmail;
+  /** The address every email is sent from; its domain is onboarded for sending. */
+  EMAIL_FROM?: string;
   /** Telegram's API host. Only set to stand a local Bot API server in its place. */
   TELEGRAM_API_BASE?: string;
 

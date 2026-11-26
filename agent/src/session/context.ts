@@ -7,10 +7,12 @@ import {
   enabled,
   mcpServerReady,
   mcpToolSpecs,
+  orderKey,
   runTool,
   type ToolContext,
   toolsFor,
 } from "../capabilities";
+import { qualifiedName } from "../mcp";
 import type { Config } from "../registry";
 import { base64ToBytes } from "../util/bytes";
 import {
@@ -33,6 +35,7 @@ import {
 } from "./documents";
 import { isPdf, isSheet, isTextLike, safeName, uploadPath } from "./files";
 import { inWords, textOf, toolNotesOf } from "./format";
+import { holdOrder } from "./orders";
 import { transcribeAttachment } from "./transcribe";
 import { type SearchDocument } from "./search";
 import type { Attachment, SessionHost } from "./types";
@@ -493,6 +496,15 @@ export function toolContext(host: SessionHost, config: Config): ToolContext {
     documents: () => chatDocuments(host),
     similarities: (query, texts) => similarities(host, query, texts),
     latestFiles: () => latestFiles(host),
+    holdOrder: (server, tool, args) =>
+      holdOrder(
+        host,
+        server,
+        tool,
+        args,
+        orderKey(server, tool, args),
+        qualifiedName(server, tool)
+      ),
     sendVoiceNote: (bytes) => sendVoiceNote(host, bytes),
     schedule: async (when, prompt) => {
       const task = await host.scheduleTask(when, prompt);

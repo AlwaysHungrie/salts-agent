@@ -1,4 +1,4 @@
-import { SELF, env } from "cloudflare:test";
+import { SELF, env, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import {
   COST_PER_TURN,
@@ -24,6 +24,8 @@ import {
   stripToolMarkup,
   toolMarkupFilter,
 } from "../src/session/format";
+import { codeHash } from "../src/session/orders";
+import type { SessionHost } from "../src/session/types";
 import { signedIn } from "./clerk";
 import { SHIPPED } from "./shipped";
 
@@ -1523,5 +1525,37 @@ describe("the run_command tool", () => {
     // The reply that announced it, then what the command did once the turn was over.
     expect(said).toMatch(/^Command said: Queued[\s\S]*\n\n(Compacted|Nothing to compact)/);
     expect(said).not.toContain("A reply is still being written");
+  });
+});
+
+describe("an emailed order code", () => {
+  /** Holds an order in the chat's session object, as `holdOrder` would, under `code`. */
+  async function holdOrderUnder(sessionId: string, code: string) {
+    const stub = env.SessionAgent.get(env.SessionAgent.idFromName(sessionId));
+    await runInDurableObject(stub, async (instance) => {
+      const host = (instance as unknown as { host: SessionHost }).host;
+      host.ensureSchema();
+      host.exec(
+        `INSERT OR REPLACE INTO order_codes
+           (id, key, server_id, tool, args, code_hash, expires_at, attempts, ts)
+         VALUES (1, 'k', 'gone', 'checkout', '{}', ?, ?, 0, 0)`,
+        await codeHash(code, "k"),
+        Date.now() + 60_000
+      );
+    });
+  }
+
+  it("is answered by Salts before any turn: the model never sees it", async () => {
+    const { sessionId, email } = await chatFixture();
+    await holdOrderUnder(sessionId, "424242");
+
+    const wrong = (await (await say(sessionId, email, "111111")).json()) as { reply: string };
+    expect(wrong.reply).toContain("not right");
+    // The right code, for an app that is not connected: still Salts answering, no turn.
+    const right = (await (await say(sessionId, email, "424242")).json()) as { reply: string };
+    expect(right.reply).toContain("no longer connected");
+
+    const body = (await (await transcript(sessionId, email)).json()) as { messages: unknown[] };
+    expect(body.messages).toEqual([]);
   });
 });

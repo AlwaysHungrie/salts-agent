@@ -103,4 +103,24 @@ export const SESSION_AGENT_MIGRATIONS: readonly Migration[] = [
       );
     },
   },
+  {
+    // The one order held for its emailed code (see session/orders.ts). Only the code's
+    // hash is kept.
+    name: "order_codes",
+    up: (sql) => {
+      sql.exec(
+        `CREATE TABLE order_codes (
+           id INTEGER PRIMARY KEY CHECK (id = 1),
+           key TEXT NOT NULL,
+           server_id TEXT NOT NULL,
+           tool TEXT NOT NULL,
+           args TEXT NOT NULL,
+           code_hash TEXT NOT NULL,
+           expires_at INTEGER NOT NULL,
+           attempts INTEGER NOT NULL,
+           ts INTEGER NOT NULL
+         )`
+      );
+    },
+  },
 ];

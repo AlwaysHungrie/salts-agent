@@ -16,6 +16,7 @@ import { isPdf, isSheet, uploadPath } from "./files";
 import { chatReply, reportable, textOf, turnFailure } from "./format";
 import { openTurn, spendBlocked } from "./turns";
 import type { Attachment, SessionHost } from "./types";
+import { orderCode } from "./orders";
 
 /**
  * Post a reply to this session's chat, over the channel named by its `source` (not by
@@ -119,17 +120,26 @@ export async function channelTurn(
       return { ok: true };
     }
 
+    // An order code is checked by Salts alone, before the model sees anything.
+    const code = await orderCode(host, inbound.text);
+    if (code.kind === "reply") {
+      await channel.sendText(target, code.text);
+      return { ok: true };
+    }
+
     const blocked = await spendBlocked(host);
     if (blocked) {
-      await channel.sendText(target, blocked);
+      const text = code.kind === "placed" ? `${code.result}\n\n${blocked}` : blocked;
+      await channel.sendText(target, text);
       return { ok: true };
     }
 
     const attached = await ingestFiles(host, inbound.files);
     const drawnBefore = drawnIds(host);
 
+    const said = code.kind === "placed" ? code.note : inbound.text;
     const result = await host.runTurn({
-      input: [await openTurn(host, inbound.text, false, attached)],
+      input: [await openTurn(host, said, false, attached)],
     });
     if (host.turn.stoppedOnPurpose) {
       // `!stop` already answered in this chat, so this turn sends nothing. Checked regardless

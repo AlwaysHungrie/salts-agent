@@ -158,6 +158,7 @@ export class SessionAgent extends Think<Env> {
     memories: () => this.memories,
     lists: () => this.lists,
     userLists: () => this.userLists(),
+    ownerEmail: () => this.ownerEmail(),
     mcpServers: () => this.mcpServers,
     modelSeesImages: (model) => this.modelSeesImages(model),
     openrouter: () => this.openrouter(),
@@ -218,13 +219,19 @@ export class SessionAgent extends Think<Env> {
    * The lists of the account that owns this agent: one object per owner, so every agent
    * the account holds shares them.
    */
-  private async userLists() {
+  /** The owner account's email, looked up once per object; "" when the agent has none. */
+  private async ownerEmail(): Promise<string> {
     if (this.owner === undefined) {
       const directory = this.env.AgentDirectory.get(this.env.AgentDirectory.idFromName("root"));
       this.owner = (await directory.get(this.agentId()))?.admin_email ?? "";
     }
-    if (!this.owner) throw new Error("this agent has no owner account to keep lists for");
-    return this.env.UserLists.get(this.env.UserLists.idFromName(this.owner));
+    return this.owner;
+  }
+
+  private async userLists() {
+    const owner = await this.ownerEmail();
+    if (!owner) throw new Error("this agent has no owner account to keep lists for");
+    return this.env.UserLists.get(this.env.UserLists.idFromName(owner));
   }
 
   /**

@@ -15,6 +15,7 @@ import {
   withoutToolMarkup,
 } from "./format";
 import { streamSentence } from "./live";
+import { orderCode } from "./orders";
 import type { Attachment, SessionHost } from "./types";
 
 /** Asked once, on the first turn, to turn the opening exchange into a sidebar title. */
@@ -161,9 +162,16 @@ export async function runChat(host: SessionHost, message: string, retry = false)
     if (destroy) host.ctx.waitUntil(host.finishDelete());
     return { body: { reply: text }, turn: { cost_usd: 0, llm_ms: 0 } };
   }
+  // An order code is checked by Salts alone, before the model sees anything.
+  const code = retry ? ({ kind: "none" } as const) : await orderCode(host, message);
+  if (code.kind === "reply")
+    return { body: { reply: code.text }, turn: { cost_usd: 0, llm_ms: 0 } };
   const blocked = await spendBlocked(host);
-  if (blocked) return { body: { reply: blocked }, turn: { cost_usd: 0, llm_ms: 0 } };
-  const userMessage = await openTurn(host, message, retry);
+  if (blocked) {
+    const reply = code.kind === "placed" ? `${code.result}\n\n${blocked}` : blocked;
+    return { body: { reply }, turn: { cost_usd: 0, llm_ms: 0 } };
+  }
+  const userMessage = await openTurn(host, code.kind === "placed" ? code.note : message, retry);
   const result = await host.runTurn({ input: [userMessage] });
   const answer = result.message as unknown as UIMessage;
   const said =
@@ -198,9 +206,14 @@ export async function streamChat(
   if (command) return await streamCommand(host, command);
   // Said as the agent would say it, down the same stream: the chat has no other
   // way to show why nothing is coming back.
+  // An order code is checked by Salts alone, before the model sees anything.
+  const code = retry ? ({ kind: "none" } as const) : await orderCode(host, message);
+  if (code.kind === "reply") return streamSentence(code.text);
   const blocked = await spendBlocked(host);
-  if (blocked) return streamSentence(blocked);
-  const userMessage = await openTurn(host, message, retry);
+  if (blocked) {
+    return streamSentence(code.kind === "placed" ? `${code.result}\n\n${blocked}` : blocked);
+  }
+  const userMessage = await openTurn(host, code.kind === "placed" ? code.note : message, retry);
   // Tool events name the call by id; the name arrives once, when it starts.
   const toolNames = new Map<string, string>();
   // A tool call the model wrote out as text never reaches the browser (see `withoutToolMarkup`).
