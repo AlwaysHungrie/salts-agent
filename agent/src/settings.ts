@@ -43,6 +43,7 @@ export const SETTABLE_CONFIG_KEYS = [
   "cap_wallet",
   "cap_youtube",
   "cap_user_lists",
+  "cap_google_calendar",
 ] as const;
 
 export type SettableConfigKey = (typeof SETTABLE_CONFIG_KEYS)[number];

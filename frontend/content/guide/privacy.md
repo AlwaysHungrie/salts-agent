@@ -42,6 +42,8 @@ The spreadsheet analyst is different. It keeps its files on your own computer, n
 
 ## Connected apps
 
+If you connect **Google Calendar**, your agent can read your events, including their notes and guests, and add, change or delete events. What it reads is sent to the AI model like the rest of the conversation. Anyone who can talk to the agent can ask it about your calendar. **Disconnect** on the Capabilities page removes the agent's access straight away.
+
 When you connect an app such as Notion or GitHub, your agent uses it with your account. Anyone who can talk to your agent can ask it to read from or change things in that app. Only connect apps to an agent that you alone use, or that you share with people you trust. See [What is an MCP server](/guide/mcp).
 
 ## Deleting things

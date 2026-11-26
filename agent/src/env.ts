@@ -35,6 +35,13 @@ export type Env = {
    * `!docs`, `!settings` and `!mcp` send. Unset, they say there is none.
    */
   APP_URL?: string;
+  /**
+   * The Google Cloud OAuth client (type "Web application") the Google Calendar capability
+   * connects through. Its authorized redirect URI is `<this Worker>/api/google/oauth/callback`.
+   * Unset, the capability cannot be connected.
+   */
+  GOOGLE_CLIENT_ID?: string;
+  GOOGLE_CLIENT_SECRET?: string;
   /** Telegram's API host. Only set to stand a local Bot API server in its place. */
   TELEGRAM_API_BASE?: string;
 

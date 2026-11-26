@@ -317,4 +317,26 @@ export const SESSION_REGISTRY_MIGRATIONS: readonly Migration[] = [
       addColumnIfMissing(sql, "config", `cap_user_lists INTEGER NOT NULL DEFAULT 0`);
     },
   },
+  {
+    name: "google calendar",
+    up: (sql) => {
+      addColumnIfMissing(sql, "config", `cap_google_calendar INTEGER NOT NULL DEFAULT 0`);
+      // The connection's tokens: their own table, out of reach of a `config` patch.
+      sql.exec(
+        `CREATE TABLE IF NOT EXISTS google_calendar (
+           id INTEGER PRIMARY KEY CHECK (id = 1),
+           email TEXT NOT NULL DEFAULT '',
+           access_token TEXT NOT NULL DEFAULT '',
+           refresh_token TEXT NOT NULL DEFAULT '',
+           expires_at INTEGER NOT NULL DEFAULT 0,
+           scope TEXT NOT NULL DEFAULT '',
+           state TEXT NOT NULL DEFAULT '',
+           verifier TEXT NOT NULL DEFAULT '',
+           return_to TEXT NOT NULL DEFAULT '',
+           last_error TEXT NOT NULL DEFAULT '',
+           connected_at INTEGER NOT NULL DEFAULT 0
+         )`
+      );
+    },
+  },
 ];

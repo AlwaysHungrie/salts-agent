@@ -82,7 +82,8 @@
     "cap_mcp": 1,
     "cap_wallet": 0,
     "cap_youtube": 0,
-    "cap_user_lists": 0
+    "cap_user_lists": 0,
+    "cap_google_calendar": 0
   },
   "mcp_catalog": [
     {

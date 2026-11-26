@@ -8,6 +8,7 @@ import {
   visionBlockedNote,
 } from "@/components/CapabilitySection";
 import { ChainWallet } from "@/components/ChainWallet";
+import { GoogleCalendar } from "@/components/GoogleCalendar";
 import { McpServers } from "@/components/McpServers";
 import { SaltsToolsInfo } from "@/components/SaltsToolsInfo";
 import type { Capability, Config, ModelOption } from "@/lib/agent";
@@ -254,6 +255,9 @@ export default function Capabilities({
                 {capability.id === "mcp" && <McpServers agentId={agentId} />}
                 {capability.id === "wallet" && (
                   <ChainWallet agentId={agentId} />
+                )}
+                {capability.id === "google_calendar" && (
+                  <GoogleCalendar agentId={agentId} />
                 )}
               </CapabilitySection>
             ))}

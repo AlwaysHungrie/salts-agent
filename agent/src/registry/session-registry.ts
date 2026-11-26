@@ -28,6 +28,16 @@ import {
   removeMcpServer,
   updateMcpServer,
 } from "./mcp-servers";
+import type { Env } from "../env";
+import {
+  clearedGoogleCalendar,
+  type GoogleCalendarRow,
+  type GoogleCalendarView,
+  googleCalendarView,
+  readGoogleCalendar,
+  refreshGoogleCalendar,
+  updateGoogleCalendar,
+} from "./google-calendar";
 import { forget, recall, remember } from "./memories";
 import { SESSION_REGISTRY_MIGRATIONS } from "./session-registry-schema";
 import {
@@ -59,6 +69,8 @@ export class SessionRegistry extends DurableObject {
   private ready = false;
   /** Token refreshes in flight, by server id, so concurrent callers share one. */
   private refreshing = new Map<string, Promise<McpServerRow | undefined>>();
+  /** The Google Calendar refresh in flight, so two tool calls in one turn share it. */
+  private calendarRefresh: Promise<GoogleCalendarRow> | undefined;
 
   /** Apply this agent's migration ladder once per object lifetime. */
   private ensureSchema() {
@@ -439,6 +451,93 @@ export class SessionRegistry extends DurableObject {
       JSON.stringify(networks)
     );
     return networks;
+  }
+
+  /** The Google Calendar connection as the browser may see it: no tokens. */
+  googleCalendar(): GoogleCalendarView {
+    this.ensureSchema();
+    return googleCalendarView(readGoogleCalendar(this.ctx.storage));
+  }
+
+  /** Park an authorization in flight; an existing connection keeps working until it lands. */
+  beginGoogleCalendar(state: string, verifier: string, returnTo: string) {
+    this.ensureSchema();
+    updateGoogleCalendar(this.ctx.storage, { state, verifier, return_to: returnTo, last_error: "" });
+  }
+
+  /** The in-flight authorization a callback's state names, or undefined for a stale one. */
+  googleCalendarPending(state: string): { verifier: string; return_to: string } | undefined {
+    this.ensureSchema();
+    const row = readGoogleCalendar(this.ctx.storage);
+    if (!state || row.state !== state) return undefined;
+    return { verifier: row.verifier, return_to: row.return_to };
+  }
+
+  /** The callback's outcome: the new tokens, or (with `error`) why there are none. */
+  finishGoogleCalendar(
+    outcome:
+      | { error: string }
+      | Pick<GoogleCalendarRow, "email" | "access_token" | "refresh_token" | "expires_at" | "scope">
+  ): GoogleCalendarView {
+    this.ensureSchema();
+    const done = { state: "", verifier: "", return_to: "" };
+    const row =
+      "error" in outcome
+        ? updateGoogleCalendar(this.ctx.storage, { ...done, last_error: outcome.error })
+        : updateGoogleCalendar(this.ctx.storage, {
+            ...outcome,
+            ...done,
+            last_error: "",
+            connected_at: Date.now(),
+          });
+    return googleCalendarView(row);
+  }
+
+  /** Forget the connection. Returns the token it held, for the caller to revoke at Google. */
+  disconnectGoogleCalendar(): string {
+    this.ensureSchema();
+    const row = readGoogleCalendar(this.ctx.storage);
+    updateGoogleCalendar(this.ctx.storage, clearedGoogleCalendar());
+    return row.refresh_token || row.access_token;
+  }
+
+  /**
+   * A working Google Calendar access token, refreshed when spent (or `force`d, after a
+   * 401), or the reason there is none, in words the model can pass on. A result rather
+   * than a throw: a refusal crossing RPC is also an unhandled rejection in the object.
+   * Only the Worker's tools call this; the token never reaches a response.
+   */
+  async googleCalendarToken(force = false): Promise<{ token: string } | { error: string }> {
+    this.ensureSchema();
+    const row = readGoogleCalendar(this.ctx.storage);
+    if (!row.access_token && !row.refresh_token) {
+      return {
+        error:
+          row.last_error ||
+          "Google Calendar is not connected. Ask the user to connect it on this agent's Capabilities page.",
+      };
+    }
+    const spent = row.expires_at > 0 && row.expires_at - Date.now() < 60_000;
+    if (!row.refresh_token) {
+      return row.access_token && !spent
+        ? { token: row.access_token }
+        : { error: "The Google Calendar connection has expired. Ask the user to connect it again." };
+    }
+    if (!force && !spent && row.access_token) return { token: row.access_token };
+    const env = this.env as Env;
+    if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
+      return { error: "Google Calendar is not set up on this deployment." };
+    }
+    this.calendarRefresh ??= refreshGoogleCalendar(this.ctx.storage, row, {
+      id: env.GOOGLE_CLIENT_ID,
+      secret: env.GOOGLE_CLIENT_SECRET,
+    }).finally(() => (this.calendarRefresh = undefined));
+    const fresh = await this.calendarRefresh;
+    if (!fresh.access_token) return { error: fresh.last_error || "Google Calendar is not connected." };
+    if (fresh.last_error) {
+      return { error: `Google Calendar could not refresh access: ${fresh.last_error}` };
+    }
+    return { token: fresh.access_token };
   }
 
   /** Drop all of this agent's storage (called on agent delete, after its sessions). */

@@ -11,6 +11,7 @@ import type {
   MetaSettings,
   SessionPage,
   SessionRow,
+  GoogleCalendarView,
   UserList,
 } from "../registry";
 import type { publicAttachment } from "../session/files";
@@ -79,6 +80,7 @@ export const ConfigSchema = z
     cap_wallet: flag,
     cap_youtube: flag,
     cap_user_lists: flag,
+    cap_google_calendar: flag,
     openrouter_api_key: z.string(),
     openrouter_key_id: z.string(),
     brave_api_key: z.string(),
@@ -317,6 +319,16 @@ export const TaskSchema = z
   .object({ id: z.string(), prompt: z.string(), when: z.string() })
   .openapi("Task");
 pin<Same<z.infer<typeof TaskSchema>, ScheduledTask>>();
+
+export const GoogleCalendarSchema = z
+  .object({
+    connected: z.boolean(),
+    email: z.string().openapi({ description: "The connected Google account." }),
+    last_error: z.string().openapi({ description: "Why the connection last failed; empty when it works." }),
+    connected_at: z.number(),
+  })
+  .openapi("GoogleCalendarConnection");
+pin<Same<z.infer<typeof GoogleCalendarSchema>, GoogleCalendarView>>();
 
 export const UserListSchema = z
   .object({

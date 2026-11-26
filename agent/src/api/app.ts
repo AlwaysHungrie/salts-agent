@@ -74,7 +74,7 @@ export function jsonOf<T extends z.ZodType>(schema: T, description = "OK") {
 }
 
 /** The refusals a route can answer with, documented as `{ error }`. */
-export function refusals(...codes: (400 | 403 | 404 | 409 | 413 | 502)[]) {
+export function refusals(...codes: (400 | 403 | 404 | 409 | 413 | 502 | 503)[]) {
   const said: Record<number, string> = {
     400: "The request is not valid.",
     403: "Not allowed for this agent.",
@@ -82,6 +82,7 @@ export function refusals(...codes: (400 | 403 | 404 | 409 | 413 | 502)[]) {
     409: "Conflicts with what is there.",
     413: "Too large, or no room left.",
     502: "An upstream service failed.",
+    503: "Not set up on this deployment.",
   };
   return Object.fromEntries(codes.map((code) => [code, jsonOf(ErrorSchema, said[code])]));
 }

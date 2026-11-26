@@ -217,6 +217,7 @@ export type Config = {
   cap_wallet: number;
   cap_youtube: number;
   cap_user_lists: number;
+  cap_google_calendar: number;
 
   /**
    * The agent's own OpenRouter key. Every model call it makes is billed here, so one

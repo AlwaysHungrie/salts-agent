@@ -11,6 +11,7 @@ import {
   type McpServerRow,
   type McpToolResult,
 } from "./mcp";
+import { GOOGLE_CALENDAR_INSTRUCTIONS, GOOGLE_CALENDAR_TOOLS } from "./google-calendar";
 import { VOICE_SAMPLE_RATE, pcm16ToOggOpus } from "./opus";
 import { base64ToBytes } from "./util/bytes";
 import type { Hex } from "viem";
@@ -50,7 +51,8 @@ export type CapabilityId =
   | "mcp"
   | "wallet"
   | "youtube"
-  | "user_lists";
+  | "user_lists"
+  | "google_calendar";
 
 /** A credential or endpoint the user fills in on the capabilities page. */
 export type CapabilityField = {
@@ -407,6 +409,23 @@ export const CAPABILITIES: Capability[] = [
     fields: [],
   },
   {
+    id: "google_calendar",
+    flag: "cap_google_calendar",
+    label: "Google Calendar",
+    summary:
+      "Connect your Google Calendar so the agent can see your schedule and add, move or cancel events for you.",
+    note: "Anyone who can chat with this agent can read and change the connected calendar.",
+    instructions: GOOGLE_CALENDAR_INSTRUCTIONS,
+    tools: [
+      "list_calendars",
+      "list_calendar_events",
+      "create_calendar_event",
+      "update_calendar_event",
+      "delete_calendar_event",
+    ],
+    fields: [],
+  },
+  {
     id: "wallet",
     flag: "cap_wallet",
     label: "Wallet",
@@ -479,6 +498,7 @@ export type ToolContext = {
   sessionId: string;
   /** The Worker's OpenRouter key, for tools that call a model of their own. */
   openrouterKey: string;
+  /** The agent's registry, which also holds its Google Calendar connection. */
   registry: DurableObjectStub<SessionRegistry>;
   /** Stores an image and returns a URL this session can serve it from. */
   saveImage: (dataUrl: string, prompt: string) => Promise<string>;
@@ -1558,7 +1578,7 @@ async function walletKey(ctx: ToolContext): Promise<Hex> {
   return key;
 }
 
-const TOOL_BY_NAME = new Map(TOOLS.map((t) => [t.name, t]));
+const TOOL_BY_NAME = new Map([...TOOLS, ...GOOGLE_CALENDAR_TOOLS].map((t) => [t.name, t]));
 
 /** The tools to offer this turn: those belonging to a ready capability. */
 export function toolsFor(config: Config): ToolSpec[] {

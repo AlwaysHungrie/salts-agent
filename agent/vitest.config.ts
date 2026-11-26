@@ -64,6 +64,9 @@ export default defineConfig({
           // A trusted app's OAuth access tokens open session routes (test/oauth-sessions.test.ts).
           OAUTH_RESOURCE: "https://worker.test",
           OAUTH_CLIENTS: "https://trusted.test/client.json",
+          // The Google Calendar capability's OAuth client (test/google-calendar.test.ts).
+          GOOGLE_CLIENT_ID: "google-client.apps.googleusercontent.com",
+          GOOGLE_CLIENT_SECRET: "google-secret",
           // Every network's chain is the stand-in in the mock, which the payment tests
           // load transactions into. The tests set where payments go.
           PAYMENT_RPC: Object.fromEntries(

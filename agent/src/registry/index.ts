@@ -3,6 +3,7 @@ export * from "./types";
 export * from "./naming";
 export * from "./emails";
 export { EMPTY_MCP_SERVER } from "./mcp-servers";
+export type { GoogleCalendarView } from "./google-calendar";
 export { thisMonth, today } from "./usage";
 export { API_KEY_ROLES, type ApiKeyInfo, type ApiKeyRole } from "./api-keys";
 export { METADATA_KEY } from "./directory-listing";

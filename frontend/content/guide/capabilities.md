@@ -2,7 +2,7 @@
 title: What your agent can do
 section: Using your agent
 order: 1
-summary: Every capability on the Capabilities page, such as web search, YouTube summaries, files, images, voice notes, reminders, memory, lists and a wallet, what each one does and how to use it.
+summary: Every capability on the Capabilities page, such as web search, YouTube summaries, files, images, voice notes, reminders, memory, lists, Google Calendar and a wallet, what each one does and how to use it.
 featured: true
 ---
 
@@ -87,6 +87,16 @@ Lets your agent keep lists for you, such as groceries, books to read, places to 
 Your lists belong to your account, not to one agent. Every agent you own, in every conversation, sees and changes the same lists. To look at them, open **Files** at the top of any conversation: your lists are at the top, under **Lists**. You can download a list from there.
 
 Anyone who can talk to your agent can read and change your lists. If your agent is used by other people, keep this switched off. When it is off, your agent does not see your lists at all, and they stay as they are until you switch it on again.
+
+## Google Calendar
+
+Lets your agent see your Google Calendar and change it for you. Ask in your own words, for example "What's on tomorrow?", "Am I free on Friday afternoon?", "Book lunch with Priya at 1pm on Thursday" or "Move my dentist appointment to next week". It can also cancel events, add guests and set up events that repeat.
+
+After you switch it on, click **Connect** and sign in with your Google account. Google asks you to allow access to your calendars, and then brings you back to the Capabilities page, which shows the account that is connected. Your agent works in your calendar's time zone, so the times it tells you and the times it books match what you see in Google Calendar.
+
+Your agent checks with you before it deletes an event or sends invitations to other people, unless you already asked for exactly that. When it adds or changes an event with guests, it does not email them unless you ask it to.
+
+Anyone who can talk to your agent can read and change your calendar. If your agent is used by other people, keep this switched off. To stop your agent using your calendar, click **Disconnect**. That also removes your agent's access from your Google account.
 
 ## Wallet
 

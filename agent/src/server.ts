@@ -6,6 +6,7 @@ import { fileBusinessRequest, handleAdmin } from "./routes/admin";
 import { handleAgents } from "./routes/agents";
 import { handleFleets } from "./routes/fleets";
 import { ROUTE_INDEX } from "./routes/index-page";
+import { handleGoogleOauthCallback } from "./routes/google-calendar";
 import { handleClientMetadata, handleOauthCallback } from "./routes/mcp-oauth";
 import { handleSaltsBrowser, handleSaltsMachine } from "./routes/salts";
 import { handleSearxngMcp, handleSearxngUrl } from "./routes/searxng";
@@ -113,7 +114,7 @@ function touchOnMessage(env: Env, ctx: ExecutionContext, segments: string[]) {
 
 /**
  * Routes matched before the identity gate, because their callers have no Clerk session:
- * the MCP OAuth redirect (state token), the OAuth client metadata document (public, read
+ * the MCP and Google OAuth redirects (state token), the OAuth client metadata document (public, read
  * by authorization servers) and the owner's admin routes (`API_SECRET`).
  */
 async function unauthenticatedRoute(
@@ -125,6 +126,9 @@ async function unauthenticatedRoute(
   const [first, second, third] = segments;
   if (first === "api" && second === "mcp" && third === "oauth" && segments[3] === "callback") {
     return await handleOauthCallback(url, env);
+  }
+  if (first === "api" && second === "google" && third === "oauth" && segments[3] === "callback") {
+    return await handleGoogleOauthCallback(url, env);
   }
   if (first === "oauth" && second === "client.json" && !third && request.method === "GET") {
     return handleClientMetadata(url);

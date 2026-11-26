@@ -483,6 +483,7 @@ that page renders, so a new capability needs no frontend change.
 | MCP servers | the server's URL, or a catalogue template | the server's own |
 | Private Memory | — | `remember`, `recall` |
 | User lists | — | `create_list`, `read_list`, `add_to_list`, `edit_list_item`, `remove_from_list`, `delete_list` |
+| Google Calendar | the deployment's Google OAuth client; the user connects their Google account | `list_calendars`, `list_calendar_events`, `create_calendar_event`, `update_calendar_event`, `delete_calendar_event` |
 | Wallet | networks (RPC URL and tokens) for balances and sends | `wallet_address`, `wallet_balance`, `wallet_transfer`, `send_transaction`, `sign_evm_transaction`, `sign_evm_typed_data`, `sign_solana_transaction` |
 
 **User lists** are kept per account, not per agent: one `UserLists` Durable Object per owner
@@ -492,6 +493,25 @@ and how many entries each holds (entries are read with `read_list`), along with 
 instructions on when to use them; while it is off nothing is loaded and the tools are not
 offered. The files view shows the lists above the chat's own files. Ceilings are the
 `max_user_lists`, `max_list_items` and `max_list_item_chars` deployment settings.
+
+**Google Calendar** connects one Google account per agent over OAuth (PKCE, offline
+access) and calls the Calendar REST API with its token. Google takes neither CIMD nor
+dynamic registration, so the deployment holds one OAuth client: create a **Web
+application** client in Google Cloud Console with the Calendar API enabled, add
+`https://<worker>/api/google/oauth/callback` as an authorized redirect URI (for
+production, staging and `http://localhost:8787` as needed), and set
+`wrangler secret put GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` (per environment; in
+`agent/.dev.vars` for `wrangler dev`). Unset, the capabilities page shows the capability as
+not set up. Scopes are `calendar.events` and `calendar.calendarlist.readonly`; both are
+sensitive, so until the consent screen is verified by Google, only the project's test users
+can connect. Tokens live in the registry's `google_calendar` table, never on `config`, and
+are refreshed there (one refresh per agent at a time); a refused refresh ends the connection.
+Routes: `GET /api/agents/:id/google-calendar` (the connected account, never a token),
+`POST .../google-calendar/connect { return_to }` → `{ authorize_url }`, and
+`POST .../google-calendar/disconnect`, which also revokes the token at Google. Google's
+redirect lands on `GET /api/google/oauth/callback`, outside the identity gate (the state
+parked on the agent is the proof), and goes back to `return_to` with `gcal_connected` or
+`gcal_error`.
 
 **Tool capabilities** hand the model functions it may call. A turn runs up to `max_tool_rounds`
 tool rounds (a deployment setting) — call, run, feed the results back — before it must answer, on both the streaming

@@ -9,6 +9,8 @@ export const ROUTE_INDEX = {
     fleets:
       "GET|PATCH /api/fleets/:fleetId (PATCH: one batch, ?cursor to continue), POST /api/fleets/:fleetId/agents",
     mcp: "GET|POST /api/agents/:agentId/mcp, PATCH|DELETE .../mcp/:id, POST .../mcp/:id/{connect,disconnect,refresh}",
+    google_calendar:
+      "GET /api/agents/:agentId/google-calendar, POST .../google-calendar/{connect,disconnect}",
     sessions: "GET|POST /api/agents/:agentId/sessions  (GET: ?limit&cursor)",
     session: "PATCH|DELETE /api/sessions/:sessionId",
     fork: "POST /api/sessions/:sessionId/fork  { count }",

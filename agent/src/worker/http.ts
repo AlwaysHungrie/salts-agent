@@ -47,7 +47,7 @@ export const notFound = () => jsonError("Agent not found.", 404);
  */
 export class ApiError extends Error {
   constructor(
-    readonly status: 400 | 401 | 403 | 404 | 409 | 413 | 502,
+    readonly status: 400 | 401 | 403 | 404 | 409 | 413 | 502 | 503,
     message: string
   ) {
     super(message);
