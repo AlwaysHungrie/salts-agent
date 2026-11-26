@@ -204,6 +204,18 @@ export async function orderCode(host: SessionHost, message: string): Promise<Cod
       text: "The code is right, but that app is no longer connected, so nothing was ordered.",
     };
   }
+  // Off by default: the whole flow runs, but nothing is sent to the provider.
+  if ((await host.settingsNow()).swiggy_live_orders !== 1) {
+    return {
+      kind: "placed",
+      result: `Test mode: the code was right, but live orders are off here, so nothing was sent to ${server.name} and nothing was ordered.`,
+      note:
+        `[Salts] The user confirmed the order with the emailed code. Live orders are off on ` +
+        `this deployment (test mode), so Salts did NOT send it to ${server.name}: nothing was ` +
+        `ordered or charged. Tell the user the order was confirmed in test mode and that no ` +
+        `real order was placed.`,
+    };
+  }
   try {
     const result = await withMcpAuth(server, host.registry(), (client) =>
       client.callTool(order.tool, JSON.parse(order.args) as Record<string, unknown>)

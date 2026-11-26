@@ -57,6 +57,7 @@
   ],
   "default_model": "deepseek/deepseek-v4-flash",
   "embedding_model": "baai/bge-m3",
+  "swiggy_live_orders": 0,
   "system_prompt": "You are a concise assistant.\nCite your sources: when you use a guide page, tool result or website, link it inline with its exact URL. Never say \"see X\" without a link, and never invent URLs.",
   "config_defaults": {
     "temperature": 0.7,

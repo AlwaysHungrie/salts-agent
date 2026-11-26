@@ -437,7 +437,9 @@ message that is exactly that code is checked before any turn, on the web, the AP
 channel. The model never sees it. On a match Salts calls the tool with the held arguments and
 the turn runs with a note saying what Swiggy replied. Only the code's hash is stored. It
 works once, for 10 minutes, and 5 wrong tries cancel the order. A different order needs a
-new code. `wrangler dev` only logs the email (the code is in the console). Sending needs
+new code. The `swiggy_live_orders` setting (admin-cli Defaults, shipped as 0) decides
+whether a correct code really sends the order: at 0 the whole flow runs but nothing is sent
+to Swiggy, and the agent is told it was a test. `wrangler dev` only logs the email (the code is in the console). Sending needs
 salts.dev onboarded under Email Service in the Cloudflare dashboard.
 
 ## Commands

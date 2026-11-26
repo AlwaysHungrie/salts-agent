@@ -140,7 +140,7 @@ describe("the emailed order code", () => {
   /** A real session's SQL, with email, owner and server lookups stood in for. */
   async function inSession(
     fn: (run: Run) => Promise<void>,
-    opts: { owner?: string; sendFails?: boolean } = {}
+    opts: { owner?: string; sendFails?: boolean; live?: boolean } = {}
   ) {
     const stub = env.SessionAgent.get(env.SessionAgent.idFromName(crypto.randomUUID()));
     await runInDurableObject(stub, async (instance) => {
@@ -159,6 +159,10 @@ describe("the emailed order code", () => {
           EMAIL_FROM: "noreply@salts.dev",
         },
         ownerEmail: async () => opts.owner ?? "owner@example.com",
+        settingsNow: async () => ({
+          ...(await real.settingsNow()),
+          swiggy_live_orders: opts.live === false ? 0 : 1,
+        }),
         registry: () => ({ mcpServer: async () => server, noteMcpError: async () => {} }) as never,
       };
       const code = () => {
@@ -204,6 +208,21 @@ describe("the emailed order code", () => {
         args: { addressId: "home", paymentMethod: "COD" },
       });
     }));
+
+  it("orders nothing while live orders are off, though the code is accepted", () =>
+    inSession(
+      async ({ host, code, hold }) => {
+        const calls = stubSwiggy();
+        await hold();
+        const outcome = await orderCode(host, code());
+        expect(outcome.kind).toBe("placed");
+        expect(outcome.kind === "placed" && outcome.note).toContain("did NOT send it");
+        expect(calls.some((c) => c.name === "checkout")).toBe(false);
+        // Used up all the same: the code cannot be replayed once live orders are on.
+        expect((await orderCode(host, code())).kind).toBe("none");
+      },
+      { live: false }
+    ));
 
   it("works once: the same code typed again orders nothing more", () =>
     inSession(async ({ host, code, hold }) => {

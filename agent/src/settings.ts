@@ -165,6 +165,11 @@ export type DeploymentSettings = {
   default_model: string;
   /** The OpenRouter embedding model `search_files` ranks passages with, billed to each agent's key. */
   embedding_model: string;
+  /**
+   * 1 sends a Swiggy order for real once its emailed code is entered; 0 only pretends
+   * (the code is checked, nothing is ordered), for testing and demos.
+   */
+  swiggy_live_orders: number;
   /** What every agent is told before its own `system_prompt`. Blank says nothing. */
   system_prompt: string;
   /** Starting values for the tuning and capability columns — every one of them. */
@@ -308,6 +313,14 @@ export const SETTINGS_FIELDS: readonly SettingsField[] = [
     key: "default_model",
     kind: "string",
     doc: "model a new agent is seeded with",
+    group: "default",
+  },
+  {
+    key: "swiggy_live_orders",
+    kind: "int",
+    min: 0,
+    max: 1,
+    doc: "1 places Swiggy orders for real once their emailed code is entered; 0 simulates them",
     group: "default",
   },
   {
