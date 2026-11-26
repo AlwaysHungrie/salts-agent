@@ -50,7 +50,7 @@ Not every model can see images. Models marked **(no image)** in **Settings** can
 
 ## Image generation
 
-Lets your agent create pictures when you ask for them, for example "Draw a birthday card with a cat on it". You can pick the **Image model** it uses. Images are paid from your agent's key like any other reply, and usually cost more than a text reply.
+Lets your agent create pictures when you ask for them, for example "Draw a birthday card with a cat on it". It can also change a picture already in the chat, one you sent or one it drew, for example "Add a sad cat to the right side of this screenshot". To send it a picture, also turn on **Image input**. You can pick the **Image model** it uses. Images are paid from your agent's key like any other reply, and usually cost more than a text reply.
 
 ## Audio input
 

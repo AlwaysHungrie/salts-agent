@@ -35,7 +35,7 @@ export function userText(host: SessionHost, message: string, attachments: Attach
     }
     // Images and PDFs ride along as content parts, so naming them is enough. A text
     // file is not sent: the model opens it from the workspace when it needs to.
-    if (a.kind === "image") return `--- attached image: ${a.name} ---`;
+    if (a.kind === "image") return `--- attached image: ${a.name} (id ${a.id}) ---`;
     if (a.kind === "pdf") return `--- attached PDF: ${a.name} ---`;
     // A workbook is not readable here; an MCP server opens it (see the upload note).
     if (a.kind === "sheet") {

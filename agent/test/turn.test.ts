@@ -1041,6 +1041,51 @@ describe("the chat's files", () => {
   });
 });
 
+describe("editing an image in the chat", () => {
+  async function drawingFixture() {
+    const fixture = await chatFixture();
+    await SELF.fetch(
+      `${BASE}/api/agents/${fixture.agentId}/config`,
+      as(fixture.email, { method: "PATCH", body: JSON.stringify({ cap_image_generation: 1 }) })
+    );
+    return fixture;
+  }
+
+  it("hands the image model the picture to change, found by its id", async () => {
+    const { sessionId, email } = await drawingFixture();
+    await (await say(sessionId, email, "!!draw a screenshot")).text();
+    const { messages } = (await (
+      await SELF.fetch(`${BASE}/agents/session-agent/${sessionId}/messages`, as(email))
+    ).json()) as { messages: { role: string; attachments: { id: string; kind: string }[] }[] };
+    const drawn = messages
+      .filter((m) => m.role === "assistant")
+      .at(-1)!
+      .attachments.find((a) => a.kind === "image")!;
+    expect(drawn).toBeTruthy();
+
+    const res = await say(sessionId, email, `!!edit ${drawn.id}`);
+    expect(await res.text()).toContain("Edited it.");
+    const all = (await (
+      await fetch(`https://openrouter.ai/__requests?contains=add%20a%20sad%20cat`)
+    ).json()) as { modalities?: string[]; messages?: { content: unknown }[] }[];
+    const edit = all.filter((b) => b.modalities?.includes("image")).at(-1)!;
+    const content = edit.messages?.[0]?.content as { type: string; image_url?: { url: string } }[];
+    expect(content[0]).toEqual({ type: "text", text: "add a sad cat" });
+    expect(content[1].image_url?.url).toMatch(/^data:image\/png;base64,iVBORw0KGgo/);
+  });
+
+  it("tells the model when no image has that id", async () => {
+    const { sessionId, email } = await drawingFixture();
+    const token = crypto.randomUUID().slice(0, 8);
+    await (await say(sessionId, email, `!!edit nosuchimage ${token}`)).text();
+    const all = (await (
+      await fetch(`https://openrouter.ai/__requests?contains=${token}`)
+    ).json()) as { stream?: boolean; messages?: unknown[] }[];
+    const sent = JSON.stringify(all.filter((b) => b.stream).at(-1)?.messages ?? []);
+    expect(sent).toContain('there is no image with id \\"nosuchimage\\" in this chat');
+  });
+});
+
 describe("deleting a session", () => {
   it("removes its files from R2 and from the session, and gives the storage back", async () => {
     const { sessionId, email, agentId } = await chatFixture();
